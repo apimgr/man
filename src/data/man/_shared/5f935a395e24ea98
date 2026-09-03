@@ -1,0 +1,404 @@
+_R_T_L_D_‐_A_U_D_I_T(7)          Miscellaneous Information Manual          _R_T_L_D_‐_A_U_D_I_T(7)
+
+NNAAMMEE
+       rtld-audit - auditing API for the dynamic linker
+
+SSYYNNOOPPSSIISS
+       ##ddeeffiinnee __GGNNUU__SSOOUURRCCEE             /* See feature_test_macros(7) */
+       ##iinncclluuddee <<lliinnkk..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+       The  GNU dynamic linker (run‐time linker) provides an auditing API that
+       allows an application to  be  notified  when  various  dynamic  linking
+       events  occur.  This API is very similar to the auditing interface pro‐
+       vided by the Solaris run‐time linker.  The necessary constants and pro‐
+       totypes are defined by including _<_l_i_n_k_._h_>.
+
+       To use this interface, the programmer creates a shared library that im‐
+       plements a standard set of function names.  Not all  of  the  functions
+       need  to be implemented: in most cases, if the programmer is not inter‐
+       ested in a particular class of auditing event, then  no  implementation
+       needs to be provided for the corresponding auditing function.
+
+       To  employ  the  auditing  interface, the environment variable LLDD__AAUUDDIITT
+       must be defined to contain a colon‐separated list of shared  libraries,
+       each  of  which can implement (parts of) the auditing API.  When an au‐
+       ditable event occurs, the corresponding function is invoked in each li‐
+       brary, in the order that the libraries are listed.
+
+   llaa__vveerrssiioonn(())
+
+       uunnssiiggnneedd iinntt llaa__vveerrssiioonn((uunnssiiggnneedd iinntt _v_e_r_s_i_o_n));;
+
+       This is the only function that _m_u_s_t be defined by an auditing  library:
+       it  performs  the  initial handshake between the dynamic linker and the
+       auditing library.  When invoking  this  function,  the  dynamic  linker
+       passes,  in _v_e_r_s_i_o_n, the highest version of the auditing interface that
+       the linker supports.
+
+       A typical implementation of this function simply returns  the  constant
+       LLAAVV__CCUURRRREENNTT,  which  indicates the version of _<_l_i_n_k_._h_> that was used to
+       build the audit module.  If the dynamic linker does  not  support  this
+       version  of  the audit interface, it will refuse to activate this audit
+       module.  If the function returns zero, the dynamic linker also does not
+       activate this audit module.
+
+       In order to enable backwards compatibility with older dynamic  linkers,
+       an  audit module can examine the _v_e_r_s_i_o_n argument and return an earlier
+       version than LLAAVV__CCUURRRREENNTT, assuming the module can adjust its  implemen‐
+       tation  to  match the requirements of the previous version of the audit
+       interface.  The llaa__vveerrssiioonn function should not return the value of _v_e_r_‐
+       _s_i_o_n without further checks because it could correspond to an interface
+       that does not match the _<_l_i_n_k_._h_> definitions used to  build  the  audit
+       module.
+
+   llaa__oobbjjsseeaarrcchh(())
+
+       cchhaarr **llaa__oobbjjsseeaarrcchh((ccoonnsstt cchhaarr **_n_a_m_e,, uuiinnttppttrr__tt **_c_o_o_k_i_e,,
+                          uunnssiiggnneedd iinntt _f_l_a_g));;
+
+       The dynamic linker invokes this function to inform the auditing library
+       that  it  is about to search for a shared object.  The _n_a_m_e argument is
+       the filename or pathname that is to be searched for.  _c_o_o_k_i_e identifies
+       the shared object that initiated the search.  _f_l_a_g is set to one of the
+       following values:
+
+       LLAA__SSEERR__OORRIIGG      This is the original name that is being searched  for.
+                        Typically,  this  name comes from an ELF DDTT__NNEEEEDDEEDD en‐
+                        try, or is the _f_i_l_e_n_a_m_e argument given to ddllooppeenn(3).
+
+       LLAA__SSEERR__LLIIBBPPAATTHH   _n_a_m_e was created using a directory specified in LLDD__LLII‐‐
+                        BBRRAARRYY__PPAATTHH.
+
+       LLAA__SSEERR__RRUUNNPPAATTHH   _n_a_m_e was created using a directory specified in an ELF
+                        DDTT__RRPPAATTHH or DDTT__RRUUNNPPAATTHH list.
+
+       LLAA__SSEERR__CCOONNFFIIGG    _n_a_m_e   was   found   via   the    llddccoonnffiigg(8)    cache
+                        (_/_e_t_c_/_l_d_._s_o_._c_a_c_h_e).
+
+       LLAA__SSEERR__DDEEFFAAUULLTT   _n_a_m_e  was found via a search of one of the default di‐
+                        rectories.
+
+       LLAA__SSEERR__SSEECCUURREE    _n_a_m_e is specific to a secure object (unused on Linux).
+
+       As its function result, llaa__oobbjjsseeaarrcchh() returns the  pathname  that  the
+       dynamic linker should use for further processing.  If NULL is returned,
+       then  this  pathname  is ignored for further processing.  If this audit
+       library simply intends to monitor search paths, then _n_a_m_e should be re‐
+       turned.
+
+   llaa__aaccttiivviittyy(())
+
+       vvooiidd llaa__aaccttiivviittyy(( uuiinnttppttrr__tt **_c_o_o_k_i_e,, uunnssiiggnneedd iinntt _f_l_a_g));;
+
+       The dynamic linker calls this function to inform the  auditing  library
+       that  link‐map  activity is occurring.  _c_o_o_k_i_e identifies the object at
+       the head of the link map.  When the dynamic linker invokes  this  func‐
+       tion, _f_l_a_g is set to one of the following values:
+
+       LLAA__AACCTT__AADDDD         New objects are being added to the link map.
+
+       LLAA__AACCTT__DDEELLEETTEE      Objects are being removed from the link map.
+
+       LLAA__AACCTT__CCOONNSSIISSTTEENNTT  Link‐map  activity  has  been  completed: the map is
+                          once again consistent.
+
+   llaa__oobbjjooppeenn(())
+
+       uunnssiiggnneedd iinntt llaa__oobbjjooppeenn((ssttrruucctt lliinnkk__mmaapp **_m_a_p,, LLmmiidd__tt _l_m_i_d,,
+                               uuiinnttppttrr__tt **_c_o_o_k_i_e));;
+
+       The dynamic linker calls this function when  a  new  shared  object  is
+       loaded.  The _m_a_p argument is a pointer to a link‐map structure that de‐
+       scribes the object.  The _l_m_i_d field has one of the following values
+
+       LLMM__IIDD__BBAASSEE       Link map is part of the initial namespace.
+
+       LLMM__IIDD__NNEEWWLLMM      Link  map is part of a new namespace requested via ddll‐‐
+                        mmooppeenn(3).
+
+       _c_o_o_k_i_e is a pointer to an identifier for this object.   The  identifier
+       is  provided to later calls to functions in the auditing library in or‐
+       der to identify this object.  This identifier is initialized  to  point
+       to  object’s  link map, but the audit library can change the identifier
+       to some other value that it may prefer to use to identify the object.
+
+       As its return value, llaa__oobbjjooppeenn() returns a bit mask created  by  ORing
+       zero  or  more of the following constants, which allow the auditing li‐
+       brary to select the objects to be monitored by llaa__ssyymmbbiinndd**():
+
+       LLAA__FFLLGG__BBIINNDDTTOO    Audit symbol bindings to this object.
+
+       LLAA__FFLLGG__BBIINNDDFFRROOMM  Audit symbol bindings from this object.
+
+       A return value of 0 from llaa__oobbjjooppeenn() indicates that no symbol bindings
+       should be audited for this object.
+
+   llaa__oobbjjcclloossee(())
+
+       uunnssiiggnneedd iinntt llaa__oobbjjcclloossee((uuiinnttppttrr__tt **_c_o_o_k_i_e));;
+
+       The dynamic linker invokes this function after  any  finalization  code
+       for  the  object has been executed, before the object is unloaded.  The
+       _c_o_o_k_i_e argument is the identifier obtained from a  previous  invocation
+       of llaa__oobbjjooppeenn().
+
+       In  the  current implementation, the value returned by llaa__oobbjjcclloossee() is
+       ignored.
+
+   llaa__pprreeiinniitt(())
+
+       vvooiidd llaa__pprreeiinniitt((uuiinnttppttrr__tt **_c_o_o_k_i_e));;
+
+       The dynamic linker invokes this function after all shared objects  have
+       been  loaded, before control is passed to the application (i.e., before
+       calling _m_a_i_n()).  Note that _m_a_i_n() may still later dynamically load ob‐
+       jects using ddllooppeenn(3).
+
+   llaa__ssyymmbbiinndd**(())
+
+       uuiinnttppttrr__tt llaa__ssyymmbbiinndd3322((EEllff3322__SSyymm **_s_y_m,, uunnssiiggnneedd iinntt _n_d_x,,
+                              uuiinnttppttrr__tt **_r_e_f_c_o_o_k,, uuiinnttppttrr__tt **_d_e_f_c_o_o_k,,
+                              uunnssiiggnneedd iinntt **_f_l_a_g_s,, ccoonnsstt cchhaarr **_s_y_m_n_a_m_e));;
+       uuiinnttppttrr__tt llaa__ssyymmbbiinndd6644((EEllff6644__SSyymm **_s_y_m,, uunnssiiggnneedd iinntt _n_d_x,,
+                              uuiinnttppttrr__tt **_r_e_f_c_o_o_k,, uuiinnttppttrr__tt **_d_e_f_c_o_o_k,,
+                              uunnssiiggnneedd iinntt **_f_l_a_g_s,, ccoonnsstt cchhaarr **_s_y_m_n_a_m_e));;
+
+       The dynamic linker invokes one of these functions when a symbol binding
+       occurs between two shared objects that have been  marked  for  auditing
+       notification  by llaa__oobbjjooppeenn().  The llaa__ssyymmbbiinndd3322() function is employed
+       on 32‐bit platforms; the llaa__ssyymmbbiinndd6644() function is employed on  64‐bit
+       platforms.
+
+       The  _s_y_m argument is a pointer to a structure that provides information
+       about the symbol being bound.  The structure  definition  is  shown  in
+       _<_e_l_f_._h_>.   Among  the  fields of this structure, _s_t___v_a_l_u_e indicates the
+       address to which the symbol is bound.
+
+       The _n_d_x argument gives the index of the symbol in the symbol  table  of
+       the bound shared object.
+
+       The  _r_e_f_c_o_o_k  argument  identifies the shared object that is making the
+       symbol reference; this is the same identifier that is provided  to  the
+       llaa__oobbjjooppeenn() function that returned LLAA__FFLLGG__BBIINNDDFFRROOMM.  The _d_e_f_c_o_o_k argu‐
+       ment  identifies  the shared object that defines the referenced symbol;
+       this is the same identifier that is provided to the llaa__oobbjjooppeenn()  func‐
+       tion that returned LLAA__FFLLGG__BBIINNDDTTOO.
+
+       The _s_y_m_n_a_m_e argument points a string containing the name of the symbol.
+
+       The  _f_l_a_g_s  argument is a bit mask that both provides information about
+       the symbol and can be used to modify further auditing of this PLT (Pro‐
+       cedure Linkage Table) entry.  The dynamic linker may supply the follow‐
+       ing bit values in this argument:
+
+       LLAA__SSYYMMBB__DDLLSSYYMM         The binding resulted from a call to ddllssyymm(3).
+
+       LLAA__SSYYMMBB__AALLTTVVAALLUUEE      A previous llaa__ssyymmbbiinndd**() call returned an  alter‐
+                             nate value for this symbol.
+
+       By default, if the auditing library implements llaa__pplltteenntteerr() and llaa__ppll‐‐
+       tteexxiitt()  functions (see below), then these functions are invoked, after
+       llaa__ssyymmbbiinndd(), for PLT entries, each time the symbol is referenced.  The
+       following flags can be ORed into _*_f_l_a_g_s to change this  default  behav‐
+       ior:
+
+       LLAA__SSYYMMBB__NNOOPPLLTTEENNTTEERR    Don’t call llaa__pplltteenntteerr() for this symbol.
+
+       LLAA__SSYYMMBB__NNOOPPLLTTEEXXIITT     Don’t call llaa__pplltteexxiitt() for this symbol.
+
+       The return value of llaa__ssyymmbbiinndd3322() and llaa__ssyymmbbiinndd6644() is the address to
+       which  control should be passed after the function returns.  If the au‐
+       diting library is simply monitoring symbol bindings, then it should re‐
+       turn _s_y_m_-_>_s_t___v_a_l_u_e.  A different value may be returned if  the  library
+       wishes to direct control to an alternate location.
+
+   llaa__pplltteenntteerr(())
+       The  precise  name  and  argument types for this function depend on the
+       hardware  platform.   (The  appropriate  definition  is   supplied   by
+       _<_l_i_n_k_._h_>.)  Here is the definition for x86‐32:
+
+       EEllff3322__AAddddrr llaa__ii8866__ggnnuu__pplltteenntteerr((EEllff3322__SSyymm **_s_y_m,, uunnssiiggnneedd iinntt _n_d_x,,
+                        uuiinnttppttrr__tt **_r_e_f_c_o_o_k,, uuiinnttppttrr__tt **_d_e_f_c_o_o_k,,
+                        LLaa__ii8866__rreeggss **_r_e_g_s,, uunnssiiggnneedd iinntt **_f_l_a_g_s,,
+                        ccoonnsstt cchhaarr **_s_y_m_n_a_m_e,, lloonngg **_f_r_a_m_e_s_i_z_e_p));;
+
+       This function is invoked just before a PLT entry is called, between two
+       shared objects that have been marked for binding notification.
+
+       The _s_y_m, _n_d_x, _r_e_f_c_o_o_k, _d_e_f_c_o_o_k, and _s_y_m_n_a_m_e are as for llaa__ssyymmbbiinndd**().
+
+       The  _r_e_g_s argument points to a structure (defined in _<_l_i_n_k_._h_>) contain‐
+       ing the values of registers to be used for the call to this PLT entry.
+
+       The _f_l_a_g_s argument points to a bit mask that conveys information about,
+       and can be used to modify subsequent auditing of, this  PLT  entry,  as
+       for llaa__ssyymmbbiinndd**().
+
+       The _f_r_a_m_e_s_i_z_e_p argument points to a _l_o_n_g _i_n_t buffer that can be used to
+       explicitly  set the frame size used for the call to this PLT entry.  If
+       different llaa__pplltteenntteerr() invocations for this  symbol  return  different
+       values,  then  the  maximum  returned  value is used.  The llaa__pplltteexxiitt()
+       function is called only if this buffer is explicitly set to a  suitable
+       value.
+
+       The return value of llaa__pplltteenntteerr() is as for llaa__ssyymmbbiinndd**().
+
+   llaa__pplltteexxiitt(())
+       The  precise  name  and  argument types for this function depend on the
+       hardware  platform.   (The  appropriate  definition  is   supplied   by
+       _<_l_i_n_k_._h_>.)  Here is the definition for x86‐32:
+
+       uunnssiiggnneedd iinntt llaa__ii8866__ggnnuu__pplltteexxiitt((EEllff3322__SSyymm **_s_y_m,, uunnssiiggnneedd iinntt _n_d_x,,
+                        uuiinnttppttrr__tt **_r_e_f_c_o_o_k,, uuiinnttppttrr__tt **_d_e_f_c_o_o_k,,
+                        ccoonnsstt LLaa__ii8866__rreeggss **_i_n_r_e_g_s,, LLaa__ii8866__rreettvvaall **_o_u_t_r_e_g_s,,
+                        ccoonnsstt cchhaarr **_s_y_m_n_a_m_e));;
+
+       This  function  is called when a PLT entry, made between two shared ob‐
+       jects that have been marked for  binding  notification,  returns.   The
+       function is called just before control returns to the caller of the PLT
+       entry.
+
+       The _s_y_m, _n_d_x, _r_e_f_c_o_o_k, _d_e_f_c_o_o_k, and _s_y_m_n_a_m_e are as for llaa__ssyymmbbiinndd**().
+
+       The  _i_n_r_e_g_s  argument  points to a structure (defined in _<_l_i_n_k_._h_>) con‐
+       taining the values of registers used for the call to  this  PLT  entry.
+       The  _o_u_t_r_e_g_s  argument points to a structure (defined in _<_l_i_n_k_._h_>) con‐
+       taining return values for the call to this PLT entry.  These values can
+       be modified by the caller, and the  changes  will  be  visible  to  the
+       caller of the PLT entry.
+
+       In  the current GNU implementation, the return value of llaa__pplltteexxiitt() is
+       ignored.
+
+VVEERRSSIIOONNSS
+       This API is very similar to the Solaris API described  in  the  Solaris
+       _L_i_n_k_e_r  _a_n_d _L_i_b_r_a_r_i_e_s _G_u_i_d_e, in the chapter _R_u_n_t_i_m_e _L_i_n_k_e_r _A_u_d_i_t_i_n_g _I_n_‐
+       _t_e_r_f_a_c_e.
+
+SSTTAANNDDAARRDDSS
+       None.
+
+NNOOTTEESS
+       Note the following differences from the Solaris dynamic linker auditing
+       API:
+
+       •  The Solaris llaa__oobbjjffiilltteerr() interface is not supported by the GNU im‐
+          plementation.
+
+       •  The Solaris llaa__ssyymmbbiinndd3322() and llaa__pplltteexxiitt() functions do not provide
+          a _s_y_m_n_a_m_e argument.
+
+       •  The Solaris llaa__pplltteexxiitt() function does not provide _i_n_r_e_g_s  and  _o_u_t_‐
+          _r_e_g_s arguments (but does provide a _r_e_t_v_a_l argument with the function
+          return value).
+
+BBUUGGSS
+       In glibc versions up to and include 2.9, specifying more than one audit
+       library  in  LLDD__AAUUDDIITT  results in a run‐time crash.  This is reportedly
+       fixed in glibc 2.10.
+
+EEXXAAMMPPLLEESS
+       #include <link.h>
+       #include <stdio.h>
+
+       unsigned int
+       la_version(unsigned int version)
+       {
+           printf("la_version(): version = %u; LAV_CURRENT = %u\n",
+                   version, LAV_CURRENT);
+
+           return LAV_CURRENT;
+       }
+
+       char *
+       la_objsearch(const char *name, uintptr_t *cookie, unsigned int flag)
+       {
+           printf("la_objsearch(): name = %s; cookie = %p", name, cookie);
+           printf("; flag = %s\n",
+                   (flag == LA_SER_ORIG) ?    "LA_SER_ORIG" :
+                   (flag == LA_SER_LIBPATH) ? "LA_SER_LIBPATH" :
+                   (flag == LA_SER_RUNPATH) ? "LA_SER_RUNPATH" :
+                   (flag == LA_SER_DEFAULT) ? "LA_SER_DEFAULT" :
+                   (flag == LA_SER_CONFIG) ?  "LA_SER_CONFIG" :
+                   (flag == LA_SER_SECURE) ?  "LA_SER_SECURE" :
+                   "???");
+
+           return name;
+       }
+
+       void
+       la_activity (uintptr_t *cookie, unsigned int flag)
+       {
+           printf("la_activity(): cookie = %p; flag = %s\n", cookie,
+                   (flag == LA_ACT_CONSISTENT) ? "LA_ACT_CONSISTENT" :
+                   (flag == LA_ACT_ADD) ?        "LA_ACT_ADD" :
+                   (flag == LA_ACT_DELETE) ?     "LA_ACT_DELETE" :
+                   "???");
+       }
+
+       unsigned int
+       la_objopen(struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
+       {
+           printf("la_objopen(): loading \"%s\"; lmid = %s; cookie=%p\n",
+                   map->l_name,
+                   (lmid == LM_ID_BASE) ?  "LM_ID_BASE" :
+                   (lmid == LM_ID_NEWLM) ? "LM_ID_NEWLM" :
+                   "???",
+                   cookie);
+
+           return LA_FLG_BINDTO | LA_FLG_BINDFROM;
+       }
+
+       unsigned int
+       la_objclose (uintptr_t *cookie)
+       {
+           printf("la_objclose(): %p\n", cookie);
+
+           return 0;
+       }
+
+       void
+       la_preinit(uintptr_t *cookie)
+       {
+           printf("la_preinit(): %p\n", cookie);
+       }
+
+       uintptr_t
+       la_symbind32(Elf32_Sym *sym, unsigned int ndx, uintptr_t *refcook,
+               uintptr_t *defcook, unsigned int *flags, const char *symname)
+       {
+           printf("la_symbind32(): symname = %s; sym->st_value = %p\n",
+                   symname, sym->st_value);
+           printf("        ndx = %u; flags = %#x", ndx, *flags);
+           printf("; refcook = %p; defcook = %p\n", refcook, defcook);
+
+           return sym->st_value;
+       }
+
+       uintptr_t
+       la_symbind64(Elf64_Sym *sym, unsigned int ndx, uintptr_t *refcook,
+               uintptr_t *defcook, unsigned int *flags, const char *symname)
+       {
+           printf("la_symbind64(): symname = %s; sym->st_value = %p\n",
+                   symname, sym->st_value);
+           printf("        ndx = %u; flags = %#x", ndx, *flags);
+           printf("; refcook = %p; defcook = %p\n", refcook, defcook);
+
+           return sym->st_value;
+       }
+
+       Elf32_Addr
+       la_i86_gnu_pltenter(Elf32_Sym *sym, unsigned int ndx,
+               uintptr_t *refcook, uintptr_t *defcook, La_i86_regs *regs,
+               unsigned int *flags, const char *symname, long *framesizep)
+       {
+           printf("la_i86_gnu_pltenter(): %s (%p)\n", symname, sym->st_value);
+
+           return sym->st_value;
+       }
+
+SSEEEE AALLSSOO
+       lldddd(1), ddllooppeenn(3), lldd..ssoo(8), llddccoonnffiigg(8)
+
+Linux man‐pages (unreleased)      2025‐05‐17                     _R_T_L_D_‐_A_U_D_I_T(7)

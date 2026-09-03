@@ -1,0 +1,205 @@
+INIT(8)                   BSD System Manager's Manual                  INIT(8)
+
+NNAAMMEE
+     iinniitt — process control initialization
+
+SSYYNNOOPPSSIISS
+     iinniitt
+     iinniitt [00 | 11 | 66 | cc | qq]
+
+DDEESSCCRRIIPPTTIIOONN
+     The iinniitt utility is the last stage of the boot process.  It normally runs
+     the automatic reboot sequence as described in rc(8), and if this suc‐
+     ceeds, begins multi-user operation.  If the reboot scripts fail, iinniitt
+     commences single-user operation by giving the super-user a shell on the
+     console.  The iinniitt utility may be passed parameters from the boot program
+     to prevent the system from going multi-user and to instead execute a sin‐
+     gle-user shell without starting the normal daemons.  The system is then
+     quiescent for maintenance work and may later be made to go to multi-user
+     by exiting the single-user shell (with ^D).  This causes iinniitt to run the
+     _/_e_t_c_/_r_c start up command file in fastboot mode (skipping disk checks).
+
+     If the _c_o_n_s_o_l_e entry in the ttys(5) file is marked “insecure”, then iinniitt
+     will require that the super-user password be entered before the system
+     will start a single-user shell.  The password check is skipped if the
+     _c_o_n_s_o_l_e is marked as “secure”.  Note that the password check does not
+     protect from variables such as _i_n_i_t___s_c_r_i_p_t being set from the loader(8)
+     command line; see the _S_E_C_U_R_I_T_Y section of loader(8).
+
+     If the system security level (see security(7)) is initially nonzero, then
+     iinniitt leaves it unchanged.  Otherwise, iinniitt raises the level to 1 before
+     going multi-user for the first time.  Since the level cannot be reduced,
+     it will be at least 1 for subsequent operation, even on return to single-
+     user.  If a level higher than 1 is desired while running multi-user, it
+     can be set before going multi-user, e.g., by the startup script rc(8),
+     using sysctl(8) to set the _k_e_r_n_._s_e_c_u_r_e_l_e_v_e_l variable to the required se‐
+     curity level.
+
+     If iinniitt is run in a jail, the security level of the “host system” will
+     not be affected.  Part of the information set up in the kernel to support
+     a jail is a per-jail security level.  This allows running a higher secu‐
+     rity level inside of a jail than that of the host system.  See jail(8)
+     for more information about jails.
+
+     In multi-user operation, iinniitt maintains processes for the terminal ports
+     found in the file ttys(5).  The iinniitt utility reads this file and executes
+     the command found in the second field, unless the first field refers to a
+     device in _/_d_e_v which is not configured.  The first field is supplied as
+     the final argument to the command.  This command is usually getty(8);
+     ggeettttyy opens and initializes the tty line and executes the login(1) pro‐
+     gram.  The llooggiinn program, when a valid user logs in, executes a shell for
+     that user.  When this shell dies, either because the user logged out or
+     an abnormal termination occurred (a signal), the cycle is restarted by
+     executing a new ggeettttyy for the line.
+
+     The iinniitt utility can also be used to keep arbitrary daemons running, au‐
+     tomatically restarting them if they die.  In this case, the first field
+     in the ttys(5) file must not reference the path to a configured device
+     node and will be passed to the daemon as the final argument on its com‐
+     mand line.  This is similar to the facility offered in the AT&T System V
+     UNIX _/_e_t_c_/_i_n_i_t_t_a_b.
+
+     Line status (on, off, secure, getty, or window information) may be
+     changed in the ttys(5) file without a reboot by sending the signal SIGHUP
+     to iinniitt with the command “kill -HUP 1”.  On receipt of this signal, iinniitt
+     re-reads the ttys(5) file.  When a line is turned off in ttys(5), iinniitt
+     will send a SIGHUP signal to the controlling process for the session as‐
+     sociated with the line.  For any lines that were previously turned off in
+     the ttys(5) file and are now on, iinniitt executes the command specified in
+     the second field.  If the command or window field for a line is changed,
+     the change takes effect at the end of the current login session (e.g.,
+     the next time iinniitt starts a process on the line).  If a line is commented
+     out or deleted from ttys(5), iinniitt will not do anything at all to that
+     line.
+
+     The iinniitt utility will terminate multi-user operations and resume single-
+     user mode if sent a terminate (TERM) signal, for example, “kill -TERM 1”.
+     If there are processes outstanding that are deadlocked (because of hard‐
+     ware or software failure), iinniitt will not wait for them all to die (which
+     might take forever), but will time out after 30 seconds and print a warn‐
+     ing message.
+
+     The iinniitt utility will cease creating new processes and allow the system
+     to slowly die away, if it is sent a terminal stop (TSTP) signal, i.e.
+     “kill -TSTP 1”.  A later hangup will resume full multi-user operations,
+     or a terminate will start a single-user shell.  This hook is used by
+     reboot(8) and halt(8).
+
+     The iinniitt utility will terminate all possible processes (again, it will
+     not wait for deadlocked processes) and reboot the machine if sent the in‐
+     terrupt (INT) signal, i.e. “kill -INT 1”.  This is useful for shutting
+     the machine down cleanly from inside the kernel or from X when the ma‐
+     chine appears to be hung.
+
+     The iinniitt utility will do the same, except it will halt the machine if
+     sent the user defined signal 1 (USR1), or will halt and turn the power
+     off (if hardware permits) if sent the user defined signal 2 (USR2).
+
+     When shutting down the machine, iinniitt will try to run the _/_e_t_c_/_r_c_._s_h_u_t_d_o_w_n
+     script.  This script can be used to cleanly terminate specific programs
+     such as iinnnndd (the InterNetNews server).  If this script does not termi‐
+     nate within 120 seconds, iinniitt will terminate it.  The timeout can be con‐
+     figured via the sysctl(8) variable _k_e_r_n_._i_n_i_t___s_h_u_t_d_o_w_n___t_i_m_e_o_u_t.
+
+     iinniitt passes “single” as the argument to the shutdown script if return to
+     single-user mode is requested.  Otherwise, “reboot” argument is used.
+
+     After all user processes have been terminated, iinniitt will try to run the
+     _/_e_t_c_/_r_c_._f_i_n_a_l script.  This script can be used to finally prepare and un‐
+     mount filesystems that may have been needed during shutdown, for in‐
+     stance.
+
+     The role of iinniitt is so critical that if it dies, the system will reboot
+     itself automatically.  If, at bootstrap time, the iinniitt process cannot be
+     located, the system will panic with the message “panic: init died (signal
+     %d, exit %d)”.
+
+     If run as a user process as shown in the second synopsis line, iinniitt will
+     emulate AT&T System V UNIX behavior, i.e., super-user can specify the de‐
+     sired _r_u_n_-_l_e_v_e_l on a command line, and iinniitt will signal the original (PID
+     1) iinniitt as follows:
+
+     RRuunn--lleevveell    SSiiggnnaall     AAccttiioonn
+     00            SIGUSR1    Halt
+     00            SIGUSR2    Halt and turn the power off
+     00            SIGWINCH   Halt and turn the power off and then back on
+     11            SIGTERM    Go to single-user mode
+     66            SIGINT     Reboot the machine
+     cc            SIGTSTP    Block further logins
+     qq            SIGHUP     Rescan the ttys(5) file
+
+KKEERRNNEELL EENNVVIIRROONNMMEENNTT VVAARRIIAABBLLEESS
+     The following kenv(2) variables are available as loader(8) tunables:
+
+     _i_n_i_t___c_h_r_o_o_t
+             If set to a valid directory in the root file system, it causes
+             iinniitt to perform a chroot(2) operation on that directory, making
+             it the new root directory.  That happens before entering single-
+             user mode or multi-user mode (but after executing the _i_n_i_t___s_c_r_i_p_t
+             if enabled).  This functionality has generally been eclipsed by
+             rerooting.  See reboot(8) --rr for details.
+
+     _i_n_i_t___e_x_e_c
+             If set to a valid file name in the root file system, instructs
+             iinniitt to directly execute that file as the very first action, re‐
+             placing iinniitt as PID 1.
+
+     _i_n_i_t___s_c_r_i_p_t
+             If set to a valid file name in the root file system, instructs
+             iinniitt to run that script as the very first action, before doing
+             anything else.  Signal handling and exit code interpretation is
+             similar to running the _/_e_t_c_/_r_c script.  In particular, single-
+             user operation is enforced if the script terminates with a non-
+             zero exit code, or if a SIGTERM is delivered to the iinniitt process
+             (PID 1).  This functionality has generally been eclipsed by re‐
+             rooting.  See reboot(8) --rr for details.
+
+     _i_n_i_t___s_h_e_l_l
+             Defines the shell binary to be used for executing the various
+             shell scripts.  The default is “/bin/sh”.  It is used for running
+             the _i_n_i_t___e_x_e_c or _i_n_i_t___s_c_r_i_p_t if set, as well as for the _/_e_t_c_/_r_c,
+             _/_e_t_c_/_r_c_._s_h_u_t_d_o_w_n, and _/_e_t_c_/_r_c_._f_i_n_a_l scripts.  The value of the
+             corresponding kenv(2) variable is evaluated every time iinniitt calls
+             a shell script, so it can be changed later on using the kenv(1)
+             utility.  In particular, if a non-default shell is used for run‐
+             ning an _i_n_i_t___s_c_r_i_p_t, it might be desirable to have that script
+             reset the value of _i_n_i_t___s_h_e_l_l back to the default, so that the
+             _/_e_t_c_/_r_c script is executed with the standard shell _/_b_i_n_/_s_h.
+
+FFIILLEESS
+     /dev/console       system console device
+     /dev/tty*          terminal ports found in ttys(5)
+     /etc/ttys          the terminal initialization information file
+     /etc/rc            system startup commands
+     /etc/rc.shutdown   system shutdown commands
+     /etc/rc.final      system shutdown commands (after process termination)
+     /var/log/init.log  log of rc(8) output if the system console device is
+                        not available
+
+DDIIAAGGNNOOSSTTIICCSS
+     ggeettttyy rreeppeeaattiinngg ttoooo qquuiicckkllyy oonn ppoorrtt %%ss,, sslleeeeppiinngg..  A process being
+     started to service a line is exiting quickly each time it is started.
+     This is often caused by a ringing or noisy terminal line.  _I_n_i_t _w_i_l_l
+     _s_l_e_e_p _f_o_r _3_0 _s_e_c_o_n_d_s_, _t_h_e_n _c_o_n_t_i_n_u_e _t_r_y_i_n_g _t_o _s_t_a_r_t _t_h_e _p_r_o_c_e_s_s_.
+
+     ssoommee pprroocceesssseess wwoouulldd nnoott ddiiee;; ppss aaxxll aaddvviisseedd..  A process is hung and
+     could not be killed when the system was shutting down.  This condition is
+     usually caused by a process that is stuck in a device driver because of a
+     persistent device error condition.
+
+SSEEEE AALLSSOO
+     kill(1), login(1), sh(1), ttys(5), security(7), getty(8), halt(8),
+     jail(8), rc(8), reboot(8), shutdown(8), sysctl(8)
+
+HHIISSTTOORRYY
+     An iinniitt utility appeared in Version 1 AT&T UNIX.
+
+CCAAVVEEAATTSS
+     Systems without sysctl(8) behave as though they have security level -1.
+
+     Setting the security level above 1 too early in the boot sequence can
+     prevent fsck(8) from repairing inconsistent file systems.  The preferred
+     location to set the security level is at the end of _/_e_t_c_/_r_c after all
+     multi-user startup actions are complete.
+
+BSD                              July 22, 2021                             BSD

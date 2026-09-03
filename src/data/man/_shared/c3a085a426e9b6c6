@@ -1,0 +1,251 @@
+dpkg-maintscript-helper(1)        dpkg suite        dpkg-maintscript-helper(1)
+
+
+
+NNAAMMEE
+       dpkg-maintscript-helper - works around known dpkg limitations in
+       maintainer scripts
+
+SSYYNNOOPPSSIISS
+       ddppkkgg--mmaaiinnttssccrriipptt--hheellppeerr _c_o_m_m_a_n_d [_p_a_r_a_m_e_t_e_r...] ---- _m_a_i_n_t_-_s_c_r_i_p_t_-
+       _p_a_r_a_m_e_t_e_r...
+
+CCOOMMMMAANNDDSS AANNDD PPAARRAAMMEETTEERRSS
+       ssuuppppoorrttss _c_o_m_m_a_n_d
+       rrmm__ccoonnffffiillee _c_o_n_f_f_i_l_e [_p_r_i_o_r_-_v_e_r_s_i_o_n [_p_a_c_k_a_g_e]]
+       mmvv__ccoonnffffiillee _o_l_d_-_c_o_n_f_f_i_l_e _n_e_w_-_c_o_n_f_f_i_l_e [_p_r_i_o_r_-_v_e_r_s_i_o_n [_p_a_c_k_a_g_e]]
+       ssyymmlliinnkk__ttoo__ddiirr _p_a_t_h_n_a_m_e _o_l_d_-_t_a_r_g_e_t [_p_r_i_o_r_-_v_e_r_s_i_o_n [_p_a_c_k_a_g_e]]
+       ddiirr__ttoo__ssyymmlliinnkk _p_a_t_h_n_a_m_e _n_e_w_-_t_a_r_g_e_t [_p_r_i_o_r_-_v_e_r_s_i_o_n [_p_a_c_k_a_g_e]]
+
+DDEESSCCRRIIPPTTIIOONN
+       This program is designed to be run within maintainer scripts to achieve
+       some tasks that ddppkkgg can't (yet) handle natively either because of
+       design decisions or due to current limitations.
+
+       Many of those tasks require coordinated actions from several maintainer
+       scripts (pprreeiinnsstt, ppoossttiinnsstt, pprreerrmm, ppoossttrrmm). To avoid mistakes the same
+       call simply needs to be put in all scripts and the program will
+       automatically adapt its behaviour based on the environment variable
+       DDPPKKGG__MMAAIINNTTSSCCRRIIPPTT__NNAAMMEE and on the maintainer scripts arguments that you
+       have to forward after a double hyphen.
+
+CCOOMMMMOONN PPAARRAAMMEETTEERRSS
+       _p_r_i_o_r_-_v_e_r_s_i_o_n
+           Defines the latest version of the package whose upgrade should
+           trigger the operation. It is important to calculate _p_r_i_o_r_-_v_e_r_s_i_o_n
+           correctly so that the operations are correctly performed even if
+           the user rebuilt the package with a local version. If _p_r_i_o_r_-_v_e_r_s_i_o_n
+           is empty or omitted, then the operation is tried on every upgrade
+           (note: it's safer to give the version and have the operation tried
+           only once).
+
+           If the conffile has not been shipped for several versions, and you
+           are now modifying the maintainer scripts to clean up the obsolete
+           file, _p_r_i_o_r_-_v_e_r_s_i_o_n should be based on the version of the package
+           that you are now preparing, not the first version of the package
+           that lacked the conffile. This applies to all other actions in the
+           same way.
+
+           For example, for a conffile removed in version 22..00--11 of a package,
+           _p_r_i_o_r_-_v_e_r_s_i_o_n should be set to 22..00--11~~. This will cause the conffile
+           to be removed even if the user rebuilt the previous version 11..00--11
+           as 11..00--11llooccaall11. Or a package switching a path from a symlink
+           (shipped in version 11..00--11) to a directory (shipped in version
+           22..00--11), but only performing the actual switch in the maintainer
+           scripts in version 33..00--11, should set _p_r_i_o_r_-_v_e_r_s_i_o_n to 33..00--11~~.
+
+       _p_a_c_k_a_g_e
+           The package name owning the pathname(s).  When the package is
+           “Multi-Arch: same” this parameter must include the architecture
+           qualifier, otherwise it should nnoott usually include the architecture
+           qualifier (as it would disallow cross-grades, or switching from
+           being architecture specific to architecture aallll or vice versa).  If
+           the parameter is empty or omitted, the DDPPKKGG__MMAAIINNTTSSCCRRIIPPTT__PPAACCKKAAGGEE and
+           DDPPKKGG__MMAAIINNTTSSCCRRIIPPTT__AARRCCHH environment variables (as set by ddppkkgg when
+           running the maintainer scripts) will be used to generate an arch-
+           qualified package name.
+
+       ----  All the parameters of the maintainer scripts have to be forwarded
+           to the program after ----.
+
+CCOONNFFFFIILLEE RREELLAATTEEDD TTAASSKKSS
+       When upgrading a package, ddppkkgg will not automatically remove a conffile
+       (a configuration file for which ddppkkgg should preserve user changes) if
+       it is not present in the newer version. There are two principal reasons
+       for this; the first is that the conffile could've been dropped by
+       accident and the next version could restore it, users wouldn't want
+       their changes thrown away. The second is to allow packages to
+       transition files from a dpkg-maintained conffile to a file maintained
+       by the package's maintainer scripts, usually with a tool like debconf
+       or ucf.
+
+       This means that if a package is intended to rename or remove a
+       conffile, it must explicitly do so and ddppkkgg--mmaaiinnttssccrriipptt--hheellppeerr can be
+       used to implement graceful deletion and moving of conffiles within
+       maintainer scripts.
+
+   RReemmoovviinngg aa ccoonnffffiillee
+       Note: This can be replaced in most cases by the "remove-on-upgrade"
+       flag in _D_E_B_I_A_N_/_c_o_n_f_f_i_l_e_s (since dpkg 1.20.6), see ddeebb--ccoonnffffiilleess(5).
+
+       If a conffile is completely removed, it should be removed from disk,
+       unless the user has modified it. If there are local modifications, they
+       should be preserved. If the package upgrades aborts, the newly obsolete
+       conffile should not disappear.
+
+       All of this is implemented by putting the following shell snippet in
+       the pprreeiinnsstt, ppoossttiinnsstt and ppoossttrrmm maintainer scripts:
+
+
+            dpkg-maintscript-helper rm_conffile \
+               _c_o_n_f_f_i_l_e _p_r_i_o_r_-_v_e_r_s_i_o_n _p_a_c_k_a_g_e -- "$@"
+
+       _c_o_n_f_f_i_l_e is the filename of the conffile to remove.
+
+       Current implementation: in the pprreeiinnsstt, it checks if the conffile was
+       modified and renames it either to _c_o_n_f_f_i_l_e..ddppkkgg--rreemmoovvee (if not
+       modified) or to _c_o_n_f_f_i_l_e..ddppkkgg--bbaacckkuupp (if modified). In the ppoossttiinnsstt,
+       the latter file is renamed to _c_o_n_f_f_i_l_e..ddppkkgg--bbaakk and kept for reference
+       as it contains user modifications but the former will be removed. If
+       the package upgrade aborts, the ppoossttrrmm reinstalls the original
+       conffile. During purge, the ppoossttrrmm will also delete the ..ddppkkgg--bbaakk file
+       kept up to now.
+
+   RReennaammiinngg aa ccoonnffffiillee
+       If a conffile is moved from one location to another, you need to make
+       sure you move across any changes the user has made. This may seem a
+       simple change to the pprreeiinnsstt script at first, however that will result
+       in the user being prompted by ddppkkgg to approve the conffile edits even
+       though they are not responsible of them.
+
+       Graceful renaming can be implemented by putting the following shell
+       snippet in the pprreeiinnsstt, ppoossttiinnsstt and ppoossttrrmm maintainer scripts:
+
+
+            dpkg-maintscript-helper mv_conffile \
+               _o_l_d_-_c_o_n_f_f_i_l_e _n_e_w_-_c_o_n_f_f_i_l_e _p_r_i_o_r_-_v_e_r_s_i_o_n _p_a_c_k_a_g_e -- "$@"
+
+       _o_l_d_-_c_o_n_f_f_i_l_e and _n_e_w_-_c_o_n_f_f_i_l_e are the old and new name of the conffile
+       to rename.
+
+       Current implementation: the pprreeiinnsstt checks if the conffile has been
+       modified, if yes it's left on place otherwise it's renamed to _o_l_d_-
+       _c_o_n_f_f_i_l_e..ddppkkgg--rreemmoovvee. On configuration, the ppoossttiinnsstt removes _o_l_d_-
+       _c_o_n_f_f_i_l_e..ddppkkgg--rreemmoovvee and renames _o_l_d_-_c_o_n_f_f_i_l_e to _n_e_w_-_c_o_n_f_f_i_l_e if _o_l_d_-
+       _c_o_n_f_f_i_l_e is still available. On abort-upgrade/abort-install, the ppoossttrrmm
+       renames _o_l_d_-_c_o_n_f_f_i_l_e..ddppkkgg--rreemmoovvee back to _o_l_d_-_c_o_n_f_f_i_l_e if required.
+
+SSYYMMLLIINNKK AANNDD DDIIRREECCTTOORRYY SSWWIITTCCHHEESS
+       When upgrading a package, ddppkkgg will not automatically switch a symlink
+       to a directory or vice-versa. Downgrades are not supported and the path
+       will be left as is.
+
+       Note: The symlinks and directories created during these switches need
+       to be shipped in the new packages, or ddppkkgg will not be able to remove
+       them on purge.
+
+   SSwwiittcchhiinngg aa ssyymmlliinnkk ttoo ddiirreeccttoorryy
+       If a symlink is switched to a real directory, you need to make sure
+       before unpacking that the symlink is removed. This may seem a simple
+       change to the pprreeiinnsstt script at first, however that will result in some
+       problems in case of admin local customization of the symlink or when
+       downgrading the package.
+
+       Graceful renaming can be implemented by putting the following shell
+       snippet in the pprreeiinnsstt, ppoossttiinnsstt and ppoossttrrmm maintainer scripts:
+
+
+            dpkg-maintscript-helper symlink_to_dir \
+               _p_a_t_h_n_a_m_e _o_l_d_-_t_a_r_g_e_t _p_r_i_o_r_-_v_e_r_s_i_o_n _p_a_c_k_a_g_e -- "$@"
+
+       _p_a_t_h_n_a_m_e is the absolute name of the old symlink (the path will be a
+       directory at the end of the installation) and _o_l_d_-_t_a_r_g_e_t is the target
+       name of the former symlink at _p_a_t_h_n_a_m_e. It can either be absolute or
+       relative to the directory containing _p_a_t_h_n_a_m_e.
+
+       Current implementation: the pprreeiinnsstt checks if the symlink exists and
+       points to _o_l_d_-_t_a_r_g_e_t, if not then it's left in place, otherwise it's
+       renamed to _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp. On configuration, the ppoossttiinnsstt removes
+       _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp if _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp is still a symlink. On
+       abort-upgrade/abort-install, the ppoossttrrmm renames _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp
+       back to _p_a_t_h_n_a_m_e if required.
+
+   SSwwiittcchhiinngg aa ddiirreeccttoorryy ttoo ssyymmlliinnkk
+       If a real directory is switched to a symlink, you need to make sure
+       before unpacking that the directory is removed. This may seem a simple
+       change to the pprreeiinnsstt script at first, however that will result in some
+       problems in case the directory contains conffiles, pathnames owned by
+       other packages, locally created pathnames, or when downgrading the
+       package.
+
+       Graceful switching can be implemented by putting the following shell
+       snippet in the pprreeiinnsstt, ppoossttiinnsstt and ppoossttrrmm maintainer scripts:
+
+
+            dpkg-maintscript-helper dir_to_symlink \
+               _p_a_t_h_n_a_m_e _n_e_w_-_t_a_r_g_e_t _p_r_i_o_r_-_v_e_r_s_i_o_n _p_a_c_k_a_g_e -- "$@"
+
+       _p_a_t_h_n_a_m_e is the absolute name of the old directory (the path will be a
+       symlink at the end of the installation) and _n_e_w_-_t_a_r_g_e_t is the target of
+       the new symlink at _p_a_t_h_n_a_m_e. It can either be absolute or relative to
+       the directory containing _p_a_t_h_n_a_m_e.
+
+       Current implementation: the pprreeiinnsstt checks if the directory exists,
+       does not contain conffiles, pathnames owned by other packages, or
+       locally created pathnames, if not then it's left in place, otherwise
+       it's renamed to _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp, and an empty staging directory
+       named _p_a_t_h_n_a_m_e is created, marked with a file so that dpkg can track
+       it. On configuration, the ppoossttiinnsstt finishes the switch if
+       _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp is still a directory and _p_a_t_h_n_a_m_e is the staging
+       directory; it removes the staging directory mark file, moves the newly
+       created files inside the staging directory to the symlink target _n_e_w_-
+       _t_a_r_g_e_t/, replaces the now empty staging directory _p_a_t_h_n_a_m_e with a
+       symlink to _n_e_w_-_t_a_r_g_e_t, and removes _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp. On
+       abort-upgrade/abort-install, the ppoossttrrmm renames _p_a_t_h_n_a_m_e..ddppkkgg--bbaacckkuupp
+       back to _p_a_t_h_n_a_m_e if required.
+
+IINNTTEEGGRRAATTIIOONN IINN PPAACCKKAAGGEESS
+       When using a packaging helper, please check if it has native ddppkkgg--
+       mmaaiinnttssccrriipptt--hheellppeerr integration, which might make your life easier. See
+       for example ddhh__iinnssttaallllddeebb(1).
+
+       Given that ddppkkgg--mmaaiinnttssccrriipptt--hheellppeerr is used in the pprreeiinnsstt, using it
+       unconditionally requires a pre-dependency to ensure that the required
+       version of ddppkkgg has been unpacked before. The required version depends
+       on the command used, for rrmm__ccoonnffffiillee and mmvv__ccoonnffffiillee it is 1.15.7.2,
+       for ssyymmlliinnkk__ttoo__ddiirr and ddiirr__ttoo__ssyymmlliinnkk it is 1.17.14:
+
+        Pre-Depends: dpkg (>= 1.17.14)
+
+       But in many cases the operation done by the program is not critical for
+       the package, and instead of using a pre-dependency we can call the
+       program only if we know that the required command is supported by the
+       currently installed ddppkkgg:
+
+
+            if dpkg-maintscript-helper supports _c_o_m_m_a_n_d; then
+               dpkg-maintscript-helper _c_o_m_m_a_n_d ...
+            fi
+
+       The command ssuuppppoorrttss will return 0 on success, 1 otherwise. The
+       ssuuppppoorrttss command will check if the environment variables as set by dpkg
+       and required by the script are present, and will consider it a failure
+       in case the environment is not sufficient.
+
+EENNVVIIRROONNMMEENNTT
+       DDPPKKGG__RROOOOTT
+           If set, it will be used as the filesystem root directory.
+
+       DDPPKKGG__AADDMMIINNDDIIRR
+           If set, it will be used as the ddppkkgg data directory.
+
+       DDPPKKGG__CCOOLLOORRSS
+           Sets the color mode (since dpkg 1.19.1).  The currently accepted
+           values are: aauuttoo (default), aallwwaayyss and nneevveerr.
+
+SSEEEE AALLSSOO
+       ddhh__iinnssttaallllddeebb(1).
+
+
+
+1.21.22                           2023-05-11        dpkg-maintscript-helper(1)

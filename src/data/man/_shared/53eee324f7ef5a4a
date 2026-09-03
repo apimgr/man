@@ -1,0 +1,333 @@
+RTLD(1)                   BSD General Commands Manual                  RTLD(1)
+
+NNAAMMEE
+     lldd--eellff..ssoo..11, lldd..ssoo, rrttlldd — run-time link-editor
+
+DDEESSCCRRIIPPTTIIOONN
+     The lldd--eellff..ssoo..11 utility is a self-contained shared object providing run-
+     time support for loading and link-editing shared objects into a process'
+     address space.  It is also commonly known as the dynamic linker.  It uses
+     the data structures contained within dynamically linked programs to de‐
+     termine which shared libraries are needed and loads them using the
+     mmap(2) system call.
+
+     After all shared libraries have been successfully loaded, lldd--eellff..ssoo..11
+     proceeds to resolve external references from both the main program and
+     all objects loaded.  A mechanism is provided for initialization routines
+     to be called on a per-object basis, giving a shared object an opportunity
+     to perform any extra set-up before execution of the program proper be‐
+     gins.  This is useful for C++ libraries that contain static constructors.
+
+     When resolving dependencies for the loaded objects, lldd--eellff..ssoo..11 trans‐
+     lates dynamic token strings in rpath and soname.  If the --zz oorriiggiinn option
+     of the static linker was set when linking the binary, the token expansion
+     is performed at the object load time, see ld(1).  The following strings
+     are recognized now:
+
+     _$_O_R_I_G_I_N    Translated to the full path of the loaded object.
+
+     _$_O_S_N_A_M_E    Translated to the name of the operating system implementation.
+
+     _$_O_S_R_E_L     Translated to the release level of the operating system.
+
+     _$_P_L_A_T_F_O_R_M  Translated to the machine hardware platform.
+
+     _$_L_I_B       Translated to the system library path component on the plat‐
+                form.  It is _l_i_b for native binaries, and typically _l_i_b_3_2 for
+                compat32 binaries.  Other translations might exist for other
+                ABIs supported on the platform.
+
+     The lldd--eellff..ssoo..11 utility itself is loaded by the kernel together with any
+     dynamically-linked program that is to be executed.  The kernel transfers
+     control to the dynamic linker.  After the dynamic linker has finished
+     loading, relocating, and initializing the program and its required shared
+     objects, it transfers control to the entry point of the program.  The
+     following search order is used to locate required shared objects:
+
+           1.   DT_RPATH of the referencing object unless that object also
+                contains a DT_RUNPATH tag
+           2.   DT_RPATH of the program unless the referencing object contains
+                a DT_RUNPATH tag
+           3.   Path indicated by LD_LIBRARY_PATH environment variable
+           4.   DT_RUNPATH of the referencing object
+           5.   Hints file produced by the ldconfig(8) utility
+           6.   The _/_l_i_b and _/_u_s_r_/_l_i_b directories, unless the referencing ob‐
+                ject was linked using the “--zz _n_o_d_e_f_a_u_l_t_l_i_b” option
+
+     The lldd--eellff..ssoo..11 utility recognizes a number of environment variables that
+     can be used to modify its behaviour.  On 64-bit architectures, the linker
+     for 32-bit objects recognizes all the environment variables listed below,
+     but is being prefixed with LD_32_, for example:
+     LD_32_TRACE_LOADED_OBJECTS.  If the activated image is setuid or setgid,
+     the variables are ignored.
+
+     The run-time linker is able to access the environment provided at process
+     startup.  After startup, environment variables are maintained by higher-
+     level libraries and are not accessible by the run-time linker.  At run-
+     time, effective settings can be queried using rtld_get_var(3), and some
+     of them can be changed with rtld_set_var(3).
+
+     LD_DUMP_REL_POST   If set, lldd--eellff..ssoo..11 will print a table containing all
+                        relocations after symbol binding and relocation.
+
+     LD_DUMP_REL_PRE    If set, lldd--eellff..ssoo..11 will print a table containing all
+                        relocations before symbol binding and relocation.
+
+     LD_DYNAMIC_WEAK    If set, use the ELF standard-compliant symbol lookup
+                        behavior: resolve to the first found symbol defini‐
+                        tion.
+
+                        By default, FreeBSD provides the non-standard symbol
+                        lookup behavior: when a weak symbol definition is
+                        found, remember the definition and keep searching in
+                        the remaining shared objects for a non-weak defini‐
+                        tion.  If found, the non-weak definition is preferred,
+                        otherwise the remembered weak definition is returned.
+
+                        Symbols exported by dynamic linker itself (see
+                        dlfcn(3)) are always resolved using FreeBSD rules re‐
+                        gardless of the presence of the variable.  This vari‐
+                        able is unset for set-user-ID and set-group-ID pro‐
+                        grams.
+
+     LD_LIBMAP          A library replacement list in the same format as
+                        libmap.conf(5).  For convenience, the characters ‘=’
+                        and ‘,’ can be used instead of a space and a newline.
+                        This variable is parsed after libmap.conf(5), and will
+                        override its entries.  This variable is unset for set-
+                        user-ID and set-group-ID programs.
+
+     LD_LIBMAP_DISABLE  If set, disables the use of libmap.conf(5) and
+                        LD_LIBMAP.  This variable is unset for set-user-ID and
+                        set-group-ID programs.
+
+     LD_ELF_HINTS_PATH  This variable will override the default location of
+                        “hints” file.  This variable is unset for set-user-ID
+                        and set-group-ID programs.
+
+     LD_LIBRARY_PATH    A colon separated list of directories, overriding the
+                        default search path for shared libraries.  This vari‐
+                        able is unset for set-user-ID and set-group-ID pro‐
+                        grams.
+
+     LD_LIBRARY_PATH_RPATH
+                        If the variable is specified and has a value starting
+                        with any of ´y´, ´Y´ or ´1´ symbols, the path speci‐
+                        fied by LD_LIBRARY_PATH variable is allowed to over‐
+                        ride the path from DT_RPATH for binaries which does
+                        not contain DT_RUNPATH tag.  For such binaries, when
+                        the variable LD_LIBRARY_PATH_RPATH is set, “--zz
+                        _n_o_d_e_f_a_u_l_t_l_i_b” link-time option is ignored as well.
+
+     LD_PRELOAD         A list of shared libraries, separated by colons and/or
+                        white space, to be linked in before any other shared
+                        libraries.  If the directory is not specified then the
+                        directories specified by LD_LIBRARY_PATH will be
+                        searched first followed by the set of built-in stan‐
+                        dard directories.  This variable is unset for set-
+                        user-ID and set-group-ID programs.
+
+     LD_PRELOAD_FDS     A colon separated list of file descriptor numbers for
+                        libraries.  This is intended for preloading libraries
+                        in which we already have a file descriptor.  This may
+                        optimize the process of loading libraries because we
+                        do not have to look for them in directories.  It may
+                        also be useful in a capability base system where we do
+                        not have access to global namespaces such as the
+                        filesystem.
+
+     LD_LIBRARY_PATH_FDS
+                        A colon separated list of file descriptor numbers for
+                        library directories.  This is intended for use within
+                        capsicum(4) sandboxes, when global namespaces such as
+                        the filesystem are unavailable.  It is consulted just
+                        after LD_LIBRARY_PATH.  This variable is unset for
+                        set-user-ID and set-group-ID programs.
+
+     LD_BIND_NOT        When set to a nonempty string, prevents modifications
+                        of the PLT slots when doing bindings.  As result, each
+                        call of the PLT-resolved function is resolved.  In
+                        combination with debug output, this provides complete
+                        account of all bind actions at runtime.  This variable
+                        is unset for set-user-ID and set-group-ID programs.
+
+     LD_BIND_NOW        When set to a nonempty string, causes lldd--eellff..ssoo..11 to
+                        relocate all external function calls before starting
+                        execution of the program.  Normally, function calls
+                        are bound lazily, at the first call of each function.
+                        LD_BIND_NOW increases the start-up time of a program,
+                        but it avoids run-time surprises caused by unexpect‐
+                        edly undefined functions.
+
+     LD_TRACE_LOADED_OBJECTS
+                        When set to a nonempty string, causes lldd--eellff..ssoo..11 to
+                        exit after loading the shared objects and printing a
+                        summary which includes the absolute pathnames of all
+                        objects, to standard output.
+
+     LD_TRACE_LOADED_OBJECTS_ALL
+                        When set to a nonempty string, causes lldd--eellff..ssoo..11 to
+                        expand the summary to indicate which objects caused
+                        each object to be loaded.
+
+     LD_TRACE_LOADED_OBJECTS_FMT1
+
+     LD_TRACE_LOADED_OBJECTS_FMT2
+                        When set, these variables are interpreted as format
+                        strings a la printf(3) to customize the trace output
+                        and are used by ldd(1)'s --ff option and allows ldd(1)
+                        to be operated as a filter more conveniently.  If the
+                        dependency name starts with string _l_i_b,
+                        LD_TRACE_LOADED_OBJECTS_FMT1 is used, otherwise
+                        LD_TRACE_LOADED_OBJECTS_FMT2 is used.  The following
+                        conversions can be used:
+
+                        %a    The main program's name (also known as
+                              “__progname”).
+
+                        %A    The value of the environment variable
+                              LD_TRACE_LOADED_OBJECTS_PROGNAME.  Typically
+                              used to print both the names of programs and
+                              shared libraries being inspected using ldd(1).
+
+                        %o    The library name.
+
+                        %p    The full pathname as determined by rrttlldd's li‐
+                              brary search rules.
+
+                        %x    The library's load address.
+
+                        Additionally, ‘\n’ and ‘\t’ are recognized and have
+                        their usual meaning.
+
+     LD_UTRACE          If set, lldd--eellff..ssoo..11 will log events such as the load‐
+                        ing and unloading of shared objects via utrace(2).
+
+     LD_LOADFLTR        If set, lldd--eellff..ssoo..11 will process the filtee dependen‐
+                        cies of the loaded objects immediately, instead of
+                        postponing it until required.  Normally, the filtees
+                        are opened at the time of the first symbol resolution
+                        from the filter object.
+
+     LD_SHOW_AUXV       If set, causes lldd--eellff..ssoo..11 to dump content of the aux
+                        vector to standard output, before passing control to
+                        any user code.
+
+     LD_STATIC_TLS_EXTRA
+                        If the variable is specified and has a numeric value,
+                        lldd--eellff..ssoo..11 will set the size of the static TLS extra
+                        space to the specified number of bytes.  The static
+                        TLS extra space is used when loading objects compiled
+                        for initial-exec TLS code model with dlopen(3).  The
+                        minimum value that can be specified is ´128´.
+
+     LD_NO_DL_ITERATE_PHDR_AFTER_FORK
+                        Allow dl_iterate_phdr(3) to block in callback, without
+                        causing deadlock with the fork(2).  The drawback is
+                        that the image started in this mode cannot use
+                        dl_iterate_phdr(3) after fork.
+
+DDIIRREECCTT EEXXEECCUUTTIIOONN MMOODDEE
+     lldd--eellff..ssoo..11 is typically used implicitly, loaded by the kernel as re‐
+     quested by the PT_INTERP program header of the executed binary.  FreeBSD
+     also supports a direct execution mode for the dynamic linker.  In this
+     mode, the user explicitly executes lldd--eellff..ssoo..11 and provides the path of
+     the program to be linked and executed as an argument.  This mode allows
+     use of a non-standard dynamic linker for a program activation without
+     changing the binary or without changing the installed dynamic linker.
+     Execution options may be specified.
+
+     The syntax of the direct invocation is
+
+           _/_l_i_b_e_x_e_c_/_l_d_-_e_l_f_._s_o_._1 [--bb _e_x_e] [--dd] [--ff _f_d] [--oo _O_P_T_=_V_A_L_U_E] [--pp] [--uu]
+           [--vv] [----] _i_m_a_g_e___p_a_t_h [_i_m_a_g_e _a_r_g_u_m_e_n_t_s]
+
+     The options are:
+
+     --bb _e_x_e  Use the executable _e_x_e instead of _i_m_a_g_e___p_a_t_h for activation.  If
+             this option is specified, _i_m_a_g_e___p_a_t_h is only used to provide the
+             _a_r_g_v_[_0_] value to the program.
+
+     --dd      Turn off the emulation of the binary execute permission.
+
+     --ff _f_d   File descriptor _f_d references the binary to be activated by
+             lldd--eellff..ssoo..11.  It must already be opened in the process when exe‐
+             cuting lldd--eellff..ssoo..11.  If this option is specified, _i_m_a_g_e___p_a_t_h is
+             only used to provide the _a_r_g_v_[_0_] value to the program.
+
+     --oo _O_P_T_=_V_A_L_U_E
+             Set the _O_P_T configuration variable to the value _V_A_L_U_E.  The pos‐
+             sible variable names are listed above as LD_ prefixed environment
+             variables, but here are referenced without the LD_ prefix.  A
+             configuration variable set this way does not leak into the acti‐
+             vated image's environment.
+
+             The option can be repeated as many times as needed to set all
+             configuration parameters.  The parameters set using this option
+             have priority over the same parameters assigned via environment.
+
+     --pp      If the _i_m_a_g_e___p_a_t_h argument specifies a name which does not con‐
+             tain a slash “/” character, lldd--eellff..ssoo..11 uses the search path pro‐
+             vided by the environment variable PATH to find the binary to exe‐
+             cute.
+
+     --uu      Ignore all LD_ environment variables and previous command line --oo
+             options that otherwise affect the dynamic linker behavior.
+
+     --vv      Display information about this run-time linker binary, then exit.
+
+     ----      Ends the lldd--eellff..ssoo..11 options.  The argument following ---- is in‐
+             terpreted as the path of the binary to execute.
+
+     In the direct execution mode, lldd--eellff..ssoo..11 emulates verification of the
+     binary execute permission for the current user.  This is done to avoid
+     breaking user expectations in naively restricted execution environments.
+     The verification only uses Unix DACs, ignores ACLs, and is naturally
+     prone to race conditions.  Environments which rely on such restrictions
+     are weak and breakable on their own.  It can be turned off with the --dd
+     option.
+
+VVEERRSSIIOONNIINNGG
+     Newer lldd--eellff..ssoo..11 might provide some features or changes in runtime be‐
+     havior that cannot be easily detected at runtime by checking of the nor‐
+     mal exported symbols.  Note that it is almost always wrong to verify
+     __FreeBSD_version in userspace to detect features, either at compile or
+     at run time, because either kernel, or libc, or environment variables
+     could not match the running lldd--eellff..ssoo..11.
+
+     To solve the problem, lldd--eellff..ssoo..11 exports some feature indicators in the
+     FreeBSD private symbols namespace FBSDprivate_1.0.  Symbols start with
+     the _rtld_version prefix.  Current list of defined symbols and corre‐
+     sponding features is:
+
+     _rtld_version__FreeBSD_version
+             Symbol exports the value of the __FreeBSD_version definition as
+             it was provided during the lldd--eellff..ssoo..11 build.  The symbol is al‐
+             ways present since the _rtld_version facility was introduced.
+
+     _rtld_version_laddr_offset
+             The _l___a_d_d_r member of the _l_i_n_k___m_a_p structure contains the load
+             offset of the shared object.  Before that, _l___a_d_d_r contained the
+             base address of the library.  See dlinfo(3).
+
+             Also it indicates the presence of _l___r_e_f_n_a_m_e member of the struc‐
+             ture.
+
+     _rtld_version_dlpi_tls_data
+             The _d_l_p_i___t_l_s___d_a_t_a member of the structure _d_l___p_h_d_r___i_n_f_o contains
+             the address of the module TLS segment for the calling thread, and
+             not the address of the initialization segment.
+
+FFIILLEESS
+     /var/run/ld-elf.so.hints    Hints file.
+     /var/run/ld-elf32.so.hints  Hints file for 32-bit binaries on 64-bit sys‐
+                                 tem.
+     /etc/libmap.conf            The libmap configuration file.
+     /etc/libmap32.conf          The libmap configuration file for 32-bit bi‐
+                                 naries on 64-bit system.
+
+SSEEEE AALLSSOO
+     ld(1), ldd(1), dlinfo(3), rtld_get_var(3), capsicum(4), elf(5),
+     libmap.conf(5), ldconfig(8)
+
+BSD                              July 24, 2024                             BSD

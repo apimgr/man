@@ -1,0 +1,563 @@
+GRE(4)                   BSD Kernel Interfaces Manual                   GRE(4)
+
+NNAAMMEE
+     ggrree, mmggrree, eeggrree, nnvvggrree — Generic Routing Encapsulation network device
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ggrree
+
+DDEESSCCRRIIPPTTIIOONN
+     The ggrree pseudo-device provides interfaces for tunnelling protocols across
+     IPv4 and IPv6 networks using the Generic Routing Encapsulation (GRE) en‐
+     capsulation protocol.
+
+     GRE datagrams (IP protocol number 47) consist of a GRE header and an
+     outer IP header for encapsulating another protocol's datagram.  The GRE
+     header specifies the type of the encapsulated datagram, allowing for the
+     tunnelling of multiple protocols.
+
+     Different tunnels between the same endpoints may be distinguished by an
+     optional Key field in the GRE header.  The Key field may be partitioned
+     to carry flow information about the encapsulated traffic to allow better
+     use of multipath links.
+
+     This pseudo driver provides the clonable network interfaces:
+
+     ggrree     Point-to-point Layer 3 tunnel interfaces.
+
+     mmggrree    Point-to-multipoint Layer 3 tunnel interfaces.
+
+     eeggrree    Point-to-point Ethernet tunnel interfaces.
+
+     nnvvggrree   Network Virtualization using Generic Routing Encapsulation
+             (NVGRE) overlay Ethernet network interfaces.
+
+     eeooiipp    MikroTik Ethernet over IP tunnel interfaces.
+
+     See eoip(4) for information regarding MikroTik Ethernet over IP inter‐
+     faces.
+
+     All GRE packet processing in the system is allowed or denied by setting
+     the _n_e_t_._i_n_e_t_._g_r_e_._a_l_l_o_w sysctl(8) variable.  To allow GRE packet process‐
+     ing, set _n_e_t_._i_n_e_t_._g_r_e_._a_l_l_o_w to 1.
+
+     ggrree, mmggrree, eeggrree, and nnvvggrree interfaces can be created at runtime using the
+     iiffccoonnffiigg iiffaaccee_N ccrreeaattee command or by setting up a hostname.if(5) configu‐
+     ration file for netstart(8).
+
+     For correct operation, encapsulated traffic must not be routed over the
+     interface itself.  This can be implemented by adding a distinct or a more
+     specific route to the tunnel destination than the hosts or networks
+     routed via the tunnel interface.  Alternatively, the tunnel traffic may
+     be configured in a separate routing table to the encapsulated traffic.
+
+   PPooiinntt--ttoo--PPooiinntt LLaayyeerr 33 GGRREE ttuunnnneell iinntteerrffaacceess ((ggrree))
+     A ggrree tunnel can encapsulate IPv4, IPv6, and MPLS packets.  The MTU is
+     set to 1476 by default to match the value used by Cisco routers.
+
+     ggrree supports sending keepalive packets to the remote endpoint which al‐
+     lows tunnel failure to be detected.  To return keepalives, the remote
+     host must be configured to forward IP packets received from inside the
+     tunnel back to the address of the local tunnel endpoint.
+
+     ggrree interfaces may be configured to receive IPv4 packets in Web Cache
+     Communication Protocol (WCCP) encapsulation by setting the lliinnkk00 flag on
+     the interface.  WCCP reception may be enabled globally by setting the
+     _n_e_t_._i_n_e_t_._g_r_e_._w_c_c_p sysctl value to 1.  Some magic with the packet filter
+     configuration and a caching proxy like squid are needed to do anything
+     useful with these packets.  This sysctl requires _n_e_t_._i_n_e_t_._g_r_e_._a_l_l_o_w to
+     also be set.
+
+   PPooiinntt--ttoo--MMuullttiippooiinntt LLaayyeerr 33 GGRREE ttuunnnneell iinntteerrffaacceess ((mmggrree))
+     mmggrree interfaces can encapsulate IPv4, IPv6, and MPLS packets.  Unlike a
+     point-to-point interface, mmggrree interfaces are configured with an address
+     on an IP subnet.  Peers on that subnet are mapped to the addresses of
+     multiple tunnel endpoints.
+
+     The MTU is set to 1476 by default to match the value used by Cisco
+     routers.
+
+   PPooiinntt--ttoo--PPooiinntt EEtthheerrnneett oovveerr GGRREE ttuunnnneell iinntteerrffaacceess ((eeggrree))
+     An eeggrree tunnel interface carries Ethernet over GRE (EoGRE).  Ethernet
+     traffic is encapsulated using Transparent Ethernet (0x6558) as the proto‐
+     col identifier in the GRE header, as per RFC 1701.  The MTU is set to
+     1500 by default.
+
+   NNeettwwoorrkk VViirrttuuaalliizzaattiioonn uussiinngg GGRREE iinntteerrffaacceess ((nnvvggrree))
+     nnvvggrree interfaces allow construction of virtual overlay Ethernet networks
+     on top of an IPv4 or IPv6 underlay network as per RFC 7367.  Ethernet
+     traffic is encapsulated using Transparent Ethernet (0x6558) as the proto‐
+     col identifier in the GRE header, a 24-bit Virtual Subnet ID (VSID), and
+     an 8-bit FlowID.
+
+     By default the MTU of an nnvvggrree interface is set to 1500, and the Don't
+     Fragment flag is set.  The MTU on the network interfaces carrying under‐
+     lay network traffic must be raised to accommodate this and the overhead
+     of the NVGRE encapsulation, or the nnvvggrree interface must be reconfigured
+     for less capable underlays.
+
+     The underlay network parameters on a nnvvggrree interface are a unicast tunnel
+     source address, a multicast tunnel destination address, and a parent net‐
+     work interface.  The unicast source address is used as the NVE Provider
+     Address (PA) on the underlay network.  The parent interface is used to
+     identify which interface the multicast group should be joined to.
+
+     The multicast group is used to transport broadcast and multicast traffic
+     from the overlay to other participating NVGRE endpoints.  It is also used
+     to flood unicast traffic to Ethernet addresses in the overlay with an un‐
+     known association to a NVGRE endpoint.  Traffic received from other NVGRE
+     endpoints, either to the Provider Address or via the multicast group, is
+     used to learn associations between Ethernet addresses in the overlay net‐
+     work and the Provider Addresses of NVGRE endpoints in the underlay.
+
+   PPrrooggrraammmmiinngg IInntteerrffaaccee
+     ggrree, mmggrree, eeggrree, and nnvvggrree interfaces support the following ioctl(2)
+     calls for configuring tunnel options:
+
+        SIOCSLIFPHYADDR _s_t_r_u_c_t _i_f___l_a_d_d_r_r_e_q _*
+                Set the IPv4 or IPv6 addresses for the encapsulating IP pack‐
+                ets.  The addresses may only be configured while the interface
+                is down.
+
+                ggrree and eeggrree interfaces support configuration of unicast IP
+                addresses as the tunnel endpoints.
+
+                mmggrree interfaces support configuration of a unicast local IP
+                address, and require an AF_UNSPEC destination address.
+
+                nnvvggrree interfaces support configuration of a unicast IP address
+                as the local endpoint and a multicast group address as the
+                destination address.
+
+        SIOCGLIFPHYADDR _s_t_r_u_c_t _i_f___l_a_d_d_r_r_e_q _*
+                Get the addresses used for the encapsulating IP packets.
+
+        SIOCDIFPHYADDR _s_t_r_u_c_t _i_f_r_e_q _*
+                Clear the addresses used for the encapsulating IP packets.
+                The addresses may only be cleared while the interface is down.
+
+        SIOCSVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Configure a virtual network identifier for use in the GRE Key
+                header.  The virtual network identifier may only be configured
+                while the interface is down.
+
+                ggrree, mmggrree, and eeggrree interfaces configured with a virtual net‐
+                work identifier will enable the use of the GRE Key header.
+                The Key is a 32-bit value by default, or a 24-bit value when
+                the virtual network flow identifier is enabled.
+
+                nnvvggrree interfaces use the virtual network identifier in the
+                24-bit Virtual Subnet Identifier (VSID) aka Tenant Network
+                Identifier (TNI) field in of the GRE Key header.
+
+        SIOCGVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the virtual network identifier used in the GRE Key header.
+
+        SIOCDVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Disable the use of the virtual network identifier.  The vir‐
+                tual network identifier may only be disabled while the inter‐
+                face is down.
+
+                When the virtual network identifier is disabled on ggrree, mmggrree,
+                and eeggrree interfaces, it disables the use of the GRE Key
+                header.
+
+                nnvvggrree interfaces do not support this ioctl as a Virtual Subnet
+                Identifier is required by the protocol.
+
+        SIOCSLIFPHYRTABLE _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the routing table the tunnel traffic operates in.  The
+                routing table may only be configured while the interface is
+                down.
+
+        SIOCGLIFPHYRTABLE _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the routing table the tunnel traffic operates in.
+
+        SIOCSLIFPHYTTL _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the Time-To-Live field in IPv4 encapsulation headers, or
+                the Hop Limit field in IPv6 encapsulation headers.
+
+                ggrree and mmggrree interfaces configured with a TTL of -1 will copy
+                the TTL in and out of the encapsulated protocol headers.
+
+        SIOCGLIFPHYTTL _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the value used in the Time-To-Live field in an IPv4 encap‐
+                sulation header or the Hop Limit field in an IPv6 encapsula‐
+                tion header.
+
+        SIOCSLIFPHYDF _s_t_r_u_c_t _i_f_r_e_q _*
+                Configure whether the tunnel traffic sent by the interface can
+                be fragmented or not.  This sets the Don't Fragment (DF) bit
+                on IPv4 packets, and disables fragmentation of IPv6 packets.
+
+        SIOCGLIFPHYDF _s_t_r_u_c_t _i_f_r_e_q _*
+                Get whether the tunnel traffic sent by the interface can be
+                fragmented or not.
+
+        SIOCSTXHPRIO _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the priority value used in the Type of Service field in
+                IPv4 headers, or the Traffic Class field in IPv6 headers.
+                Values may be from 0 to 7, or IF_HDRPRIO_PACKET to specify
+                that the current priority of a packet should be used.
+
+                ggrree and mmggrree interfaces configured with a value of
+                IF_HDRPRIO_PAYLOAD will copy the priority from encapsulated
+                protocol headers.
+
+        SIOCGTXHPRIO _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the priority value used in the Type of Service field in
+                IPv4 headers, or the Traffic Class field in IPv6 headers.
+
+     ggrree, mmggrree, and eeggrree interfaces support the following ioctl(2) calls:
+
+        SIOCSVNETFLOWID _s_t_r_u_c_t _i_f_r_e_q _*
+                Enable or disable the partitioning of the optional GRE Key
+                header into a 24-bit virtual network identifier and an 8-bit
+                flow identifier.
+
+                The interface must already be configured with a virtual net‐
+                work identifier before enabling flow identifiers in the GRE
+                Key header.  The configured virtual network identify must also
+                fit into 24 bits.
+
+        SIOCDVNETFLOWID _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the status of the partitioning of the GRE key.
+
+     ggrree interfaces support the following ioctl(2) calls:
+
+        SIOCSETKALIVE _s_t_r_u_c_t _i_f_k_a_l_i_v_e_r_e_q _*
+                Enable the transmission of keepalive packets to detect tunnel
+                failure.
+
+                Setting the keepalive period or count to 0 disables keepalives
+                on the tunnel.
+
+        SIOCGETKALIVE _s_t_r_u_c_t _i_f_k_a_l_i_v_e_r_e_q _*
+                Get the configuration of keepalive packets.
+
+     nnvvggrree interfaces support the following ioctl(2) calls:
+
+        SIOCSIFPARENT _s_t_r_u_c_t _i_f___p_a_r_e_n_t _*
+                Configure which interface will be joined to the multicast
+                group specified by the tunnel destination address.  The parent
+                interface may only be configured while the interface is down.
+
+        SIOCGIFPARENT _s_t_r_u_c_t _i_f___p_a_r_e_n_t _*
+                Get the name of the interface used for multicast communica‐
+                tion.
+
+        SIOCDIFPARENT _s_t_r_u_c_t _i_f_r_e_q _*
+                Remove the configuration of the interface used for multicast
+                communication.
+
+   SSeeccuurriittyy CCoonnssiiddeerraattiioonnss
+     The GRE protocol in all its flavours does not provide any integrated se‐
+     curity features.  GRE should only be deployed on trusted private net‐
+     works, or protected with IPsec to add authentication and encryption for
+     confidentiality.  IPsec is especially recommended when transporting GRE
+     over the public internet.
+
+     The Packet Filter pf(4) can be used to filter tunnel traffic with end‐
+     point policies pf.conf(5).
+
+     The Time-to-Live (TTL) value of a tunnel can be set to 1 or a low value
+     to restrict the traffic to the local network:
+
+           # ifconfig gre0 tunnelttl 1
+
+EEXXAAMMPPLLEESS
+   PPooiinntt--ttoo--PPooiinntt LLaayyeerr 33 GGRREE ttuunnnneell iinntteerrffaacceess ((ggrree)) eexxaammppllee
+     Host X ---- Host A ------------ tunnel ------------ Cisco D ---- Host E
+                    \                                      /
+                     \                                    /
+                      +------ Host B ------ Host C ------+
+
+     On Host A (OpenBSD):
+
+           # route add default B
+           # ifconfig greN create
+           # ifconfig greN A D netmask 0xffffffff up
+           # ifconfig greN tunnel A D
+           # route add E D
+
+     On Host D (Cisco):
+
+           Interface TunnelX
+            ip unnumbered D   ! e.g. address from Ethernet interface
+            tunnel source D   ! e.g. address from Ethernet interface
+            tunnel destination A
+           ip route C <some interface and mask>
+           ip route A mask C
+           ip route X mask tunnelX
+
+     OR
+
+     On Host D (OpenBSD):
+
+           # route add default C
+           # ifconfig greN create
+           # ifconfig greN D A
+           # ifconfig greN tunnel D A
+
+     To reach Host A over the tunnel (from Host D), there has to be an alias
+     on Host A for the Ethernet interface:
+
+           # ifconfig <etherif> alias Y
+
+     and on the Cisco:
+
+           ip route Y mask tunnelX
+
+     ggrree keepalive packets may be enabled with ifconfig(8) like this:
+
+           # ifconfig greN keepalive period count
+
+     This will send a keepalive packet every _p_e_r_i_o_d seconds.  If no response
+     is received in _c_o_u_n_t * _p_e_r_i_o_d seconds, the link is considered down.  To
+     return keepalives, the remote host must be configured to forward packets:
+
+           # sysctl net.inet.ip.forwarding=1
+
+     If pf(4) is enabled then it is necessary to add a pass rule specific for
+     the keepalive packets.  The rule must use nnoo ssttaattee because the keepalive
+     packet is entering the network stack multiple times.  In most cases the
+     following should work:
+
+           pass quick on gre proto gre no state
+
+   PPooiinntt--ttoo--MMuullttiippooiinntt LLaayyeerr 33 GGRREE ttuunnnneell iinntteerrffaacceess ((mmggrree)) eexxaammppllee
+     mmggrree can be used to build a point-to-multipoint tunnel network to several
+     hosts using a single mmggrree interface.
+
+     In this example the host A has an outer IP of 198.51.100.12, host B has
+     203.0.113.27, and host C has 203.0.113.254.
+
+     Addressing within the tunnel is done using 192.0.2.0/24:
+
+                             +--- Host B
+                            /
+                           /
+     Host A --- tunnel ---+
+                           \
+                            \
+                             +--- Host C
+
+     On Host A:
+
+           # ifconfig mgreN create
+           # ifconfig mgreN tunneladdr 198.51.100.12
+           # ifconfig mgreN inet 192.0.2.1 netmask 0xffffff00 up
+
+     On Host B:
+
+           # ifconfig mgreN create
+           # ifconfig mgreN tunneladdr 203.0.113.27
+           # ifconfig mgreN inet 192.0.2.2 netmask 0xffffff00 up
+
+     On Host C:
+
+           # ifconfig mgreN create
+           # ifconfig mgreN tunneladdr 203.0.113.254
+           # ifconfig mgreN inet 192.0.2.3 netmask 0xffffff00 up
+
+     To reach Host B over the tunnel (from Host A), there has to be a route on
+     Host A specifying the next-hop:
+
+           # route add -host 192.0.2.2 203.0.113.27 -iface -ifp mgreN
+
+     Similarly, to reach Host A over the tunnel from Host B, a route must be
+     present on B with A's outer IP as next-hop:
+
+           # route add -host 192.0.2.1 198.51.100.12 -iface -ifp mgreN
+
+     The same tunnel interface can then be used between host B and C by adding
+     the appropriate routes, making the network any-to-any instead of hub-and-
+     spoke:
+
+     On Host B:
+           # route add -host 192.0.2.3 203.0.113.254 -iface -ifp mgreN
+
+     On Host C:
+           # route add -host 192.0.2.2 203.0.113.27 -iface -ifp mgreN
+
+   PPooiinntt--ttoo--PPooiinntt EEtthheerrnneett oovveerr GGRREE ttuunnnneell iinntteerrffaacceess ((eeggrree)) eexxaammppllee
+     eeggrree can be used to carry Ethernet traffic between two endpoints over an
+     IP network, including the public internet.  This can also be achieved us‐
+     ing etherip(4), but eeggrree offers the ability to carry different Ethernet
+     networks between the same endpoints by using virtual network identifiers
+     to distinguish between them.
+
+     For example, a pair of routers separated by the internet could bridge
+     several Ethernet networks using eeggrree and bridge(4).
+
+     In this example the first router has a public IP of 192.0.2.1, and the
+     second router has 203.0.113.2.  They are connecting the Ethernet networks
+     on two vlan(4) interfaces over the internet.  A separate eeggrree tunnel is
+     created for each VLAN and given different virtual network identifiers so
+     the routers can tell which network the encapsulated traffic is for.  The
+     eeggrree interfaces are explicitly configured to provide the same MTU as the
+     vlan(4) interfaces (1500 bytes) with fragmentation enabled so they can be
+     carried over the internet, which has the same or lower MTU.
+
+     At the first site:
+
+           # ifconfig vlan0 vnetid 100
+           # ifconfig egre0 create
+           # ifconfig egre0 tunnel 192.0.2.1 203.0.113.2
+           # ifconfig egre0 vnetid 100
+           # ifconfig egre0 mtu 1500 -tunneldf
+           # ifconfig egre0 up
+           # ifconfig bridge0 add vlan0 add egre0 up
+           # ifconfig vlan1 vnetid 200
+           # ifconfig egre1 create
+           # ifconfig egre1 tunnel 192.0.2.1 203.0.113.2
+           # ifconfig egre1 vnetid 200
+           # ifconfig egre1 mtu 1500 -tunneldf
+           # ifconfig egre1 up
+           # ifconfig bridge1 add vlan1 add egre1 up
+
+     At the second site:
+
+           # ifconfig vlan0 vnetid 100
+           # ifconfig egre0 create
+           # ifconfig egre0 tunnel 203.0.113.2 192.0.2.1
+           # ifconfig egre0 vnetid 100
+           # ifconfig egre0 mtu 1500 -tunneldf
+           # ifconfig egre0 up
+           # ifconfig bridge0 add vlan0 add egre0 up
+           # ifconfig vlan1 vnetid 200
+           # ifconfig egre1 create
+           # ifconfig egre1 tunnel 203.0.113.2 192.0.2.1
+           # ifconfig egre1 vnetid 200
+           # ifconfig egre1 mtu 1500 -tunneldf
+           # ifconfig egre1 up
+           # ifconfig bridge1 add vlan1 add egre1 up
+
+   NNeettwwoorrkk VViirrttuuaalliizzaattiioonn uussiinngg GGRREE iinntteerrffaacceess ((nnvvggrree)) eexxaammppllee
+     NVGRE can be used to build a distinct logical Ethernet network on top of
+     another network.  nnvvggrree is therefore like a vlan(4) interface configured
+     on top of a physical Ethernet interface, except it can sit on any IP net‐
+     work capable of multicast.
+
+     The following shows a basic nnvvggrree configuration and an equivalent vlan(4)
+     configuration.  In the examples, 192.168.0.1/24 will be the network con‐
+     figured on the relevant virtual interfaces.  The NVGRE underlay network
+     will be configured on 100.64.10.0/24, and will use 239.1.1.100 as the
+     multicast group address.
+
+     The vlan(4) interface only relies on Ethernet, it does not rely on IP
+     configuration on the parent interface:
+
+           # ifconfig em0 up
+           # ifconfig vlan0 create
+           # ifconfig vlan0 parent em0
+           # ifconfig vlan0 vnetid 10
+           # ifconfig vlan0 inet 192.168.0.1/24
+           # ifconfig vlan0 up
+
+     nnvvggrree relies on IP configuration on the parent interface, and an MTU
+     large enough to carry the encapsulated traffic:
+
+           # ifconfig em0 mtu 1600
+           # ifconfig em0 inet 100.64.10.1/24
+           # ifconfig em0 up
+           # ifconfig nvgre0 create
+           # ifconfig nvgre0 parent em0 tunnel 100.64.10.1 239.1.1.100
+           # ifconfig nvgre0 vnetid 10010
+           # ifconfig nvgre0 inet 192.168.0.1/24
+           # ifconfig nvgre0 up
+
+     NVGRE is intended for use in a multitenant datacentre environment to pro‐
+     vide each customer with distinct Ethernet networks as needed, but without
+     running into the limit on the number of VLAN tags, and without requiring
+     reconfiguration of the underlying Ethernet infrastructure.  Another way
+     to look at it is NVGRE can be used to construct multipoint Ethernet VPNs
+     across an IP core.
+
+     For example, if a customer has multiple virtual machines running in
+     vmm(4) on distinct physical hosts, nnvvggrree and bridge(4) can be used to
+     provide network connectivity between the tap(4) interfaces connected to
+     the virtual machines.  If there are 3 virtual machines, all using tap0 on
+     each hosts, and those hosts are connected to the same network described
+     above, nnvvggrree with a distinct virtual network identifier and multicast
+     group can be created for them.  The following assumes nvgre1 and bridge1
+     have already been created on each host, and em0 has had the MTU raised:
+
+     On physical host 1:
+
+           # ifconfig em0 inet 100.64.10.10/24
+           # ifconfig nvgre1 parent em0 tunnel 100.64.10.10 239.1.1.111
+           # ifconfig nvgre1 vnetid 10011
+           # ifconfig bridge1 add nvgre1 add tap0 up
+
+     On physical host 2:
+
+           # ifconfig em0 inet 100.64.10.11/24
+           # ifconfig nvgre1 parent em0 tunnel 100.64.10.11 239.1.1.111
+           # ifconfig nvgre1 vnetid 10011
+           # ifconfig bridge1 add nvgre1 add tap0 up
+
+     On physical host 3:
+
+           # ifconfig em0 inet 100.64.10.12/24
+           # ifconfig nvgre1 parent em0 tunnel 100.64.10.12 239.1.1.111
+           # ifconfig nvgre1 vnetid 10011
+           # ifconfig bridge1 add nvgre1 add tap0 up
+
+     Being able to carry working multicast and jumbo frames over the public
+     internet is unlikely, which makes it difficult to use NVGRE to extended
+     Ethernet VPNs between different sites.  nnvvggrree and eeggrree can be bridged to‐
+     gether to provide such connectivity.  See the eeggrree section for an exam‐
+     ple.
+
+SSEEEE AALLSSOO
+     eoip(4), inet(4), ip(4), netintro(4), options(4), hostname.if(5),
+     protocols(5), ifconfig(8), netstart(8), sysctl(8)
+
+SSTTAANNDDAARRDDSS
+     S. Hanks, T. Li, D. Farinacci, and P. Traina, _G_e_n_e_r_i_c _R_o_u_t_i_n_g
+     _E_n_c_a_p_s_u_l_a_t_i_o_n _(_G_R_E_), RFC 1701, October 1994.
+
+     S. Hanks, T. Li, D. Farinacci, and P. Traina, _G_e_n_e_r_i_c _R_o_u_t_i_n_g
+     _E_n_c_a_p_s_u_l_a_t_i_o_n _o_v_e_r _I_P_v_4 _n_e_t_w_o_r_k_s, RFC 1702, October 1994.
+
+     D. Farinacci, T. Li, S. Hanks, D. Meyer, and P. Traina, _G_e_n_e_r_i_c _R_o_u_t_i_n_g
+     _E_n_c_a_p_s_u_l_a_t_i_o_n _(_G_R_E_), RFC 2784, March 2000.
+
+     G. Dommety, _K_e_y _a_n_d _S_e_q_u_e_n_c_e _N_u_m_b_e_r _E_x_t_e_n_s_i_o_n_s _t_o _G_R_E, RFC 2890,
+     September 2000.
+
+     T. Worster, Y. Rekhter, and E. Rosen, _E_n_c_a_p_s_u_l_a_t_i_n_g _M_P_L_S _i_n _I_P _o_r _G_e_n_e_r_i_c
+     _R_o_u_t_i_n_g _E_n_c_a_p_s_u_l_a_t_i_o_n _(_G_R_E_), RFC 4023, March 2005.
+
+     P. Garg and Y. Wang, _N_V_G_R_E_: _N_e_t_w_o_r_k _V_i_r_t_u_a_l_i_z_a_t_i_o_n _U_s_i_n_g _G_e_n_e_r_i_c _R_o_u_t_i_n_g
+     _E_n_c_a_p_s_u_l_a_t_i_o_n, RFC 7637, September 2015.
+
+     _W_e_b _C_a_c_h_e _C_o_o_r_d_i_n_a_t_i_o_n _P_r_o_t_o_c_o_l _V_1_._0, https://tools.ietf.org/html/draft-
+     ietf-wrec-web-pro-00.txt.
+
+     _W_e_b _C_a_c_h_e _C_o_o_r_d_i_n_a_t_i_o_n _P_r_o_t_o_c_o_l _V_2_._0, https://tools.ietf.org/html/draft-
+     wilson-wrec-wccp-v2-00.txt.
+
+AAUUTTHHOORRSS
+     Heiko W. Rupp <_h_w_r_@_p_i_l_h_u_h_n_._d_e>
+
+CCAAVVEEAATTSS
+     RFC 1701 and RFC 2890 describe a variety of optional GRE header fields in
+     the protocol that are not implemented in the ggrree and eeggrree interface driv‐
+     ers.  The only optional field the drivers implement support for is the
+     Key header.
+
+     ggrree interfaces skip the redirect header in WCCPv2 GRE encapsulated pack‐
+     ets.
+
+     The NVGRE RFC specifies VSIDs 0 (0x0) to 4095 (0xfff) as reserved for fu‐
+     ture use, and VSID 16777215 (0xffffff) for use for vendor-specific end‐
+     point communication.  The NVGRE RFC also explicitly states encapsulated
+     Ethernet packets must not contain IEEE 802.1Q (VLAN) tags.  The nnvvggrree
+     driver does not restrict the use of these VSIDs, and does not prevent the
+     configuration of child vlan(4) interfaces or the bridging of VLAN tagged
+     traffic across the tunnel.  These non-restrictions allow non-compliant
+     tunnels to be configured which may not interoperate with other vendors.
+
+BSD                           September 13, 2022                           BSD

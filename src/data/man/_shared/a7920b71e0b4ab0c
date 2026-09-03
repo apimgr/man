@@ -1,0 +1,525 @@
+_o_p_e_n___b_y___h_a_n_d_l_e___a_t(2)          System Calls Manual         _o_p_e_n___b_y___h_a_n_d_l_e___a_t(2)
+
+NNAAMMEE
+       name_to_handle_at, open_by_handle_at - obtain handle for a pathname and
+       open file via a handle
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##ddeeffiinnee __GGNNUU__SSOOUURRCCEE         /* See feature_test_macros(7) */
+       ##iinncclluuddee <<ffccnnttll..hh>>
+
+       iinntt nnaammee__ttoo__hhaannddllee__aatt((iinntt _d_i_r_f_d,, ccoonnsstt cchhaarr **_p_a_t_h,,
+                             ssttrruucctt ffiillee__hhaannddllee **_h_a_n_d_l_e,,
+                             iinntt **_m_o_u_n_t___i_d,, iinntt _f_l_a_g_s));;
+       iinntt ooppeenn__bbyy__hhaannddllee__aatt((iinntt _m_o_u_n_t___f_d,, ssttrruucctt ffiillee__hhaannddllee **_h_a_n_d_l_e,,
+                             iinntt _f_l_a_g_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  nnaammee__ttoo__hhaannddllee__aatt() and ooppeenn__bbyy__hhaannddllee__aatt() system calls split the
+       functionality of ooppeennaatt(2) into two parts: nnaammee__ttoo__hhaannddllee__aatt()  returns
+       an  opaque  handle  that  corresponds to a specified file; ooppeenn__bbyy__hhaann‐‐
+       ddllee__aatt() opens the file corresponding to a handle returned by a  previ‐
+       ous call to nnaammee__ttoo__hhaannddllee__aatt() and returns an open file descriptor.
+
+   nnaammee__ttoo__hhaannddllee__aatt(())
+       The  nnaammee__ttoo__hhaannddllee__aatt()  system call returns a file handle and a mount
+       ID corresponding to the file specified by the _d_i_r_f_d and _p_a_t_h arguments.
+       The file handle is returned via the argument _h_a_n_d_l_e, which is a pointer
+       to a structure of the following form:
+
+           struct file_handle {
+               unsigned int  handle_bytes;   /* Size of f_handle [in, out] */
+               int           handle_type;    /* Handle type [out] */
+               unsigned char f_handle[0];    /* File identifier (sized by
+                                                caller) [out] */
+           };
+
+       It is the caller’s responsibility to allocate the structure with a size
+       large enough to hold the handle returned in _f___h_a_n_d_l_e.  Before the call,
+       the _h_a_n_d_l_e___b_y_t_e_s field should be initialized to contain  the  allocated
+       size  for _f___h_a_n_d_l_e.  (The constant MMAAXX__HHAANNDDLLEE__SSZZ, defined in _<_f_c_n_t_l_._h_>,
+       specifies the maximum expected size for a file handle.   It  is  not  a
+       guaranteed  upper  limit as future filesystems may require more space.)
+       Upon successful return, the _h_a_n_d_l_e___b_y_t_e_s field is  updated  to  contain
+       the number of bytes actually written to _f___h_a_n_d_l_e.
+
+       The caller can discover the required size for the _f_i_l_e___h_a_n_d_l_e structure
+       by  making  a call in which _h_a_n_d_l_e_-_>_h_a_n_d_l_e___b_y_t_e_s is zero; in this case,
+       the call fails with the error EEOOVVEERRFFLLOOWW and _h_a_n_d_l_e_-_>_h_a_n_d_l_e___b_y_t_e_s is set
+       to indicate the required size; the caller can then use this information
+       to allocate a structure of the correct size (see EXAMPLES below).  Some
+       care is needed here as EEOOVVEERRFFLLOOWW can also indicate that no file  handle
+       is  available  for this particular name in a filesystem which does nor‐
+       mally support file‐handle lookup.  This case can be detected  when  the
+       EEOOVVEERRFFLLOOWW error is returned without _h_a_n_d_l_e___b_y_t_e_s being increased.
+
+       Other  than  the use of the _h_a_n_d_l_e___b_y_t_e_s field, the caller should treat
+       the _f_i_l_e___h_a_n_d_l_e structure as an opaque data type: the  _h_a_n_d_l_e___t_y_p_e  and
+       _f___h_a_n_d_l_e  fields  can  be  used  in  a  subsequent call to ooppeenn__bbyy__hhaann‐‐
+       ddllee__aatt().  The caller can also use the opaque  _f_i_l_e___h_a_n_d_l_e  to  compare
+       the identity of filesystem objects that were queried at different times
+       and  possibly at different paths.  The ffaannoottiiffyy(7) subsystem can report
+       events with an information record containing a _f_i_l_e___h_a_n_d_l_e to  identify
+       the filesystem object.
+
+       The  _f_l_a_g_s argument is a bit mask constructed by ORing together zero or
+       more of AATT__HHAANNDDLLEE__FFIIDD, AATT__HHAANNDDLLEE__MMNNTT__IIDD__UUNNIIQQUUEE,  AATT__HHAANNDDLLEE__CCOONNNNEECCTTAABBLLEE,
+       AATT__EEMMPPTTYY__PPAATTHH, and AATT__SSYYMMLLIINNKK__FFOOLLLLOOWW, described below.
+
+       When _f_l_a_g_s contain the AATT__HHAANNDDLLEE__FFIIDD (since Linux 6.5) flag, the caller
+       indicates  that  the  returned  _f_i_l_e___h_a_n_d_l_e  is  needed to identify the
+       filesystem object, and not for opening the file later, so it should  be
+       expected  that  a  subsequent  call to ooppeenn__bbyy__hhaannddllee__aatt() with the re‐
+       turned _f_i_l_e___h_a_n_d_l_e may fail.
+
+       When _f_l_a_g_s contain the AATT__HHAANNDDLLEE__MMNNTT__IIDD__UUNNIIQQUUEE (since Linux 6.12) flag,
+       the caller indicates that the width of the _m_o_u_n_t___i_d buffer is at  least
+       64  bits,  and  then the mount id returned in that buffer is the unique
+       mount id as the one returned by ssttaattxx(2) with  the  SSTTAATTXX__MMNNTT__IIDD__UUNNIIQQUUEE
+       flag.
+
+       When  _f_l_a_g_s  contain the AATT__HHAANNDDLLEE__CCOONNNNEECCTTAABBLLEE (since Linux 6.13) flag,
+       the caller indicates that the returned _f_i_l_e___h_a_n_d_l_e is needed to open  a
+       file  with known path later, so it should be expected that a subsequent
+       call to ooppeenn__bbyy__hhaannddllee__aatt() with the returned _f_i_l_e___h_a_n_d_l_e may  fail  if
+       the  file  was moved, but otherwise, the path of the opened file is ex‐
+       pected to be visible from the _/_p_r_o_c_/pid_/_f_d_/* magic link.  This flag can
+       not  be  used  in  combination  with  the  flags  AATT__HHAANNDDLLEE__FFIIDD  and/or
+       AATT__EEMMPPTTYY__PPAATTHH.
+
+       Together,  the  _p_a_t_h  and _d_i_r_f_d arguments identify the file for which a
+       handle is to be obtained.  There are four distinct cases:
+
+       •  If _p_a_t_h is a nonempty string containing an absolute pathname, then a
+          handle is returned for the file referred to by  that  pathname.   In
+          this case, _d_i_r_f_d is ignored.
+
+       •  If  _p_a_t_h  is  a  nonempty  string containing a relative pathname and
+          _d_i_r_f_d has the special value AATT__FFDDCCWWDD, then _p_a_t_h is interpreted rela‐
+          tive to the current working directory of the caller, and a handle is
+          returned for the file to which it refers.
+
+       •  If _p_a_t_h is a nonempty string  containing  a  relative  pathname  and
+          _d_i_r_f_d  is  a  file descriptor referring to a directory, then _p_a_t_h is
+          interpreted relative to the directory referred to by  _d_i_r_f_d,  and  a
+          handle  is returned for the file to which it refers.  (See ooppeennaatt(2)
+          for an explanation of why "directory file descriptors" are useful.)
+
+       •  If  _p_a_t_h  is  an  empty  string  and  _f_l_a_g_s  specifies   the   value
+          AATT__EEMMPPTTYY__PPAATTHH,  then  _d_i_r_f_d can be an open file descriptor referring
+          to any type of file, or AATT__FFDDCCWWDD, meaning the current working direc‐
+          tory, and a handle is returned for the file to which it refers.
+
+       The _m_o_u_n_t___i_d argument returns an identifier for  the  filesystem  mount
+       that  corresponds  to _p_a_t_h.  This corresponds to the first field in one
+       of the records in _/_p_r_o_c_/_s_e_l_f_/_m_o_u_n_t_i_n_f_o.  Opening the  pathname  in  the
+       fifth  field  of  that  record  yields  a file descriptor for the mount
+       point; that file descriptor  can  be  used  in  a  subsequent  call  to
+       ooppeenn__bbyy__hhaannddllee__aatt().   _m_o_u_n_t___i_d  is returned both for a successful call
+       and for a call that results in the error EEOOVVEERRFFLLOOWW.
+
+       By default, nnaammee__ttoo__hhaannddllee__aatt() does not dereference _p_a_t_h if  it  is  a
+       symbolic  link,  and  thus  returns  a  handle for the link itself.  If
+       AATT__SSYYMMLLIINNKK__FFOOLLLLOOWW is specified in _f_l_a_g_s, _p_a_t_h is dereferenced if it  is
+       a  symbolic  link  (so  that the call returns a handle for the file re‐
+       ferred to by the link).
+
+       nnaammee__ttoo__hhaannddllee__aatt() does not trigger a mount when the  final  component
+       of the pathname is an automount point.  When a filesystem supports both
+       file handles and automount points, a nnaammee__ttoo__hhaannddllee__aatt() call on an au‐
+       tomount point will return with error EEOOVVEERRFFLLOOWW without having increased
+       _h_a_n_d_l_e___b_y_t_e_s.  This can happen since Linux 4.13 with NFS when accessing
+       a  directory  which is on a separate filesystem on the server.  In this
+       case, the automount can be triggered by adding a "/" to the end of  the
+       pathname.
+
+   ooppeenn__bbyy__hhaannddllee__aatt(())
+       The  ooppeenn__bbyy__hhaannddllee__aatt() system call opens the file referred to by _h_a_n_‐
+       _d_l_e, a file handle returned by a previous call to nnaammee__ttoo__hhaannddllee__aatt().
+
+       The _m_o_u_n_t___f_d argument is a file descriptor for any object (file, direc‐
+       tory, etc.)  in the mounted filesystem with  respect  to  which  _h_a_n_d_l_e
+       should  be  interpreted.   The special value AATT__FFDDCCWWDD can be specified,
+       meaning the current working directory of the caller.
+
+       The _f_l_a_g_s argument is as for ooppeenn(2).  If _h_a_n_d_l_e refers to  a  symbolic
+       link, the caller must specify the OO__PPAATTHH flag, and the symbolic link is
+       not dereferenced; the OO__NNOOFFOOLLLLOOWW flag, if specified, is ignored.
+
+       The  caller  must  have  the  CCAAPP__DDAACC__RREEAADD__SSEEAARRCCHH  capability to invoke
+       ooppeenn__bbyy__hhaannddllee__aatt().
+
+RREETTUURRNN VVAALLUUEE
+       On success, nnaammee__ttoo__hhaannddllee__aatt() returns 0, and ooppeenn__bbyy__hhaannddllee__aatt()  re‐
+       turns a file descriptor (a nonnegative integer).
+
+       In  the event of an error, both system calls return -1 and set _e_r_r_n_o to
+       indicate the error.
+
+EERRRROORRSS
+       nnaammee__ttoo__hhaannddllee__aatt() and ooppeenn__bbyy__hhaannddllee__aatt() can fail for the  same  er‐
+       rors  as  ooppeennaatt(2).   In addition, they can fail with the errors noted
+       below.
+
+       nnaammee__ttoo__hhaannddllee__aatt() can fail with the following errors:
+
+       EEFFAAUULLTT _p_a_t_h, _m_o_u_n_t___i_d, or _h_a_n_d_l_e points outside your accessible address
+              space.
+
+       EEIINNVVAALL _f_l_a_g_s includes an invalid bit value or an invalid  bit  combina‐
+              tion.
+
+       EEIINNVVAALL _h_a_n_d_l_e_-_>_h_a_n_d_l_e___b_y_t_e_s is greater than MMAAXX__HHAANNDDLLEE__SSZZ.
+
+       EENNOOEENNTT _p_a_t_h  is an empty string, but AATT__EEMMPPTTYY__PPAATTHH was not specified in
+              _f_l_a_g_s.
+
+       EENNOOTTDDIIRR
+              The file descriptor supplied in _d_i_r_f_d does not refer to a direc‐
+              tory,  and  it  is  not  the  case  that  both  _f_l_a_g_s   includes
+              AATT__EEMMPPTTYY__PPAATTHH and _p_a_t_h is an empty string.
+
+       EEOOPPNNOOTTSSUUPPPP
+              The filesystem does not support decoding of a pathname to a file
+              handle.
+
+       EEOOVVEERRFFLLOOWW
+              The  _h_a_n_d_l_e_-_>_h_a_n_d_l_e___b_y_t_e_s  value  passed  into  the call was too
+              small.  When this error occurs, _h_a_n_d_l_e_-_>_h_a_n_d_l_e___b_y_t_e_s is  updated
+              to indicate the required size for the handle.
+
+       ooppeenn__bbyy__hhaannddllee__aatt() can fail with the following errors:
+
+       EEBBAADDFF  _m_o_u_n_t___f_d is not an open file descriptor.
+
+       EEBBAADDFF  _p_a_t_h  is relative but _d_i_r_f_d is neither AATT__FFDDCCWWDD nor a valid file
+              descriptor.
+
+       EEFFAAUULLTT _h_a_n_d_l_e points outside your accessible address space.
+
+       EEIINNVVAALL _h_a_n_d_l_e_-_>_h_a_n_d_l_e___b_y_t_e_s is greater than MMAAXX__HHAANNDDLLEE__SSZZ or  is  equal
+              to zero.
+
+       EELLOOOOPP  _h_a_n_d_l_e  refers  to a symbolic link, but OO__PPAATTHH was not specified
+              in _f_l_a_g_s.
+
+       EEPPEERRMM  The caller does not have the CCAAPP__DDAACC__RREEAADD__SSEEAARRCCHH capability.
+
+       EESSTTAALLEE The specified _h_a_n_d_l_e is not valid for opening a file.  This  er‐
+              ror will occur if, for example, the file has been deleted.  This
+              error  can  also  occur  if  the  _h_a_n_d_l_e  was acquired using the
+              AATT__HHAANNDDLLEE__FFIIDD  flag  and  the  filesystem   does   not   support
+              ooppeenn__bbyy__hhaannddllee__aatt().   This  error  can also occur if the _h_a_n_d_l_e
+              was acquired using the AATT__HHAANNDDLLEE__CCOONNNNEECCTTAABBLLEE flag and  the  file
+              was moved to a different parent.
+
+VVEERRSSIIOONNSS
+       FreeBSD  has  a  broadly  similar  pair  of system calls in the form of
+       ggeettffhh() and ffhhooppeenn().
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 2.6.39, glibc 2.14.
+
+NNOOTTEESS
+       A file handle can be generated in one process using nnaammee__ttoo__hhaannddllee__aatt()
+       and later used in a different process that calls ooppeenn__bbyy__hhaannddllee__aatt().
+
+       Some filesystem don’t support the translation of pathnames to file han‐
+       dles, for example, _/_p_r_o_c, _/_s_y_s, and various network filesystems.   Some
+       filesystems  support  the translation of pathnames to file handles, but
+       do not support using those file handles in ooppeenn__bbyy__hhaannddllee__aatt().
+
+       A file handle may become invalid ("stale") if a file is deleted, or for
+       other filesystem‐specific reasons.  Invalid handles are notified by  an
+       EESSTTAALLEE error from ooppeenn__bbyy__hhaannddllee__aatt().
+
+       These  system  calls  are  designed for use by user‐space file servers.
+       For example, a user‐space NFS server might generate a file  handle  and
+       pass  it  to  an  NFS client.  Later, when the client wants to open the
+       file, it could pass the handle back to the server.  This sort of  func‐
+       tionality  allows  a  user‐space  file server to operate in a stateless
+       fashion with respect to the files it serves.
+
+       If _p_a_t_h refers to a symbolic link and _f_l_a_g_s does  not  specify  AATT__SSYYMM‐‐
+       LLIINNKK__FFOOLLLLOOWW,  then  nnaammee__ttoo__hhaannddllee__aatt()  returns  a handle for the link
+       (rather than the file to which it refers).  The process  receiving  the
+       handle  can later perform operations on the symbolic link by converting
+       the handle to a file  descriptor  using  ooppeenn__bbyy__hhaannddllee__aatt()  with  the
+       OO__PPAATTHH flag, and then passing the file descriptor as the _d_i_r_f_d argument
+       in system calls such as rreeaaddlliinnkkaatt(2) and ffcchhoowwnnaatt(2).
+
+   OObbttaaiinniinngg aa ppeerrssiisstteenntt ffiilleessyysstteemm IIDD
+       The  mount IDs in _/_p_r_o_c_/_s_e_l_f_/_m_o_u_n_t_i_n_f_o can be reused as filesystems are
+       unmounted  and  mounted.   Therefore,  the   mount   ID   returned   by
+       nnaammee__ttoo__hhaannddllee__aatt()  (in  _*_m_o_u_n_t___i_d) should not be treated as a persis‐
+       tent identifier for the corresponding mounted filesystem.  However,  an
+       application can use the information in the _m_o_u_n_t_i_n_f_o record that corre‐
+       sponds to the mount ID to derive a persistent identifier.
+
+       For  example,  one  can  use  the device name in the fifth field of the
+       _m_o_u_n_t_i_n_f_o record to search for the corresponding device  UUID  via  the
+       symbolic  links  in _/_d_e_v_/_d_i_s_k_s_/_b_y_-_u_u_i_d.  (A more comfortable way of ob‐
+       taining the UUID is to use the lliibbbbllkkiidd(3) library.)  That process  can
+       then  be  reversed, using the UUID to look up the device name, and then
+       obtaining the corresponding  mount  point,  in  order  to  produce  the
+       _m_o_u_n_t___f_d argument used by ooppeenn__bbyy__hhaannddllee__aatt().
+
+EEXXAAMMPPLLEESS
+       The  two  programs below demonstrate the use of nnaammee__ttoo__hhaannddllee__aatt() and
+       ooppeenn__bbyy__hhaannddllee__aatt().  The first  program  (_t___n_a_m_e___t_o___h_a_n_d_l_e___a_t_._c)  uses
+       nnaammee__ttoo__hhaannddllee__aatt() to obtain the file handle and mount ID for the file
+       specified  in  its  command‐line  argument; the handle and mount ID are
+       written to standard output.
+
+       The second program (_t___o_p_e_n___b_y___h_a_n_d_l_e___a_t_._c) reads a mount  ID  and  file
+       handle  from  standard  input.   The  program then employs ooppeenn__bbyy__hhaann‐‐
+       ddllee__aatt() to open the file using that handle.  If an  optional  command‐
+       line  argument is supplied, then the _m_o_u_n_t___f_d argument for ooppeenn__bbyy__hhaann‐‐
+       ddllee__aatt() is obtained by opening the directory named in  that  argument.
+       Otherwise,  _m_o_u_n_t___f_d  is  obtained  by scanning _/_p_r_o_c_/_s_e_l_f_/_m_o_u_n_t_i_n_f_o to
+       find a record whose mount ID matches the mount ID  read  from  standard
+       input,  and  the  mount  directory  specified in that record is opened.
+       (These programs do not deal with the fact that mount IDs are  not  per‐
+       sistent.)
+
+       The following shell session demonstrates the use of these two programs:
+
+           $ eecchhoo ''CCaann yyoouu pplleeaassee tthhiinnkk aabboouutt iitt??'' >> cceecciilliiaa..ttxxtt;
+           $ ..//tt__nnaammee__ttoo__hhaannddllee__aatt cceecciilliiaa..ttxxtt >> ffhh;
+           $ ..//tt__ooppeenn__bbyy__hhaannddllee__aatt << ffhh;
+           open_by_handle_at: Operation not permitted
+           $ ssuuddoo ..//tt__ooppeenn__bbyy__hhaannddllee__aatt << ffhh;      # Need CAP_SYS_ADMIN
+           Read 31 bytes
+           $ rrmm cceecciilliiaa..ttxxtt;
+
+       Now  we delete and (quickly) re‐create the file so that it has the same
+       content and (by chance) the  same  inode.   Nevertheless,  ooppeenn__bbyy__hhaann‐‐
+       ddllee__aatt() recognizes that the original file referred to by the file han‐
+       dle no longer exists.
+
+           $ ssttaatt ----pprriinnttff==""%%ii\\nn"" cceecciilliiaa..ttxxtt;     # Display inode number
+           4072121
+           $ rrmm cceecciilliiaa..ttxxtt;
+           $ eecchhoo ''CCaann yyoouu pplleeaassee tthhiinnkk aabboouutt iitt??'' >> cceecciilliiaa..ttxxtt;
+           $ ssttaatt ----pprriinnttff==""%%ii\\nn"" cceecciilliiaa..ttxxtt;     # Check inode number
+           4072121
+           $ ssuuddoo ..//tt__ooppeenn__bbyy__hhaannddllee__aatt << ffhh;
+           open_by_handle_at: Stale NFS file handle
+
+   PPrrooggrraamm ssoouurrccee:: tt__nnaammee__ttoo__hhaannddllee__aatt..cc
+
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <errno.h>
+       #include <fcntl.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+
+       int
+       main(int argc, char *argv[])
+       {
+           int                 mount_id, fhsize, flags, dirfd;
+           char                *path;
+           struct file_handle  *fhp;
+
+           if (argc != 2) {
+               fprintf(stderr, "Usage: %s path\n", argv[0]);
+               exit(EXIT_FAILURE);
+           }
+
+           path = argv[1];
+
+           /* Allocate file_handle structure.  */
+
+           fhsize = sizeof(*fhp);
+           fhp = malloc(fhsize);
+           if (fhp == NULL)
+               err(EXIT_FAILURE, "malloc");
+
+           /* Make an initial call to name_to_handle_at() to discover
+              the size required for file handle.  */
+
+           dirfd = AT_FDCWD;           /* For name_to_handle_at() calls */
+           flags = 0;                  /* For name_to_handle_at() calls */
+           fhp->handle_bytes = 0;
+           if (name_to_handle_at(dirfd, path, fhp, &mount_id, flags) != -1
+               || errno != EOVERFLOW)
+           {
+               fprintf(stderr, "Unexpected result from name_to_handle_at()\n");
+               exit(EXIT_FAILURE);
+           }
+
+           /* Reallocate file_handle structure with correct size.  */
+
+           fhsize = sizeof(*fhp) + fhp->handle_bytes;
+           fhp = realloc(fhp, fhsize);         /* Copies fhp->handle_bytes */
+           if (fhp == NULL)
+               err(EXIT_FAILURE, "realloc");
+
+           /* Get file handle from pathname supplied on command line.  */
+
+           if (name_to_handle_at(dirfd, path, fhp, &mount_id, flags) == -1)
+               err(EXIT_FAILURE, "name_to_handle_at");
+
+           /* Write mount ID, file handle size, and file handle to stdout,
+              for later reuse by t_open_by_handle_at.c.  */
+
+           printf("%d\n", mount_id);
+           printf("%u %d   ", fhp->handle_bytes, fhp->handle_type);
+           for (size_t j = 0; j < fhp->handle_bytes; j++)
+               printf(" %02x", fhp->f_handle[j]);
+           printf("\n");
+
+           exit(EXIT_SUCCESS);
+       }
+
+   PPrrooggrraamm ssoouurrccee:: tt__ooppeenn__bbyy__hhaannddllee__aatt..cc
+
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <fcntl.h>
+       #include <limits.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <string.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       /* Scan /proc/self/mountinfo to find the line whose mount ID matches
+          'mount_id'.  (An easier way to do this is to install and use the
+          'libmount' library provided by the 'util-linux' project.)
+          Open the corresponding mount path and return the resulting file
+          descriptor.  */
+
+       static int
+       open_mount_path_by_id(int mount_id)
+       {
+           int      mi_mount_id, found;
+           char     mount_path[PATH_MAX];
+           char     *linep;
+           FILE     *fp;
+           size_t   lsize;
+           ssize_t  nread;
+
+           fp = fopen("/proc/self/mountinfo", "r");
+           if (fp == NULL)
+               err(EXIT_FAILURE, "fopen");
+
+           found = 0;
+           linep = NULL;
+           while (!found) {
+               nread = getline(&linep, &lsize, fp);
+               if (nread == -1)
+                   break;
+
+               nread = sscanf(linep, "%d %*d %*s %*s %s",
+                              &mi_mount_id, mount_path);
+               if (nread != 2) {
+                   fprintf(stderr, "Bad sscanf()\n");
+                   exit(EXIT_FAILURE);
+               }
+
+               if (mi_mount_id == mount_id)
+                   found = 1;
+           }
+           free(linep);
+
+           fclose(fp);
+
+           if (!found) {
+               fprintf(stderr, "Could not find mount point\n");
+               exit(EXIT_FAILURE);
+           }
+
+           return open(mount_path, O_RDONLY);
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           int                 mount_id, fd, mount_fd, handle_bytes;
+           char                buf[1000];
+       #define LINE_SIZE 100
+           char                line1[LINE_SIZE], line2[LINE_SIZE];
+           char                *nextp;
+           ssize_t             nread;
+           struct file_handle  *fhp;
+
+           if ((argc > 1 && strcmp(argv[1], "--help") == 0) || argc > 2) {
+               fprintf(stderr, "Usage: %s [mount-path]\n", argv[0]);
+               exit(EXIT_FAILURE);
+           }
+
+           /* Standard input contains mount ID and file handle information:
+
+                Line 1: <mount_id>
+                Line 2: <handle_bytes> <handle_type>   <bytes of handle in hex>
+           */
+
+           if (fgets(line1, sizeof(line1), stdin) == NULL ||
+               fgets(line2, sizeof(line2), stdin) == NULL)
+           {
+               fprintf(stderr, "Missing mount_id / file handle\n");
+               exit(EXIT_FAILURE);
+           }
+
+           mount_id = atoi(line1);
+
+           handle_bytes = strtoul(line2, &nextp, 0);
+
+           /* Given handle_bytes, we can now allocate file_handle structure.  */
+
+           fhp = malloc(sizeof(*fhp) + handle_bytes);
+           if (fhp == NULL)
+               err(EXIT_FAILURE, "malloc");
+
+           fhp->handle_bytes = handle_bytes;
+
+           fhp->handle_type = strtoul(nextp, &nextp, 0);
+
+           for (size_t j = 0; j < fhp->handle_bytes; j++)
+               fhp->f_handle[j] = strtoul(nextp, &nextp, 16);
+
+           /* Obtain file descriptor for mount point, either by opening
+              the pathname specified on the command line, or by scanning
+              /proc/self/mounts to find a mount that matches the 'mount_id'
+              that we received from stdin.  */
+
+           if (argc > 1)
+               mount_fd = open(argv[1], O_RDONLY);
+           else
+               mount_fd = open_mount_path_by_id(mount_id);
+
+           if (mount_fd == -1)
+               err(EXIT_FAILURE, "opening mount fd");
+
+           /* Open file using handle and mount point.  */
+
+           fd = open_by_handle_at(mount_fd, fhp, O_RDONLY);
+           if (fd == -1)
+               err(EXIT_FAILURE, "open_by_handle_at");
+
+           /* Try reading a few bytes from the file.  */
+
+           nread = read(fd, buf, sizeof(buf));
+           if (nread == -1)
+               err(EXIT_FAILURE, "read");
+
+           printf("Read %zd bytes\n", nread);
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       ooppeenn(2), lliibbbbllkkiidd(3), bbllkkiidd(8), ffiinnddffss(8), mmoouunntt(8)
+
+       The  _l_i_b_b_l_k_i_d  and  _l_i_b_m_o_u_n_t documentation in the latest _u_t_i_l_-_l_i_n_u_x re‐
+       lease at ⟨https://www.kernel.org/pub/linux/utils/util-linux/⟩
+
+Linux man‐pages (unreleased)      2025‐09‐21              _o_p_e_n___b_y___h_a_n_d_l_e___a_t(2)

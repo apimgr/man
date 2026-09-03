@@ -1,0 +1,190 @@
+AUTO_MASTER(5)              BSD File Formats Manual             AUTO_MASTER(5)
+
+NNAAMMEE
+     aauuttoo__mmaasstteerr — auto_master and map file format
+
+DDEESSCCRRIIPPTTIIOONN
+     The automounter configuration consists of the aauuttoo__mmaasstteerr configuration
+     file, which assigns filesystem paths to map names, and maps, which con‐
+     tain actual mount information.  The aauuttoo__mmaasstteerr configuration file is
+     used by the automount(8) command.  Map files are read by the
+     automountd(8) daemon.
+
+AAUUTTOO__MMAASSTTEERR SSYYNNTTAAXX
+     The aauuttoo__mmaasstteerr file consists of lines with two or three entries sepa‐
+     rated by whitespace and terminated by newline character:
+
+           _m_o_u_n_t_p_o_i_n_t _m_a_p___n_a_m_e [_-_o_p_t_i_o_n_s]
+
+     _m_o_u_n_t_p_o_i_n_t is either a fully specified path, or /-.  When _m_o_u_n_t_p_o_i_n_t is a
+     full path, _m_a_p___n_a_m_e must reference an indirect map.  Otherwise, _m_a_p___n_a_m_e
+     must reference a direct map.  See _M_A_P _S_Y_N_T_A_X _b_e_l_o_w_.
+
+     _m_a_p___n_a_m_e specifies map to use.  If _m_a_p___n_a_m_e begins with -, it specifies a
+     special map.  See _M_A_P _S_Y_N_T_A_X below.  If _m_a_p___n_a_m_e is not a fully specified
+     path (it does not start with /), automountd(8) will search for that name
+     in /etc.  Otherwise it will use the path as given.  If the file indicated
+     by _m_a_p___n_a_m_e is executable, automountd(8) will assume it is an executable
+     map.  See _M_A_P _S_Y_N_T_A_X below.  Otherwise, the file is opened and the con‐
+     tents parsed.
+
+     _-_o_p_t_i_o_n_s is an optional field that starts with - and can contain generic
+     filesystem mount options.
+
+     The following example specifies that the /etc/auto_example indirect map
+     will be mounted on /example.
+
+           /example auto_example
+
+MMAAPP SSYYNNTTAAXX
+     Map files consist of lines with a number of entries separated by white‐
+     space and terminated by newline character:
+
+           _k_e_y [_-_o_p_t_i_o_n_s] [_m_o_u_n_t_p_o_i_n_t [-options]] _l_o_c_a_t_i_o_n [...]
+
+     In most cases, it can be simplified to:
+
+           _k_e_y [_-_o_p_t_i_o_n_s] _l_o_c_a_t_i_o_n
+
+     _k_e_y is the path component used by automountd(8) to find the right map en‐
+     try to use.  It is also used to form the final mountpoint.  A wildcard
+     (‘*’) can be used for the key.  It matches every directory that does not
+     match other keys.  Those directories will not be visible to the user un‐
+     til accessed.
+
+     The _o_p_t_i_o_n_s field, if present, must begin with -.  When mounting the
+     filesystem, options supplied to aauuttoo__mmaasstteerr and options specified in the
+     map entry are concatenated together.  The special option fstype is used
+     to specify filesystem type.  It is not passed to the mount program as an
+     option.  Instead, it is passed as an argument to mmoouunntt --tt.  The default
+     fstype is ‘nfs’.  The special option nobrowse is used to disable creation
+     of top-level directories for special and executable maps.
+
+     The optional _m_o_u_n_t_p_o_i_n_t field is used to specify multiple mount points
+     for a single key.
+
+     The _l_o_c_a_t_i_o_n field specifies the filesystem to be mounted.  Ampersands
+     (‘&’) in the _l_o_c_a_t_i_o_n field are replaced with the value of _k_e_y.  This is
+     typically used with wildcards, like:
+
+           *       192.168.1.1:/share/&
+
+     The _l_o_c_a_t_i_o_n field may contain references to variables, like:
+
+           sys     192.168.1.1:/sys/${OSNAME}
+
+     Defined variables are:
+
+     ARCH     Expands to the output of uname -p.
+     CPU      Same as ARCH.
+     DOLLAR   A literal $ sign.
+     HOST     Expands to the output of uname -n.
+     OSNAME   Expands to the output of uname -s.
+     OSREL    Expands to the output of uname -r.
+     OSVERS   Expands to the output of uname -v.
+
+     Additional variables can be defined with the --DD option of automount(8)
+     and automountd(8).
+
+     To pass a location that begins with /, prefix it with a colon.  For exam‐
+     ple, :/dev/cd0.
+
+     This example, when put into _/_e_t_c_/_a_u_t_o___e_x_a_m_p_l_e, and with aauuttoo__mmaasstteerr re‐
+     ferring to the map as described above, specifies that the NFS share
+     192.168.1.1:/share/example/x will be mounted on _/_e_x_a_m_p_l_e_/_x_/ when any
+     process attempts to access that mountpoint, with intr and nfsv4 mount op‐
+     tions, described in mount_nfs(8):
+
+           x -intr,nfsv4 192.168.1.1:/share/example/x
+
+     Automatically mount an SMB share on access, as a guest user, without
+     prompting for a password:
+
+           share -fstype=smbfs,-N ://@server/share
+
+     Automatically mount the CD drive on access:
+
+           cd -fstype=cd9660 :/dev/cd0
+
+SSPPEECCIIAALL MMAAPPSS
+     Special maps have names beginning with -.  Supported special maps are:
+
+     -hosts   Query the remote NFS server and map exported shares.  This map
+              is traditionally mounted on _/_n_e_t.  Access to files on a remote
+              NFS server is provided through the
+              /net/_n_f_s_-_s_e_r_v_e_r_-_i_p/_s_h_a_r_e_-_n_a_m_e/ directory without any additional
+              configuration.  Directories for individual NFS servers are not
+              present until the first access, when they are automatically cre‐
+              ated.
+     -media   Query devices that are not yet mounted, but contain valid
+              filesystems.  Generally used to access files on removable media.
+     -noauto  Mount filesystems configured in fstab(5) as "noauto".  This
+              needs to be set up as a direct map.
+     -null    Prevent automountd(8) from mounting anything on the mountpoint.
+
+     It is possible to add custom special maps by adding them, as executable
+     maps named _s_p_e_c_i_a_l___f_o_o, to the _/_e_t_c_/_a_u_t_o_f_s_/ directory.
+
+EEXXEECCUUTTAABBLLEE MMAAPPSS
+     If the map file specified in aauuttoo__mmaasstteerr has the execute bit set,
+     automountd(8) will execute it and parse the standard output instead of
+     parsing the file contents.  When called without command line arguments,
+     the executable is expected to output a list of available map keys sepa‐
+     rated by newline characters.  Otherwise, the executable will be called
+     with a key name as a command line argument.  Output from the executable
+     is expected to be the entry for that key, not including the key itself.
+
+IINNDDIIRREECCTT VVEERRSSUUSS DDIIRREECCTT MMAAPPSS
+     Indirect maps are referred to in aauuttoo__mmaasstteerr by entries with a fully
+     qualified path as a mount point, and must contain only relative paths as
+     keys.  Direct maps are referred to in aauuttoo__mmaasstteerr by entries with /- as
+     the mountpoint, and must contain only fully qualified paths as keys.  For
+     indirect maps, the final mount point is determined by concatenating the
+     aauuttoo__mmaasstteerr mountpoint with the map entry key and optional map entry
+     mountpoint.  For direct maps, the final mount point is determined by con‐
+     catenating the map entry key with the optional map entry mountpoint.
+
+     The example above could be rewritten using direct map, by placing this in
+     aauuttoo__mmaasstteerr:
+
+           /- auto_example
+
+     and this in /etc/auto_example map file:
+
+           /example/x -intr,nfsv4 192.168.1.1:/share/example/x
+           /example/share -fstype=smbfs,-N ://@server/share
+           /example/cd -fstype=cd9660 :/dev/cd0
+
+DDIIRREECCTTOORRYY SSEERRVVIICCEESS
+     Both aauuttoo__mmaasstteerr and maps may contain entries consisting of a plus sign
+     and map name:
+
+           +auto_master
+
+     Those entries cause automountd(8) daemon to retrieve the named map from
+     directory services (like LDAP) and include it where the entry was.
+
+     If the file containing the map referenced in aauuttoo__mmaasstteerr is not found,
+     the map will be retrieved from directory services instead.
+
+     To retrieve entries from directory services, automountd(8) daemon runs
+     _/_e_t_c_/_a_u_t_o_f_s_/_i_n_c_l_u_d_e, which is usually a shell script, with map name as
+     the only command line parameter.  The script should output entries for‐
+     matted according to aauuttoo__mmaasstteerr or automounter map syntax to standard
+     output.  An example script to use LDAP is included in
+     _/_e_t_c_/_a_u_t_o_f_s_/_i_n_c_l_u_d_e___l_d_a_p.  It can be symlinked to _/_e_t_c_/_a_u_t_o_f_s_/_i_n_c_l_u_d_e.
+
+FFIILLEESS
+     /etc/auto_master  The default location of the _a_u_t_o___m_a_s_t_e_r file.
+     /etc/autofs/      Directory containing shell scripts to implement special
+                       maps and directory services.
+
+SSEEEE AALLSSOO
+     autofs(5), automount(8), automountd(8), autounmountd(8)
+
+AAUUTTHHOORRSS
+     The aauuttoo__mmaasstteerr configuration file functionality was developed by Edward
+     Tomasz Napierala <_t_r_a_s_z_@_F_r_e_e_B_S_D_._o_r_g> under sponsorship from the FreeBSD
+     Foundation.
+
+BSD                            December 28, 2018                           BSD

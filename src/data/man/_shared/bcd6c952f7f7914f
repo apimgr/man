@@ -1,0 +1,171 @@
+_v_f_o_r_k(2)                      System Calls Manual                     _v_f_o_r_k(2)
+
+NNAAMMEE
+       vfork - create a child process and block parent
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       ppiidd__tt vvffoorrkk((vvooiidd));;
+
+   Feature Test Macro Requirements for glibc (see ffeeaattuurree__tteesstt__mmaaccrrooss(7)):
+
+       vvffoorrkk():
+           Since glibc 2.12:
+               (_XOPEN_SOURCE >= 500) && ! (_POSIX_C_SOURCE >= 200809L)
+                   || /* Since glibc 2.19: */ _DEFAULT_SOURCE
+                   || /* glibc <= 2.19: */ _BSD_SOURCE
+           Before glibc 2.12:
+               _BSD_SOURCE || _XOPEN_SOURCE >= 500
+
+DDEESSCCRRIIPPTTIIOONN
+   SSttaannddaarrdd ddeessccrriippttiioonn
+       (From POSIX.1) The vvffoorrkk() function has the same effect as ffoorrkk(2), ex‐
+       cept  that  the behavior is undefined if the process created by vvffoorrkk()
+       either modifies any data other than a variable of type  _p_i_d___t  used  to
+       store  the  return  value from vvffoorrkk(), or returns from the function in
+       which vvffoorrkk() was called, or calls any other function  before  success‐
+       fully calling __eexxiitt(2) or one of the eexxeecc(3) family of functions.
+
+   LLiinnuuxx ddeessccrriippttiioonn
+       vvffoorrkk(),  just  like  ffoorrkk(2),  creates  a child process of the calling
+       process.  For details and return value and errors, see ffoorrkk(2).
+
+       vvffoorrkk() is a special case of  cclloonnee(2).   It  is  used  to  create  new
+       processes  without  copying  the page tables of the parent process.  It
+       may be useful in performance‐sensitive applications where  a  child  is
+       created which then immediately issues an eexxeeccvvee(2).
+
+       vvffoorrkk()  differs  from  ffoorrkk(2) in that the calling thread is suspended
+       until the child terminates (either normally, by  calling  __eexxiitt(2),  or
+       abnormally,  after  delivery  of a fatal signal), or it makes a call to
+       eexxeeccvvee(2).  Until that point, the child shares all memory with its par‐
+       ent, including the stack.  The child must not return from  the  current
+       function  or  call eexxiitt(3) (which would have the effect of calling exit
+       handlers established by the parent process and  flushing  the  parent’s
+       ssttddiioo(3) buffers), but may call __eexxiitt(2).
+
+       As  with  ffoorrkk(2), the child process created by vvffoorrkk() inherits copies
+       of various of the caller’s process attributes (e.g., file  descriptors,
+       signal  dispositions,  and current working directory); the vvffoorrkk() call
+       differs only in the treatment of the  virtual  address  space,  as  de‐
+       scribed above.
+
+       Signals sent to the parent arrive after the child releases the parent’s
+       memory (i.e., after the child terminates or calls eexxeeccvvee(2)).
+
+   HHiissttoorriicc ddeessccrriippttiioonn
+       Under  Linux,  ffoorrkk(2) is implemented using copy‐on‐write pages, so the
+       only penalty incurred by ffoorrkk(2) is the time and memory required to du‐
+       plicate the parent’s page tables, and to create a unique task structure
+       for the child.  However, in the bad old days a  ffoorrkk(2)  would  require
+       making  a  complete  copy of the caller’s data space, often needlessly,
+       since usually immediately afterward an  eexxeecc(3)  is  done.   Thus,  for
+       greater  efficiency,  BSD introduced the vvffoorrkk() system call, which did
+       not fully copy the address space of the parent  process,  but  borrowed
+       the  parent’s memory and thread of control until a call to eexxeeccvvee(2) or
+       an exit occurred.  The parent process was suspended while the child was
+       using its resources.  The use of vvffoorrkk() was tricky: for  example,  not
+       modifying  data  in  the parent process depended on knowing which vari‐
+       ables were held in a register.
+
+VVEERRSSIIOONNSS
+       The requirements put on vvffoorrkk() by the standards are weaker than  those
+       put  on  ffoorrkk(2),  so an implementation where the two are synonymous is
+       compliant.  In particular, the programmer cannot rely on the parent re‐
+       maining blocked until the child either terminates or  calls  eexxeeccvvee(2),
+       and cannot rely on any specific behavior with respect to shared memory.
+
+       Some  consider the semantics of vvffoorrkk() to be an architectural blemish,
+       and the 4.2BSD man page stated: “This system call  will  be  eliminated
+       when  proper  system  sharing mechanisms are implemented.  Users should
+       not depend on the memory sharing semantics of _v_f_o_r_k as it will, in that
+       case, be made synonymous to _f_o_r_k.”  However, even though modern  memory
+       management  hardware  has  decreased the performance difference between
+       ffoorrkk(2) and vvffoorrkk(), there are various reasons why Linux and other sys‐
+       tems have retained vvffoorrkk():
+
+       •  Some performance‐critical applications require the small performance
+          advantage conferred by vvffoorrkk().
+
+       •  vvffoorrkk() can be implemented on systems that lack a  memory‐management
+          unit  (MMU),  but  ffoorrkk(2)  can’t  be  implemented  on such systems.
+          (POSIX.1‐2008 removed vvffoorrkk() from the standard; the POSIX rationale
+          for the ppoossiixx__ssppaawwnn(3) function notes that that function, which pro‐
+          vides functionality equivalent to ffoorrkk(2)+eexxeecc(3), is designed to be
+          implementable on systems that lack an MMU.)
+
+       •  On systems where memory is constrained, vvffoorrkk() avoids the  need  to
+          temporarily commit memory (see the description of _/_p_r_o_c_/_s_y_s_/_v_m_/_o_v_e_r_‐
+          _c_o_m_m_i_t___m_e_m_o_r_y  in pprroocc(5)) in order to execute a new program.  (This
+          can be especially beneficial where a large parent process wishes  to
+          execute  a  small  helper program in a child process.)  By contrast,
+          using ffoorrkk(2) in this scenario requires either committing an  amount
+          of  memory  equal to the size of the parent process (if strict over‐
+          committing is in force) or overcommitting memory with the risk  that
+          a process is terminated by the out‐of‐memory (OOM) killer.
+
+   LLiinnuuxx nnootteess
+       Fork handlers established using pptthhrreeaadd__aattffoorrkk(3) are not called when a
+       multithreaded  program  employing  the  NPTL  threading  library  calls
+       vvffoorrkk().  Fork handlers are called in this case in a program using  the
+       LinuxThreads  threading library.  (See pptthhrreeaaddss(7) for a description of
+       Linux threading libraries.)
+
+       A call to vvffoorrkk() is equivalent to calling cclloonnee(2) with  _f_l_a_g_s  speci‐
+       fied as:
+
+            CLONE_VM | CLONE_VFORK | SIGCHLD
+
+SSTTAANNDDAARRDDSS
+       None.
+
+HHIISSTTOORRYY
+       4.3BSD;  POSIX.1‐2001  (but marked OBSOLETE).  POSIX.1‐2008 removes the
+       specification of vvffoorrkk().
+
+       The vvffoorrkk() system call appeared in 3.0BSD.  In 4.4BSD it was made syn‐
+       onymous   to   ffoorrkk(2)   but   NetBSD   introduced   it   again;    see
+       ⟨http://www.netbsd.org/Documentation/kernel/vfork.html⟩.   In Linux, it
+       has been equivalent to ffoorrkk(2) until Linux  2.2.0‐pre6  or  so.   Since
+       Linux 2.2.0‐pre9 (on i386, somewhat later on other architectures) it is
+       an independent system call.  Support was added in glibc 2.0.112.
+
+CCAAVVEEAATTSS
+       The  child  process  should take care not to modify the memory in unin‐
+       tended ways, since such changes will be seen by the parent process once
+       the child terminates or executes another program.  In this regard, sig‐
+       nal handlers can be especially problematic: if a signal handler that is
+       invoked in the child of vvffoorrkk() changes memory, those changes  may  re‐
+       sult  in an inconsistent process state from the perspective of the par‐
+       ent process (e.g., memory changes would be visible in the  parent,  but
+       changes to the state of open file descriptors would not be visible).
+
+       When  vvffoorrkk()  is  called  in a multithreaded process, only the calling
+       thread is suspended until the child terminates or executes a  new  pro‐
+       gram.  This means that the child is sharing an address space with other
+       running  code.   This  can be dangerous if another thread in the parent
+       process changes credentials (using sseettuuiidd(2) or similar),  since  there
+       are  now  two  processes with different privilege levels running in the
+       same address space.  As an example of the dangers, suppose that a  mul‐
+       tithreaded  program running as root creates a child using vvffoorrkk().  Af‐
+       ter the vvffoorrkk(), a thread in the parent process drops the process to an
+       unprivileged user in order to run some untrusted  code  (e.g.,  perhaps
+       via plug‐in opened with ddllooppeenn(3)).  In this case, attacks are possible
+       where  the parent process uses mmmmaapp(2) to map in code that will be exe‐
+       cuted by the privileged child process.
+
+BBUUGGSS
+       Details of the signal handling are obscure and differ between  systems.
+       The  BSD  man  page  states:  "To  avoid a possible deadlock situation,
+       processes that are children in the middle of a vvffoorrkk() are  never  sent
+       SSIIGGTTTTOOUU  or  SSIIGGTTTTIINN  signals; rather, output or _i_o_c_t_ls are allowed and
+       input attempts result in an end‐of‐file indication."
+
+SSEEEE AALLSSOO
+       cclloonnee(2), eexxeeccvvee(2), __eexxiitt(2), ffoorrkk(2), __FFoorrkk(3), uunnsshhaarree(2), wwaaiitt(2)
+
+Linux man‐pages (unreleased)      2025‐10‐29                          _v_f_o_r_k(2)

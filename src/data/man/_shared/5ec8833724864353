@@ -1,0 +1,119 @@
+MultiProtocol  Label  Switching  represents a mechanism which di‐
+rects and carries data in high‐performance  networks,  its  tech‐
+niques  being  applicable  to  any network layer protocol.  In an
+MPLS domain the assignment of a particular  packet  a  particular
+Forward Equivalence Class is done just once, as the packet enters
+the  network.  The FEC to which the packet is assigned is encoded
+as a short fixed length value known as a When a  packet  is  for‐
+warded to the next hop, the label is sent along with it; that is,
+the  packets  are before they are forwarded.  A router capable of
+receiving and forwarding MPLS frames is  called  or  LSR.   Label
+scope is generally router‐wide meaning that a certain label has a
+specific  meaning  only  for  a certain LSR.  Currently, supports
+MPLS over Ethernet interfaces and GRE tunnels.  For these kind of
+interfaces, a label is contained by a fixed sized  that  precedes
+any  network  layer  headers, just after data link layer headers.
+In network bit order: ‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐
+|               |        |       |        | | Label         |  TC
+|  BoS   | TTL    | | 20 bits       | 3 bits | 1 bit | 8 bits | |
+|                    |                    |                     |
+‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐  20 bits representing
+FEC, consequently the only information used to forward the  frame
+to  next‐hop 3 bits that are used for specifying a traffic class,
+usually used for defining a type  of  service.   This  field  was
+named  the "Experimental Field" in most early documents.  One bit
+that is set for the last entry in the shim stack and  0  for  all
+others.   An  MPLS frame may contain more than one shim, the last
+one before the network headers being marked by  setting  the  BoS
+bit.   8  bits,  representing  Time to Live, decremented at every
+LSR.  The MPLS behavior is controlled by the tree: If zero,  MPLS
+frames are dropped on sight on ingress interfaces.  If zero, MPLS
+frames  are  not forwarded to next‐hop.  The default ttl for self
+generated MPLS frames.  If set, TTL field from IP header will  be
+mapped  into  the  MPLS  shim on encapsulation, and the TTL field
+from MPLS shim will be copied into IP  header  on  decapsulation.
+The  IPv6 version of the above.  If set, precedence field from IP
+header will be mapped into MPLS shim in TC  field  on  encapsula‐
+tion,  and  the  MPLS  TC field will be copied into IP Precedence
+field on decapsulation.  The IPv6 version of the above.   Returns
+ICMP  TTL  exceeded  in transit when an MPLS frame is dropped be‐
+cause of TTL = 0 on egress interface.  Pop the Explicit Null  la‐
+bels  as  specified by In order to encapsulate and decapsulate to
+and from MPLS, an mpls pseudo‐interface must be created and pack‐
+ets that should be encapsulated must be routed to that interface.
+MPLS routes may be created using sockaddrs  for  destination  and
+tag  fields.   Other  protocols  can be encapsulated using routes
+pointing to mpls pseudo‐interfaces, and sockaddrs for tags.   De‐
+capsulation  can  be  made using values of reserved labels set in
+the tag field (see below).  For more information about doing this
+using userland utilities see the section  of  this  manual  page.
+The  and utilities should be used to manage routes from userland.
+The implementation stores route tagging information into a  sock‐
+addr_mpls  structure  that  is  referenced by the rt_tag field of
+rtentry struct.  For storing multiple labels associated with  the
+next‐hop,  the  current  implementation  abuses the sockaddr_mpls
+structure, extending it in  order  to  fit  a  stack  of  labels.
+should  be used in order to automatically import, manage and dis‐
+tribute labels among LSRs in the same MPLS domain.  MPLS labels 0
+through 15 are reserved.  Out of those, only four  are  currently
+defined:  IPv4 Explicit NULL label.  This label value is only le‐
+gal at the bottom of the label stack.  It indicates that the  la‐
+bel  stack  must be popped, and the forwarding of the packet must
+then be based on the IPv4 header.  Router Alert Label.  Currently
+not implemented in IPv6 Explicit NULL label.  It  indicates  that
+the  label stack must be popped, and the forwarding of the packet
+must then be based on the  IPv6  header.   Implicit  NULL  label.
+This  is a label that an LSR may assign and distribute, but which
+never actually appears in the encapsulation.  When an  LSR  would
+otherwise  replace  the  label at the top of the stack with a new
+label, but the new label is the LSR will pop the stack instead of
+doing the replacement.  In this case, the LSR will have to deduce
+by itself what is the original address family of the encapsulated
+network packet.  Currently, implementation is assuming  that  the
+latter  address  family  is  equal to the next‐hop address family
+specified in the Implicit Null Label MPLS route.  Create an  MPLS
+interface and set an IP address: # ifconfig mpls0 create up # if‐
+config  mpls0  inet 192.168.0.1/32 Route IP packets into MPLS do‐
+main with a specific tag # route add 10.0.0.0/8 ‐ifp  mpls0  ‐tag
+25  ‐inet  192.168.1.100  Create  a static MPLS forwarding rule ‐
+swap the incoming label  50  to  33  and  forward  the  frame  to
+192.168.1.101  and  verify the route # route add ‐mpls 50 ‐tag 33
+‐inet 192.168.1.101 add host 50: gateway 192.168.1.101 # route ‐n
+get ‐mpls 50
+   route to: 50 destination: 50
+    gateway: 192.168.1.101
+        Tag: 33
+ local addr: 192.168.1.180
+  interface: sk0
+      flags:  <UP,GATEWAY,HOST,DONE,STATIC>  recvpipe    sendpipe
+ssthresh  rtt,msec    rttvar  hopcount      mtu     expire
+      0           0           0           0          0          0
+0         0 sockaddrs: <DST,GATEWAY,IFP,IFA,TAG> Route IP packets
+into MPLS domain but use a different  source  address  for  local
+generated  packets.   #  route  add 10.0.0.0/8 ‐ifa 192.168.1.180
+‐ifp mpls0 ‐tag 25 ‐inet 192.168.1.100 For  the  latter  example,
+setting  an  IP address for the mpls0 interface is not necessary.
+Route MPLS packets encapsulated with label  60  to  192.168.1.100
+and  POP  label  #  route add ‐mpls 60 ‐tag 3 ‐inet 192.168.1.100
+Route IP packets into MPLS domain and prepend more tags  #  route
+add  10/8  ‐ifa  192.168.1.200  ‐ifp  mpls0  ‐tag  20,30,40 ‐inet
+192.168.1.100 For the above example, tag 20 will be  inserted  at
+Bottom  of  Stack,  while  tag  40 will be set into the outermost
+shim.  Replace label 60 with label 30, prepend two  more  labels:
+40 and 41 (in this order) and forward the result to 192.168.1.100
+#  route  add ‐mpls 60 ‐tag 30,40,41 ‐inet 192.168.1.100 The sup‐
+port appeared in User must be aware that encapsulating IP packets
+in MPLS implies a major security  effect  when  using  firewalls.
+Currently  neither  nor implement the heuristics in order to look
+inside an MPLS frame.  Moreover, it’s technically  impossible  in
+most cases for an LSR to know information related to encapsulated
+packet.   Therefore,  MPLS  Domains should be strictly controlled
+and, in most cases, limited to  trusted  connections  inside  the
+same  Autonomous  System.  Users must be aware that the MPLS for‐
+warding domain is entirely separated from  the  inner  (IP,  IPv6
+etc.)  forwarding  domain  and  once  a packet is encapsulated in
+MPLS, the former forwarding is used.  This could result in a dif‐
+ferent path for MPLS encapsulated packets than the original  non‐
+MPLS  one.   IP or IPv6 forwarding is not necessary for MPLS for‐
+warding.  Your system may still forward IP or IPv6 packets encap‐
+sulated into MPLS if is set.

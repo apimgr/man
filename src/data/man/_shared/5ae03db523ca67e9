@@ -1,0 +1,156 @@
+ARCHIVE_READ(3)          BSD Library Functions Manual          ARCHIVE_READ(3)
+
+NNAAMMEE
+     aarrcchhiivvee__rreeaadd — functions for reading streaming archives
+
+LLIIBBRRAARRYY
+     Streaming Archive Library (libarchive, -larchive)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<aarrcchhiivvee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     These functions provide a complete API for reading streaming archives.
+     The general process is to first create the struct archive object, set op‐
+     tions, initialize the reader, iterate over the archive headers and asso‐
+     ciated data, then close the archive and release all resources.
+
+   CCrreeaattee aarrcchhiivvee oobbjjeecctt
+     See archive_read_new(3).
+
+     To read an archive, you must first obtain an initialized struct archive
+     object from aarrcchhiivvee__rreeaadd__nneeww().
+
+   EEnnaabbllee ffiilltteerrss aanndd ffoorrmmaattss
+     See archive_read_filter(3) and archive_read_format(3).
+
+     You can then modify this object for the desired operations with the vari‐
+     ous aarrcchhiivvee__rreeaadd__sseett__XXXXXX() and aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__XXXXXX() functions.  In
+     particular, you will need to invoke appropriate
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__XXXXXX() functions to enable the corresponding compres‐
+     sion and format support.  Note that these latter functions perform two
+     distinct operations: they cause the corresponding support code to be
+     linked into your program, and they enable the corresponding auto-detect
+     code.  Unless you have specific constraints, you will generally want to
+     invoke aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__aallll() and
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffoorrmmaatt__aallll() to enable auto-detect for all formats
+     and compression types currently supported by the library.
+
+   SSeett ooppttiioonnss
+     See archive_read_set_options(3).
+
+   OOppeenn aarrcchhiivvee
+     See archive_read_open(3).
+
+     Once you have prepared the struct archive object, you call
+     aarrcchhiivvee__rreeaadd__ooppeenn() to actually open the archive and prepare it for read‐
+     ing.  There are several variants of this function; the most basic expects
+     you to provide pointers to several functions that can provide blocks of
+     bytes from the archive.  There are convenience forms that allow you to
+     specify a filename, file descriptor, _F_I_L_E _* object, or a block of memory
+     from which to read the archive data.  Note that the core library makes no
+     assumptions about the size of the blocks read; callback functions are
+     free to read whatever block size is most appropriate for the medium.
+
+   CCoonnssuummee aarrcchhiivvee
+     See archive_read_header(3), archive_read_data(3) and
+     archive_read_extract(3).
+
+     Each archive entry consists of a header followed by a certain amount of
+     data.  You can obtain the next header with aarrcchhiivvee__rreeaadd__nneexxtt__hheeaaddeerr(),
+     which returns a pointer to an struct archive_entry structure with infor‐
+     mation about the current archive element.  If the entry is a regular
+     file, then the header will be followed by the file data.  You can use
+     aarrcchhiivvee__rreeaadd__ddaattaa() (which works much like the read(2) system call) to
+     read this data from the archive, or aarrcchhiivvee__rreeaadd__ddaattaa__bblloocckk() which pro‐
+     vides a slightly more efficient interface.  You may prefer to use the
+     higher-level aarrcchhiivvee__rreeaadd__ddaattaa__sskkiipp(), which reads and discards the data
+     for this entry, aarrcchhiivvee__rreeaadd__ddaattaa__iinnttoo__ffdd(), which copies the data to the
+     provided file descriptor, or aarrcchhiivvee__rreeaadd__eexxttrraacctt(), which recreates the
+     specified entry on disk and copies data from the archive.  In particular,
+     note that aarrcchhiivvee__rreeaadd__eexxttrraacctt() uses the struct archive_entry structure
+     that you provide it, which may differ from the entry just read from the
+     archive.  In particular, many applications will want to override the
+     pathname, file permissions, or ownership.
+
+   RReelleeaassee rreessoouurrcceess
+     See archive_read_free(3).
+
+     Once you have finished reading data from the archive, you should call
+     aarrcchhiivvee__rreeaadd__cclloossee() to close the archive, then call aarrcchhiivvee__rreeaadd__ffrreeee()
+     to release all resources, including all memory allocated by the library.
+
+EEXXAAMMPPLLEESS
+     The following illustrates basic usage of the library.  In this example,
+     the callback functions are simply wrappers around the standard open(2),
+     read(2), and close(2) system calls.
+
+           void
+           list_archive(const char *name)
+           {
+             struct mydata *mydata;
+             struct archive *a;
+             struct archive_entry *entry;
+
+             mydata = malloc(sizeof(struct mydata));
+             a = archive_read_new();
+             mydata->name = name;
+             archive_read_support_filter_all(a);
+             archive_read_support_format_all(a);
+             archive_read_open(a, mydata, myopen, myread, myclose);
+             while (archive_read_next_header(a, &entry) == ARCHIVE_OK) {
+               printf("%s\n",archive_entry_pathname(entry));
+               archive_read_data_skip(a);
+             }
+             archive_read_free(a);
+             free(mydata);
+           }
+
+           la_ssize_t
+           myread(struct archive *a, void *client_data, const void **buff)
+           {
+             struct mydata *mydata = client_data;
+
+             *buff = mydata->buff;
+             return (read(mydata->fd, mydata->buff, 10240));
+           }
+
+           int
+           myopen(struct archive *a, void *client_data)
+           {
+             struct mydata *mydata = client_data;
+
+             mydata->fd = open(mydata->name, O_RDONLY);
+             return (mydata->fd >= 0 ? ARCHIVE_OK : ARCHIVE_FATAL);
+           }
+
+           int
+           myclose(struct archive *a, void *client_data)
+           {
+             struct mydata *mydata = client_data;
+
+             if (mydata->fd > 0)
+               close(mydata->fd);
+             return (ARCHIVE_OK);
+           }
+
+SSEEEE AALLSSOO
+     tar(1), archive_read_data(3), archive_read_extract(3),
+     archive_read_filter(3), archive_read_format(3), archive_read_header(3),
+     archive_read_new(3), archive_read_open(3), archive_read_set_options(3),
+     archive_util(3), libarchive(3), tar(5)
+
+HHIISSTTOORRYY
+     The lliibbaarrcchhiivvee library first appeared in FreeBSD 5.3.
+
+AAUUTTHHOORRSS
+     The lliibbaarrcchhiivvee library was written by Tim Kientzle <kientzle@acm.org>.
+
+BBUUGGSS
+     Many traditional archiver programs treat empty files as valid empty ar‐
+     chives.  For example, many implementations of tar(1) allow you to append
+     entries to an empty file.  Of course, it is impossible to determine the
+     format of an empty file by inspecting the contents, so this library
+     treats empty files as having a special “empty” format.
+
+BSD                            February 2, 2012                            BSD

@@ -1,0 +1,940 @@
+PERL581DELTA(1)        Perl Programmers Reference Guide        PERL581DELTA(1)
+
+
+
+NNAAMMEE
+       perl581delta - what is new for perl v5.8.1
+
+DDEESSCCRRIIPPTTIIOONN
+       This document describes differences between the 5.8.0 release and the
+       5.8.1 release.
+
+       If you are upgrading from an earlier release such as 5.6.1, first read
+       the perl58delta, which describes differences between 5.6.0 and 5.8.0.
+
+       In case you are wondering about 5.6.1, it was bug-fix-wise rather
+       identical to the development release 5.7.1.  Confused?  This timeline
+       hopefully helps a bit: it lists the new major releases, their
+       maintenance releases, and the development releases.
+
+                 New     Maintenance  Development
+
+                 5.6.0                             2000-Mar-22
+                                      5.7.0        2000-Sep-02
+                         5.6.1                     2001-Apr-08
+                                      5.7.1        2001-Apr-09
+                                      5.7.2        2001-Jul-13
+                                      5.7.3        2002-Mar-05
+                 5.8.0                             2002-Jul-18
+                         5.8.1                     2003-Sep-25
+
+IInnccoommppaattiibbllee CChhaannggeess
+   HHaasshh RRaannddoommiissaattiioonn
+       Mainly due to security reasons, the "random ordering" of hashes has
+       been made even more random.  Previously while the order of hash
+       elements from kkeeyyss(()), vvaalluueess(()), and eeaacchh(()) was essentially random, it
+       was still repeatable.  Now, however, the order varies between different
+       runs of Perl.
+
+       PPeerrll hhaass nneevveerr gguuaarraanntteeeedd aannyy oorrddeerriinngg ooff tthhee hhaasshh kkeeyyss, and the
+       ordering has already changed several times during the lifetime of Perl
+       5.  Also, the ordering of hash keys has always been, and continues to
+       be, affected by the insertion order.
+
+       The added randomness may affect applications.
+
+       One possible scenario is when output of an application has included
+       hash data.  For example, if you have used the Data::Dumper module to
+       dump data into different files, and then compared the files to see
+       whether the data has changed, now you will have false positives since
+       the order in which hashes are dumped will vary.  In general the cure is
+       to sort the keys (or the values); in particular for Data::Dumper to use
+       the "Sortkeys" option.  If some particular order is really important,
+       use tied hashes: for example the Tie::IxHash module which by default
+       preserves the order in which the hash elements were added.
+
+       More subtle problem is reliance on the order of "global destruction".
+       That is what happens at the end of execution: Perl destroys all data
+       structures, including user data.  If your destructors (the DESTROY
+       subroutines) have assumed any particular ordering to the global
+       destruction, there might be problems ahead.  For example, in a
+       destructor of one object you cannot assume that objects of any other
+       class are still available, unless you hold a reference to them.  If the
+       environment variable PERL_DESTRUCT_LEVEL is set to a non-zero value, or
+       if Perl is exiting a spawned thread, it will also destruct the ordinary
+       references and the symbol tables that are no longer in use.  You can't
+       call a class method or an ordinary function on a class that has been
+       collected that way.
+
+       The hash randomisation is certain to reveal hidden assumptions about
+       some particular ordering of hash elements, and outright bugs: it
+       revealed a few bugs in the Perl core and core modules.
+
+       To disable the hash randomisation in runtime, set the environment
+       variable PERL_HASH_SEED to 0 (zero) before running Perl (for more
+       information see "PERL_HASH_SEED" in perlrun), or to disable the feature
+       completely in compile time, compile with "-DNO_HASH_SEED" (see
+       _I_N_S_T_A_L_L).
+
+       See "Algorithmic Complexity Attacks" in perlsec for the original
+       rationale behind this change.
+
+   UUTTFF--88 OOnn FFiilleehhaannddlleess NNoo LLoonnggeerr AAccttiivvaatteedd BByy LLooccaallee
+       In Perl 5.8.0 all filehandles, including the standard filehandles, were
+       implicitly set to be in Unicode UTF-8 if the locale settings indicated
+       the use of UTF-8.  This feature caused too many problems, so the
+       feature was turned off and redesigned: see "Core Enhancements".
+
+   SSiinnggllee--nnuummbbeerr vv--ssttrriinnggss aarree nnoo lloonnggeerr vv--ssttrriinnggss bbeeffoorree ""==>>""
+       The version strings or v-strings (see "Version Strings" in perldata)
+       feature introduced in Perl 5.6.0 has been a source of some confusion--
+       especially when the user did not want to use it, but Perl thought it
+       knew better.  Especially troublesome has been the feature that before a
+       "=>" a version string (a "v" followed by digits) has been interpreted
+       as a v-string instead of a string literal.  In other words:
+
+               %h = ( v65 => 42 );
+
+       has meant since Perl 5.6.0
+
+               %h = ( 'A' => 42 );
+
+       (at least in platforms of ASCII progeny)  Perl 5.8.1 restores the more
+       natural interpretation
+
+               %h = ( 'v65' => 42 );
+
+       The multi-number v-strings like v65.66 and 65.66.67 still continue to
+       be v-strings in Perl 5.8.
+
+   ((WWiinn3322)) TThhee --CC SSwwiittcchh HHaass BBeeeenn RReeppuurrppoosseedd
+       The -C switch has changed in an incompatible way.  The old semantics of
+       this switch only made sense in Win32 and only in the "use utf8"
+       universe in 5.6.x releases, and do not make sense for the Unicode
+       implementation in 5.8.0.  Since this switch could not have been used by
+       anyone, it has been repurposed.  The behavior that this switch enabled
+       in 5.6.x releases may be supported in a transparent, data-dependent
+       fashion in a future release.
+
+       For the new life of this switch, see "UTF-8 no longer default under
+       UTF-8 locales", and "-C" in perlrun.
+
+   ((WWiinn3322)) TThhee //dd SSwwiittcchh OOff ccmmdd..eexxee
+       Perl 5.8.1 uses the /d switch when running the cmd.exe shell internally
+       for ssyysstteemm(()), backticks, and when opening pipes to external programs.
+       The extra switch disables the execution of AutoRun commands from the
+       registry, which is generally considered undesirable when running
+       external programs.  If you wish to retain compatibility with the older
+       behavior, set PERL5SHELL in your environment to "cmd /x/c".
+
+CCoorree EEnnhhaanncceemmeennttss
+   UUTTFF--88 nnoo lloonnggeerr ddeeffaauulltt uunnddeerr UUTTFF--88 llooccaalleess
+       In Perl 5.8.0 many Unicode features were introduced.   One of them was
+       found to be of more nuisance than benefit: the automagic (and silent)
+       "UTF-8-ification" of filehandles, including the standard filehandles,
+       if the user's locale settings indicated use of UTF-8.
+
+       For example, if you had "en_US.UTF-8" as your locale, your STDIN and
+       STDOUT were automatically "UTF-8", in other words an implicit
+       binmode(..., ":utf8") was made.  This meant that trying to print, say,
+       cchhrr(0xff), ended up printing the bytes 0xc3 0xbf.  Hardly what you had
+       in mind unless you were aware of this feature of Perl 5.8.0.  The
+       problem is that the vast majority of people weren't: for example in
+       RedHat releases 8 and 9 the ddeeffaauulltt locale setting is UTF-8, so all
+       RedHat users got UTF-8 filehandles, whether they wanted it or not.  The
+       pain was intensified by the Unicode implementation of Perl 5.8.0
+       (still) having nasty bugs, especially related to the use of s/// and
+       tr///.  (Bugs that have been fixed in 5.8.1)
+
+       Therefore a decision was made to backtrack the feature and change it
+       from implicit silent default to explicit conscious option.  The new
+       Perl command line option "-C" and its counterpart environment variable
+       PERL_UNICODE can now be used to control how Perl and Unicode interact
+       at interfaces like I/O and for example the command line arguments.  See
+       "-C" in perlrun and "PERL_UNICODE" in perlrun for more information.
+
+   UUnnssaaffee ssiiggnnaallss aaggaaiinn aavvaaiillaabbllee
+       In Perl 5.8.0 the so-called "safe signals" were introduced.  This means
+       that Perl no longer handles signals immediately but instead "between
+       opcodes", when it is safe to do so.  The earlier immediate handling
+       easily could corrupt the internal state of Perl, resulting in
+       mysterious crashes.
+
+       However, the new safer model has its problems too.  Because now an
+       opcode, a basic unit of Perl execution, is never interrupted but
+       instead let to run to completion, certain operations that can take a
+       long time now really do take a long time.  For example, certain network
+       operations have their own blocking and timeout mechanisms, and being
+       able to interrupt them immediately would be nice.
+
+       Therefore perl 5.8.1 introduces a "backdoor" to restore the pre-5.8.0
+       (pre-5.7.3, really) signal behaviour.  Just set the environment
+       variable PERL_SIGNALS to "unsafe", and the old immediate (and unsafe)
+       signal handling behaviour returns.  See "PERL_SIGNALS" in perlrun and
+       "Deferred Signals (Safe Signals)" in perlipc.
+
+       In completely unrelated news, you can now use safe signals with
+       POSIX::SigAction.  See "POSIX::SigAction" in POSIX.
+
+   TTiieedd AArrrraayyss wwiitthh NNeeggaattiivvee AArrrraayy IInnddiicceess
+       Formerly, the indices passed to "FETCH", "STORE", "EXISTS", and
+       "DELETE" methods in tied array class were always non-negative.  If the
+       actual argument was negative, Perl would call FETCHSIZE implicitly and
+       add the result to the index before passing the result to the tied array
+       method.  This behaviour is now optional.  If the tied array class
+       contains a package variable named $NEGATIVE_INDICES which is set to a
+       true value, negative values will be passed to "FETCH", "STORE",
+       "EXISTS", and "DELETE" unchanged.
+
+   llooccaall $${{$$xx}}
+       The syntaxes
+
+               local ${$x}
+               local @{$x}
+               local %{$x}
+
+       now do localise variables, given that the $x is a valid variable name.
+
+   UUnniiccooddee CChhaarraacctteerr DDaattaabbaassee 44..00..00
+       The copy of the Unicode Character Database included in Perl 5.8 has
+       been updated to 4.0.0 from 3.2.0.  This means for example that the
+       Unicode character properties are as in Unicode 4.0.0.
+
+   DDeepprreeccaattiioonn WWaarrnniinnggss
+       There is one new feature deprecation.  Perl 5.8.0 forgot to add some
+       deprecation warnings, these warnings have now been added.  Finally, a
+       reminder of an impending feature removal.
+
+       _(_R_e_m_i_n_d_e_r_) _P_s_e_u_d_o_-_h_a_s_h_e_s _a_r_e _d_e_p_r_e_c_a_t_e_d _(_r_e_a_l_l_y_)
+
+       Pseudo-hashes were deprecated in Perl 5.8.0 and will be removed in Perl
+       5.10.0, see perl58delta for details.  Each attempt to access pseudo-
+       hashes will trigger the warning "Pseudo-hashes are deprecated".  If you
+       really want to continue using pseudo-hashes but not to see the
+       deprecation warnings, use:
+
+           no warnings 'deprecated';
+
+       Or you can continue to use the fields pragma, but please don't expect
+       the data structures to be pseudohashes any more.
+
+       _(_R_e_m_i_n_d_e_r_) _5_._0_0_5_-_s_t_y_l_e _t_h_r_e_a_d_s _a_r_e _d_e_p_r_e_c_a_t_e_d _(_r_e_a_l_l_y_)
+
+       5.005-style threads (activated by "use Thread;") were deprecated in
+       Perl 5.8.0 and will be removed after Perl 5.8, see perl58delta for
+       details.  Each 5.005-style thread creation will trigger the warning
+       "5.005 threads are deprecated".  If you really want to continue using
+       the 5.005 threads but not to see the deprecation warnings, use:
+
+           no warnings 'deprecated';
+
+       _(_R_e_m_i_n_d_e_r_) _T_h_e _$_* _v_a_r_i_a_b_l_e _i_s _d_e_p_r_e_c_a_t_e_d _(_r_e_a_l_l_y_)
+
+       The $* variable controlling multi-line matching has been deprecated and
+       will be removed after 5.8.  The variable has been deprecated for a long
+       time, and a deprecation warning "Use of $* is deprecated" is given, now
+       the variable will just finally be removed.  The functionality has been
+       supplanted by the "/s" and "/m" modifiers on pattern matching.  If you
+       really want to continue using the $*-variable but not to see the
+       deprecation warnings, use:
+
+           no warnings 'deprecated';
+
+   MMiisscceellllaanneeoouuss EEnnhhaanncceemmeennttss
+       "map" in void context is no longer expensive. "map" is now context
+       aware, and will not construct a list if called in void context.
+
+       If a socket gets closed by the server while printing to it, the client
+       now gets a SIGPIPE.  While this new feature was not planned, it fell
+       naturally out of PerlIO changes, and is to be considered an accidental
+       feature.
+
+       PerlIO::get_layers(FH) returns the names of the PerlIO layers active on
+       a filehandle.
+
+       PerlIO::via layers can now have an optional UTF8 method to indicate
+       whether the layer wants to "auto-:utf8" the stream.
+
+       uuttff88::::iiss__uuttff88(()) has been added as a quick way to test whether a scalar
+       is encoded internally in UTF-8 (Unicode).
+
+MMoodduulleess aanndd PPrraaggmmaattaa
+   UUppddaatteedd MMoodduulleess AAnndd PPrraaggmmaattaa
+       The following modules and pragmata have been updated since Perl 5.8.0:
+
+       base
+       B::Bytecode
+           In much better shape than it used to be.  Still far from perfect,
+           but maybe worth a try.
+
+       B::Concise
+       B::Deparse
+       Benchmark
+           An optional feature, ":hireswallclock", now allows for high
+           resolution wall clock times (uses Time::HiRes).
+
+       ByteLoader
+           See B::Bytecode.
+
+       bytes
+           Now has bytes::substr.
+
+       CGI
+       charnames
+           One can now have custom character name aliases.
+
+       CPAN
+           There is now a simple command line frontend to the CPAN.pm module
+           called _c_p_a_n.
+
+       Data::Dumper
+           A new option, Pair, allows choosing the separator between hash keys
+           and values.
+
+       DB_File
+       Devel::PPPort
+       Digest::MD5
+       Encode
+           Significant updates on the encoding pragma functionality (tr/// and
+           the DATA filehandle, formats).
+
+           If a filehandle has been marked as to have an encoding, unmappable
+           characters are detected already during input, not later (when the
+           corrupted data is being used).
+
+           The ISO 8859-6 conversion table has been corrected (the 0x30..0x39
+           erroneously mapped to U+0660..U+0669, instead of U+0030..U+0039).
+           The GSM 03.38 conversion did not handle escape sequences correctly.
+           The UTF-7 encoding has been added (making Encode feature-complete
+           with Unicode::String).
+
+       fields
+       libnet
+       Math::BigInt
+           A lot of bugs have been fixed since v1.60, the version included in
+           Perl v5.8.0. Especially noteworthy are the bug in Calc that caused
+           div and mod to fail for some large values, and the fixes to the
+           handling of bad inputs.
+
+           Some new features were added, e.g. the bbrroooott(()) method, you can now
+           pass parameters to ccoonnffiigg(()) to change some settings at runtime, and
+           it is now possible to trap the creation of NaN and infinity.
+
+           As usual, some optimizations took place and made the math overall a
+           tad faster. In some cases, quite a lot faster, actually. Especially
+           alternative libraries like Math::BigInt::GMP benefit from this. In
+           addition, a lot of the quite clunky routines like ffssqqrrtt(()) and
+           fflloogg(()) are now much much faster.
+
+       MIME::Base64
+       NEXT
+           Diamond inheritance now works.
+
+       Net::Ping
+       PerlIO::scalar
+           Reading from non-string scalars (like the special variables, see
+           perlvar) now works.
+
+       podlators
+       Pod::LaTeX
+       PodParsers
+       Pod::Perldoc
+           Complete rewrite.  As a side-effect, no longer refuses to startup
+           when run by root.
+
+       Scalar::Util
+           New utilities: refaddr, isvstring, looks_like_number,
+           set_prototype.
+
+       Storable
+           Can now store code references (via B::Deparse, so not foolproof).
+
+       strict
+           Earlier versions of the strict pragma did not check the parameters
+           implicitly passed to its "import" (use) and "unimport" (no)
+           routine.  This caused the false idiom such as:
+
+                   use strict qw(@ISA);
+                   @ISA = qw(Foo);
+
+           This however (probably) raised the false expectation that the
+           strict refs, vars and subs were being enforced (and that @ISA was
+           somehow "declared").  But the strict refs, vars, and subs are nnoott
+           enforced when using this false idiom.
+
+           Starting from Perl 5.8.1, the above wwiillll cause an error to be
+           raised.  This may cause programs which used to execute seemingly
+           correctly without warnings and errors to fail when run under 5.8.1.
+           This happens because
+
+                   use strict qw(@ISA);
+
+           will now fail with the error:
+
+                   Unknown 'strict' tag(s) '@ISA'
+
+           The remedy to this problem is to replace this code with the correct
+           idiom:
+
+                   use strict;
+                   use vars qw(@ISA);
+                   @ISA = qw(Foo);
+
+       Term::ANSIcolor
+       Test::Harness
+           Now much more picky about extra or missing output from test
+           scripts.
+
+       Test::More
+       Test::Simple
+       Text::Balanced
+       Time::HiRes
+           Use of nnaannoosslleeeepp(()), if available, allows mixing subsecond sleeps
+           with alarms.
+
+       threads
+           Several fixes, for example for jjooiinn(()) problems and memory leaks.
+           In some platforms (like Linux) that use glibc the minimum memory
+           footprint of one ithread has been reduced by several hundred
+           kilobytes.
+
+       threads::shared
+           Many memory leaks have been fixed.
+
+       Unicode::Collate
+       Unicode::Normalize
+       Win32::GetFolderPath
+       Win32::GetOSVersion
+           Now returns extra information.
+
+UUttiilliittyy CChhaannggeess
+       The "h2xs" utility now produces a more modern layout:
+       _F_o_o_-_B_a_r_/_l_i_b_/_F_o_o_/_B_a_r_._p_m instead of _F_o_o_/_B_a_r_/_B_a_r_._p_m.  Also, the
+       boilerplate test is now called _t_/_F_o_o_-_B_a_r_._t instead of _t_/_1_._t.
+
+       The Perl debugger (_l_i_b_/_p_e_r_l_5_d_b_._p_l) has now been extensively documented
+       and bugs found while documenting have been fixed.
+
+       "perldoc" has been rewritten from scratch to be more robust and feature
+       rich.
+
+       "perlcc -B" works now at least somewhat better, while "perlcc -c" is
+       rather more broken.  (The Perl compiler suite as a whole continues to
+       be experimental.)
+
+NNeeww DDooccuummeennttaattiioonn
+       perl573delta has been added to list the differences between the (now
+       quite obsolete) development releases 5.7.2 and 5.7.3.
+
+       perl58delta has been added: it is the perldelta of 5.8.0, detailing the
+       differences between 5.6.0 and 5.8.0.
+
+       perlartistic has been added: it is the Artistic License in pod format,
+       making it easier for modules to refer to it.
+
+       perlcheat has been added: it is a Perl cheat sheet.
+
+       perlgpl has been added: it is the GNU General Public License in pod
+       format, making it easier for modules to refer to it.
+
+       perlmacosx has been added to tell about the installation and use of
+       Perl in Mac OS X.
+
+       perlos400 has been added to tell about the installation and use of Perl
+       in OS/400 PASE.
+
+       perlreref has been added: it is a regular expressions quick reference.
+
+IInnssttaallllaattiioonn aanndd CCoonnffiigguurraattiioonn IImmpprroovveemmeennttss
+       The Unix standard Perl location, _/_u_s_r_/_b_i_n_/_p_e_r_l, is no longer
+       overwritten by default if it exists.  This change was very prudent
+       because so many Unix vendors already provide a _/_u_s_r_/_b_i_n_/_p_e_r_l, but
+       simultaneously many system utilities may depend on that exact version
+       of Perl, so better not to overwrite it.
+
+       One can now specify installation directories for site and vendor man
+       and HTML pages, and site and vendor scripts.  See _I_N_S_T_A_L_L.
+
+       One can now specify a destination directory for Perl installation by
+       specifying the DESTDIR variable for "make install".  (This feature is
+       slightly different from the previous "Configure -Dinstallprefix=...".)
+       See _I_N_S_T_A_L_L.
+
+       gcc versions 3.x introduced a new warning that caused a lot of noise
+       during Perl compilation: "gcc -Ialreadyknowndirectory (warning:
+       changing search order)".  This warning has now been avoided by
+       Configure weeding out such directories before the compilation.
+
+       One can now build subsets of Perl core modules by using the Configure
+       flags "-Dnoextensions=..." and "-Donlyextensions=...", see _I_N_S_T_A_L_L.
+
+   PPllaattffoorrmm--ssppeecciiffiicc eennhhaanncceemmeennttss
+       In Cygwin Perl can now be built with threads ("Configure
+       -Duseithreads").  This works with both Cygwin 1.3.22 and Cygwin 1.5.3.
+
+       In newer FreeBSD releases Perl 5.8.0 compilation failed because of
+       trying to use _m_a_l_l_o_c_._h, which in FreeBSD is just a dummy file, and a
+       fatal error to even try to use.  Now _m_a_l_l_o_c_._h is not used.
+
+       Perl is now known to build also in Hitachi HI-UXMPP.
+
+       Perl is now known to build again in LynxOS.
+
+       Mac OS X now installs with Perl version number embedded in installation
+       directory names for easier upgrading of user-compiled Perl, and the
+       installation directories in general are more standard.  In other words,
+       the default installation no longer breaks the Apple-provided Perl.  On
+       the other hand, with "Configure -Dprefix=/usr" you can now really
+       replace the Apple-supplied Perl (pplleeaassee bbee ccaarreeffuull).
+
+       Mac OS X now builds Perl statically by default.  This change was done
+       mainly for faster startup times.  The Apple-provided Perl is still
+       dynamically linked and shared, and you can enable the sharedness for
+       your own Perl builds by "Configure -Duseshrplib".
+
+       Perl has been ported to IBM's OS/400 PASE environment.  The best way to
+       build a Perl for PASE is to use an AIX host as a cross-compilation
+       environment.  See README.os400.
+
+       Yet another cross-compilation option has been added: now Perl builds on
+       OpenZaurus, a Linux distribution based on Mandrake + Embedix for the
+       Sharp Zaurus PDA.  See the Cross/README file.
+
+       Tru64 when using gcc 3 drops the optimisation for _t_o_k_e_._c to "-O2"
+       because of gigantic memory use with the default "-O3".
+
+       Tru64 can now build Perl with the newer Berkeley DBs.
+
+       Building Perl on WinCE has been much enhanced, see _R_E_A_D_M_E_._c_e and
+       _R_E_A_D_M_E_._p_e_r_l_c_e.
+
+SSeelleecctteedd BBuugg FFiixxeess
+   CClloossuurreess,, eevvaall aanndd lleexxiiccaallss
+       There have been many fixes in the area of anonymous subs, lexicals and
+       closures.  Although this means that Perl is now more "correct", it is
+       possible that some existing code will break that happens to rely on the
+       faulty behaviour.  In practice this is unlikely unless your code
+       contains a very complex nesting of anonymous subs, evals and lexicals.
+
+   GGeenneerriicc ffiixxeess
+       If an input filehandle is marked ":utf8" and Perl sees illegal UTF-8
+       coming in when doing "<FH>", if warnings are enabled a warning is
+       immediately given - instead of being silent about it and Perl being
+       unhappy about the broken data later.  (The :encoding(utf8) layer also
+       works the same way.)
+
+       binmode(SOCKET, ":utf8") only worked on the input side, not on the
+       output side of the socket.  Now it works both ways.
+
+       For threaded Perls certain system database functions like ggeettppwweenntt(())
+       and ggeettggrreenntt(()) now grow their result buffer dynamically, instead of
+       failing.  This means that at sites with lots of users and groups the
+       functions no longer fail by returning only partial results.
+
+       Perl 5.8.0 had accidentally broken the capability for users to define
+       their own uppercase<->lowercase Unicode mappings (as advertised by the
+       Camel).  This feature has been fixed and is also documented better.
+
+       In 5.8.0 this
+
+               $some_unicode .= <FH>;
+
+       didn't work correctly but instead corrupted the data.  This has now
+       been fixed.
+
+       Tied methods like FETCH etc. may now safely access tied values, i.e.
+       resulting in a recursive call to FETCH etc.  Remember to break the
+       recursion, though.
+
+       At startup Perl blocks the SIGFPE signal away since there isn't much
+       Perl can do about it.  Previously this blocking was in effect also for
+       programs executed from within Perl.  Now Perl restores the original
+       SIGFPE handling routine, whatever it was, before running external
+       programs.
+
+       Linenumbers in Perl scripts may now be greater than 65536, or 2**16.
+       (Perl scripts have always been able to be larger than that, it's just
+       that the linenumber for reported errors and warnings have "wrapped
+       around".)  While scripts that large usually indicate a need to rethink
+       your code a bit, such Perl scripts do exist, for example as results
+       from generated code.  Now linenumbers can go all the way to 4294967296,
+       or 2**32.
+
+   PPllaattffoorrmm--ssppeecciiffiicc ffiixxeess
+       Linux
+
+       •   Setting $0 works again (with certain limitations that Perl cannot
+           do much about: see "$0" in perlvar)
+
+       HP-UX
+
+       •   Setting $0 now works.
+
+       VMS
+
+       •   Configuration now tests for the presence of poll(), and IO::Poll
+           now uses the vendor-supplied function if detected.
+
+       •   A rare access violation at Perl start-up could occur if the Perl
+           image was installed with privileges or if there was an identifier
+           with the subsystem attribute set in the process's rightslist.
+           Either of these circumstances triggered tainting code that
+           contained a pointer bug.  The faulty pointer arithmetic has been
+           fixed.
+
+       •   The length limit on values (not keys) in the %ENV hash has been
+           raised from 255 bytes to 32640 bytes (except when the
+           PERL_ENV_TABLES setting overrides the default use of logical names
+           for %ENV).  If it is necessary to access these long values from
+           outside Perl, be aware that they are implemented using search list
+           logical names that store the value in pieces, each 255-byte piece
+           (up to 128 of them) being an element in the search list. When doing
+           a lookup in %ENV from within Perl, the elements are combined into a
+           single value.  The existing VMS-specific ability to access
+           individual elements of a search list logical name via the
+           $ENV{'foo;N'} syntax (where N is the search list index) is
+           unimpaired.
+
+       •   The piping implementation now uses local rather than global DCL
+           symbols for inter-process communication.
+
+       •   File::Find could become confused when navigating to a relative
+           directory whose name collided with a logical name.  This problem
+           has been corrected by adding directory syntax to relative path
+           names, thus preventing logical name translation.
+
+       Win32
+
+       •   A memory leak in the ffoorrkk(()) emulation has been fixed.
+
+       •   The return value of the iiooccttll(()) built-in function was accidentally
+           broken in 5.8.0.  This has been corrected.
+
+       •   The internal message loop executed by perl during blocking
+           operations sometimes interfered with messages that were external to
+           Perl.  This often resulted in blocking operations terminating
+           prematurely or returning incorrect results, when Perl was executing
+           under environments that could generate Windows messages.  This has
+           been corrected.
+
+       •   Pipes and sockets are now automatically in binary mode.
+
+       •   The four-argument form of sseelleecctt(()) did not preserve $! (errno)
+           properly when there were errors in the underlying call.  This is
+           now fixed.
+
+       •   The "CR CR LF" problem of has been fixed, binmode(FH, ":crlf") is
+           now effectively a no-op.
+
+NNeeww oorr CChhaannggeedd DDiiaaggnnoossttiiccss
+       All the warnings related to ppaacckk(()) and uunnppaacckk(()) were made more
+       informative and consistent.
+
+   CChhaannggeedd ""AA tthhrreeaadd eexxiitteedd wwhhiillee %%dd tthhrreeaaddss wweerree rruunnnniinngg""
+       The old version
+
+           A thread exited while %d other threads were still running
+
+       was misleading because the "other" included also the thread giving the
+       warning.
+
+   RReemmoovveedd ""AAtttteemmpptt ttoo cclleeaarr aa rreessttrriicctteedd hhaasshh""
+       It is not illegal to clear a restricted hash, so the warning was
+       removed.
+
+   NNeeww ""IIlllleeggaall ddeeccllaarraattiioonn ooff aannoonnyymmoouuss ssuubbrroouuttiinnee""
+       You must specify the block of code for "sub".
+
+   CChhaannggeedd ""IInnvvaalliidd rraannggee ""%%ss"" iinn ttrraannsslliitteerraattiioonn ooppeerraattoorr""
+       The old version
+
+           Invalid [] range "%s" in transliteration operator
+
+       was simply wrong because there are no "[] ranges" in tr///.
+
+   NNeeww ""MMiissssiinngg ccoonnttrrooll cchhaarr nnaammee iinn \\cc""
+       Self-explanatory.
+
+   NNeeww ""NNeewwlliinnee iinn lleefftt--jjuussttiiffiieedd ssttrriinngg ffoorr %%ss""
+       The padding spaces would appear after the newline, which is probably
+       not what you had in mind.
+
+   NNeeww ""PPoossssiibbllee pprreecceeddeennccee pprroobblleemm oonn bbiittwwiissee %%cc ooppeerraattoorr""
+       If you think this
+
+           $x & $y == 0
+
+       tests whether the bitwise AND of $x and $y is zero, you will like this
+       warning.
+
+   NNeeww ""PPsseeuuddoo--hhaasshheess aarree ddeepprreeccaatteedd""
+       This warning should have been already in 5.8.0, since they are.
+
+   NNeeww ""rreeaadd(()) oonn %%ss ffiilleehhaannddllee %%ss""
+       You cannot rreeaadd(()) (or ssyyssrreeaadd(())) from a closed or unopened filehandle.
+
+   NNeeww ""55..000055 tthhrreeaaddss aarree ddeepprreeccaatteedd""
+       This warning should have been already in 5.8.0, since they are.
+
+   NNeeww ""TTiieedd vvaarriiaabbllee ffrreeeedd wwhhiillee ssttiillll iinn uussee""
+       Something pulled the plug on a live tied variable, Perl plays safe by
+       bailing out.
+
+   NNeeww ""TToo%%ss:: iilllleeggaall mmaappppiinngg ''%%ss''""
+       An illegal user-defined Unicode casemapping was specified.
+
+   NNeeww ""UUssee ooff ffrreeeedd vvaalluuee iinn iitteerraattiioonn""
+       Something modified the values being iterated over.  This is not good.
+
+CChhaannggeedd IInntteerrnnaallss
+       These news matter to you only if you either write XS code or like to
+       know about or hack Perl internals (using Devel::Peek or any of the
+       "B::" modules counts), or like to run Perl with the "-D" option.
+
+       The embedding examples of perlembed have been reviewed to be up to date
+       and consistent: for example, the correct use of PPEERRLL__SSYYSS__IINNIITT33(()) and
+       PPEERRLL__SSYYSS__TTEERRMM(()).
+
+       Extensive reworking of the pad code (the code responsible for lexical
+       variables) has been conducted by Dave Mitchell.
+
+       Extensive work on the v-strings by John Peacock.
+
+       UTF-8 length and position cache: to speed up the handling of Unicode
+       (UTF-8) scalars, a cache was introduced.  Potential problems exist if
+       an extension bypasses the official APIs and directly modifies the PV of
+       an SV: the UTF-8 cache does not get cleared as it should.
+
+       APIs obsoleted in Perl 5.8.0, like sv_2pv, sv_catpvn, sv_catsv,
+       sv_setsv, are again available.
+
+       Certain Perl core C APIs like cxinc and regatom are no longer available
+       at all to code outside the Perl core of the Perl core extensions.  This
+       is intentional.  They never should have been available with the shorter
+       names, and if you application depends on them, you should (be ashamed
+       and) contact perl5-porters to discuss what are the proper APIs.
+
+       Certain Perl core C APIs like "Perl_list" are no longer available
+       without their "Perl_" prefix.  If your XS module stops working because
+       some functions cannot be found, in many cases a simple fix is to add
+       the "Perl_" prefix to the function and the thread context "aTHX_" as
+       the first argument of the function call.  This is also how it should
+       always have been done: letting the Perl_-less forms to leak from the
+       core was an accident.  For cleaner embedding you can also force this
+       for all APIs by defining at compile time the cpp define
+       PERL_NO_SHORT_NAMES.
+
+       PPeerrll__ssaavvee__bbooooll(()) has been added.
+
+       Regexp objects (those created with "qr") now have S-magic rather than
+       R-magic.  This fixed regexps of the form /...(??{...;$x})/ to no longer
+       ignore changes made to $x.  The S-magic avoids dropping the caching
+       optimization and making (??{...}) constructs obscenely slow (and
+       consequently useless).  See also "Magic Variables" in perlguts.
+       Regexp::Copy was affected by this change.
+
+       The Perl internal debugging macros DDEEBBUUGG(()) and DDEEBB(()) have been renamed
+       to PPEERRLL__DDEEBBUUGG(()) and PPEERRLL__DDEEBB(()) to avoid namespace conflicts.
+
+       "-DL" removed (the leaktest had been broken and unsupported for years,
+       use alternative debugging mallocs or tools like valgrind and Purify).
+
+       Verbose modifier "v" added for "-DXv" and "-Dsv", see perlrun.
+
+NNeeww TTeessttss
+       In Perl 5.8.0 there were about 69000 separate tests in about 700 test
+       files, in Perl 5.8.1 there are about 77000 separate tests in about 780
+       test files.  The exact numbers depend on the Perl configuration and on
+       the operating system platform.
+
+KKnnoowwnn PPrroobblleemmss
+       The hash randomisation mentioned in "Incompatible Changes" is
+       definitely problematic: it will wake dormant bugs and shake out bad
+       assumptions.
+
+       If you want to use mod_perl 2.x with Perl 5.8.1, you will need
+       mod_perl-1.99_10 or higher.  Earlier versions of mod_perl 2.x do not
+       work with the randomised hashes.  (mod_perl 1.x works fine.)  You will
+       also need Apache::Test 1.04 or higher.
+
+       Many of the rarer platforms that worked 100% or pretty close to it with
+       perl 5.8.0 have been left a little bit untended since their maintainers
+       have been otherwise busy lately, and therefore there will be more
+       failures on those platforms.  Such platforms include Mac OS Classic,
+       IBM z/OS (and other EBCDIC platforms), and NetWare.  The most common
+       Perl platforms (Unix and Unix-like, Microsoft platforms, and VMS) have
+       large enough testing and expert population that they are doing well.
+
+   TTiieedd hhaasshheess iinn ssccaallaarr ccoonntteexxtt
+       Tied hashes do not currently return anything useful in scalar context,
+       for example when used as boolean tests:
+
+               if (%tied_hash) { ... }
+
+       The current nonsensical behaviour is always to return false, regardless
+       of whether the hash is empty or has elements.
+
+       The root cause is that there is no interface for the implementors of
+       tied hashes to implement the behaviour of a hash in scalar context.
+
+   NNeett::::PPiinngg 445500__sseerrvviiccee aanndd 551100__ppiinngg__uuddpp ffaaiilluurreess
+       The subtests 9 and 18 of lib/Net/Ping/t/450_service.t, and the subtest
+       2 of lib/Net/Ping/t/510_ping_udp.t might fail if you have an unusual
+       networking setup.  For example in the latter case the test is trying to
+       send a UDP ping to the IP address 127.0.0.1.
+
+   BB::::CC
+       The C-generating compiler backend B::C (the frontend being "perlcc -c")
+       is even more broken than it used to be because of the extensive lexical
+       variable changes.  (The good news is that B::Bytecode and ByteLoader
+       are better than they used to be.)
+
+PPllaattffoorrmm SSppeecciiffiicc PPrroobblleemmss
+   EEBBCCDDIICC PPllaattffoorrmmss
+       IBM z/OS and other EBCDIC platforms continue to be problematic
+       regarding Unicode support.  Many Unicode tests are skipped when they
+       really should be fixed.
+
+   CCyyggwwiinn 11..55 pprroobblleemmss
+       In Cygwin 1.5 the _i_o_/_t_e_l_l and _o_p_/_s_y_s_i_o tests have failures for some yet
+       unknown reason.  In 1.5.5 the threads tests stress_cv, stress_re, and
+       stress_string are failing unless the environment variable PERLIO is set
+       to "perlio" (which makes also the io/tell failure go away).
+
+       Perl 5.8.1 does build and work well with Cygwin 1.3: with (uname -a)
+       "CYGWIN_NT-5.0 ... 1.3.22(0.78/3/2) 2003-03-18 09:20 i686 ..."  a 100%
+       "make test"  was achieved with "Configure -des -Duseithreads".
+
+   HHPP--UUXX:: HHPP cccc wwaarrnniinnggss aabboouutt sseennddffiillee aanndd sseennddppaatthh
+       With certain HP C compiler releases (e.g. B.11.11.02) you will get many
+       warnings like this (lines wrapped for easier reading):
+
+         cc: "/usr/include/sys/socket.h", line 504: warning 562:
+           Redeclaration of "sendfile" with a different storage class specifier:
+             "sendfile" will have internal linkage.
+         cc: "/usr/include/sys/socket.h", line 505: warning 562:
+           Redeclaration of "sendpath" with a different storage class specifier:
+             "sendpath" will have internal linkage.
+
+       The warnings show up both during the build of Perl and during certain
+       lib/ExtUtils tests that invoke the C compiler.  The warning, however,
+       is not serious and can be ignored.
+
+   IIRRIIXX:: tt//uunnii//ttrr__77jjiiss..tt ffaallsseellyy ffaaiilliinngg
+       The test t/uni/tr_7jis.t is known to report failure under 'make test'
+       or the test harness with certain releases of IRIX (at least IRIX 6.5
+       and MIPSpro Compilers Version 7.3.1.1m), but if run manually the test
+       fully passes.
+
+   MMaacc OOSS XX:: nnoo uusseemmyymmaalllloocc
+       The Perl malloc ("-Dusemymalloc") does not work at all in Mac OS X.
+       This is not that serious, though, since the native malloc works just
+       fine.
+
+   TTrruu6644:: NNoo tthhrreeaaddeedd bbuuiillddss wwiitthh GGNNUU cccc ((ggcccc))
+       In the latest Tru64 releases (e.g. v5.1B or later) gcc cannot be used
+       to compile a threaded Perl (-Duseithreads) because the system
+       "<pthread.h>" file doesn't know about gcc.
+
+   WWiinn3322:: ssyyssooppeenn,, ssyyssrreeaadd,, ssyysswwrriittee
+       As of the 5.8.0 release, ssyyssooppeenn(())/ssyyssrreeaadd(())/ssyysswwrriittee(()) do not behave
+       like they used to in 5.6.1 and earlier with respect to "text" mode.
+       These built-ins now always operate in "binary" mode (even if ssyyssooppeenn(())
+       was passed the O_TEXT flag, or if bbiinnmmooddee(()) was used on the file
+       handle).  Note that this issue should only make a difference for disk
+       files, as sockets and pipes have always been in "binary" mode in the
+       Windows port.  As this behavior is currently considered a bug,
+       compatible behavior may be re-introduced in a future release.  Until
+       then, the use of ssyyssooppeenn(()), ssyyssrreeaadd(()) and ssyysswwrriittee(()) is not supported
+       for "text" mode operations.
+
+FFuuttuurree DDiirreeccttiioonnss
+       The following things mmiigghhtt happen in future.  The first publicly
+       available releases having these characteristics will be the developer
+       releases Perl 5.9.x, culminating in the Perl 5.10.0 release.  These are
+       our best guesses at the moment: we reserve the right to rethink.
+
+       •   PerlIO will become The Default.  Currently (in Perl 5.8.x) the
+           stdio library is still used if Perl thinks it can use certain
+           tricks to make stdio go rreeaallllyy fast.  For future releases our goal
+           is to make PerlIO go even faster.
+
+       •   A new feature called _a_s_s_e_r_t_i_o_n_s will be available.  This means that
+           one can have code called assertions sprinkled in the code: usually
+           they are optimised away, but they can be enabled with the "-A"
+           option.
+
+       •   A new operator "//" (defined-or) will be available.  This means
+           that one will be able to say
+
+               $a // $b
+
+           instead of
+
+              defined $a ? $a : $b
+
+           and
+
+              $c //= $d;
+
+           instead of
+
+              $c = $d unless defined $c;
+
+           The operator will have the same precedence and associativity as
+           "||".  A source code patch against the Perl 5.8.1 sources will be
+           available in CPAN as _a_u_t_h_o_r_s_/_i_d_/_H_/_H_M_/_H_M_B_R_A_N_D_/_d_o_r_-_5_._8_._1_._d_i_f_f.
+
+       •   unpack() will default to unpacking the $_.
+
+       •   Various Copy-On-Write techniques will be investigated in hopes of
+           speeding up Perl.
+
+       •   CPANPLUS, Inline, and Module::Build will become core modules.
+
+       •   The ability to write true lexically scoped pragmas will be
+           introduced.
+
+       •   Work will continue on the bytecompiler and byteloader.
+
+       •   v-strings as they currently exist are scheduled to be deprecated.
+           The v-less form (1.2.3) will become a "version object" when used
+           with "use", "require", and $VERSION.  $^V will also be a "version
+           object" so the printf("%vd",...) construct will no longer be
+           needed.  The v-ful version (v1.2.3) will become obsolete.  The
+           equivalence of strings and v-strings (e.g.  that currently 5.8.0 is
+           equal to "\5\8\0") will go away.  TThheerree mmaayy bbee nnoo ddeepprreeccaattiioonn
+           wwaarrnniinngg ffoorr vv--ssttrriinnggss, though: it is quite hard to detect when
+           v-strings are being used safely, and when they are not.
+
+       •   5.005 Threads Will Be Removed
+
+       •   The $* Variable Will Be Removed (it was deprecated a long time ago)
+
+       •   Pseudohashes Will Be Removed
+
+RReeppoorrttiinngg BBuuggss
+       If you find what you think is a bug, you might check the articles
+       recently posted to the comp.lang.perl.misc newsgroup and the perl bug
+       database at http://bugs.perl.org/ .  There may also be information at
+       http://www.perl.com/ , the Perl Home Page.
+
+       If you believe you have an unreported bug, please run the ppeerrllbbuugg
+       program included with your release.  Be sure to trim your bug down to a
+       tiny but sufficient test case.  Your bug report, along with the output
+       of "perl -V", will be sent off to perlbug@perl.org to be analysed by
+       the Perl porting team.  You can browse and search the Perl 5 bugs at
+       http://bugs.perl.org/
+
+SSEEEE AALLSSOO
+       The _C_h_a_n_g_e_s file for exhaustive details on what changed.
+
+       The _I_N_S_T_A_L_L file for how to build Perl.
+
+       The _R_E_A_D_M_E file for general stuff.
+
+       The _A_r_t_i_s_t_i_c and _C_o_p_y_i_n_g files for copyright information.
+
+
+
+perl v5.40.1                      2019-02-13                   PERL581DELTA(1)

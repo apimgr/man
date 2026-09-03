@@ -1,0 +1,174 @@
+PIDFILE(3)               BSD Library Functions Manual               PIDFILE(3)
+
+NNAAMMEE
+     ppiiddffiillee__ooppeenn, ppiiddffiillee__wwrriittee, ppiiddffiillee__cclloossee, ppiiddffiillee__rreemmoovvee — library for
+     PID files handling
+
+LLIIBBRRAARRYY
+     System Utilities Library (libutil, -lutil)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<lliibbuuttiill..hh>>
+
+     _s_t_r_u_c_t _p_i_d_f_h _*
+     ppiiddffiillee__ooppeenn(_c_o_n_s_t _c_h_a_r _*_p_a_t_h, _m_o_d_e___t _m_o_d_e, _p_i_d___t _*_p_i_d_p_t_r);
+
+     _i_n_t
+     ppiiddffiillee__wwrriittee(_s_t_r_u_c_t _p_i_d_f_h _*_p_f_h);
+
+     _i_n_t
+     ppiiddffiillee__cclloossee(_s_t_r_u_c_t _p_i_d_f_h _*_p_f_h);
+
+     _i_n_t
+     ppiiddffiillee__rreemmoovvee(_s_t_r_u_c_t _p_i_d_f_h _*_p_f_h);
+
+     _i_n_t
+     ppiiddffiillee__ffiilleennoo(_s_t_r_u_c_t _p_i_d_f_h _*_p_f_h);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppiiddffiillee family of functions allows daemons to handle PID files.  It
+     uses flopen(3) to lock a pidfile and detect already running daemons.
+
+     The ppiiddffiillee__ooppeenn() function opens (or creates) a file specified by the
+     _p_a_t_h argument and locks it.  If _p_i_d_p_t_r argument is not NULL and file can
+     not be locked, the function will use it to store a PID of an already run‐
+     ning daemon or -1 in case daemon did not write its PID yet.  The function
+     does not write process' PID into the file here, so it can be used before
+     ffoorrkk()ing and exit with a proper error message when needed.  If the _p_a_t_h
+     argument is NULL, _/_v_a_r_/_r_u_n_/⟨_p_r_o_g_n_a_m_e⟩_._p_i_d file will be used.  The
+     ppiiddffiillee__ooppeenn() function sets the O_CLOEXEC close-on-exec flag when open‐
+     ing the pidfile.
+
+     The ppiiddffiillee__wwrriittee() function writes process' PID into a previously opened
+     file.  The file is truncated before write, so calling the ppiiddffiillee__wwrriittee()
+     function multiple times is supported.
+
+     The ppiiddffiillee__cclloossee() function closes a pidfile.  It should be used after
+     daemon ffoorrkk()s to start a child process.
+
+     The ppiiddffiillee__rreemmoovvee() function closes and removes a pidfile.
+
+     The ppiiddffiillee__ffiilleennoo() function returns the file descriptor for the open
+     pidfile.
+
+RREETTUURRNN VVAALLUUEESS
+     The ppiiddffiillee__ooppeenn() function returns a valid pointer to a _p_i_d_f_h structure
+     on success, or NULL if an error occurs.  If an error occurs, _e_r_r_n_o will
+     be set.
+
+     The ppiiddffiillee__wwrriittee(), ppiiddffiillee__cclloossee(), and ppiiddffiillee__rreemmoovvee() functions re‐
+     turn the value 0 if successful; otherwise the value -1 is returned and
+     the global variable _e_r_r_n_o is set to indicate the error.
+
+     The ppiiddffiillee__ffiilleennoo() function returns the low-level file descriptor.  It
+     returns -1 and sets _e_r_r_n_o if a NULL _p_i_d_f_h is specified, or if the pidfile
+     is no longer open.
+
+EEXXAAMMPPLLEESS
+     The following example shows in which order these functions should be
+     used.  Note that it is safe to pass NULL to ppiiddffiillee__wwrriittee(),
+     ppiiddffiillee__rreemmoovvee(), ppiiddffiillee__cclloossee() and ppiiddffiillee__ffiilleennoo() functions.
+
+     struct pidfh *pfh;
+     pid_t otherpid, childpid;
+
+     pfh = pidfile_open("/var/run/daemon.pid", 0600, &otherpid);
+     if (pfh == NULL) {
+             if (errno == EEXIST) {
+                     errx(EXIT_FAILURE, "Daemon already running, pid: %jd.",
+                         (intmax_t)otherpid);
+             }
+             /* If we cannot create pidfile from other reasons, only warn. */
+             warn("Cannot open or create pidfile");
+             /*
+              * Even though pfh is NULL we can continue, as the other pidfile_*
+              * function can handle such situation by doing nothing except setting
+              * errno to EDOOFUS.
+              */
+     }
+
+     if (daemon(0, 0) == -1) {
+             warn("Cannot daemonize");
+             pidfile_remove(pfh);
+             exit(EXIT_FAILURE);
+     }
+
+     pidfile_write(pfh);
+
+     for (;;) {
+             /* Do work. */
+             childpid = fork();
+             switch (childpid) {
+             case -1:
+                     syslog(LOG_ERR, "Cannot fork(): %s.", strerror(errno));
+                     break;
+             case 0:
+                     pidfile_close(pfh);
+                     /* Do child work. */
+                     break;
+             default:
+                     syslog(LOG_INFO, "Child %jd started.", (intmax_t)childpid);
+                     break;
+             }
+     }
+
+     pidfile_remove(pfh);
+     exit(EXIT_SUCCESS);
+
+EERRRROORRSS
+     The ppiiddffiillee__ooppeenn() function will fail if:
+
+     [EEXIST]           Some process already holds the lock on the given pid‐
+                        file, meaning that a daemon is already running.  If
+                        _p_i_d_p_t_r argument is not NULL the function will use it
+                        to store a PID of an already running daemon or -1 in
+                        case daemon did not write its PID yet.
+
+     [ENAMETOOLONG]     Specified pidfile's name is too long.
+
+     [EINVAL]           Some process already holds the lock on the given pid‐
+                        file, but PID read from there is invalid.
+
+     The ppiiddffiillee__ooppeenn() function may also fail and set _e_r_r_n_o for any errors
+     specified for the fstat(2), open(2), and read(2) calls.
+
+     The ppiiddffiillee__wwrriittee() function will fail if:
+
+     [EDOOFUS]          Improper function use.  Probably called before
+                        ppiiddffiillee__ooppeenn().
+
+     The ppiiddffiillee__wwrriittee() function may also fail and set _e_r_r_n_o for any errors
+     specified for the fstat(2), ftruncate(2), and write(2) calls.
+
+     The ppiiddffiillee__cclloossee() function may fail and set _e_r_r_n_o for any errors speci‐
+     fied for the close(2) and fstat(2) calls.
+
+     The ppiiddffiillee__rreemmoovvee() function will fail if:
+
+     [EDOOFUS]          Improper function use.  Probably called not from the
+                        process which made ppiiddffiillee__wwrriittee().
+
+     The ppiiddffiillee__rreemmoovvee() function may also fail and set _e_r_r_n_o for any errors
+     specified for the close(2), fstat(2), write(2), and unlink(2) system
+     calls and the flopen(3) library function.
+
+     The ppiiddffiillee__ffiilleennoo() function will fail if:
+
+     [EDOOFUS]          Improper function use.  Probably called not from the
+                        process which used ppiiddffiillee__ooppeenn().
+
+SSEEEE AALLSSOO
+     open(2), daemon(3), flopen(3)
+
+HHIISSTTOORRYY
+     The functions ppiiddffiillee__ooppeenn(), ppiiddffiillee__wwrriittee(), ppiiddffiillee__cclloossee() and
+     ppiiddffiillee__rreemmoovvee() first appeared in FreeBSD 5.5.
+
+AAUUTTHHOORRSS
+     The ppiiddffiillee functionality is based on ideas from John-Mark Gurney
+     <_j_m_g_@_F_r_e_e_B_S_D_._o_r_g>.
+
+     The code and manual page was written by Pawel Jakub Dawidek
+     <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                              May 10, 2020                              BSD

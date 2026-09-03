@@ -1,0 +1,153 @@
+ERSPAN(4)                BSD Kernel Interfaces Manual                ERSPAN(4)
+
+NNAAMMEE
+     eerrssppaann — ERSPAN Type II tunnel network device
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ggrree
+
+DDEESSCCRRIIPPTTIIOONN
+     The eerrssppaann interface provides tunnelling of Ethernet frames across IPv4
+     and IPv6 networks using the Encapsulated Remote Switch Port Analyzer
+     (ERSPAN) Type II protocol.
+
+     ERSPAN is intended as a network based packet capture format rather than a
+     tunnelling protocol.  However, ERSPAN Type II is implemented as a network
+     interface driver in OpenBSD to allow existing infrastructure such as
+     bpf(4) and tools such as bpflogd(8) and tcpdump(8) to store and analyse
+     the received packets.  eerrssppaann interfaces support packet transmission so
+     they can be used as span ports on veb(4) and bridge(4) configurations.
+
+     The protocol is based on the Generic Routing and Encapsulation (GRE) pro‐
+     tocol.  GRE datagrams (IP protocol number 47) consist of a GRE header and
+     an outer IP header for encapsulating another protocol's datagram.  The
+     GRE header specifies a version and the type of the encapsulated datagram,
+     allowing for the tunnelling of multiple protocols.  ERSPAN Type II uses
+     GRE version 0, sequence numbers, protocol identifier (0x88be), and a cus‐
+     tom header before the Ethernet payload, making it distinct from the Eth‐
+     ernet over GRE encapsulation supported by egre(4).  However, it is imple‐
+     mented as part of the same driver providing egre(4).
+
+     Distinct tunnels between the same endpoints are distinguished by a 10-bit
+     tunnel identifier field in the header.
+
+     eerrssppaann supports the capture of the encapsulated Ethernet packets via
+     bpf(4) using the DLT_EN10MB data link type, and the encapsulating ERSPAN,
+     GRE, and IP headers using the DLT_LOOP data link type.
+
+     eerrssppaann interfaces are configured in monitor mode by default, preventing
+     the processing of received packets from entering the network stack.
+
+     All GRE packet processing in the system is allowed or denied by setting
+     the _n_e_t_._i_n_e_t_._g_r_e_._a_l_l_o_w sysctl(8) variable.  To allow GRE packet process‐
+     ing, set _n_e_t_._i_n_e_t_._g_r_e_._a_l_l_o_w to 1.
+
+     eerrssppaann interfaces can be created at runtime using the iiffccoonnffiigg eerrssppaann_N
+     ccrreeaattee command or by setting up a hostname.if(5) configuration file for
+     netstart(8).
+
+     For correct operation, encapsulated traffic must not be routed over the
+     interface itself.  This can be implemented by adding a distinct or a more
+     specific route to the tunnel destination than the hosts or networks
+     routed via the tunnel interface.  Alternatively, the tunnel traffic may
+     be configured in a separate routing table to the encapsulated traffic.
+
+   PPrrooggrraammmmiinngg IInntteerrffaaccee
+     eerrssppaann interfaces support the following ioctl(2) calls for configuring
+     tunnel options:
+
+        SIOCSLIFPHYADDR _s_t_r_u_c_t _i_f___l_a_d_d_r_r_e_q _*
+                Set the unicast IPv4 or IPv6 addresses for the encapsulating
+                IP packets.  The destination address may be left unspecified
+                if the interface is used as a collector for ERSPAN sessions.
+                The addresses may only be configured while the interface is
+                down.
+
+        SIOCGLIFPHYADDR _s_t_r_u_c_t _i_f___l_a_d_d_r_r_e_q _*
+                Get the addresses used for the encapsulating IP packets.
+
+        SIOCDIFPHYADDR _s_t_r_u_c_t _i_f_r_e_q _*
+                Clear the addresses used for the encapsulating IP packets.
+                The addresses may only be cleared while the interface is down.
+
+        SIOCSVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Configure a virtual network identifier for use as the Session
+                ID in the ERSPAN Type II header.  The virtual network identi‐
+                fier may only be configured while the interface is down.  The
+                Session ID is a 10-bit value.
+
+        SIOCGVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the virtual network identifier used as the Session ID in
+                the ERSPAN Type II header.
+
+        SIOCDVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Clear the virtual as the Session ID in the ERSPAN Type II
+                header.  If the Session ID and tunnel destination address are
+                unspecified, the interface will accept packets with any Ses‐
+                sion ID.
+
+        SIOCSLIFPHYRTABLE _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the routing table the tunnel traffic operates in.  The
+                routing table may only be configured while the interface is
+                down.
+
+        SIOCGLIFPHYRTABLE _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the routing table the tunnel traffic operates in.
+
+        SIOCSLIFPHYTTL _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the Time-To-Live field in IPv4 encapsulation headers, or
+                the Hop Limit field in IPv6 encapsulation headers.
+
+        SIOCGLIFPHYTTL _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the value used in the Time-To-Live field in an IPv4 encap‐
+                sulation header or the Hop Limit field in an IPv6 encapsula‐
+                tion header.
+
+        SIOCSLIFPHYDF _s_t_r_u_c_t _i_f_r_e_q _*
+                Configure whether the tunnel traffic sent by the interface can
+                be fragmented or not.  This sets the Don't Fragment (DF) bit
+                on IPv4 packets, and disables fragmentation of IPv6 packets.
+
+        SIOCGLIFPHYDF _s_t_r_u_c_t _i_f_r_e_q _*
+                Get whether the tunnel traffic sent by the interface can be
+                fragmented or not.
+
+        SIOCSTXHPRIO _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the priority value used in the Type of Service field in
+                IPv4 headers, or the Traffic Class field in IPv6 headers.
+                Values may be from 0 to 7, or IF_HDRPRIO_PACKET to specify
+                that the current priority of a packet should be used.
+
+        SIOCGTXHPRIO _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the priority value used in the Type of Service field in
+                IPv4 headers, or the Traffic Class field in IPv6 headers.
+
+   SSeeccuurriittyy CCoonnssiiddeerraattiioonnss
+     ERSPAN does not provide any integrated security features.  It should only
+     be deployed on trusted private networks, or protected with IPsec to add
+     authentication and encryption for confidentiality.  An encrypted trans‐
+     port is especially recommended when using ERSPAN over a public network.
+
+     The Packet Filter pf(4) can be used to filter tunnel traffic with end‐
+     point policies pf.conf(5).
+
+     The Time-to-Live (TTL) value of a tunnel can be set to 1 or a low value
+     to restrict the traffic to the local network:
+
+           # ifconfig erspanN tunnelttl 1
+
+SSEEEE AALLSSOO
+     egre(4), inet(4), ip(4), netintro(4), options(4), hostname.if(5),
+     protocols(5), bpflogd(8), ifconfig(8), netstart(8), sysctl(8), tcpdump(8)
+
+SSTTAANNDDAARRDDSS
+     S. Hanks, T. Li, D. Farinacci, and P. Traina, _G_e_n_e_r_i_c _R_o_u_t_i_n_g
+     _E_n_c_a_p_s_u_l_a_t_i_o_n _(_G_R_E_), RFC 1701, October 1994.
+
+HHIISSTTOORRYY
+     The eerrssppaann driver first appeared in OpenBSD 7.8.
+
+AAUUTTHHOORRSS
+     David Gwynne <_d_l_g_@_o_p_e_n_b_s_d_._o_r_g>
+
+BSD                              May 18, 2025                              BSD

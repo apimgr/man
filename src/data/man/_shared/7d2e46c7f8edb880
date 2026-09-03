@@ -1,0 +1,370 @@
+PMC(3)                   BSD Library Functions Manual                   PMC(3)
+
+NNAAMMEE
+     ppmmcc — library for accessing hardware performance monitoring counters
+
+LLIIBBRRAARRYY
+     Performance Counters Library (libpmc, -lpmc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ppmmcc..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The Performance Counters Library (libpmc, -lpmc) provides a programming
+     interface that allows applications to use hardware performance counters
+     to gather performance data about specific processes or for the system as
+     a whole.  The library is implemented using the lower-level facilities of‐
+     fered by the hwpmc(4) driver.
+
+   KKeeyy CCoonncceeppttss
+     Performance monitoring counters (PMCs) are represented by the library us‐
+     ing a software abstraction.  These “abstract” PMCs can have two scopes:
+
+     ••   System scope.  These PMCs measure events in a whole-system manner,
+         i.e., independent of the currently executing thread.  System scope
+         PMCs are allocated on specific CPUs and do not migrate between CPUs.
+         Non-privileged process are allowed to allocate system scope PMCs if
+         the hwpmc(4) sysctl tunable: _s_e_c_u_r_i_t_y_._b_s_d_._u_n_p_r_i_v_i_l_e_g_e_d___s_y_s_p_m_c_s is
+         non-zero.
+
+     ••   Process scope.  These PMCs only measure hardware events when the pro‐
+         cesses they are attached to are executing on a CPU.  In an SMP sys‐
+         tem, process scope PMCs migrate between CPUs along with their target
+         processes.
+
+     Orthogonal to PMC scope, PMCs may be allocated in one of two operational
+     modes:
+
+     ••   Counting PMCs measure events according to their scope (system or
+         process).  The application needs to explicitly read these counters to
+         retrieve their value.
+
+     ••   Sampling PMCs cause the CPU to be periodically interrupted and infor‐
+         mation about its state of execution to be collected.  Sampling PMCs
+         are used to profile specific processes and kernel threads or to pro‐
+         file the system as a whole.
+
+     The scope and operational mode for a software PMC are specified at PMC
+     allocation time.  An application is allowed to allocate multiple PMCs
+     subject to availability of hardware resources.
+
+     The library uses human-readable strings to name the event being measured
+     by hardware.  The syntax used for specifying a hardware event along with
+     additional event specific qualifiers (if any) is described in detail in
+     section _E_V_E_N_T _S_P_E_C_I_F_I_E_R_S below.
+
+     PMCs are associated with the process that allocated them and will be au‐
+     tomatically reclaimed by the system when the process exits.  Addition‐
+     ally, process-scope PMCs have to be attached to one or more target pro‐
+     cesses before they can perform measurements.  A process-scope PMC may be
+     attached to those target processes that its owner process would otherwise
+     be permitted to debug.  An owner process may attach PMCs to itself allow‐
+     ing it to measure its own behavior.  Additionally, on some machine archi‐
+     tectures, such self-attached PMCs may be read cheaply using specialized
+     instructions supported by the processor.
+
+     Certain kinds of PMCs require that a log file be configured before they
+     may be started.  These include:
+
+     ••   System scope sampling PMCs.
+
+     ••   Process scope sampling PMCs.
+
+     ••   Process scope counting PMCs that have been configured to report PMC
+         readings on process context switches or process exits.
+
+     Up to one log file may be configured per owner process.  Events logged to
+     a log file may be subsequently analyzed using the pmclog(3) family of
+     functions.
+
+   SSuuppppoorrtteedd CCPPUUss
+     The CPUs known to the PMC library are named by the _e_n_u_m _p_m_c___c_p_u_t_y_p_e enu‐
+     meration.  Supported CPUs include:
+
+     PMC_CPU_AMD_K7               AMD Athlon CPUs.
+     PMC_CPU_AMD_K8               AMD Athlon64 CPUs.
+     PMC_CPU_ARMV7_CORTEX_A5      ARMv7 Cortex A5 CPUs.
+     PMC_CPU_ARMV7_CORTEX_A7      ARMv7 Cortex A7 CPUs.
+     PMC_CPU_ARMV7_CORTEX_A8      ARMv7 Cortex A8 CPUs.
+     PMC_CPU_ARMV7_CORTEX_A9      ARMv7 Cortex A9 CPUs.
+     PMC_CPU_ARMV7_CORTEX_A15     ARMv7 Cortex A15 CPUs.
+     PMC_CPU_ARMV7_CORTEX_A17     ARMv7 Cortex A17 CPUs.
+     PMC_CPU_ARMV8_CORTEX_A53     ARMv8 Cortex A53 CPUs.
+     PMC_CPU_ARMV8_CORTEX_A57     ARMv8 Cortex A57 CPUs.
+     PMC_CPU_ARMV8_CORTEX_A76     ARMv8 Cortex A76 CPUs.
+     GENERIC                      Generic
+     PMC_CPU_INTEL_ATOM           Intel Atom CPUs and other CPUs conforming to
+                                  version 3 of the Intel performance measure‐
+                                  ment architecture.
+     PMC_CPU_INTEL_CORE           Intel Core Solo and Core Duo CPUs, and other
+                                  CPUs conforming to version 1 of the Intel
+                                  performance measurement architecture.
+     PMC_CPU_INTEL_CORE2          Intel Core2 Solo, Core2 Duo and Core2
+                                  Extreme CPUs, and other CPUs conforming to
+                                  version 2 of the Intel performance measure‐
+                                  ment architecture.
+     PMC_CPU_PPC_7450             PowerPC MPC7450 CPUs.
+     PMC_CPU_PPC_970              IBM PowerPC 970 CPUs.
+     PMC_CPU_PPC_E500             PowerPC e500 Core CPUs.
+     PMC_CPU_PPC_POWER8           IBM POWER8 and POWER9 CPUs.
+
+   SSuuppppoorrtteedd PPMMCCss
+     PMCs supported by this library are named by the _e_n_u_m _p_m_c___c_l_a_s_s enumera‐
+     tion.  Supported PMC classes include:
+
+     PMC_CLASS_IAF        Fixed function hardware counters presents in CPUs
+                          conforming to the Intel performance measurement ar‐
+                          chitecture version 2 and later.
+     PMC_CLASS_IAP        Programmable hardware counters present in CPUs con‐
+                          forming to the Intel performance measurement archi‐
+                          tecture version 1 and later.
+     PMC_CLASS_K7         Programmable hardware counters present in AMD Athlon
+                          CPUs.
+     PMC_CLASS_K8         Programmable hardware counters present in AMD
+                          Athlon64 CPUs.
+     PMC_CLASS_TSC        The timestamp counter on i386 and amd64 architecture
+                          CPUs.
+     PMC_CLASS_ARMV7      ARMv7
+     PMC_CLASS_ARMV8      ARMv8
+     PMC_CLASS_PPC970     IBM PowerPC 970 class.
+     PMC_CLASS_POWER8     IBM POWER8 class.
+     PMC_CLASS_SOFT       Software events.
+
+   PPMMCC CCaappaabbiilliittiieess
+     Capabilities of performance monitoring hardware are denoted using the
+     _e_n_u_m _p_m_c___c_a_p_s enumeration.  Supported capabilities include:
+
+     PMC_CAP_CASCADE       The ability to cascade counters.
+     PMC_CAP_DOMWIDE       Separate counters tied to each NUMA domain.
+     PMC_CAP_EDGE          The ability to count negated to asserted transi‐
+                           tions of the hardware conditions being probed for.
+     PMC_CAP_INTERRUPT     The ability to interrupt the CPU.
+     PMC_CAP_INVERT        The ability to invert the sense of the hardware
+                           conditions being measured.
+     PMC_CAP_PRECISE       The ability to perform precise sampling.
+     PMC_CAP_QUALIFIER     The hardware allows monitored to be further quali‐
+                           fied in some system dependent way.
+     PMC_CAP_READ          The ability to read from performance counters.
+     PMC_CAP_SYSTEM        The ability to restrict counting of hardware events
+                           to when the CPU is running privileged code.
+     PMC_CAP_SYSWIDE       A single counter aggregating events for the whole
+                           system.
+     PMC_CAP_THRESHOLD     The ability to ignore simultaneous hardware events
+                           below a programmable threshold.
+     PMC_CAP_USER          The ability to restrict counting of hardware events
+                           to those when the CPU is running unprivileged code.
+     PMC_CAP_WRITE         The ability to write to performance counters.
+
+   CCPPUU NNaammiinngg CCoonnvveennttiioonnss
+     CPUs are named using small integers from zero up to, but excluding, the
+     value returned by function ppmmcc__nnccppuu().  On platforms supporting sparsely
+     numbered CPUs not all the numbers in this range will denote valid CPUs.
+     Operations on non-existent CPUs will return an error.
+
+   FFuunnccttiioonnaall GGrroouuppiinngg ooff tthhee AAPPII
+     This section contains a brief overview of the available functionality in
+     the PMC library.  Each function listed here is described further in its
+     own manual page.
+
+     Administration
+         ppmmcc__ddiissaabbllee(), ppmmcc__eennaabbllee()
+                 Administratively disable (enable) specific performance moni‐
+                 toring counter hardware.  Counters that are disabled will not
+                 be available to applications to use.
+
+     Convenience Functions
+         ppmmcc__eevveenntt__nnaammeess__ooff__ccllaassss()
+                 Returns a list of event names supported by a given PMC type.
+         ppmmcc__nnaammee__ooff__ccaappaabbiilliittyy()
+                 Convert a PMC_CAP_* flag to a human-readable string.
+         ppmmcc__nnaammee__ooff__ccllaassss()
+                 Convert a PMC_CLASS_* constant to a human-readable string.
+         ppmmcc__nnaammee__ooff__ccppuuttyyppee()
+                 Return a human-readable name for a CPU type.
+         ppmmcc__nnaammee__ooff__ddiissppoossiittiioonn()
+                 Return a human-readable string describing a PMC's disposi‐
+                 tion.
+         ppmmcc__nnaammee__ooff__eevveenntt()
+                 Convert a numeric event code to a human-readable string.
+         ppmmcc__nnaammee__ooff__mmooddee()
+                 Convert a PMC_MODE_* constant to a human-readable name.
+         ppmmcc__nnaammee__ooff__ssttaattee()
+                 Return a human-readable string describing a PMC's current
+                 state.
+
+     Library Initialization
+         ppmmcc__iinniitt()
+                 Initialize the library.  This function must be called before
+                 any other library function.
+
+     Log File Handling
+         ppmmcc__ccoonnffiigguurree__llooggffiillee()
+                 Configure a log file for hwpmc(4) to write logged events to.
+         ppmmcc__fflluusshh__llooggffiillee()
+                 Flush all pending log data in hwpmc(4)'s buffers.
+         ppmmcc__cclloossee__llooggffiillee()
+                 Flush all pending log data and close hwpmc(4)'s side of the
+                 stream.
+         ppmmcc__wwrriitteelloogg()
+                 Append arbitrary user data to the current log file.
+
+     PMC Management
+         ppmmcc__aallllooccaattee(), ppmmcc__rreelleeaassee()
+                 Allocate (free) a PMC.
+         ppmmcc__aattttaacchh(), ppmmcc__ddeettaacchh()
+                 Attach (detach) a process scope PMC to a target.
+         ppmmcc__rreeaadd(), ppmmcc__wwrriittee(), ppmmcc__rrww()
+                 Read (write) a value from (to) a PMC.
+         ppmmcc__ssttaarrtt(), ppmmcc__ssttoopp()
+                 Start (stop) a software PMC.
+         ppmmcc__sseett()
+                 Set the reload value for a sampling PMC.
+
+     Queries
+         ppmmcc__ccaappaabbiilliittiieess()
+                 Retrieve the capabilities for a given PMC.
+         ppmmcc__ccppuuiinnffoo()
+                 Retrieve information about the CPUs and PMC hardware present
+                 in the system.
+         ppmmcc__ggeett__ddrriivveerr__ssttaattss()
+                 Retrieve statistics maintained by hwpmc(4).
+         ppmmcc__nnccppuu()
+                 Determine the greatest possible CPU number on the system.
+         ppmmcc__nnppmmcc()
+                 Return the number of hardware PMCs present in a given CPU.
+         ppmmcc__ppmmcciinnffoo()
+                 Return information about the state of a given CPU's PMCs.
+         ppmmcc__wwiiddtthh()
+                 Determine the width of a hardware counter in bits.
+
+     x86 Architecture Specific API
+         ppmmcc__ggeett__mmssrr()
+                 Returns the processor model specific register number associ‐
+                 ated with _p_m_c.  Applications may then use the x86 RRDDPPMMCC in‐
+                 struction to directly read the contents of the PMC.
+
+   SSiiggnnaall HHaannddlliinngg RReeqquuiirreemmeennttss
+     Applications using PMCs are required to handle the following signals:
+
+     SIGBUS  When the hwpmc(4) module is unloaded using kldunload(8), pro‐
+             cesses that have PMCs allocated to them will be sent a SIGBUS
+             signal.
+
+     SIGIO   The hwpmc(4) driver will send a PMC owning process a SIGIO signal
+             if:
+
+             ••   any process-mode PMC allocated by it loses all its target
+                 processes.
+
+             ••   the driver encounters an error when writing log data to a
+                 configured log file.  This error may be retrieved by a subse‐
+                 quent call to ppmmcc__fflluusshh__llooggffiillee().
+
+   TTyyppiiccaall PPrrooggrraamm FFllooww
+     1.   An application would first invoke function ppmmcc__iinniitt() to allow the
+          library to initialize itself.
+
+     2.   Signal handling would then be set up.
+
+     3.   Next the application would allocate the PMCs it desires using func‐
+          tion ppmmcc__aallllooccaattee().
+
+     4.   Initial values for PMCs may be set using function ppmmcc__sseett().
+
+     5.   If a log file is necessary for the PMCs to work, it would be config‐
+          ured using function ppmmcc__ccoonnffiigguurree__llooggffiillee().
+
+     6.   Process scope PMCs would then be attached to their target processes
+          using function ppmmcc__aattttaacchh().
+
+     7.   The PMCs would then be started using function ppmmcc__ssttaarrtt().
+
+     8.   Once started, the values of counting PMCs may be read using function
+          ppmmcc__rreeaadd().  For PMCs that write events to the log file, this logged
+          data would be read and parsed using the pmclog(3) family of func‐
+          tions.
+
+     9.   PMCs are stopped using function ppmmcc__ssttoopp(), and process scope PMCs
+          are detached from their targets using function ppmmcc__ddeettaacchh().
+
+     10.  Before the process exits, it may release its PMCs using function
+          ppmmcc__rreelleeaassee().  Any configured log file may be closed using function
+          ppmmcc__ccoonnffiigguurree__llooggffiillee().
+
+EEVVEENNTT SSPPEECCIIFFIIEERRSS
+     Event specifiers are strings comprising of an event name, followed by op‐
+     tional parameters modifying the semantics of the hardware event being
+     probed.  Event names are PMC architecture dependent, but the PMC library
+     defines machine independent aliases for commonly used events.
+
+     Event specifiers spellings are case-insensitive and space characters, pe‐
+     riods, underscores and hyphens are considered equivalent to each other.
+     Thus the event specifiers "Example Event", "example-event", and
+     "EXAMPLE_EVENT" are equivalent.
+
+   PPMMCC AArrcchhiitteeccttuurree DDeeppeennddeenntt EEvveennttss
+     PMC architecture dependent event specifiers are described in the follow‐
+     ing manual pages:
+
+     _P_M_C _C_l_a_s_s          _M_a_n_u_a_l _P_a_g_e
+     PMC_CLASS_IAF      pmc.iaf(3)
+     PMC_CLASS_IAP      pmc.atom(3), pmc.core(3), pmc.core2(3)
+     PMC_CLASS_K7       pmc.k7(3)
+     PMC_CLASS_K8       pmc.k8(3)
+     PMC_CLASS_TSC      pmc.tsc(3)
+
+   EEvveenntt NNaammee AAlliiaasseess
+     Event name aliases are PMC-independent names for commonly used events.
+     The following aliases are known to this version of the ppmmcc library:
+
+     branches
+             Measure the number of branches retired.
+
+     branch-mispredicts
+             Measure the number of retired branches that were mispredicted.
+
+     cycles  Measure processor cycles.  This event is implemented using the
+             processor's Time Stamp Counter register.
+
+     dc-misses
+             Measure the number of data cache misses.
+
+     ic-misses
+             Measure the number of instruction cache misses.
+
+     instructions
+             Measure the number of instructions retired.
+
+     interrupts
+             Measure the number of interrupts seen.
+
+     unhalted-cycles
+             Measure the number of cycles the processor is not in a halted or
+             sleep state.
+
+CCOOMMPPAATTIIBBIILLIITTYY
+     The interface between the ppmmcc library and the hwpmc(4) driver is intended
+     to be private to the implementation and may change.  In order to ease
+     forward compatibility with future versions of the hwpmc(4) driver, appli‐
+     cations are urged to dynamically link with the ppmmcc library.  Doing other‐
+     wise is unsupported.
+
+SSEEEE AALLSSOO
+     pmc.atom(3), pmc.core(3), pmc.core2(3), pmc.haswell(3), pmc.haswelluc(3),
+     pmc.haswellxeon(3), pmc.iaf(3), pmc.ivybridge(3), pmc.ivybridgexeon(3),
+     pmc.k7(3), pmc.k8(3), pmc.sandybridge(3), pmc.sandybridgeuc(3),
+     pmc.sandybridgexeon(3), pmc.soft(3), pmc.tsc(3), pmc.westmere(3),
+     pmc.westmereuc(3), pmc_allocate(3), pmc_attach(3), pmc_capabilities(3),
+     pmc_configure_logfile(3), pmc_disable(3), pmc_event_names_of_class(3),
+     pmc_get_driver_stats(3), pmc_get_msr(3), pmc_init(3),
+     pmc_name_of_capability(3), pmc_read(3), pmc_set(3), pmc_start(3),
+     pmclog(3), hwpmc(4), pmccontrol(8), pmcstat(8)
+
+HHIISSTTOORRYY
+     The ppmmcc library first appeared in FreeBSD 6.0.
+
+AAUUTTHHOORRSS
+     The Performance Counters Library (libpmc, -lpmc) library was written by
+     Joseph Koshy <_j_k_o_s_h_y_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                              June 16, 2023                             BSD

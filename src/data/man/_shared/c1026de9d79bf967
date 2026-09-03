@@ -1,0 +1,194 @@
+RC.SUBR(8)                BSD System Manager's Manual               RC.SUBR(8)
+
+NNAAMMEE
+     rrcc..ssuubbrr — daemon control scripts routines
+
+SSYYNNOOPPSSIISS
+     ddaaeemmoonn=_p_a_t_h___t_o___e_x_e_c_u_t_a_b_l_e
+     .. _/_e_t_c_/_r_c_._d_/_r_c_._s_u_b_r
+     rrcc__ccmmdd _a_c_t_i_o_n
+
+DDEESSCCRRIIPPTTIIOONN
+     Apart from a few notable exceptions, rc scripts must follow this naming
+     policy:
+
+     1.   When possible, use the same name as the ddaaeemmoonn it is referring to.
+     2.   It must follow ksh(1) variable naming: begin with an alphabetic or
+          underscore character, followed by one or more alphanumeric or under‐
+          score characters.  Dashes (‘-’) have to be converted to underscores
+          (‘_’).
+
+     Every script under _/_e_t_c_/_r_c_._d follows this pattern:
+
+     1.   Define the _d_a_e_m_o_n variable.
+     2.   Define service-specific defaults for one or more _d_a_e_m_o_n___* variables
+          (optional).
+     3.   Source rrcc..ssuubbrr, which defines default shell functions and variable
+          values.
+     4.   Override the _p_e_x_p variable or any of the rrcc__** functions and set the
+          _r_c___b_g or _r_c___r_e_l_o_a_d variables, if needed.
+     5.   Define an rrcc__pprree and/or rrcc__ppoosstt function, if needed.
+     6.   Call the rrcc__ccmmdd function as “rc_cmd $1”.
+
+     The following shell functions are defined by rrcc..ssuubbrr:
+
+     rrcc__cchheecckk   Search for processes of the service with pgrep(1) using the
+                regular expression given in the _p_e_x_p variable.
+
+     rrcc__ccmmdd _a_c_t_i_o_n
+                Run the _a_c_t_i_o_n for the current rrcc..dd script, based on the set‐
+                tings of various shell variables.  rrcc__ccmmdd is extremely flexi‐
+                ble, and allows fully functional rrcc..dd scripts to be imple‐
+                mented in a small amount of shell code.  For a given _a_c_t_i_o_n,
+                if the rrcc__$${{aaccttiioonn}} function is not defined, then a default
+                function is provided by rrcc..ssuubbrr.  In addition actions can be
+                disabled by setting the _r_c___$_{_a_c_t_i_o_n_} variable to “NO”.  For
+                example, if “rc_reload=NO” is set in the rrcc..dd script, and
+                rrcc__ccmmdd is called for the reload action, an error will be
+                raised.  Similarly, the special variable _r_c___u_s_e_r_c_h_e_c_k must be
+                set to “NO” if the cchheecckk _a_c_t_i_o_n requires root privileges.
+
+                The _a_c_t_i_o_n argument can be ssttaarrtt, ssttoopp, rreellooaadd, rreessttaarrtt, or
+                cchheecckk:
+
+                cchheecckk    Call rrcc__cchheecckk.  Return 0 if the daemon is running or
+                         1 if it is not.
+
+                ssttaarrtt    Check that the service is running by calling
+                         rrcc__cchheecckk.  If it's not running, call rrcc__pprree if it ex‐
+                         ists, then rrcc__ssttaarrtt.
+
+                ssttoopp     Check that the service is running by calling
+                         rrcc__cchheecckk.  If it is running, call rrcc__ssttoopp and wait up
+                         to 30 seconds for the daemon to properly shutdown.
+                         If successful, run rrcc__ppoosstt if it exists.
+
+                rreessttaarrtt  Run the _a_c_t_i_o_n argument ssttoopp, then if successful run
+                         ssttaarrtt.
+
+                rreellooaadd   Check that the service is running by calling
+                         rrcc__cchheecckk.  If it is running, call rrcc__rreellooaadd.
+
+     rrcc__ccoonnffiiggtteesstt
+                Check daemon configuration before running ssttaarrtt, rreellooaadd and
+                rreessttaarrtt if implemented by the rc.d(8) script.
+
+     rrcc__eexxeecc    Execute argument using su(1) according to _d_a_e_m_o_n___c_l_a_s_s,
+                _d_a_e_m_o_n___e_x_e_c_d_i_r, _d_a_e_m_o_n___u_s_e_r, _d_a_e_m_o_n___r_t_a_b_l_e and _d_a_e_m_o_n___l_o_g_g_e_r
+                values.
+
+     rrcc__ppoosstt    This function is run after ssttoopp if implemented by the rc.d(8)
+                script.
+
+     rrcc__pprree     This function is run before ssttaarrtt if implemented by the
+                rc.d(8) script.
+
+     rrcc__rreellooaadd  Send the _r_c___r_e_l_o_a_d___s_i_g_n_a_l using pkill(1) on the regular ex‐
+                pression given in the _p_e_x_p variable.  One has to make sure
+                that sending SIGHUP to a daemon will have the desired effect,
+                i.e. that it will reload its configuration.
+
+     rrcc__ssttaarrtt   Start the daemon.  Defaults to:
+
+                      rc_exec "${daemon} ${daemon_flags}"
+
+     rrcc__ssttoopp    Stop the daemon.  Send the _r_c___s_t_o_p___s_i_g_n_a_l using pkill(1) on
+                the regular expression given in the _p_e_x_p variable.
+
+EENNVVIIRROONNMMEENNTT
+     rrcc__ccmmdd uses the following shell variables to control its behaviour.
+
+     _d_a_e_m_o_n          The path to the daemon, optionally followed by one or
+                     more whitespace separated arguments.  Arguments included
+                     here are always used, even if _d_a_e_m_o_n___f_l_a_g_s is empty.
+                     This variable is required.  It is an error to source
+                     rrcc..ssuubbrr without defining _d_a_e_m_o_n first.
+
+     _d_a_e_m_o_n___c_l_a_s_s    Login class to run the daemon with, using su(1).  This is
+                     a read only variable that gets set by rrcc..ssuubbrr itself.  It
+                     searches login.conf(5) for a login class that has the
+                     same name as the rrcc..dd script itself and uses that.  If no
+                     such login class exists then “daemon” will be used.
+
+     _d_a_e_m_o_n___e_x_e_c_d_i_r  Change to this directory before running rrcc__eexxeecc.
+
+     _d_a_e_m_o_n___f_l_a_g_s    Arguments to call the daemon with.
+
+     _d_a_e_m_o_n___l_o_g_g_e_r   Redirect standard output and error to logger(1) using the
+                     configured priority (e.g. "daemon.info").
+
+     _d_a_e_m_o_n___r_t_a_b_l_e   Routing table to run the daemon under, using route(8).
+
+     _d_a_e_m_o_n___t_i_m_e_o_u_t  Maximum time in seconds to wait for the ssttaarrtt, ssttoopp and
+                     rreellooaadd actions to return.  This is only guaranteed with
+                     the default rrcc__ssttaarrtt, rrcc__ssttoopp and rrcc__rreellooaadd functions.
+
+     _d_a_e_m_o_n___u_s_e_r     User to run the daemon as, using su(1).
+
+     _p_e_x_p            A regular expression to be passed to pgrep(1) in order to
+                     find the desired process or to be passed to pkill(1) to
+                     stop it.  By default this variable contains the _d_a_e_m_o_n
+                     and _d_a_e_m_o_n___f_l_a_g_s variables.  To override the default
+                     value, an rrcc..dd script has to redefine this variable _a_f_t_e_r
+                     sourcing rrcc..ssuubbrr.
+
+     _r_c___b_g           Can be set to YYEESS in an rrcc..dd script to force starting the
+                     daemon in background when using the default rrcc__ssttaarrtt.
+
+     _r_c___r_e_l_o_a_d       Can be set to “NO” in an rrcc..dd script to disable the
+                     reload action if the respective daemon does not support
+                     reloading its configuration.  _T_h_e _s_a_m_e _i_s _p_o_s_s_i_b_l_e_, _b_u_t
+                     _a_l_m_o_s_t _n_e_v_e_r _u_s_e_f_u_l_, _f_o_r _o_t_h_e_r _a_c_t_i_o_n_s_.
+
+     _r_c___r_e_l_o_a_d___s_i_g_n_a_l
+                     Signal sent to the daemon process (_p_e_x_p) by the default
+                     rrcc__rreellooaadd() function.  Defaults to _H_U_P.
+
+     _r_c___s_t_o_p___s_i_g_n_a_l  Signal sent to the daemon process (_p_e_x_p) by the default
+                     rrcc__ssttoopp() function.  Default to _T_E_R_M.
+
+     _r_c___u_s_e_r_c_h_e_c_k    Can be set to “NO” in an rrcc..dd script, if the cchheecckk action
+                     needs root privileges.
+
+     All _d_a_e_m_o_n___* variables are set in the following ways:
+
+     1.   Global defaults are provided by rrcc..ssuubbrr:
+
+                daemon_class=daemon
+                daemon_execdir=
+                daemon_flags=
+                daemon_logger=
+                daemon_rtable=0
+                daemon_timeout=30
+                daemon_user=root
+
+     2.   Service-specific defaults may be provided in the respective rrcc..dd
+          script _b_e_f_o_r_e sourcing rrcc..ssuubbrr, thus overriding the global defaults.
+
+     3.   As noted in rc.d(8), site-specific values provided in
+          rc.conf.local(8) for _d_a_e_m_o_n___e_x_e_c_d_i_r, _d_a_e_m_o_n___f_l_a_g_s, _d_a_e_m_o_n___l_o_g_g_e_r,
+          _d_a_e_m_o_n___r_t_a_b_l_e, _d_a_e_m_o_n___t_i_m_e_o_u_t, and _d_a_e_m_o_n___u_s_e_r will override those
+          defaults.
+
+FFIILLEESS
+     /etc/rc.d/
+             Directory containing daemon control scripts.
+
+     /etc/rc.d/rc.subr
+             Functions and variables used by rrcc..dd scripts.
+
+     /usr/ports/infrastructure/templates/rc.template
+             A sample rrcc..dd script.
+
+SSEEEE AALLSSOO
+     rc(8), rc.conf(8), rc.d(8)
+
+HHIISSTTOORRYY
+     The rrcc..ssuubbrr framework first appeared in OpenBSD 4.9.
+
+AAUUTTHHOORRSS
+     The rrcc..ssuubbrr framework was written by Robert Nagy <_r_o_b_e_r_t_@_o_p_e_n_b_s_d_._o_r_g>,
+     Antoine Jacoutot <_a_j_a_c_o_u_t_o_t_@_o_p_e_n_b_s_d_._o_r_g>, and Ingo Schwarze
+     <_s_c_h_w_a_r_z_e_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BSD                            October 22, 2022                            BSD

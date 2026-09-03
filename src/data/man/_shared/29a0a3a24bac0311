@@ -1,0 +1,202 @@
+CRUNCHGEN(8)              BSD System Manager's Manual             CRUNCHGEN(8)
+
+NNAAMMEE
+     ccrruunncchhggeenn — generates build environment for a crunched binary
+
+SSYYNNOOPPSSIISS
+     ccrruunncchhggeenn [--EEffMMqq] [--cc _c_-_f_i_l_e_-_n_a_m_e] [--DD _s_r_c_-_r_o_o_t] [--ee _e_x_e_c_-_f_i_l_e_-_n_a_m_e]
+               [--LL _l_i_b_-_d_i_r] [--mm _m_a_k_e_f_i_l_e_-_n_a_m_e] [--OO _o_b_j_d_i_r_-_n_a_m_e] _c_o_n_f_-_f_i_l_e
+     ccrruunncchhggeenn --hh [--ff _k_e_e_p_-_l_i_s_t_-_f_i_l_e] [--kk _k_e_e_p_-_s_y_m_b_o_l] _o_b_j_e_c_t_-_f_i_l_e _._._.
+
+DDEESSCCRRIIPPTTIIOONN
+     A crunched binary is a program made up of many other programs linked to‐
+     gether into a single executable.  The crunched binary mmaaiinn() function de‐
+     termines which component program to run by the contents of argv[0].  The
+     main reason to crunch programs together is for fitting as many programs
+     as possible onto an installation or system recovery floppy.
+
+     ccrruunncchhggeenn reads in the specifications in _c_o_n_f_-_f_i_l_e for a crunched binary,
+     and generates a Makefile and accompanying top-level C source file that
+     when built create the crunched executable file from the component pro‐
+     grams.  For each component program, ccrruunncchhggeenn can optionally attempt to
+     determine the object (.o) files that make up the program from its source
+     directory Makefile.  This information is cached in a file named
+     _<_c_o_n_f_-_n_a_m_e_>_._c_a_c_h_e between runs.
+
+     ccrruunncchhggeenn is later run again with the --hh flag to eliminate link-time con‐
+     flicts between the component programs by hiding all unnecessary symbols.
+     Some symbols may be left visible via the --kk _k_e_e_p_-_s_y_m_b_o_l and --ff
+     _k_e_e_p_-_l_i_s_t_-_f_i_l_e options.  The _k_e_e_p_-_l_i_s_t_-_f_i_l_e must contain a list of sym‐
+     bols to keep visible, one symbol per line.  Note that the C compiler
+     prepends an underscore in front of symbols, so to keep the C function
+     “foo” visible, the option “-k _foo” must be used.
+
+     After ccrruunncchhggeenn is run, the crunched binary can be built by running “make
+     -f <conf-name>.mk”.  The component programs' object files must already be
+     built.  An “objs” target, included in the output makefile, will run make
+     in each component program's source dir to build the object files for the
+     user.  This is not done automatically since in release engineering cir‐
+     cumstances it is generally not desirable to be modifying objects in other
+     directories.
+
+     The options are as follows:
+
+     --cc _c_-_f_i_l_e_-_n_a_m_e
+             Set output C file name to _c_-_f_i_l_e_-_n_a_m_e.  The default name is
+             “⟨conf-name⟩.c”.
+
+     --DD _s_r_c_-_r_o_o_t
+             Assume that relative source directory specifications begin with
+             _s_r_c_-_r_o_o_t.
+
+     --EE      Don't prepend stub names with an underscore.  Used for architec‐
+             tures that don't have underscore prepended to symbol names, such
+             as ELF architectures.
+
+     --ee _e_x_e_c_-_f_i_l_e_-_n_a_m_e
+             Set crunched binary executable file name to _e_x_e_c_-_f_i_l_e_-_n_a_m_e.  The
+             default name is “⟨conf-name⟩”.
+
+     --ff      Flush cache.  Forces the recalculation of cached parameters.
+
+     --hh      Hide all unnecessary symbols.  Note that this is done on some ELF
+             architectures by marking the symbol local, while the --MM option
+             causes it to mangle the symbol name to hide the symbol.  It is
+             therefore not advisable to try to run nm(1) on a crunched object
+             file.  This is due to the nature of the ELF symbol table and how
+             some architectures use the symbol attributes for their GOT build.
+
+     --LL _l_i_b_-_d_i_r
+             Try to obtain libraries from _l_i_b_-_d_i_r.
+
+     --MM      On ELF architectures mangle the symbol instead of marking it
+             global; necessary for some architectures due to GOT usage.
+
+     --mm _m_a_k_e_f_i_l_e_-_n_a_m_e
+             Set output Makefile name to _m_a_k_e_f_i_l_e_-_n_a_m_e.  The default name is
+             “⟨conf-name⟩.mk”.
+
+     --OO _o_b_j_d_i_r_-_n_a_m_e
+             Specify an object directory to use.  It defaults to “obj”, though
+             for cross building purposes it can be used to specify
+             obj.${HOST}.${MACHINE}.  Normally used with the make variable
+             ${MAKEOBJDIR}.
+
+     --qq      Quiet operation.  Status messages are suppressed.
+
+CCRRUUNNCCHHGGEENN CCOONNFFIIGGUURRAATTIIOONN FFIILLEE CCOOMMMMAANNDDSS
+     ccrruunncchhggeenn reads specifications from the _c_o_n_f_-_f_i_l_e that describe the com‐
+     ponents of the crunched binary.  In its simplest use, the component pro‐
+     gram names are merely listed along with the top-level source directories
+     in which their sources can be found.  ccrruunncchhggeenn then calculates (via the
+     source makefiles) and caches the list of object files and their loca‐
+     tions.  For more specialized situations, the user can specify by hand all
+     the parameters that ccrruunncchhggeenn needs.
+
+     The _c_o_n_f_-_f_i_l_e commands are as follows:
+
+     srcdirs _d_i_r_n_a_m_e _._._.
+             A list of source trees in which the source directories of the
+             component programs can be found.  These dirs are searched using
+             the BSD “<source-dir>/<progname>/” convention.  Multiple srcdirs
+             lines can be specified.  The directories are searched in the or‐
+             der they are given.
+
+     libdirs _d_i_r_n_a_m_e
+             A list of source trees in which the source directories for sup‐
+             plementary libraries can be found.
+
+     progs _p_r_o_g_n_a_m_e _._._.
+             A list of programs that make up the crunched binary.  Multiple
+             progs lines can be specified.
+
+     libs _l_i_b_s_p_e_c _._._.
+             A list of library specifications to be included in the crunched
+             binary link.  Multiple libs lines can be specified.
+
+     ln _p_r_o_g_n_a_m_e _l_i_n_k_n_a_m_e
+             Causes the crunched binary to invoke _p_r_o_g_n_a_m_e whenever _l_i_n_k_n_a_m_e
+             appears in argv[0].  This allows programs that change their be‐
+             havior when run under different names to operate correctly.
+
+     To handle specialized situations, such as when the source is not avail‐
+     able or not built via a conventional Makefile, the following ssppeecciiaall com‐
+     mands can be used to set ccrruunncchhggeenn parameters for a component program.
+
+     special _p_r_o_g_n_a_m_e srcdir _p_a_t_h_n_a_m_e
+             Set the source directory for _p_r_o_g_n_a_m_e.  This is normally calcu‐
+             lated by searching the specified srcdirs for a directory named
+             _p_r_o_g_n_a_m_e.
+
+     special _p_r_o_g_n_a_m_e objdir _p_a_t_h_n_a_m_e
+             Set the obj directory for _p_r_o_g_n_a_m_e.  This is normally calculated
+             by looking for a directory named “obj” under the _s_r_c_d_i_r, and if
+             that is not found, the _s_r_c_d_i_r itself becomes the objdir.
+
+     special _p_r_o_g_n_a_m_e objs _o_b_j_e_c_t_-_f_i_l_e_-_n_a_m_e _._._.
+             Set the list of object files for program _p_r_o_g_n_a_m_e.  This is nor‐
+             mally calculated by constructing a temporary makefile that in‐
+             cludes “srcdir/Makefile” and outputs the value of $(OBJS).
+
+     special _p_r_o_g_n_a_m_e objpaths _f_u_l_l_-_p_a_t_h_n_a_m_e_-_t_o_-_o_b_j_e_c_t_-_f_i_l_e _._._.
+             Sets the pathnames of the object files for program _p_r_o_g_n_a_m_e.
+             This is normally calculated by prepending the objdir pathname to
+             each file in the objs list.
+
+     Only the objpaths parameter is actually needed by ccrruunncchhggeenn, but it is
+     calculated from objdir and objs, which are in turn calculated from sr‐
+     cdir, so it is sometimes convenient to specify the earlier parameters and
+     let ccrruunncchhggeenn calculate forward from there if it can.
+
+     The makefile produced by ccrruunncchhggeenn contains an optional _o_b_j_s target that
+     will build the object files for each component program by running make
+     inside that program's source directory.  For this to work the srcdir and
+     objs parameters must also be valid.  If they are not valid for a particu‐
+     lar program, that program is skipped in the _o_b_j_s target.
+
+EEXXAAMMPPLLEESS
+     Here is an example ccrruunncchhggeenn input conf file, named _k_c_o_p_y_._c_o_n_f:
+
+           srcdirs /usr/src/bin /usr/src/sbin
+
+           progs test cp echo sh fsck halt init mount umount myinstall
+           ln test [       # test can be invoked via [
+           ln sh -sh       # init invokes the shell with "-sh" in argv[0]
+
+           special myprog objpaths /homes/leroy/src/myinstall.o # no sources
+
+           libs -lutil -lcrypt
+
+     This conf file specifies a small crunched binary consisting of some basic
+     system utilities plus a home-grown install program “myinstall”, for which
+     no source directory is specified, but its object file is specified di‐
+     rectly with the ssppeecciiaall line.
+
+     The crunched binary “kcopy” can be built as follows:
+
+           % crunchgen -m Makefile kcopy.conf    # gen Makefile and kcopy.c
+           % make objs             # build the component programs' .o files
+           % make                  # build the crunched binary kcopy
+           % kcopy sh              # test that this invokes a sh shell
+           $                       # it works!
+
+     At this point the binary “kcopy” can be copied onto an install floppy and
+     hard-linked to the names of the component programs.
+
+AAUUTTHHOORRSS
+     ccrruunncchhggeenn was written by James da Silva <_j_d_s_@_c_s_._u_m_d_._e_d_u> at the Univer‐
+     sity of Maryland.
+
+CCAAVVEEAATTSS
+     While ccrruunncchhggeenn takes care to eliminate link conflicts between the compo‐
+     nent programs of a crunched binary, conflicts are still possible between
+     the libraries that are linked in.  Some shuffling in the order of li‐
+     braries may be required, and in some rare cases two libraries may have an
+     unresolvable conflict and thus cannot be crunched together.
+
+     Some versions of the BSD build environment do not by default build the
+     intermediate object file for single-source file programs.  The “make
+     objs” target must then be used to get those object files built, or some
+     other arrangements made.
+
+BSD                              June 11, 2017                             BSD

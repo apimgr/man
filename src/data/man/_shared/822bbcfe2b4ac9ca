@@ -1,0 +1,441 @@
+PFCTL(8)                  BSD System Manager's Manual                 PFCTL(8)
+
+NNAAMMEE
+     ppffccttll — control the packet filter (PF) device
+
+SSYYNNOOPPSSIISS
+     ppffccttll [--AAddeegghhMMmmNNnnOOPPqqRRrrvvzz] [--aa _a_n_c_h_o_r] [--DD _m_a_c_r_o= _v_a_l_u_e] [--FF _m_o_d_i_f_i_e_r]
+           [--ff _f_i_l_e] [--ii _i_n_t_e_r_f_a_c_e] [--KK _h_o_s_t | _n_e_t_w_o_r_k] [--kk _h_o_s_t | _n_e_t_w_o_r_k |
+           _l_a_b_e_l | _i_d | _g_a_t_e_w_a_y] [--oo _l_e_v_e_l] [--pp _d_e_v_i_c_e] [--ss _m_o_d_i_f_i_e_r] [--tt
+           _t_a_b_l_e --TT _c_o_m_m_a_n_d [_a_d_d_r_e_s_s _._._.]] [--xx _l_e_v_e_l]
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppffccttll utility communicates with the packet filter device using the
+     ioctl interface described in pf(4).  It allows ruleset and parameter con‐
+     figuration and retrieval of status information from the packet filter.
+
+     Packet filtering restricts the types of packets that pass through network
+     interfaces entering or leaving the host based on filter rules as de‐
+     scribed in pf.conf(5).  The packet filter can also replace addresses and
+     ports of packets.  Replacing source addresses and ports of outgoing pack‐
+     ets is called NAT (Network Address Translation) and is used to connect an
+     internal network (usually reserved address space) to an external one (the
+     Internet) by making all connections to external hosts appear to come from
+     the gateway.  Replacing destination addresses and ports of incoming pack‐
+     ets is used to redirect connections to different hosts and/or ports.  A
+     combination of both translations, bidirectional NAT, is also supported.
+     Translation rules are described in pf.conf(5).
+
+     When the variable _p_f is set to YES in rc.conf(5), the rule file specified
+     with the variable _p_f___r_u_l_e_s is loaded automatically by the rc(8) scripts
+     and the packet filter is enabled.
+
+     The packet filter does not itself forward packets between interfaces.
+     Forwarding can be enabled by setting the sysctl(8) variables
+     _n_e_t_._i_n_e_t_._i_p_._f_o_r_w_a_r_d_i_n_g and/or _n_e_t_._i_n_e_t_6_._i_p_6_._f_o_r_w_a_r_d_i_n_g to 1.  Set them
+     permanently in sysctl.conf(5).
+
+     The ppffccttll utility provides several commands.  The options are as follows:
+
+     --AA      Load only the queue rules present in the rule file.  Other rules
+             and options are ignored.
+
+     --aa _a_n_c_h_o_r
+             Apply flags --ff, --FF, and --ss only to the rules in the specified
+             _a_n_c_h_o_r.  In addition to the main ruleset, ppffccttll can load and ma‐
+             nipulate additional rulesets by name, called anchors.  The main
+             ruleset is the default anchor.
+
+             Anchors are referenced by name and may be nested, with the vari‐
+             ous components of the anchor path separated by ‘/’ characters,
+             similar to how file system hierarchies are laid out.  The last
+             component of the anchor path is where ruleset operations are per‐
+             formed.
+
+             Evaluation of _a_n_c_h_o_r rules from the main ruleset is described in
+             pf.conf(5).
+
+             For example, the following will show all filter rules (see the --ss
+             flag below) inside the anchor “authpf/smith(1234)”, which would
+             have been created for user “smith” by authpf(8), PID 1234:
+
+                   # pfctl -a "authpf/smith(1234)" -s rules
+
+             Private tables can also be put inside anchors, either by having
+             table statements in the pf.conf(5) file that is loaded in the an‐
+             chor, or by using regular table commands, as in:
+
+                   # pfctl -a foo/bar -t mytable -T add 1.2.3.4 5.6.7.8
+
+             When a rule referring to a table is loaded in an anchor, the rule
+             will use the private table if one is defined, and then fall back
+             to the table defined in the main ruleset, if there is one.  This
+             is similar to C rules for variable scope.  It is possible to cre‐
+             ate distinct tables with the same name in the global ruleset and
+             in an anchor, but this is often bad design and a warning will be
+             issued in that case.
+
+             By default, recursive inline printing of anchors applies only to
+             unnamed anchors specified inline in the ruleset.  If the anchor
+             name is terminated with a ‘*’ character, the --ss flag will recur‐
+             sively print all anchors in a brace delimited block.  For example
+             the following will print the “authpf” ruleset recursively:
+
+                   # pfctl -a 'authpf/*' -sr
+
+             To print the main ruleset recursively, specify only ‘*’ as the
+             anchor name:
+
+                   # pfctl -a '*' -sr
+
+     --DD _m_a_c_r_o=_v_a_l_u_e
+             Define _m_a_c_r_o to be set to _v_a_l_u_e on the command line.  Overrides
+             the definition of _m_a_c_r_o in the ruleset.
+
+     --dd      Disable the packet filter.
+
+     --ee      Enable the packet filter.
+
+     --FF _m_o_d_i_f_i_e_r
+             Flush the filter parameters specified by _m_o_d_i_f_i_e_r (may be abbre‐
+             viated):
+
+             --FF nnaatt        Flush the NAT rules.
+             --FF qquueeuuee      Flush the queue rules.
+             --FF eetthheerrnneett   Flush the Ethernet filter rules.
+             --FF rruulleess      Flush the filter rules.
+             --FF ssttaatteess     Flush the state table (NAT and filter).
+             --FF SSoouurrcceess    Flush the source tracking table.
+             --FF iinnffoo       Flush the filter information (statistics that are
+                           not bound to rules).
+             --FF TTaabblleess     Flush the tables.
+             --FF oossffpp       Flush the passive operating system fingerprints.
+             --FF aallll        Flush all of the above.
+
+     --ff _f_i_l_e
+             Load the rules contained in _f_i_l_e.  This _f_i_l_e may contain macros,
+             tables, options, and normalization, queueing, translation, and
+             filtering rules.  With the exception of macros and tables, the
+             statements must appear in that order.
+
+     --gg      Include output helpful for debugging.
+
+     --hh      Help.
+
+     --ii _i_n_t_e_r_f_a_c_e
+             Restrict the operation to the given _i_n_t_e_r_f_a_c_e.
+
+     --KK _h_o_s_t | _n_e_t_w_o_r_k
+             Kill all of the source tracking entries originating from the
+             specified _h_o_s_t or _n_e_t_w_o_r_k.  A second --KK _h_o_s_t or --KK _n_e_t_w_o_r_k option
+             may be specified, which will kill all the source tracking entries
+             from the first host/network to the second.
+
+     --kk _h_o_s_t | _n_e_t_w_o_r_k | _l_a_b_e_l | _i_d | _g_a_t_e_w_a_y
+             Kill all of the state entries matching the specified _h_o_s_t,
+             _n_e_t_w_o_r_k, _l_a_b_e_l, _i_d, or _g_a_t_e_w_a_y_.
+
+             For example, to kill all of the state entries originating from
+             “host”:
+
+                   # pfctl -k host
+
+             A second --kk _h_o_s_t or --kk _n_e_t_w_o_r_k option may be specified, which
+             will kill all the state entries from the first host/network to
+             the second.  To kill all of the state entries from “host1” to
+             “host2”:
+
+                   # pfctl -k host1 -k host2
+
+             To kill all states originating from 192.168.1.0/24 to
+             172.16.0.0/16:
+
+                   # pfctl -k 192.168.1.0/24 -k 172.16.0.0/16
+
+             A network prefix length of 0 can be used as a wildcard.  To kill
+             all states with the target “host2”:
+
+                   # pfctl -k 0.0.0.0/0 -k host2
+
+             It is also possible to kill states by rule label or state ID.  In
+             this mode the first --kk argument is used to specify the type of
+             the second argument.  The following command would kill all states
+             that have been created from rules carrying the label “foobar”:
+
+                   # pfctl -k label -k foobar
+
+             To kill one specific state by its unique state ID (as shown by
+             pfctl -s state -vv), use the _i_d modifier and as a second argument
+             the state ID and optional creator ID.  To kill a state with ID
+             4823e84500000003 use:
+
+                   # pfctl -k id -k 4823e84500000003
+
+             To kill a state with ID 4823e84500000018 created from a backup
+             firewall with hostid 00000002 use:
+
+                   # pfctl -k id -k 4823e84500000018/2
+
+             It is also possible to kill states created from a rule with the
+             route-to/reply-to parameter set to route the connection through a
+             particular gateway.  Note that rules routing via the default
+             routing table (not via a route-to rule) will have their rt_addr
+             set as 0.0.0.0 or ::.  To kill all states using a gateway of
+             192.168.0.1 use:
+
+                   # pfctl -k gateway -k 192.168.0.1
+
+             A network prefix length can also be specified.  To kill all
+             states using a gateway in 192.168.0.0/24:
+
+                   # pfctl -k gateway -k 192.168.0.0/24
+
+     --MM      Kill matching states in the opposite direction (on other inter‐
+             faces) when killing states.  This applies to states killed using
+             the -k option and also will apply to the flush command when
+             flushing states.  This is useful when an interface is specified
+             when flushing states.  Example:
+
+                   # pfctl -M -i interface -Fs
+
+     --mm      Merge in explicitly given options without resetting those which
+             are omitted.  Allows single options to be modified without dis‐
+             turbing the others:
+
+                   # echo "set loginterface fxp0" | pfctl -mf -
+
+     --NN      Load only the NAT rules present in the rule file.  Other rules
+             and options are ignored.
+
+     --nn      Do not actually load rules, just parse them.
+
+     --OO      Load only the options present in the rule file.  Other rules and
+             options are ignored.
+
+     --oo _l_e_v_e_l
+             Control the ruleset optimizer, overriding any rule file settings.
+
+             --oo nnoonnee       Disable the ruleset optimizer.
+             --oo bbaassiicc      Enable basic ruleset optimizations.  This is the
+                           default behaviour.
+             --oo pprrooffiillee    Enable basic ruleset optimizations with profiling.
+             For further information on the ruleset optimizer, see pf.conf(5).
+
+     --PP      Do not perform service name lookup for port specific rules, in‐
+             stead display the ports numerically.
+
+     --pp _d_e_v_i_c_e
+             Use the device file _d_e_v_i_c_e instead of the default _/_d_e_v_/_p_f.
+
+     --qq      Only print errors and warnings.
+
+     --RR      Load only the filter rules present in the rule file.  Other rules
+             and options are ignored.
+
+     --rr      Perform reverse DNS lookups on states when displaying them.
+
+     --ss _m_o_d_i_f_i_e_r
+             Show the filter parameters specified by _m_o_d_i_f_i_e_r (may be abbrevi‐
+             ated):
+
+             --ss nnaatt         Show the currently loaded NAT rules.
+             --ss qquueeuuee       Show the currently loaded queue rules.  When used
+                            together with --vv, per-queue statistics are also
+                            shown.  When used together with --vv --vv, ppffccttll will
+                            loop and show updated queue statistics every five
+                            seconds, including measured bandwidth and packets
+                            per second.
+             --ss eetthheerr       Show the currently loaded Ethernet rules.  When
+                            used together with --vv, the per-rule statistics
+                            (number of evaluations, packets, and bytes) are
+                            also shown.
+             --ss rruulleess       Show the currently loaded filter rules.  When used
+                            together with --vv, the per-rule statistics (number
+                            of evaluations, packets, and bytes) are also
+                            shown.  Note that the “skip step” optimization
+                            done automatically by the kernel will skip evalua‐
+                            tion of rules where possible.  Packets passed
+                            statefully are counted in the rule that created
+                            the state (even though the rule is not evaluated
+                            more than once for the entire connection).
+             --ss AAnncchhoorrss     Show the currently loaded anchors directly at‐
+                            tached to the main ruleset.  If --aa _a_n_c_h_o_r is spec‐
+                            ified as well, the anchors loaded directly below
+                            the given _a_n_c_h_o_r are shown instead.  If --vv is
+                            specified, all anchors attached under the target
+                            anchor will be displayed recursively.
+             --ss ssttaatteess      Show the contents of the state table.
+             --ss SSoouurrcceess     Show the contents of the source tracking table.
+             --ss iinnffoo        Show filter information (statistics and counters).
+                            When used together with --vv, source tracking sta‐
+                            tistics are also shown.
+             --ss RRuunnnniinngg     Show the running status and provide a non-zero
+                            exit status when disabled.
+             --ss llaabbeellss      Show per-rule statistics (label, evaluations,
+                            packets total, bytes total, packets in, bytes in,
+                            packets out, bytes out, state creations) of filter
+                            rules with labels, useful for accounting.
+             --ss ttiimmeeoouuttss    Show the current global timeouts.
+             --ss mmeemmoorryy      Show the current pool memory hard limits.
+             --ss TTaabblleess      Show the list of tables.
+             --ss oossffpp        Show the list of operating system fingerprints.
+             --ss IInntteerrffaacceess  Show the list of interfaces and interface drivers
+                            available to PF.  When used together with --vv, it
+                            additionally lists which interfaces have skip
+                            rules activated.  When used together with --vvvv, in‐
+                            terface statistics are also shown.  --ii can be used
+                            to select an interface or a group of interfaces.
+             --ss aallll         Show all of the above, except for the lists of in‐
+                            terfaces and operating system fingerprints.
+
+     --TT _c_o_m_m_a_n_d [_a_d_d_r_e_s_s _._._.]
+             Specify the _c_o_m_m_a_n_d (may be abbreviated) to apply to the table.
+             Commands include:
+
+             --TT kkiillll       Kill a table.
+             --TT fflluusshh      Flush all addresses of a table.
+             --TT aadddd        Add one or more addresses in a table.  Automati‐
+                           cally create a nonexisting table.
+             --TT ddeelleettee     Delete one or more addresses from a table.
+             --TT eexxppiirree _n_u_m_b_e_r
+                           Delete addresses which had their statistics cleared
+                           more than _n_u_m_b_e_r seconds ago.  For entries which
+                           have never had their statistics cleared, _n_u_m_b_e_r
+                           refers to the time they were added to the table.
+             --TT rreeppllaaccee    Replace the addresses of the table.  Automatically
+                           create a nonexisting table.
+             --TT sshhooww       Show the content (addresses) of a table.
+             --TT tteesstt       Test if the given addresses match a table.
+             --TT zzeerroo [_a_d_d_r_e_s_s _._._.]
+                           Clear all the statistics of a table, or only for
+                           specified addresses.
+             --TT rreesseett      Clear statistics only for addresses with non-zero
+                           statistics. Addresses with counter values at zero
+                           and their “Cleared” timestamp are left untouched.
+             --TT llooaadd       Load only the table definitions from pf.conf(5).
+                           This is used in conjunction with the --ff flag, as
+                           in:
+
+                                 # pfctl -Tl -f pf.conf
+
+             For the aadddd, ddeelleettee, rreeppllaaccee, and tteesstt commands, the list of ad‐
+             dresses can be specified either directly on the command line
+             and/or in an unformatted text file, using the --ff flag.  Comments
+             starting with a ‘#’ or ‘;’ are allowed in the text file.  With
+             these commands, the --vv flag can also be used once or twice, in
+             which case ppffccttll will print the detailed result of the operation
+             for each individual address, prefixed by one of the following
+             letters:
+
+             A    The address/network has been added.
+             C    The address/network has been changed (negated).
+             D    The address/network has been deleted.
+             M    The address matches (tteesstt operation only).
+             X    The address/network is duplicated and therefore ignored.
+             Y    The address/network cannot be added/deleted due to conflict‐
+                  ing ‘!’ attributes.
+             Z    The address/network has been cleared (statistics).
+
+             Each table can maintain a set of counters that can be retrieved
+             using the --vv flag of ppffccttll.  For example, the following commands
+             define a wide open firewall which will keep track of packets go‐
+             ing to or coming from the OpenBSD FTP server.  The following com‐
+             mands configure the firewall and send 10 pings to the FTP server:
+
+                   # printf "table <test> counters { ftp.openbsd.org }\n \
+                       pass out to <test>\n" | pfctl -f-
+                   # ping -qc10 ftp.openbsd.org
+
+             We can now use the table sshhooww command to output, for each address
+             and packet direction, the number of packets and bytes that are
+             being passed or blocked by rules referencing the table.  The time
+             at which the current accounting started is also shown with the
+             “Cleared” line.
+
+                   # pfctl -t test -vTshow
+                      129.128.5.191
+                       Cleared:     Thu Feb 13 18:55:18 2003
+                       In/Block:    [ Packets: 0        Bytes: 0        ]
+                       In/Pass:     [ Packets: 10       Bytes: 840      ]
+                       Out/Block:   [ Packets: 0        Bytes: 0        ]
+                       Out/Pass:    [ Packets: 10       Bytes: 840      ]
+
+             Similarly, it is possible to view global information about the
+             tables by using the --vv modifier twice and the --ss TTaabblleess command.
+             This will display the number of addresses on each table, the num‐
+             ber of rules which reference the table, and the global packet
+             statistics for the whole table:
+
+                   # pfctl -vvsTables
+                   --a-r-C test
+                       Addresses:   1
+                       Cleared:     Thu Feb 13 18:55:18 2003
+                       References:  [ Anchors: 0        Rules: 1        ]
+                       Evaluations: [ NoMatch: 3496     Match: 1        ]
+                       In/Block:    [ Packets: 0        Bytes: 0        ]
+                       In/Pass:     [ Packets: 10       Bytes: 840      ]
+                       In/XPass:    [ Packets: 0        Bytes: 0        ]
+                       Out/Block:   [ Packets: 0        Bytes: 0        ]
+                       Out/Pass:    [ Packets: 10       Bytes: 840      ]
+                       Out/XPass:   [ Packets: 0        Bytes: 0        ]
+
+             As we can see here, only one packet - the initial ping request -
+             matched the table, but all packets passing as the result of the
+             state are correctly accounted for.  Reloading the table(s) or
+             ruleset will not affect packet accounting in any way.  The two
+             “XPass” counters are incremented instead of the “Pass” counters
+             when a “stateful” packet is passed but does not match the table
+             anymore.  This will happen in our example if someone flushes the
+             table while the ping(8) command is running.
+
+             When used with a single --vv, ppffccttll will only display the first
+             line containing the table flags and name.  The flags are defined
+             as follows:
+
+             c    For constant tables, which cannot be altered outside
+                  pf.conf(5).
+             p    For persistent tables, which do not get automatically killed
+                  when no rules refer to them.
+             a    For tables which are part of the _a_c_t_i_v_e tableset.  Tables
+                  without this flag do not really exist, cannot contain ad‐
+                  dresses, and are only listed if the --gg flag is given.
+             i    For tables which are part of the _i_n_a_c_t_i_v_e tableset.  This
+                  flag can only be witnessed briefly during the loading of
+                  pf.conf(5).
+             r    For tables which are referenced (used) by rules.
+             h    This flag is set when a table in the main ruleset is hidden
+                  by one or more tables of the same name from anchors attached
+                  below it.
+             C    This flag is set when per-address counters are enabled on
+                  the table.
+
+     --tt _t_a_b_l_e
+             Specify the name of the table.
+
+     --vv      Produce more verbose output.  A second use of --vv will produce
+             even more verbose output including ruleset warnings.  See the
+             previous section for its effect on table commands.
+
+     --xx _l_e_v_e_l
+             Set the debug _l_e_v_e_l (may be abbreviated) to one of the following:
+
+             --xx nnoonnee       Do not generate debug messages.
+             --xx uurrggeenntt     Generate debug messages only for serious errors.
+             --xx mmiisscc       Generate debug messages for various errors.
+             --xx lloouudd       Generate debug messages for common conditions.
+
+     --zz      Clear per-rule statistics.
+
+FFIILLEESS
+     /etc/pf.conf  Packet filter rules file.
+     /etc/pf.os    Passive operating system fingerprint database.
+
+SSEEEE AALLSSOO
+     pf(4), pf.conf(5), pf.os(5), rc.conf(5), services(5), sysctl.conf(5),
+     authpf(8), ftp-proxy(8), rc(8), sysctl(8)
+
+HHIISSTTOORRYY
+     The ppffccttll program and the pf(4) filter mechanism appeared in OpenBSD 3.0.
+     They first appeared in FreeBSD 5.3 ported from the version in OpenBSD 3.5
+
+BSD                            November 25, 2024                           BSD

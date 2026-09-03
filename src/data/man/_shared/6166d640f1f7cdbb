@@ -1,0 +1,202 @@
+RFCOMM_PPPD(8)            BSD System Manager's Manual           RFCOMM_PPPD(8)
+
+NNAAMMEE
+     rrffccoommmm__ppppppdd — RFCOMM PPP daemon
+
+SSYYNNOOPPSSIISS
+     rrffccoommmm__ppppppdd --cc [--ddhh] --aa _a_d_d_r_e_s_s --CC _c_h_a_n_n_e_l --ll _l_a_b_e_l --uu _N
+     rrffccoommmm__ppppppdd --ss [--ddDDhhSS] [--aa _a_d_d_r_e_s_s] --CC _c_h_a_n_n_e_l --ll _l_a_b_e_l
+
+DDEESSCCRRIIPPTTIIOONN
+     The rrffccoommmm__ppppppdd daemon is a simple wrapper daemon that allows the use of
+     ppp(8) via an RFCOMM connection.  It can operate in two modes: client and
+     server.
+
+     In client mode, rrffccoommmm__ppppppdd opens an RFCOMM connection to the specified
+     server's _B_D___A_D_R_R and _c_h_a_n_n_e_l.  Once the RFCOMM connection is established,
+     rrffccoommmm__ppppppdd executes ppp(8) in --ddiirreecctt mode with the specified _l_a_b_e_l.
+     Likewise, ppp(8) operates over the RFCOMM connection just like it would
+     over a standard serial port, thus allowing a user to “dial out” and con‐
+     nect to the Internet.
+
+     In server mode, rrffccoommmm__ppppppdd opens an RFCOMM socket and listens for incom‐
+     ing connections from remote clients.  Once the new incoming connection is
+     accepted, rrffccoommmm__ppppppdd forks and executes ppp(8) in --ddiirreecctt mode with the
+     specified _l_a_b_e_l.  Likewise, ppp(8) operates over the RFCOMM connection
+     just like it would over a standard serial port, thus providing network
+     connectivity to remote clients.
+
+     The options are as follows:
+
+     --aa _a_d_d_r_e_s_s
+             In client mode, this required option specifies the address of the
+             remote RFCOMM server.  In server mode, this option can be used to
+             specify the local address to listen on.  By default, in server
+             mode, the daemon will listen on ANY address.  The address can be
+             specified as BD_ADDR or name.  If a name was specified, the
+             rrffccoommmm__ppppppdd utility will attempt to resolve the name via
+             bt_gethostbyname(3).
+
+     --CC _c_h_a_n_n_e_l
+             In both client and server mode, this required option specifies
+             the RFCOMM channel to connect to or listen on.  In server mode,
+             the channel should be a number between 1 and 30.  In client mode,
+             the channel could either be a number between 1 and 30 or a ser‐
+             vice name.  Supported service names are: DDUUNN (Dial-Up Networking)
+             and LLAANN (LAN Access Using PPP).  If a service name is used in‐
+             stead of a numeric channel number, then rrffccoommmm__ppppppdd will try to
+             obtain an RFCOMM channel number via SDP (Service Discovery Proto‐
+             col).
+
+     --cc      Act as an RFCOMM client.  This is the default mode.
+
+     --dd      Do not detach from the controlling terminal, i.e., run in fore‐
+             ground.
+
+     --DD      In server mode, register the DDUUNN (Dial-Up Networking) service in
+             addition to the LLAANN (LAN Access Using PPP) service.  AT-command
+             exchange can be faked with ppp(8) chat script.
+
+     --hh      Display usage message and exit.
+
+     --ll _l_a_b_e_l
+             In both client and server mode, this required option specifies
+             which ppp(8) label will be used.
+
+     --SS      In server mode, register the SSPP (Serial Port) service in addition
+             to the LLAANN (LAN Access Using PPP) service.
+
+             It appears that some cell phones are using the so-called
+             “callback mechanism”.  In this scenario, the user is trying to
+             connect his cell phone to the Internet, while the user's host
+             computer is acting as the gateway server.  It seems that it is
+             not possible to tell the phone to just connect and start using
+             the LLAANN service.  Instead, the user's host computer must “jump
+             start” the phone by connecting to the phone's SSPP service.  What
+             happens next is the phone kills the existing connection and opens
+             another connection back to the user's host computer.  The phone
+             really wants to use the LLAANN service, but for whatever reason it
+             looks for the SSPP service on the user's host computer.  This
+             brain-damaged behavior was reported for the Nokia 6600 and the
+             Sony/Ericsson P900.
+
+     --ss      Act as an RFCOMM server.
+
+     --uu _N    This option maps directly to the --uunniitt ppp(8) command-line option
+             and tells rrffccoommmm__ppppppdd to instruct ppp(8) to only attempt to open
+             _/_d_e_v_/_t_u_n_N.  This option only works in client mode.
+
+PPPPPP CCOONNFFIIGGUURRAATTIIOONN
+   IImmppoorrttaanntt NNootteess oonn PPPPPP CCoonnffiigguurraattiioonn
+     Special attention is required when adding new RFCOMM configurations to
+     the existing PPP configuration.  Please keep in mind that PPP will _a_l_w_a_y_s
+     execute commands in the “default” label of your _/_e_t_c_/_p_p_p_/_p_p_p_._c_o_n_f file.
+     Please make sure that the “default” label _o_n_l_y contains commands that ap‐
+     ply to _e_v_e_r_y other label.  If you need to use PPP for both dialing out
+     and accepting incoming RFCOMM connections, please make sure you have
+     moved all commands related to dialing out from the “default” section into
+     an appropriate outgoing label.
+
+   RRFFCCOOMMMM SSeerrvveerr
+     One of the typical examples is the LAN access.  In this example, an RF‐
+     COMM connection is used as a null-modem connection between a client and a
+     server.  Both client and server will start talking PPP right after the
+     RFCOMM connection has been established.
+
+           rfcomm-server:
+            set timeout 0
+            set lqrperiod 10
+            set ifaddr 10.0.0.1 10.0.0.2 255.255.255.0
+            enable lqr
+            accept lqr
+            accept dns
+            # Do not use PPP authentication. Assume that
+            # Bluetooth connection was authenticated already
+            disable pap
+            deny pap
+            disable chap
+            deny chap
+
+   RRFFCCOOMMMM CClliieenntt
+     The rrffccoommmm__ppppppdd utility supports both LLAANN (LAN Access Using PPP) and DDUUNN
+     (Dial-Up Networking) access.  The client's configuration for LLAANN access
+     is very similar to the server's and might look like this:
+
+           rfcomm-client:
+            enable lqr
+            accept lqr
+            set dial
+            set timeout 0
+            disable iface-alias
+            set ifaddr 10.0.0.1/0 10.0.0.2/0 255.255.255.0 0.0.0.0
+            # Do not use PPP authentication. Assume that
+            # Bluetooth connection was authenticated already
+            deny pap
+            disable pap
+            deny chap
+            disable chap
+
+     The client's configuration for DDUUNN access is different.  In this sce‐
+     nario, the client gets connected to the virtual serial port on the
+     server.  To open a PPP session, the client must dial a number.  Note that
+     by default ppp(8) will not execute any configured chat scripts.  The
+     ffoorrccee--ssccrriippttss option can be used to override this behavior.  An example
+     configuration is shown below:
+
+           rfcomm-dialup:
+            # This is IMPORTANT option
+            enable force-scripts
+
+            # You might want to change these
+            set authname
+            set authkey
+            set phone "*99***1#"
+
+            # You might want to adjust dial string as well
+            set dial "ABORT BUSY ABORT NO\\sCARRIER TIMEOUT 5 \
+                      \"\" AT OK-AT-OK ATE1Q0 OK \\dATDT\\T TIMEOUT 40 CONNECT"
+            set login
+            set timeout 30
+            enable dns
+            resolv rewrite
+
+            set ifaddr 10.0.0.1/0 10.0.0.2/0 255.255.255.0 0.0.0.0
+            add default HISADDR
+
+     Note that by adjusting the initialization string, one can make a CSD
+     (Circuit Switched Data), HSCSD (High Speed Circuit Switched Data) or GPRS
+     (General Packet Radio Service) connection.  The availability of the par‐
+     ticular connection type depends on the phone model and service plan acti‐
+     vated on the phone.
+
+EEXXIITT SSTTAATTUUSS
+     The rrffccoommmm__ppppppdd utility exits 0 on success, and >0 if an error occurs.
+
+EEXXAAMMPPLLEESS
+           rfcomm_pppd -s -a 00:01:02:03:04:05 -C 1 -l rfcomm-server
+
+     This command will start rrffccoommmm__ppppppdd in the server mode.  The RFCOMM
+     server will listen on local address 00:01:02:03:04:05 and channel 1.
+     Once the incoming connection has been accepted, rrffccoommmm__ppppppdd will execute
+     ppp(8) in --ddiirreecctt mode with the “rfcomm-server” label.
+
+           rfcomm_pppd -c -a 00:01:02:03:04:05 -C 1 -l rfcomm-client
+
+     This command will start rrffccoommmm__ppppppdd in the client mode.  rrffccoommmm__ppppppdd will
+     try to connect to the RFCOMM server at 00:01:02:03:04:05 address and
+     channel 1.  Once connected, rrffccoommmm__ppppppdd will execute ppp(8) in --ddiirreecctt
+     mode with the “rfcomm-client” label.
+
+SSEEEE AALLSSOO
+     rfcomm_sppd(1), bluetooth(3), ng_btsocket(4), ppp(8), sdpcontrol(8),
+     sdpd(8)
+
+AAUUTTHHOORRSS
+     Maksim Yevmenkin <_m___e_v_m_e_n_k_i_n_@_y_a_h_o_o_._c_o_m>
+
+CCAAVVEEAATTSS
+     The rrffccoommmm__ppppppdd utility in server mode will try to register the Bluetooth
+     LAN Access Over PPP service with the local SDP daemon.  If the local SDP
+     daemon is not running, rrffccoommmm__ppppppdd will exit with an error.
+
+BSD                            February 4, 2003                            BSD

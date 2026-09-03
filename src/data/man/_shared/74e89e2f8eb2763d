@@ -1,0 +1,264 @@
+_m_a_t_h_e_r_r(3)                 Library Functions Manual                 _m_a_t_h_e_r_r(3)
+
+NNAAMMEE
+       matherr - SVID math library exception handling
+
+LLIIBBRRAARRYY
+       Math library (_l_i_b_m, _-_l_m)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<mmaatthh..hh>>
+
+       [[[[ddeepprreeccaatteedd]]]] iinntt mmaatthheerrrr((ssttrruucctt eexxcceeppttiioonn **_e_x_c));;
+
+       [[[[ddeepprreeccaatteedd]]]] eexxtteerrnn __LLIIBB__VVEERRSSIIOONN__TTYYPPEE __LLIIBB__VVEERRSSIIOONN;;
+
+DDEESSCCRRIIPPTTIIOONN
+       _N_o_t_e:  the  mechanism  described in this page is no longer supported by
+       glibc.  Before glibc 2.27, it had been marked as obsolete.  Since glibc
+       2.27, the mechanism has  been  removed  altogether.   New  applications
+       should use the techniques described in mmaatthh__eerrrroorr(7) and ffeennvv(3).  This
+       page  documents  the  mmaatthheerrrr() mechanism as an aid for maintaining and
+       porting older applications.
+
+       The System V Interface Definition (SVID) specifies  that  various  math
+       functions should invoke a function called mmaatthheerrrr() if a math exception
+       is detected.  This function is called before the math function returns;
+       after  mmaatthheerrrr() returns, the system then returns to the math function,
+       which in turn returns to the caller.
+
+       To employ mmaatthheerrrr(), the programmer must define the  __SSVVIIDD__SSOOUURRCCEE  fea‐
+       ture  test  macro  (before  including _a_n_y header files), and assign the
+       value __SSVVIIDD__ to the external variable __LLIIBB__VVEERRSSIIOONN.
+
+       The system provides a default version of mmaatthheerrrr().  This version  does
+       nothing,  and  returns  zero  (see below for the significance of this).
+       The default mmaatthheerrrr() can be overridden by  a  programmer‐defined  ver‐
+       sion,  which will be invoked when an exception occurs.  The function is
+       invoked with one argument, a pointer to an _e_x_c_e_p_t_i_o_n structure, defined
+       as follows:
+
+           struct exception {
+               int    type;      /* Exception type */
+               char  *name;      /* Name of function causing exception */
+               double arg1;      /* 1st argument to function */
+               double arg2;      /* 2nd argument to function */
+               double retval;    /* Function return value */
+           }
+
+       The _t_y_p_e field has one of the following values:
+
+       DDOOMMAAIINN      A domain error occurred (the function argument was  outside
+                   the  range  for which the function is defined).  The return
+                   value depends on the function; _e_r_r_n_o is set to EEDDOOMM.
+
+       SSIINNGG        A pole error occurred (the function result is an infinity).
+                   The return value in most cases is HHUUGGEE (the largest  single
+                   precision floating‐point number), appropriately signed.  In
+                   most cases, _e_r_r_n_o is set to EEDDOOMM.
+
+       OOVVEERRFFLLOOWW    An overflow occurred.  In most cases, the value HHUUGGEE is re‐
+                   turned, and _e_r_r_n_o is set to EERRAANNGGEE.
+
+       UUNNDDEERRFFLLOOWW   An  underflow  occurred.  0.0 is returned, and _e_r_r_n_o is set
+                   to EERRAANNGGEE.
+
+       TTLLOOSSSS       Total loss of significance.  0.0 is returned, and _e_r_r_n_o  is
+                   set to EERRAANNGGEE.
+
+       PPLLOOSSSS       Partial  loss  of  significance.   This  value is unused on
+                   glibc (and many other systems).
+
+       The _a_r_g_1 and _a_r_g_2 fields are the arguments  supplied  to  the  function
+       (_a_r_g_2 is undefined for functions that take only one argument).
+
+       The _r_e_t_v_a_l field specifies the return value that the math function will
+       return to its caller.  The programmer‐defined mmaatthheerrrr() can modify this
+       field to change the return value of the math function.
+
+       If  the  mmaatthheerrrr() function returns zero, then the system sets _e_r_r_n_o as
+       described above, and may print an error message on standard error  (see
+       below).
+
+       If the mmaatthheerrrr() function returns a nonzero value, then the system does
+       not set _e_r_r_n_o, and doesn’t print an error message.
+
+   MMaatthh ffuunnccttiioonnss tthhaatt eemmppllooyy mmaatthheerrrr(())
+       The  table  below  lists the functions and circumstances in which mmaatthh‐‐
+       eerrrr() is called.  The "Type" column indicates  the  value  assigned  to
+       _e_x_c_-_>_t_y_p_e  when  calling mmaatthheerrrr().  The "Result" column is the default
+       return value assigned to _e_x_c_-_>_r_e_t_v_a_l.
+
+       The "Msg?" and "errno" columns describe the default behavior  if  mmaatthh‐‐
+       eerrrr()  returns zero.  If the "Msg?" columns contains "y", then the sys‐
+       tem prints an error message on standard error.
+
+       The table uses the following notations and abbreviations:
+
+              l l.  x        first argument to function y        second  argu‐
+              ment   to  function  fin       finite  value  for  argument  neg
+              negative value for argument int      integral value for argument
+              o/f       result  overflowed  u/f       result  underflowed  |x|
+              absolute value of x X_TLOSS  is a constant defined in _<_m_a_t_h_._h_>
+       lB  lB  lB  cB  lB  l  l  l  c  l.  Function  Type Result    Msg? errno
+       acos(|x|>1)    DOMAIN    HUGE y    EDOM              asin(|x|>1)    DO‐
+       MAIN    HUGE y    EDOM          atan2(0,0)     DOMAIN    HUGE y    EDOM
+       acosh(x<1)     DOMAIN    NAN  y    EDOM              atanh(|x|>1)   DO‐
+       MAIN    NAN  y    EDOM         atanh(|x|==1)  SING (x>0.0)?  y    EDOM
+                 HUGE_VAL   :             -HUGE_VAL    cosh(fin)    o/f  OVER‐
+       FLOW  HUGE n    ERANGE  sinh(fin)  o/f  OVERFLOW  (x>0.0) ? n    ERANGE
+                 HUGE   :   -HUGE    sqrt(x<0) DOMAIN    0.0  y    EDOM    hy‐
+       pot(fin,fin)    o/f OVERFLOW  HUGE n    ERANGE   exp(fin)   o/f   OVER‐
+       FLOW  HUGE n    ERANGE    exp(fin)     u/f   UNDERFLOW 0.0  n    ERANGE
+       exp2(fin)    o/f OVERFLOW  HUGE n    ERANGE    exp2(fin)    u/f  UNDER‐
+       FLOW 0.0  n    ERANGE     exp10(fin)     o/f OVERFLOW  HUGE n    ERANGE
+       exp10(fin)                            u/f    UNDERFLOW 0.0  n    ERANGE
+       j0(|x|>X_TLOSS)     TLOSS     0.0  y    ERANGE
+       j1(|x|>X_TLOSS)     TLOSS     0.0  y    ERANGE
+       jn(|x|>X_TLOSS)     TLOSS     0.0  y    ERANGE
+       y0(x>X_TLOSS)  TLOSS     0.0  y    ERANGE
+       y1(x>X_TLOSS)  TLOSS     0.0  y    ERANGE
+       yn(x>X_TLOSS)  TLOSS     0.0  y    ERANGE                 y0(0)     DO‐
+       MAIN    -HUGE     y    EDOM     y0(x<0)   DOMAIN    -HUGE     y    EDOM
+       y1(0)     DOMAIN    -HUGE     y    EDOM                   y1(x<0)   DO‐
+       MAIN    -HUGE     y    EDOM     yn(n,0)   DOMAIN    -HUGE     y    EDOM
+       yn(x<0)   DOMAIN    -HUGE     y    EDOM    lgamma(fin)    o/f     OVER‐
+       FLOW  HUGE n    ERANGE      lgamma(-int)     or     SING HUGE y    EDOM
+         lgamma(0)     tgamma(fin)     o/f     OVERFLOW  HUGE_VAL  n    ERANGE
+       tgamma(-int)   SING NAN  y    EDOM tgamma(0) SING copysign( y    ERANGE
+                 HUGE_VAL,x)  log(0)    SING -HUGE     y    EDOM log(x<0)  DO‐
+       MAIN    -HUGE     y    EDOM         log2(0)   SING -HUGE     n    EDOM
+       log2(x<0) DOMAIN    -HUGE     n    EDOM
+       log10(0)  SING -HUGE     y    EDOM                   log10(x<0)     DO‐
+       MAIN    -HUGE     y    EDOM     pow(0.0,0.0)   DOMAIN    0.0  y    EDOM
+       pow(x,y)   o/f     OVERFLOW  HUGE n    ERANGE   pow(x,y)   u/f   UNDER‐
+       FLOW 0.0  n    ERANGE           pow(NaN,0.0)   DOMAIN    x    n    EDOM
+       0**neg    DOMAIN    0.0  y    EDOM                   neg**non‐int   DO‐
+       MAIN    0.0  y    EDOM scalb()  o/f    OVERFLOW  (x>0.0)  ? n    ERANGE
+                 HUGE_VAL :           -HUGE_VAL scalb() u/f    UNDERFLOW copy‐
+       sign( n    ERANGE             0.0,x) fmod(x,0) DOMAIN    x    y    EDOM
+       remainder(x,0) DOMAIN    NAN  y    EDOM
+
+AATTTTRRIIBBUUTTEESS
+       For  an  explanation  of  the  terms  used in this section, see aattttrriibb‐‐
+       uutteess(7).  allbox; lbx lb lb l l l.  Interface Attribute Value T{
+       mmaatthheerrrr() T}   Thread safety  MT‐Safe
+
+EEXXAAMMPPLLEESS
+       The example program demonstrates the use of mmaatthheerrrr() when calling
+       lloogg(3).  The program takes up to three command‐line arguments.  The
+       first argument is the floating‐point number to be given to lloogg(3).  If
+       the optional second argument is provided, then __LLIIBB__VVEERRSSIIOONN is set to
+       __SSVVIIDD__ so that mmaatthheerrrr() is called, and the integer supplied in the
+       command‐line argument is used as the return value from mmaatthheerrrr().  If
+       the optional third command‐line argument is supplied, then it specifies
+       an alternative return value that mmaatthheerrrr() should assign as the return
+       value of the math function.
+
+       The following example run, where lloogg(3) is given an argument of 0.0,
+       does not use mmaatthheerrrr():
+
+           $ ..//aa..oouutt 00..00
+           errno: Numerical result out of range
+           x=-inf
+
+       In the following run, mmaatthheerrrr() is called, and returns 0:
+
+           $ ..//aa..oouutt 00..00 00
+           matherr SING exception in log() function
+                   args:   0.000000, 0.000000
+                   retval: -340282346638528859811704183484516925440.000000
+           log: SING error
+           errno: Numerical argument out of domain
+           x=-340282346638528859811704183484516925440.000000
+
+       The message "log: SING error" was printed by the C library.
+
+       In the following run, mmaatthheerrrr() is called, and returns a nonzero value:
+
+           $ ..//aa..oouutt 00..00 11
+           matherr SING exception in log() function
+                   args:   0.000000, 0.000000
+                   retval: -340282346638528859811704183484516925440.000000
+           x=-340282346638528859811704183484516925440.000000
+
+       In this case, the C library did not print a message, and _e_r_r_n_o was not
+       set.
+
+       In the following run, mmaatthheerrrr() is called, changes the return value of
+       the math function, and returns a nonzero value:
+
+           $ ..//aa..oouutt 00..00 11 1122334455..00
+           matherr SING exception in log() function
+                   args:   0.000000, 0.000000
+                   retval: -340282346638528859811704183484516925440.000000
+           x=12345.000000
+
+   PPrrooggrraamm ssoouurrccee
+
+       #define _SVID_SOURCE
+       #include <errno.h>
+       #include <math.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+
+       static int matherr_ret = 0;     /* Value that matherr()
+                                          should return */
+       static int change_retval = 0;   /* Should matherr() change
+                                          function's return value? */
+       static double new_retval;       /* New function return value */
+
+       int
+       matherr(struct exception *exc)
+       {
+           fprintf(stderr, "matherr %s exception in %s() function\n",
+                   (exc->type == DOMAIN) ?    "DOMAIN" :
+                   (exc->type == OVERFLOW) ?  "OVERFLOW" :
+                   (exc->type == UNDERFLOW) ? "UNDERFLOW" :
+                   (exc->type == SING) ?      "SING" :
+                   (exc->type == TLOSS) ?     "TLOSS" :
+                   (exc->type == PLOSS) ?     "PLOSS" : "???",
+                   exc->name);
+           fprintf(stderr, "        args:   %f, %f\n",
+                   exc->arg1, exc->arg2);
+           fprintf(stderr, "        retval: %f\n", exc->retval);
+
+           if (change_retval)
+               exc->retval = new_retval;
+
+           return matherr_ret;
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           double x;
+
+           if (argc < 2) {
+               fprintf(stderr, "Usage: %s <argval>"
+                       " [<matherr-ret> [<new-func-retval>]]\n", argv[0]);
+               exit(EXIT_FAILURE);
+           }
+
+           if (argc > 2) {
+               _LIB_VERSION = _SVID_;
+               matherr_ret = atoi(argv[2]);
+           }
+
+           if (argc > 3) {
+               change_retval = 1;
+               new_retval = atof(argv[3]);
+           }
+
+           x = log(atof(argv[1]));
+           if (errno != 0)
+               perror("errno");
+
+           printf("x=%f\n", x);
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       ffeennvv(3), mmaatthh__eerrrroorr(7), ssttaannddaarrddss(7)
+
+Linux man‐pages (unreleased)      2025‐05‐17                        _m_a_t_h_e_r_r(3)

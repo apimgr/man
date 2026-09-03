@@ -1,0 +1,1364 @@
+The  NetBSD  version  of  PF is obsolete, and its use is strongly
+discouraged.  Use instead.  The packet filter modifies, drops  or
+passes  packets  according  to  rules or definitions specified in
+There are seven types of statements in User‐defined variables may
+be defined and used later, simplifying  the  configuration  file.
+Macros  must be defined before they are referenced in Tables pro‐
+vide a mechanism for increasing the performance  and  flexibility
+of  rules  with large numbers of source or destination addresses.
+Options tune the behaviour of the packet filtering engine.  Traf‐
+fic normalization protects internal machines against inconsisten‐
+cies in Internet protocols and  implementations.   Queueing  pro‐
+vides  rule‐based  bandwidth  control.  Translation rules specify
+how addresses are to be mapped or redirected to other  addresses.
+Packet filtering provides rule‐based blocking or passing of pack‐
+ets.  With the exception of and the types of statements should be
+grouped  and  appear in in the order shown above, as this matches
+the operation of the underlying packet filtering engine.  By  de‐
+fault  enforces  this  order  (see below).  Macros can be defined
+that will later be expanded in context.  Macro names  must  start
+with  a  letter, and may contain letters, digits and underscores.
+Macro names may not be reserved words (for example Macros are not
+expanded inside quotes.  For example, ext_if = "kue0"  all_ifs  =
+"{"  $ext_if  lo0 "}" pass out on $ext_if from any to any pass in
+on $ext_if proto tcp from any to any port  25  Tables  are  named
+structures which can hold a collection of addresses and networks.
+Lookups  against  tables  in are relatively fast, making a single
+rule with tables much more efficient, in terms of processor usage
+and memory consumption, than a large number of rules which differ
+only in IP address (either created explicitly or automatically by
+rule expansion).  Tables can be used as the source or destination
+of filter rules, rules or translation rules such as or (see below
+for details on the various rule types).  Tables can also be  used
+for  the redirect address of and rules and in the routing options
+of filter rules, but only for pools.  Tables can be defined  with
+any  of the following mechanisms.  As with macros, reserved words
+may not be used as table names.  Persistent tables can  be  manu‐
+ally  created  with  the or option of before or after the ruleset
+has been loaded.  Table definitions can  be  placed  directly  in
+this file, and loaded at the same time as other rules are loaded,
+atomically.   Table definitions inside use the statement, and are
+especially useful to define non‐persistent tables.  The  contents
+of  a  pre‐existing  table defined without a list of addresses to
+initialize it is not altered when is loaded.  A table initialized
+with the empty list, will be cleared on load.  Tables may be  de‐
+fined with the following two attributes: The flag forces the ker‐
+nel  to  keep  the  table even when no rules refer to it.  If the
+flag is not set, the kernel will automatically remove  the  table
+when the last rule referring to it is flushed.  The flag prevents
+the user from altering the contents of the table once it has been
+created.   Without  that  flag,  can be used to add or remove ad‐
+dresses from the table at any time, even when  running  with  se‐
+curelevel  =  2.   For  example,  table  private  const  {  10/8,
+172.16/12, 192.168/16 } table badhosts persist block on fxp0 from
+{ private, badhosts } to any creates a table called  private,  to
+hold  RFC  1918  private  network blocks, and a table called bad‐
+hosts, which is initially empty.  A filter  rule  is  set  up  to
+block  all  traffic coming from addresses listed in either table.
+The private table cannot have its contents changed and  the  bad‐
+hosts table will exist even when no active filter rules reference
+it.   Addresses may later be added to the badhosts table, so that
+traffic from these hosts can be blocked by using # pfctl ‐t  bad‐
+hosts ‐Tadd 204.92.77.111 A table can also be initialized with an
+address  list  specified in one or more external files, using the
+following syntax: table spam persist  file  "/etc/spammers"  file
+"/etc/openrelays"  block  on  fxp0 from spam to any The files and
+list IP addresses, one per line.  Any lines beginning  with  a  #
+are treated as comments and ignored.  In addition to being speci‐
+fied  by  IP  address, hosts may also be specified by their host‐
+name.  When the resolver is called to add a hostname to a  table,
+resulting  IPv4 and IPv6 addresses are placed into the table.  IP
+addresses can also be entered in a table by  specifying  a  valid
+interface  name, a valid interface group or the keyword, in which
+case all addresses assigned to the interface(s) will be added  to
+the  table.   may  be tuned for various situations using the com‐
+mand.  Interval between purging  expired  states  and  fragments.
+Seconds  before  an  unassembled  fragment is expired.  Length of
+time to retain a source tracking entry after the last  state  ex‐
+pires.   When a packet matches a stateful connection, the seconds
+to live for the connection will be updated to that of  the  which
+corresponds  to  the connection state.  Each packet which matches
+this state will reset the TTL.  Tuning these values  may  improve
+the  performance  of  the  firewall at the risk of dropping valid
+idle connections.  The state after the first packet.   The  state
+before  the  destination host ever sends a packet.  The fully es‐
+tablished state.  The state after the first FIN  has  been  sent.
+The  state after both FINs have been exchanged and the connection
+is closed.  Some hosts (notably web servers on Solaris) send  TCP
+packets  even after closing the connection.  Increasing (and pos‐
+sibly can prevent blocking of such packets.  The state after  one
+endpoint  sends  an  RST.   ICMP and UDP are handled in a fashion
+similar to TCP, but with a much more limited set of  states:  The
+state after the first packet.  The state if the source host sends
+more  than one packet but the destination host has never sent one
+back.  The state if both hosts have sent packets.  The state  af‐
+ter the first packet.  The state after an ICMP error came back in
+response  to  an  ICMP packet.  Other protocols are handled simi‐
+larly to UDP: Timeout values can be  reduced  adaptively  as  the
+number  of  state  table entries grows.  When the number of state
+entries exceeds this value, adaptive scaling begins.  All timeout
+values are scaled linearly with factor (adaptive.end ‐ number  of
+states)  /  (adaptive.end  ‐ adaptive.start).  When reaching this
+number of state entries, all timeout values become  zero,  effec‐
+tively purging all state entries immediately.  This value is used
+to  define  the  scale  factor, it should not actually be reached
+(set a lower state limit, see below).  Adaptive timeouts are  en‐
+abled  by  default,  with an adaptive.start value equal to 60% of
+the state limit, and an adaptive.end value equal to 120%  of  the
+state limit.  They can be disabled by setting both adaptive.start
+and  adaptive.end  to  0.  The adaptive timeout values can be de‐
+fined both globally and for each rule.  When used on  a  per‐rule
+basis,  the  values relate to the number of states created by the
+rule, otherwise to the total number of states.  For example:  set
+timeout tcp.first 120 set timeout tcp.established 86400 set time‐
+out  { adaptive.start 6000, adaptive.end 12000 } set limit states
+10000 With 9000 state  table  entries,  the  timeout  values  are
+scaled to 50% (tcp.first 60, tcp.established 43200).  Enable col‐
+lection  of packet and byte count statistics for the given inter‐
+face.  These statistics can be viewed using # pfctl  ‐s  info  In
+this  example collects statistics on the interface named dc0: set
+loginterface dc0 One can  disable  the  loginterface  using:  set
+loginterface  none  Sets  hard limits on the memory pools used by
+the packet filter.  See for an explanation of memory pools.   For
+example,  set  limit  states 20000 sets the maximum number of en‐
+tries in the memory pool used by state table  entries  (generated
+by  rules  which  do not specify to 20000.  Using set limit frags
+20000 sets the maximum number of entries in the memory pool  used
+for fragment reassembly (generated by rules) to 20000.  Using set
+limit  src‐nodes  2000  sets the maximum number of entries in the
+memory pool used for tracking source IP addresses  (generated  by
+the  and options) to 2000.  Using set limit tables 1000 set limit
+table‐entries 100000 sets limits on the memory pools used by  ta‐
+bles.   The  first  limits the number of tables that can exist to
+1000.  The second limits the overall number of addresses that can
+be stored in tables to 100000.  Various limits can be combined on
+a single line: set limit { states 20000, frags  20000,  src‐nodes
+2000 } Disable the ruleset optimizer.  Enable basic ruleset opti‐
+mization.   This  is  the default behaviour.  Basic ruleset opti‐
+mization does four things to improve the performance  of  ruleset
+evaluations:  remove duplicate rules remove rules that are a sub‐
+set of another rule combine multiple rules into a table when  ad‐
+vantageous  re‐order  the rules to improve evaluation performance
+Uses the currently loaded ruleset as a feedback profile to tailor
+the ordering of quick rules to actual network traffic.  It is im‐
+portant to note that the ruleset optimizer will modify the  rule‐
+set to improve performance.  A side effect of the ruleset modifi‐
+cation is that per‐rule accounting statistics will have different
+meanings  than  before.   If per‐rule accounting is important for
+billing purposes or whatnot, either the ruleset optimizer  should
+not  be  used  or a label field should be added to all of the ac‐
+counting rules to act as optimization barriers.  Optimization can
+also be set as a command‐line argument to overriding the settings
+in Optimize state timeouts for one of the following network envi‐
+ronments: A normal network environment.  Suitable for almost  all
+networks.   A  high‐latency environment (such as a satellite con‐
+nection).  Alias for Aggressively expire connections.   This  can
+greatly  reduce  the  memory usage of the firewall at the cost of
+dropping idle connections  early.   Extremely  conservative  set‐
+tings.   Avoid  dropping legitimate connections at the expense of
+greater memory utilization (possibly much greater on a busy  net‐
+work) and slightly increased processor utilization.  For example:
+set optimization aggressive The option sets the default behaviour
+for  the packet action: Packet is silently dropped.  A TCP RST is
+returned for blocked TCP packets, an ICMP UNREACHABLE is returned
+for blocked UDP packets,  and  all  other  packets  are  silently
+dropped.   For  example:  set block‐policy return The option sets
+the default behaviour for states: States are bound to  interface.
+States  can  match  packets on any interfaces (the default).  For
+example: set state‐policy if‐bound  The  32‐bit  identifies  this
+firewall’s  state  table entries to other firewalls in a failover
+cluster.  By default the hostid is set to a pseudo‐random  value,
+however it may be desirable to manually configure it, for example
+to  more  easily identify the source of state table entries.  set
+hostid 1 The hostid may be specified in either decimal  or  hexa‐
+decimal.   By default enforces an ordering of the statement types
+in the ruleset to: Setting this option to disables this  enforce‐
+ment.   There  may be non‐trivial and non‐obvious implications to
+an out of order ruleset.  Consider carefully before disabling the
+order enforcement.  Load fingerprints of known operating  systems
+from  the given filename.  By default fingerprints of known oper‐
+ating systems are automatically loaded from in but can  be  over‐
+ridden  via  this  option.  Setting this option may leave a small
+period of time where the fingerprints referenced by the currently
+active ruleset are inconsistent until the  new  ruleset  finishes
+loading.   For  example: List interfaces for which packets should
+not be filtered.  Packets passing in or out  on  such  interfaces
+are  passed  as if pf was disabled, i.e. pf does not process them
+in any way.  This can be useful on loopback and other virtual in‐
+terfaces, when packet filtering is not desired and can have unex‐
+pected effects.  For example: Set the debug to one of the follow‐
+ing: Don’t generate debug messages.  Generate debug messages only
+for serious errors.  Generate debug messages for various  errors.
+Generate  debug  messages for common conditions.  Traffic normal‐
+ization is used to sanitize packet content in  such  a  way  that
+there  are no ambiguities in packet interpretation on the receiv‐
+ing side.  The normalizer does IP fragment reassembly to  prevent
+attacks that confuse intrusion detection systems by sending over‐
+lapping  IP  fragments.  Packet normalization is invoked with the
+directive.  has the following options:  Clears  the  bit  from  a
+matching IP packet.  Some operating systems are known to generate
+fragmented  packets  with the bit set.  This is particularly true
+with NFS.  will drop such fragmented packets unless is specified.
+Unfortunately some operating systems also generate their  packets
+with a zero IP identification field.  Clearing the bit on packets
+with  a  zero  IP ID may cause deleterious results if an upstream
+router later fragments the packet.  Using the modifier  (see  be‐
+low)  is  recommended  in combination with the modifier to ensure
+unique IP identifiers.  Enforces a minimum TTL  for  matching  IP
+packets.   Enforces  a maximum MSS for matching TCP packets.  Re‐
+places the IP identification field with random values to  compen‐
+sate for predictable values generated by many hosts.  This option
+only  applies  to  packets  that are not fragmented after the op‐
+tional fragment reassembly.  Using rules, fragments  can  be  re‐
+assembled by normalization.  In this case, fragments are buffered
+until  they form a complete packet, and only the completed packet
+is passed on to the filter.  The advantage is that  filter  rules
+have  to  deal  only  with complete packets, and can ignore frag‐
+ments.  The drawback of caching fragments is the additional  mem‐
+ory cost.  But the full reassembly method is the only method that
+currently works with NAT.  This is the default behavior of a rule
+if  no  fragmentation modifier is supplied.  The default fragment
+reassembly method is expensive, hence the option to crop is  pro‐
+vided.   In this case, will track the fragments and cache a small
+range descriptor.  Duplicate fragments are dropped  and  overlaps
+are cropped.  Thus data will only occur once on the wire with am‐
+biguities  resolving  to  the first occurrence.  Unlike the modi‐
+fier, fragments are not buffered, they are passed as soon as they
+are received.  The reassembly mechanism does not  yet  work  with
+NAT.   This  option  is  similar  to the modifier except that all
+overlapping or duplicate fragments will be dropped, and all  fur‐
+ther corresponding fragments will be dropped as well.  Statefully
+normalizes  TCP  connections.   rules  may not have the direction
+(in/out) specified.  performs the following normalizations:  Nei‐
+ther  side  of  the connection is allowed to reduce their IP TTL.
+An attacker may send a packet such that it reaches the  firewall,
+affects  the firewall state, and expires before reaching the des‐
+tination host.  will raise the TTL of all packets back up to  the
+highest  value  seen  on  the connection.  Modern TCP stacks will
+send a timestamp on every TCP packet  and  echo  the  other  end‐
+point’s  timestamp  back  to  them.   Many operating systems will
+merely start the timestamp at zero when first booted, and  incre‐
+ment  it  several  times a second.  The uptime of the host can be
+deduced by reading the timestamp and multiplying by  a  constant.
+Also  observing several different timestamps can be used to count
+hosts behind a NAT device.  And spoofing TCP packets into a  con‐
+nection  requires  knowing  or  guessing valid timestamps.  Time‐
+stamps merely need to be monotonically increasing and not derived
+off a guessable base time.  will cause to modulate the TCP  time‐
+stamps with a random number.  There is a problem with TCP on long
+fat  pipes, in that a packet might get delayed for longer than it
+takes the connection to wrap its 32‐bit sequence space.  In  such
+an  occurrence,  the old packet would be indistinguishable from a
+new packet and would be accepted as such.  The solution  to  this
+is  called PAWS: Protection Against Wrapped Sequence numbers.  It
+protects against it by making sure the timestamp on  each  packet
+does  not  go  backwards.   also  makes sure the timestamp on the
+packet does not go forward more than the RFC  allows.   By  doing
+this,  artificially  extends the security of TCP sequence numbers
+by 10 to 18 bits when  the  host  uses  appropriately  randomized
+timestamps,  since a blind attacker would have to guess the time‐
+stamp as well.  For example, scrub in on $ext_if all fragment re‐
+assemble The option prefixed to  a  scrub  rule  causes  matching
+packets  to  remain  unscrubbed, much in the same way as works in
+the packet filter (see below).  This  mechanism  should  be  used
+when  it  is  necessary  to exclude specific packets from broader
+scrub rules.  Packets can be assigned to queues for  the  purpose
+of  bandwidth control.  At least two declarations are required to
+configure queues, and later any packet filtering rule can  refer‐
+ence  the defined queues by name.  During the filtering component
+of the last referenced name is where any packets from rules  will
+be  queued, while for rules it specifies where any resulting ICMP
+or TCP RST packets should be queued.  The defines  the  algorithm
+used  to  decide  which packets get delayed, dropped, or sent out
+immediately.  There are three currently supported.   Class  Based
+Queueing.   attached  to an interface build a tree, thus each can
+have further child Each queue can have a and a assigned.   mainly
+controls the time packets take to get sent out, while has primar‐
+ily  effects on throughput.  achieves both partitioning and shar‐
+ing of link bandwidth by hierarchically structured classes.  Each
+class has its own and is assigned its share of A child class  can
+borrow  bandwidth  from  its parent class as long as excess band‐
+width is available (see the option  below).   Priority  Queueing.
+are  flat  attached  to  the interface, thus, cannot have further
+child Each has a unique assigned, ranging from 0 to 15.   Packets
+in  the  with the highest are processed first.  Hierarchical Fair
+Service Curve.  attached to an interface build a tree, thus  each
+can  have  further  child  Each  queue can have a and a assigned.
+mainly controls the time packets take to get sent out, while  has
+primarily  effects on throughput.  supports both link‐sharing and
+guaranteed real‐time services.  It employs a service curve  based
+QoS  model,  and its unique feature is an ability to decouple and
+allocation.  The interfaces on which queueing should be activated
+are declared using the declaration.  has the following  keywords:
+Queueing  is  enabled  on  the  named interface.  Specifies which
+queueing scheduler to use.  Currently supported  values  are  for
+Class  Based  Queueing, for Priority Queueing and for the Hierar‐
+chical Fair Service Curve scheduler.  The maximum bitrate for all
+queues on an interface may be specified using the  keyword.   The
+value can be specified as an absolute value or as a percentage of
+the  interface bandwidth.  When using an absolute value, the suf‐
+fixes and are used to represent bits, kilobits, megabits, and gi‐
+gabits per second, respectively.  The value must not  exceed  the
+interface  bandwidth.   If  is not specified, the interface band‐
+width is used (but take note that some  interfaces  do  not  know
+their  bandwidth, or can adapt their bandwidth rates).  The maxi‐
+mum number of packets held in the queue.  The default is 50.  Ad‐
+justs the size, in bytes, of the token bucket regulator.  If  not
+specified,  heuristics  based on the interface bandwidth are used
+to determine the size.  Defines a list of subqueues to create  on
+an interface.  In the following example, the interface dc0 should
+queue  up  to  5  Mbit/s  in four second‐level queues using Class
+Based Queueing.  Those four queues will be shown in a later exam‐
+ple.  altq on dc0 cbq bandwidth 5Mb queue { std, http, mail,  ssh
+} Once interfaces are activated for queueing using the directive,
+a  sequence  of  directives  may be defined.  The name associated
+with a must match a queue defined in the directive  (e.g.  mail),
+or,  except  for the in a parent declaration.  The following key‐
+words can be used: Specifies the interface the queue operates on.
+If not given, it operates on all matching interfaces.   Specifies
+the  maximum  bitrate  to  be processed by the queue.  This value
+must not exceed the value of the parent and can be  specified  as
+an  absolute  value  or  a percentage of the parent queue’s band‐
+width.  If not specified, defaults to 100% of the parent  queue’s
+bandwidth.   The  scheduler does not support bandwidth specifica‐
+tion.  Between queues a priority level can be set.  For  and  the
+range  is  0  to 7 and for the range is 0 to 15.  The default for
+all is 1.  queues with a higher priority are always served first.
+and queues with a higher priority are preferred in  the  case  of
+overload.   The maximum number of packets held in the queue.  The
+default is 50.  The can get additional parameters with Parameters
+are as follows: Packets not matched by another queue are assigned
+to this one.  Exactly one default queue is required.  Enable  RED
+(Random Early Detection) on this queue.  RED drops packets with a
+probability  proportional  to  the average queue length.  Enables
+RIO on this queue.  RIO is RED with IN/OUT, thus running RED  two
+times  more  than RIO would achieve the same effect.  RIO is cur‐
+rently not supported in the GENERIC  kernel.   Enables  ECN  (Ex‐
+plicit  Congestion Notification) on this queue.  ECN implies RED.
+The supports an additional option: The queue can borrow bandwidth
+from the parent.  The supports some additional options: The mini‐
+mum required bandwidth for the queue.  The maximum allowed  band‐
+width  for the queue.  The bandwidth share of a backlogged queue.
+is an acronym for The format for service curve specifications  is
+controls  the  bandwidth assigned to the queue.  and are optional
+and can be used to control the initial bandwidth assignment.  For
+the first milliseconds the queue gets the bandwidth given as  af‐
+terwards  the  value  given in Furthermore, with and child queues
+can be specified as in an declaration, thus building  a  tree  of
+queues  using a part of their parent’s bandwidth.  Packets can be
+assigned to queues based on filter rules by  using  the  keyword.
+Normally only one is specified; when a second one is specified it
+will instead be used for packets which have a of and for TCP ACKs
+with  no data payload.  To continue the previous example, the ex‐
+amples below would specify the four referenced queues, plus a few
+child queues.  Interactive sessions get priority over bulk trans‐
+fers like and The queues may  then  be  referenced  by  filtering
+rules  (see  below).   queue std bandwidth 10% cbq(default) queue
+http bandwidth 60% priority 2 cbq(borrow red) \
+      { employees, developers } queue  developers  bandwidth  75%
+cbq(borrow)  queue   employees bandwidth 15% queue mail bandwidth
+10% priority 0 cbq(borrow ecn) queue ssh bandwidth  20%  cbq(bor‐
+row)  {  ssh_interactive, ssh_bulk } queue  ssh_interactive band‐
+width 50% priority 7 cbq(borrow) queue   ssh_bulk  bandwidth  50%
+priority 0 cbq(borrow)
+
+block  return  out on dc0 inet all queue std pass out on dc0 inet
+proto tcp from $developerhosts to any port 80 \
+      queue developers pass out on dc0 inet proto tcp  from  $em‐
+ployeehosts to any port 80 \
+      queue  employees pass out on dc0 inet proto tcp from any to
+any port 22 \
+      queue(ssh_bulk, ssh_interactive) pass out on dc0 inet proto
+tcp from any to any port 25 \
+      queue mail Translation rules modify either  the  source  or
+destination  address  of  the  packets associated with a stateful
+connection.  A stateful connection is  automatically  created  to
+track  packets  matching  such  a  rule  as  long as they are not
+blocked by the filtering section of The translation engine  modi‐
+fies  the  specified  address and/or port in the packet, recalcu‐
+lates IP, TCP and UDP checksums as necessary, and  passes  it  to
+the  packet  filter for evaluation.  Since translation occurs be‐
+fore filtering the filter engine will see packets  as  they  look
+after any addresses and ports have been translated.  Filter rules
+will therefore have to filter based on the translated address and
+port  number.  Packets that match a translation rule are only au‐
+tomatically passed if the modifier is given, otherwise  they  are
+still  subject  to and rules.  The state entry created permits to
+keep track of the original address for  traffic  associated  with
+that  state  and correctly direct return traffic for that connec‐
+tion.  Various types of translation are possible with pf: A  rule
+specifies a bidirectional mapping between an external IP netblock
+and  an internal IP netblock.  A rule specifies that IP addresses
+are to be changed as the packet traverses  the  given  interface.
+This technique allows one or more IP addresses on the translating
+host to support network traffic for a larger range of machines on
+an  "inside"  network.   Although in theory any IP address can be
+used on the inside, it is strongly recommended that  one  of  the
+address ranges defined by RFC 1918 be used.  These netblocks are:
+10.0.0.0  ‐ 10.255.255.255 (all of net 10, i.e., 10/8) 172.16.0.0
+‐ 172.31.255.255 (i.e., 172.16/12) 192.168.0.0 ‐  192.168.255.255
+(i.e.,  192.168/16)  The packet is redirected to another destina‐
+tion and possibly a different port.  rules can optionally specify
+port ranges instead of single ports.  rdr ...  port  2000:2999  ‐
+...  port  4000  redirects ports 2000 to 2999 (inclusive) to port
+4000.  rdr ... port 2000:2999 ‐ ... port  4000:*  redirects  port
+2000  to  4000,  2001 to 4001, ..., 2999 to 4999.  In addition to
+modifying the address, some translation rules may  modify  source
+or  destination  ports for or connections; implicitly in the case
+of rules and explicitly in the case of rules.  Port  numbers  are
+never  translated  with a rule.  Evaluation order of the transla‐
+tion rules is dependent on the type of the translation rules  and
+of  the direction of a packet.  rules are always evaluated first.
+Then either the rules are evaluated on an inbound packet  or  the
+rules  on  an outbound packet.  Rules of the same type are evalu‐
+ated in the same order in which they appear in the ruleset.   The
+first  matching  rule  decides  what action is taken.  The option
+prefixed to a translation rule causes packets to remain  untrans‐
+lated,  much  in  the same way as works in the packet filter (see
+below).  If no rule matches the packet it is passed to the filter
+engine unmodified.  Translation rules apply only to packets  that
+pass  through  the  specified  interface,  and if no interface is
+specified, translation is applied to packets on  all  interfaces.
+For  instance, redirecting port 80 on an external interface to an
+internal web server will only work  for  connections  originating
+from the outside.  Connections to the address of the external in‐
+terface from local hosts will not be redirected, since such pack‐
+ets  do  not actually pass through the external interface.  Redi‐
+rections cannot reflect packets back through the  interface  they
+arrive on, they can only be redirected to hosts connected to dif‐
+ferent interfaces or to the firewall itself.  Note that redirect‐
+ing  external incoming connections to the loopback address, as in
+rdr on ne3 inet proto tcp to port spamd  ‐  127.0.0.1  port  smtp
+will  effectively  allow  an  external host to connect to daemons
+bound solely to the loopback address,  circumventing  the  tradi‐
+tional  blocking of such connections on a real interface.  Unless
+this effect is desired, any of the local  non‐loopback  addresses
+should be used as redirection target instead, which allows exter‐
+nal  connections  only  to  daemons  bound to this address or not
+bound to any address.  See below.  has the ability to and packets
+based on attributes of their layer 3 (see and and  layer  4  (see
+headers.  In addition, packets may also be assigned to queues for
+the  purpose  of bandwidth control.  For each packet processed by
+the packet filter, the filter rules are evaluated  in  sequential
+order,  from  first to last.  The last matching rule decides what
+action is taken.  If no rule matches the packet, the default  ac‐
+tion is to pass the packet.  The following actions can be used in
+the filter: The packet is blocked.  There are a number of ways in
+which  a rule can behave when blocking a packet.  The default be‐
+haviour is to packets silently, however this can be overridden or
+made explicit either globally, by setting the  option,  or  on  a
+per‐rule  basis  with one of the following options: The packet is
+silently dropped.  This applies only to packets, and issues a TCP
+RST which closes the connection.  This causes ICMP messages to be
+returned for packets which match the rule.  By default this is an
+ICMP UNREACHABLE message, however this can be overridden by spec‐
+ifying a message as a code or number.  This causes a TCP  RST  to
+be returned for packets and an ICMP UNREACHABLE for UDP and other
+packets.  Options returning ICMP packets currently have no effect
+if  operates on a as the code to support this feature has not yet
+been implemented.  The simplest mechanism to block everything  by
+default  and only pass packets that match explicit rules is spec‐
+ify a first filter rule of: block all The packet is passed; state
+is created unless the option is specified.   By  default  filters
+packets  statefully;  the  first  time a packet matches a rule, a
+state entry is created; for subsequent packets the filter  checks
+whether  the packet matches any state.  If it does, the packet is
+passed without evaluation of any rules.  After the connection  is
+closed  or  times  out, the state entry is automatically removed.
+This has several advantages.  For TCP  connections,  comparing  a
+packet to a state involves checking its sequence numbers, as well
+as  TCP timestamps if a rule applies to the connection.  If these
+values are outside the narrow windows  of  expected  values,  the
+packet  is dropped.  This prevents spoofing attacks, such as when
+an attacker sends packets with a  fake  source  address/port  but
+does  not  know  the  connection’s  sequence numbers.  Similarly,
+knows how to match ICMP replies to states.  For example, pass out
+inet proto icmp all icmp‐type echoreq allows echo requests  (such
+as  those  created  by  out statefully, and matches incoming echo
+replies correctly to states.  Also, looking up states is  usually
+faster than evaluating rules.  If there are 50 rules, all of them
+are evaluated sequentially in O(n).  Even with 50000 states, only
+16  comparisons  are  needed  to  match a state, since states are
+stored in a binary search tree that allows searches in O(log2 n).
+Furthermore, correct handling of ICMP error messages is  critical
+to many protocols, particularly TCP.  matches ICMP error messages
+to the correct connection, checks them against connection parame‐
+ters,  and  passes  them  if appropriate.  For example if an ICMP
+source quench message referring to a stateful TCP connection  ar‐
+rives,  it will be matched to the state and get passed.  Finally,
+state tracking is required for rules, in order to  track  address
+and  port  translations  and reverse the translation on returning
+packets.  will also create state for other  protocols  which  are
+effectively  stateless  by  nature.   UDP  packets are matched to
+states using only host addresses and ports, and  other  protocols
+are  matched  to states using only the host addresses.  If state‐
+less filtering of individual packets is desired, the keyword  can
+be  used to specify that state will not be created if this is the
+last matching rule.  A number of parameters can also  be  set  to
+affect  how  handles  state  tracking.  See below for further de‐
+tails.  The rule parameters specify the packets to which  a  rule
+applies.   A  packet always comes in on, or goes out through, one
+interface.  Most parameters are  optional.   If  a  parameter  is
+specified, the rule only applies to packets with matching attrib‐
+utes.   Certain  parameters  can  be expressed as lists, in which
+case generates all needed rule combinations.  This  rule  applies
+to  incoming  or outgoing packets.  If neither nor are specified,
+the rule will match packets in both directions.  In  addition  to
+the  action  specified,  a  log  message  is generated.  Only the
+packet that establishes the state is logged, unless the option is
+specified.  The logged packets are sent to a  interface,  by  de‐
+fault  This  interface  is monitored by the logging daemon, which
+dumps the logged packets to the file in binary format.   Used  to
+force  logging of all packets for a connection.  This is not nec‐
+essary when is explicitly specified.  As with packets are  logged
+to  Logs the user ID of the user that owns the socket and the PID
+of the process that has the  socket  open  where  the  packet  is
+sourced from or destined to (depending on which socket is local).
+This  is in addition to the normal information logged.  Send logs
+to the specified interface instead of If a packet matches a  rule
+which has the option set, this rule is considered the last match‐
+ing  rule,  and  evaluation of subsequent rules is skipped.  This
+rule applies only to packets coming in on, or going out  through,
+this  particular interface or interface group.  For more informa‐
+tion on interface groups, see the keyword in  This  rule  applies
+only to packets of this address family.  Supported values are and
+This  rule applies only to packets of this protocol.  Common pro‐
+tocols are and For a list of all the protocol name to number map‐
+pings used by see the file This rule applies only to packets with
+the specified source and destination addresses  and  ports.   Ad‐
+dresses  can  be specified in CIDR notation (matching netblocks),
+as symbolic host names, interface names or interface group names,
+or as any of the following keywords: Any  address.   Any  address
+whose associated route has label See and Any address which is not
+currently  routable.  Any source address that fails a unicast re‐
+verse path forwarding (URPF) check, i.e. packets coming in on  an
+interface  other  than  that  which  holds  the route back to the
+packet’s source address.  Any address that matches the given  ta‐
+ble.   Interface  names  and interface group names can have modi‐
+fiers appended: Translates to the network(s) attached to the  in‐
+terface.   Translates  to  the interface’s broadcast address(es).
+Translates to the point to point  interface’s  peer  address(es).
+Do  not  include interface aliases.  Host names may also have the
+option appended to restrict the name resolution to the  first  of
+each v4 and v6 address found.  Host name resolution and interface
+to  address  translation are done at ruleset load‐time.  When the
+address of an interface (or host name)  changes  (under  DHCP  or
+PPP,  for  instance), the ruleset must be reloaded for the change
+to be reflected in the kernel.  Surrounding  the  interface  name
+(and  optional  modifiers) in parentheses changes this behaviour.
+When the interface name is surrounded by parentheses, the rule is
+automatically updated whenever the interface changes its address.
+The ruleset does not need to be  reloaded.   This  is  especially
+useful  with  Ports can be specified either by number or by name.
+For example, port 80 can be specified as For a list of  all  port
+name  to number mappings used by see the file Ports and ranges of
+ports are specified by  using  these  operators:  =       (equal)
+!=      (unequal)           (less  than)          (less  than  or
+equal)         (greater than)          (greater  than  or  equal)
+:       (range  including  boundaries)          (range  excluding
+boundaries)         (except range) and are binary operators (they
+take two arguments).  For instance: means hence ports 2000, 2001,
+2002, 2003 and 2004.  means hence  ports  2001,  2002  and  2003.
+means hence ports 1‐1999 and 2005‐65535.  The operating system of
+the  source  host  can be specified in the case of TCP rules with
+the modifier.  See the section for more information.   The  host,
+port  and OS specifications are optional, as in the following ex‐
+amples: pass in all pass in from any to any  pass  in  proto  tcp
+from any port  1024 to any pass in proto tcp from any to any port
+25 pass in proto tcp from 10.0.0.0/8 port  1024 \
+      to  !  10.1.2.3  port  != ssh pass in proto tcp from any os
+"OpenBSD" pass in proto tcp from route "DTAG" This is  equivalent
+to  "from  any  to  any".  This functionality is not supported in
+this version of This rule only  applies  to  packets  of  sockets
+owned  by the specified user.  For outgoing connections initiated
+from the firewall, this is the user that opened  the  connection.
+For incoming connections to the firewall itself, this is the user
+that listens on the destination port.  For forwarded connections,
+where  the  firewall  is  not a connection endpoint, the user and
+group are All packets, both outgoing and incoming, of one connec‐
+tion are associated with the same user and group.  Only  TCP  and
+UDP  packets  can  be  associated with users; for other protocols
+these parameters are ignored.  User and group refer to the effec‐
+tive (as opposed to the real) IDs, in case the socket is  created
+by a setuid/setgid process.  User and group IDs are stored when a
+socket  is  created; when a process creates a listening socket as
+root (for instance, by binding to a privileged port)  and  subse‐
+quently changes to another user ID (to drop privileges), the cre‐
+dentials  will  remain root.  User and group IDs can be specified
+as either numbers or names.  The syntax is similar to the one for
+ports.  The value matches packets of forwarded connections.   can
+only be used with the operators and Other constructs like are in‐
+valid.   Forwarded  packets  with unknown user and group ID match
+only rules that explicitly compare against with the operators  or
+For instance does not match forwarded packets.  The following ex‐
+ample  allows  only  selected users to open outgoing connections:
+block out proto { tcp, udp } all pass  out proto { tcp, udp } all
+user {  1000, dhartmei } This rule only applies  to  TCP  packets
+that have the flags set out of set Flags not specified in are ig‐
+nored.  For stateful connections, the default is To indicate that
+flags should not be checked at all, specify The flags are: (F)IN,
+(S)YN,  (R)ST,  (P)USH, (A)CK, (U)RG, (E)CE, and C(W)R.  Flag SYN
+is set.  The other flags are ignored.  This is the  default  set‐
+ting  for  stateful connections.  Out of SYN and ACK, exactly SYN
+may be set.  SYN, SYN+PSH and SYN+RST match, but SYN+ACK, ACK and
+ACK+RST do not.  This is more restrictive than the previous exam‐
+ple.  If the first set is not specified,  it  defaults  to  none.
+All  of  SYN, FIN, RST and ACK must be unset.  Because is applied
+by default (unless is specified), only the initial SYN packet  of
+a  TCP handshake will create a state for a TCP connection.  It is
+possible to be less restrictive, and allow  state  creation  from
+intermediate  packets,  by specifying This will cause to synchro‐
+nize to existing connections, for instance  if  one  flushes  the
+state  table.   However,  states  created  from such intermediate
+packets may be missing connection details such as the TCP  window
+scaling  factor.   States  which  modify the packet flow, such as
+those affected by rules, options, or scrubbed with will also  not
+be  recoverable from intermediate packets.  Such connections will
+stall and time out.  This rule only applies  to  ICMP  or  ICMPv6
+packets  with  the  specified type and code.  Text names for ICMP
+types and codes are listed in and This parameter  is  only  valid
+for  rules  that cover protocols ICMP or ICMP6.  The protocol and
+the ICMP type indicator or must  match.   This  rule  applies  to
+packets  with  the specified bits set.  may be given as one of or
+as either hex or decimal.  For example, the following  rules  are
+identical:  pass  all tos lowdelay pass all tos 0x10 pass all tos
+16 By default, IPv4 packets with IP options or IPv6 packets  with
+routing  extension  headers are blocked.  When is specified for a
+rule, packets that pass the  filter  based  on  that  rule  (last
+matching) do so even if they contain IP options or routing exten‐
+sion  headers.   For packets that match state, the rule that ini‐
+tially created the state is used.  The implicit rule that is used
+when a packet does not match any rules does not allow IP options.
+Adds a label (name) to the rule, which can be  used  to  identify
+the  rule.   For instance, pfctl ‐s labels shows per‐rule statis‐
+tics for rules that have labels.  The  following  macros  can  be
+used  in labels: The interface.  The source IP address.  The des‐
+tination IP address.  The source port specification.  The  desti‐
+nation  port specification.  The protocol name.  The rule number.
+For example: ips = "{ 1.2.3.4, 1.2.3.5 }" pass in proto tcp  from
+any to $ips \
+      port   1023  label  "$dstaddr:$dstport"  expands to pass in
+inet proto tcp from any to 1.2.3.4 \
+      port  1023 label "1.2.3.4:1023" pass in inet proto tcp from
+any to 1.2.3.5 \
+      port  1023 label "1.2.3.5:1023" The macro expansion for the
+directive occurs only at configuration file parse time, not  dur‐
+ing  runtime.  Packets matching this rule will be assigned to the
+specified queue.  If two queues are given, packets which  have  a
+of and TCP ACKs with no data payload will be assigned to the sec‐
+ond  one.  See for setup details.  For example: pass in proto tcp
+to  port  25  queue  mail  pass  in  proto   tcp   to   port   22
+queue(ssh_bulk,  ssh_prio)  Packets  matching  this  rule will be
+tagged with the specified string.  The tag acts  as  an  internal
+marker that can be used to identify these packets later on.  This
+can be used, for example, to provide trust between interfaces and
+to determine if packets have been processed by translation rules.
+Tags  are meaning that the packet will be tagged even if the rule
+is not the last matching rule.  Further matching  rules  can  re‐
+place the tag with a new one but will not remove a previously ap‐
+plied  tag.   A  packet  is only ever assigned one tag at a time.
+Packet tagging can be done during or rules in addition to  filter
+rules.   Tags  take  the same macros as labels (see above).  Used
+with filter or translation rules to specify that packets must al‐
+ready be tagged with the given tag in order to  match  the  rule.
+Inverse  tag matching can also be done by specifying the operator
+before the keyword.  Used to select an  alternate  routing  table
+for  the  routing lookup.  Only effective before the route lookup
+happened, i.e. when filtering inbound.  A  probability  attribute
+can  be  attached  to  a  rule, with a value set between 0 and 1,
+bounds not included.  In that case, the rule will be honoured us‐
+ing the given probability value only.  For example, the following
+rule will drop 20% of incoming ICMP packets: block in proto  icmp
+probability  20%  If  a packet matches a rule with a route option
+set, the packet filter will route the  packet  according  to  the
+type  of route option.  When such a rule creates state, the route
+option is also applied to all packets matching the  same  connec‐
+tion.  The option does a normal route lookup to find the next hop
+for  the  packet.   The option routes the packet to the specified
+interface with an optional address for the next hop.  When a rule
+creates state, only packets that pass in the  same  direction  as
+the  filter  rule  specifies will be routed in this way.  Packets
+passing in the opposite direction (replies) are not affected  and
+are routed normally.  The option is similar to but routes packets
+that  pass  in  the opposite direction (replies) to the specified
+interface.  Opposite direction is only defined in the context  of
+a state entry, and is useful only in rules that create state.  It
+can  be  used  on  systems  with multiple external connections to
+route all outgoing packets of a connection through the  interface
+the  incoming  connection  arrived through (symmetric routing en‐
+forcement).  The option creates a duplicate  of  the  packet  and
+routes  it  like  The  original packet gets routed as it normally
+would.  For and rules, (as well as for the and rule options)  for
+which  there  is  a single redirection address which has a subnet
+mask smaller than 32 for IPv4 or 128 for IPv6 (more than  one  IP
+address),  a  variety of different methods for assigning this ad‐
+dress can be used: The option applies the network portion of  the
+redirection  address  to  the address to be modified (source with
+destination with The option selects an address at  random  within
+the  defined  block  of addresses.  The option uses a hash of the
+source address to determine  the  redirection  address,  ensuring
+that  the  redirection  address  is  always  the same for a given
+source.  An optional key can be specified after this keyword  ei‐
+ther  in  hex or as a string; by default randomly generates a key
+for source‐hash every time the ruleset is reloaded.   The  option
+loops  through  the  redirection address(es).  When more than one
+redirection address is specified,  is  the  only  permitted  pool
+type.   With rules, the option prevents from modifying the source
+port on TCP and UDP packets.  Additionally,  the  option  can  be
+specified  to help ensure that multiple connections from the same
+source are mapped to the same redirection address.   This  option
+can  be  used  with  the  and pool options.  Note that by default
+these associations are destroyed as soon as there are  no  longer
+states  which  refer  to them; in order to make the mappings last
+beyond the lifetime of the states, increase  the  global  options
+with  See  for more ways to control the source tracking.  Much of
+the security derived from TCP is attributable  to  how  well  the
+initial  sequence  numbers (ISNs) are chosen.  Some popular stack
+implementations choose poor ISNs and thus are normally  suscepti‐
+ble to ISN prediction exploits.  By applying a rule to a TCP con‐
+nection,  will  create  a high quality random sequence number for
+each connection endpoint.  The directive implicitly  keeps  state
+on  the  rule and is only applicable to TCP connections.  For in‐
+stance: block all pass out proto tcp from  any  to  any  modulate
+state  pass  in   proto  tcp from any to any port 25 flags S/SFRA
+modulate state Note that modulated connections will  not  recover
+when the state table is lost (firewall reboot, flushing the state
+table, etc...).  will not be able to infer a connection again af‐
+ter the state table flushes the connection’s modulator.  When the
+state  is lost, the connection may be left dangling until the re‐
+spective endpoints time out the connection.  It is possible on  a
+fast  local network for the endpoints to start an ACK storm while
+trying to resynchronize after the loss of the modulator.  The de‐
+fault settings (or a more strict equivalent) should  be  used  on
+rules  to  prevent ACK storms.  Note that alternative methods are
+available to prevent loss of the state table and allow for  fire‐
+wall  failover.   See  and  for further information.  By default,
+passes packets that are part of  a  handshake  between  the  end‐
+points.   The  option can be used to cause itself to complete the
+handshake with the active endpoint, perform a handshake with  the
+passive endpoint, and then forward packets between the endpoints.
+No  packets  are  sent  to the passive endpoint before the active
+endpoint has completed the handshake, hence so‐called SYN  floods
+with  spoofed  source  addresses  will not reach the passive end‐
+point, as the sender can’t complete the handshake.  The proxy  is
+transparent  to both endpoints, they each see a single connection
+from/to the other endpoint.  chooses random initial sequence num‐
+bers for both handshakes.  Once the handshakes are completed, the
+sequence number modulators (see previous  section)  are  used  to
+translate further packets of the connection.  includes Rules with
+will  not  work  if operates on a Example: pass in proto tcp from
+any to any port www synproxy state A number of options related to
+stateful tracking can be applied on a per‐rule basis.   and  sup‐
+port these options, and must be specified explicitly to apply op‐
+tions to a rule.  Limits the number of concurrent states the rule
+may create.  When this limit is reached, further packets matching
+the  rule  that  would  create  state are dropped, until existing
+states time out.  Changes the timeout values used for states cre‐
+ated by this rule.  For a list of all valid  timeout  names,  see
+above.   Multiple  options can be specified, separated by commas:
+pass in proto tcp from any to any \
+      port www keep state \
+      (max 100, source‐track rule, max‐src‐nodes 75, \
+      max‐src‐states 3, tcp.established 60, tcp.closing  5)  When
+the  keyword  is specified, the number of states per source IP is
+tracked.  The maximum number of states created by  this  rule  is
+limited by the rule’s and options.  Only state entries created by
+this  particular rule count toward the rule’s limits.  The number
+of states created by all rules that use this option  is  limited.
+Each  rule  can  specify different and options, however state en‐
+tries created by any participating rule count towards each  indi‐
+vidual  rule’s  limits.   The following limits can be set: Limits
+the maximum number of source addresses which  can  simultaneously
+have  state table entries.  Limits the maximum number of simulta‐
+neous state entries that a single source address can create  with
+this  rule.   For stateful TCP connections, limits on established
+connections (connections which have completed the TCP 3‐way hand‐
+shake) can also be enforced per source IP.   Limits  the  maximum
+number  of  simultaneous TCP connections which have completed the
+3‐way handshake that a single host can make.  Limit the  rate  of
+new  connections over a time interval.  The connection rate is an
+approximation calculated as a moving average.  Because the  3‐way
+handshake  ensures  that the source address is not being spoofed,
+more aggressive action can be taken based on these limits.   With
+the  state  option,  source  IP addresses which hit either of the
+limits on established connections will be added to the named  ta‐
+ble.   This table can be used in the ruleset to block further ac‐
+tivity from the offending host, redirect it to a tarpit  process,
+or restrict its bandwidth.  The optional keyword kills all states
+created  by the matching rule which originate from the host which
+exceeds these limits.  The modifier to the  flush  command  kills
+all  states  originating  from  the offending host, regardless of
+which rule created the state.  For example, the  following  rules
+will  protect  the  webserver  against hosts making more than 100
+connections in 10 seconds.  Any host which connects  faster  than
+this  rate  will have its address added to the table and have all
+states originating from it flushed.   Any  new  packets  arriving
+from this host will be dropped unconditionally by the block rule.
+block  quick from bad_hosts pass in on $ext_if proto tcp to $web‐
+server port www keep state \          (max‐src‐conn‐rate  100/10,
+overload  bad_hosts flush global) You can adjust the state policy
+on individual and translation rules by adding a keyword or at the
+end of the rule.  For example, a rule such as this, nat  on  sip0
+from 10/8 to ! 10/8 ‐> 192.168.1.4/32 if‐bound will create states
+that  only match packets on sip0.  Passive OS Fingerprinting is a
+mechanism to inspect nuances of a TCP  connection’s  initial  SYN
+packet  and  guess at the host’s operating system.  Unfortunately
+these nuances are easily spoofed by an attacker  so  the  finger‐
+print  is  not useful in making security decisions.  But the fin‐
+gerprint is typically accurate enough to  make  policy  decisions
+upon.   The  fingerprints  may  be  specified by operating system
+class, by version, or by subtype/patchlevel.  The class of an op‐
+erating system is typically the vendor or genre and would be  for
+the firewall itself.  The version of the oldest available release
+on  the  main  FTP site would be 2.6 and the fingerprint would be
+written The subtype of an operating system is typically  used  to
+describe  the  patchlevel if that patch led to changes in the TCP
+stack behavior.  In the case of the only subtype is for a finger‐
+print that was normalized by the scrub option and would be speci‐
+fied as Fingerprints for most popular operating systems are  pro‐
+vided by Once is running, a complete list of known operating sys‐
+tem  fingerprints  may be listed by running: Filter rules can en‐
+force policy at any level of operating system  specification  as‐
+suming  a  fingerprint is present.  Policy could limit traffic to
+approved operating systems or even ban traffic  from  hosts  that
+aren’t at the latest service pack.  The class can also be used as
+the  fingerprint  which will match packets for which no operating
+system fingerprint is known.  Examples: pass  out proto tcp  from
+any  os  OpenBSD  block out proto tcp from any os Doors block out
+proto tcp from any os "Doors PT" block out proto tcp from any  os
+"Doors  PT SP3" block out from any os "unknown" pass on lo0 proto
+tcp from any os "OpenBSD 3.3 lo0" Operating system fingerprinting
+is limited only to the TCP SYN packet.  This means that  it  will
+not work on other protocols and will not match a currently estab‐
+lished connection.  Caveat: operating system fingerprints are oc‐
+casionally  wrong.   There  are  three  problems: an attacker can
+trivially craft his packets to appear as any operating system  he
+chooses;  an operating system patch could change the stack behav‐
+ior and no fingerprints will match it until the database  is  up‐
+dated;  and  multiple operating systems may have the same finger‐
+print.  "Spoofing" is the faking of IP addresses,  typically  for
+malicious  purposes.   The  directive  expands to a set of filter
+rules which will block all traffic with a source IP from the net‐
+work(s) directly connected to the specified interface(s) from en‐
+tering the system through any other interface.  For example,  the
+line  antispoof  for  lo0  expands to block drop in on ! lo0 inet
+from 127.0.0.1/8 to any block drop in on ! lo0 inet6 from ::1  to
+any  For  non‐loopback  interfaces, there are additional rules to
+block incoming packets with a source IP address identical to  the
+interface’s  IP(s).   For example, assuming the interface wi0 had
+an IP address of 10.0.0.1 and a  netmask  of  255.255.255.0,  the
+line  antispoof  for  wi0  inet expands to block drop in on ! wi0
+inet from 10.0.0.0/24 to any block drop in inet from 10.0.0.1  to
+any Caveat: Rules created by the directive interfere with packets
+sent  over  loopback  interfaces  to local addresses.  One should
+pass these explicitly.  The size of IP datagrams (packets) can be
+significantly larger than the maximum transmission unit (MTU)  of
+the  network.  In cases when it is necessary or more efficient to
+send such large packets, the large packet will be fragmented into
+many smaller packets that will each fit onto the wire.   Unfortu‐
+nately  for a firewalling device, only the first logical fragment
+will contain the necessary header information for the subprotocol
+that allows to filter on things such as TCP ports or  to  perform
+NAT.   Besides  the use of rules as described in above, there are
+three options for handling fragments in the packet  filter.   One
+alternative  is to filter individual fragments with filter rules.
+If no rule applies to a fragment, it is  passed  to  the  filter.
+Filter  rules  with  matching IP header parameters decide whether
+the fragment is passed or blocked, in the same  way  as  complete
+packets  are filtered.  Without reassembly, fragments can only be
+filtered based on IP header fields  (source/destination  address,
+protocol),  since  subprotocol  header  fields  are not available
+(TCP/UDP port numbers, ICMP code/type).  The option can  be  used
+to restrict filter rules to apply only to fragments, but not com‐
+plete  packets.   Filter  rules without the option still apply to
+fragments, if they only specify IP header fields.  For  instance,
+the  rule pass in proto tcp from any to any port 80 never applies
+to a fragment, even if the fragment is part of a TCP packet  with
+destination  port 80, because without reassembly this information
+is not available for each fragment.  This also means  that  frag‐
+ments  cannot  create  new or match existing state table entries,
+which makes stateful  filtering  and  address  translation  (NAT,
+redirection) for fragments impossible.  It’s also possible to re‐
+assemble  only certain fragments by specifying source or destina‐
+tion addresses or protocols as  parameters  in  rules.   In  most
+cases,  the benefits of reassembly outweigh the additional memory
+cost, and it’s recommended to use rules to reassemble  all  frag‐
+ments  via  the  modifier.   The  memory  allocated  for fragment
+caching can be limited using Once this limit  is  reached,  frag‐
+ments  that  would  have to be cached are dropped until other en‐
+tries time out.  The timeout value can also  be  adjusted.   Cur‐
+rently,  only IPv4 fragments are supported and IPv6 fragments are
+blocked unconditionally.  Besides  the  main  ruleset,  can  load
+rulesets into attachment points.  An is a container that can hold
+rules,  address  tables,  and other anchors.  An has a name which
+specifies the path where can be used to access the anchor to per‐
+form operations on it, such as attaching child anchors to  it  or
+loading  rules  into  it.  Anchors may be nested, with components
+separated by characters, similar to how file  system  hierarchies
+are  laid  out.  The main ruleset is actually the default anchor,
+so filter and translation rules, for example, may  also  be  con‐
+tained in any anchor.  An anchor can reference another attachment
+point  using the following kinds of rules: Evaluates the rules in
+the specified Evaluates the rules in the specified Evaluates  the
+rules  in  the specified Evaluates the filter rules in the speci‐
+fied Loads the rules from the specified file into the anchor When
+evaluation of the main ruleset reaches an rule, will  proceed  to
+evaluate all rules specified in that anchor.  Matching filter and
+translation  rules marked with the option are final and abort the
+evaluation of the rules in other anchors and  the  main  ruleset.
+If  the itself is marked with the option, ruleset evaluation will
+terminate when the anchor is exited if the packet is  matched  by
+any  rule within the anchor.  rules are evaluated relative to the
+anchor in which they are contained.  For example, all rules spec‐
+ified in the main ruleset will reference anchor attachment points
+underneath the main ruleset, and rules specified in a file loaded
+from a rule will be attached under that anchor point.  Rules  may
+be  contained in attachment points which do not contain any rules
+when the main ruleset is loaded, and later such  anchors  can  be
+manipulated  through  without reloading the main ruleset or other
+anchors.  For example, ext_if = "kue0" block on $ext_if  all  an‐
+chor  spam  pass  out on $ext_if all pass in on $ext_if proto tcp
+from any \
+      to $ext_if port smtp blocks all packets on the external in‐
+terface by default, then evaluates all rules in the named "spam",
+and finally passes all outgoing connections and incoming  connec‐
+tions  to port 25.  # echo "block in quick from 1.2.3.4 to any" |
+\
+      pfctl ‐a spam ‐f ‐ This loads a single rule into the  which
+blocks  all packets from a specific address.  The anchor can also
+be populated by adding a rule after the rule:  anchor  spam  load
+anchor spam from "/etc/pf‐spam.conf" When loads it will also load
+all  the  rules from the file into the anchor.  Optionally, rules
+can specify the parameter’s direction, interface, address family,
+protocol and source/destination address/port using the same  syn‐
+tax  as filter rules.  When parameters are used, the rule is only
+evaluated for matching packets.  This allows conditional  evalua‐
+tion of anchors, like: block on $ext_if all anchor spam proto tcp
+from  any  to  any  port  smtp pass out on $ext_if all pass in on
+$ext_if proto tcp from any to $ext_if port smtp The rules  inside
+spam  are  only  evaluated  for packets with destination port 25.
+Hence, # echo "block in quick from 1.2.3.4 to any" | \
+      pfctl ‐a spam ‐f ‐ will only block connections from 1.2.3.4
+to port 25.  Anchors may end with the asterisk  character,  which
+signifies that all anchors attached at that point should be eval‐
+uated in the alphabetical ordering of their anchor name.  For ex‐
+ample, anchor "spam/*" will evaluate each rule in each anchor at‐
+tached  to  the  anchor.  Note that it will only evaluate anchors
+that are directly attached to the anchor, and will not descend to
+evaluate anchors recursively.  Since anchors are evaluated  rela‐
+tive to the anchor in which they are contained, there is a mecha‐
+nism for accessing the parent and ancestor anchors of a given an‐
+chor.   Similar  to  file system path name resolution, if the se‐
+quence appears as an anchor path component, the parent anchor  of
+the  current anchor in the path evaluation at that point will be‐
+come the new current anchor.  As an example, consider the follow‐
+ing: # echo ’ anchor "spam/allowed" ’ | pfctl ‐f ‐ #  echo  ‐e  ’
+anchor "../banned" \n pass’ | \
+      pfctl  ‐a  spam/allowed ‐f ‐ Evaluation of the main ruleset
+will lead into the anchor, which will evaluate the rules  in  the
+anchor,  if any, before finally evaluating the rule.  Filter rule
+can also be loaded inline in the ruleset within a brace (’{’ ’}’)
+delimited block.  Brace delimited blocks  may  contain  rules  or
+other  brace‐delimited  blocks.  When anchors are loaded this way
+the anchor name becomes optional.  anchor "external" on egress  {
+        block         anchor out {                 pass proto tcp
+from  any to port { 25, 80, 443 }         }         pass in proto
+tcp to any port 22 } Since the parser  specification  for  anchor
+names  is  a  string,  any reference to an anchor name containing
+solidus characters will require double  quote  characters  around
+the  anchor name.  This example maps incoming requests on port 80
+to port 8080, on which a daemon is running (because, for example,
+it is not run as root, and therefore lacks permission to bind  to
+port  80).   #  use  a macro for the interface name, so it can be
+changed easily ext_if = "ne3"
+
+# map daemon on 8080 to appear to be on 80 rdr on  $ext_if  proto
+tcp from any to any port 80 ‐ 127.0.0.1 port 8080 If the modifier
+is  given, packets matching the translation rule are passed with‐
+out inspecting the filter rules: rdr pass on  $ext_if  proto  tcp
+from any to any port 80 ‐ 127.0.0.1 \
+      port  8080  In  the  example below, vlan12 is configured as
+192.168.168.1; the machine translates  all  packets  coming  from
+192.168.168.0/24 to 204.92.77.111 when they are going out any in‐
+terface except vlan12.  This has the net effect of making traffic
+from  the 192.168.168.0/24 network appear as though it is the In‐
+ternet routable address 204.92.77.111 to nodes behind any  inter‐
+face  on  the  router  except  for  the  nodes on vlan12.  (Thus,
+192.168.168.1 can talk to the 192.168.168.0/24 nodes.)  nat on  !
+vlan12  from 192.168.168.0/24 to any ‐ 204.92.77.111 In the exam‐
+ple below, the machine sits between a fake  internal  144.19.74.*
+network,  and  a routable external IP of 204.92.77.100.  The rule
+excludes protocol AH from being translated.  # NO NAT no  nat  on
+$ext_if  proto  ah from 144.19.74.0/24 to any nat on $ext_if from
+144.19.74.0/24 to any ‐ 204.92.77.100 In the example below, pack‐
+ets bound for one specific server, as well as those generated  by
+the  sysadmins  are not proxied; all other connections are.  # NO
+RDR no rdr on $int_if proto { tcp, udp } from any to $server port
+80 no rdr on $int_if proto { tcp, udp } from  $sysadmins  to  any
+port 80 rdr on $int_if proto { tcp, udp } from any to any port 80
+‐ 127.0.0.1 \
+      port  80 This longer example uses both a NAT and a redirec‐
+tion.  The external interface has the address 157.161.48.183.  On
+localhost, we are running waiting for FTP sessions  to  be  redi‐
+rected  to  it.  The three mandatory anchors for are omitted from
+this example; see the manpage.  # NAT # Translate outgoing  pack‐
+ets’  source  addresses  (any protocol).  # In this case, any ad‐
+dress but the gateway’s  external  address  is  mapped.   nat  on
+$ext_if inet from ! ($ext_if) to any ‐ ($ext_if)
+
+# NAT PROXYING # Map outgoing packets’ source port to an assigned
+proxy port instead of # an arbitrary port.  # In this case, proxy
+outgoing  isakmp  with  port  500 on the gateway.  nat on $ext_if
+inet proto udp from any port = isakmp to any ‐ ($ext_if) \
+      port 500
+
+# BINAT # Translate outgoing packets’ source address (any  proto‐
+col).   #  Translate  incoming packets’ destination address to an
+internal  machine  #  (bidirectional).   binat  on  $ext_if  from
+10.1.2.150 to any ‐ $ext_if
+
+#  RDR # Translate incoming packets’ destination addresses.  # As
+an example, redirect a TCP and UDP port to an  internal  machine.
+rdr on $ext_if inet proto tcp from any to ($ext_if) port 8080 \
+      ‐ 10.1.2.151 port 22 rdr on $ext_if inet proto udp from any
+to ($ext_if) port 8080 \
+      ‐ 10.1.2.151 port 53
+
+#  RDR  # Translate outgoing ftp control connections to send them
+to localhost # for proxying with  ftp‐proxy(8)  running  on  port
+8021.   rdr  on  $int_if  proto  tcp  from  any  to any port 21 ‐
+127.0.0.1 port 8021 In this example, a NAT gateway is set  up  to
+translate  internal  addresses  using  a pool of public addresses
+(192.0.2.16/28) and to redirect incoming web  server  connections
+to  a  group  of web servers on the internal network.  # NAT LOAD
+BALANCE # Translate outgoing packets’ source addresses  using  an
+address  pool.   # A given source address is always translated to
+the same pool address by # using the source‐hash keyword.  nat on
+$ext_if inet from any to any ‐ 192.0.2.16/28 source‐hash
+
+# RDR ROUND ROBIN # Translate incoming web server connections  to
+a group of web servers on # the internal network.  rdr on $ext_if
+proto tcp from any to any port 80 \
+      ‐  { 10.1.2.155, 10.1.2.160, 10.1.2.161 } round‐robin # The
+external interface is kue0 # (157.161.48.183, the  only  routable
+address)  #  and  the private network is 10.0.0.0/8, for which we
+are doing NAT.
+
+# use a macro for the interface name, so it can be changed easily
+ext_if = "kue0"
+
+# normalize all incoming traffic scrub in on $ext_if all fragment
+reassemble
+
+# block and log everything by default block return log on $ext_if
+all
+
+# block anything coming from source we have no  back  routes  for
+block in from no‐route to any
+
+# block packets whose ingress interface does not match the one in
+#  the  route  back  to  their source address block in from urpf‐
+failed to any
+
+# block and log outgoing packets that do not have our address  as
+source,  #  they are either spoofed or something is misconfigured
+(NAT disabled, # for instance), we want to be  nice  and  do  not
+send  out  garbage.   block  out  log  quick  on  $ext_if  from !
+157.161.48.183 to any
+
+# silently drop broadcasts (cable modem noise) block in quick  on
+$ext_if from any to 255.255.255.255
+
+#  block and log incoming packets from reserved address space and
+invalid # addresses, they are either spoofed or misconfigured, we
+cannot reply to # them anyway (hence, no return‐rst).   block  in
+log quick on $ext_if from { 10.0.0.0/8, 172.16.0.0/12, \
+      192.168.0.0/16, 255.255.255.255/32 } to any
+
+# ICMP
+
+#  pass out/in certain ICMP queries and keep state (ping) # state
+matching is done on host addresses and ICMP id (not type/code), #
+so replies (like 0/0 for 8/0) will match  queries  #  ICMP  error
+messages  (which  always refer to a TCP/UDP packet) are # handled
+by the TCP/UDP states pass on $ext_if inet proto icmp  all  icmp‐
+type 8 code 0
+
+# UDP
+
+# pass out all UDP connections and keep state pass out on $ext_if
+proto udp all
+
+# pass in certain UDP connections and keep state (DNS) pass in on
+$ext_if proto udp from any to any port domain
+
+# TCP
+
+#  pass  out  all  TCP connections and modulate state pass out on
+$ext_if proto tcp all modulate state
+
+# pass in certain TCP connections and keep state (SSH, SMTP, DNS,
+IDENT) pass in on $ext_if proto tcp from any to any port  {  ssh,
+smtp, domain, \
+      auth }
+
+#  Do  not allow Windows 9x SMTP connections since they are typi‐
+cally # a viral worm. Alternately we could limit these OSes to  1
+connection  each.   block  in  on  $ext_if  proto tcp from any os
+{"Windows 95", "Windows 98"} \
+      to any port smtp
+
+# IPv6 # pass in/out all IPv6 traffic: note that we have  to  en‐
+able this in two # different ways, on both our physical interface
+and  our  tunnel  pass  quick on gif0 inet6 pass quick on $ext_if
+proto ipv6
+
+# Packet Tagging
+
+# three interfaces: $int_if, $ext_if,  and  $wifi_if  (wireless).
+NAT  is  #  being  done  on $ext_if for all outgoing packets. tag
+packets in on # $int_if and pass  those  tagged  packets  out  on
+$ext_if.   all  other  # outgoing packets (i.e., packets from the
+wireless network) are only # permitted to access port 80.
+
+pass in on $int_if from any to any tag INTNET pass in on $wifi_if
+from any to any
+
+block out on $ext_if from any to any pass out  quick  on  $ext_if
+tagged  INTNET pass out on $ext_if proto tcp from any to any port
+80
+
+# tag incoming packets as they are redirected  to  spamd(8).  use
+the tag # to pass those packets through the packet filter.
+
+rdr  on  $ext_if  inet  proto  tcp  from  spammers to port smtp \
+        tag SPAMD ‐ 127.0.0.1 port spamd
+
+block in on $ext_if pass in on  $ext_if  inet  proto  tcp  tagged
+SPAMD  Syntax  for  in BNF: line           = ( option | pf‐rule |
+nat‐rule | binat‐rule | rdr‐rule |
+                 antispoof‐rule | altq‐rule | queue‐rule | trans‐
+anchors |                  anchor‐rule | anchor‐close |  load‐an‐
+chor | table‐rule | )
+
+option         = "set" ( [ "timeout" ( timeout | "{" timeout‐list
+"}"  )  ]  |                  [ "ruleset‐optimization" [ "none" |
+"basic" | "profile" ]] |
+                 [ "optimization" [ "default" | "normal" |
+                 "high‐latency" | "satellite" |
+                 "aggressive" | "conservative" ] ]
+                 [ "limit" ( limit‐item | "{" limit‐list "}" )  ]
+|
+                 [ "loginterface" ( interface‐name | "none" ) ] |
+                 [ "block‐policy" ( "drop" | "return" ) ] |
+                 [ "state‐policy" ( "if‐bound" | "floating" ) ]
+                 [ "require‐order" ( "yes" | "no" ) ]
+                 [ "fingerprints" filename ] |
+                 [ "skip on" ifspec ] |
+                 [  "debug" ( "none" | "urgent" | "misc" | "loud"
+) ] )
+
+pf‐rule        = action [ ( "in" | "out" ) ]
+                 [ "log" [ "(" logopts ")"] ] [ "quick" ]
+                 [ "on" ifspec ] [ "fastroute" | route ] [ af ] [
+protospec ]
+                 hosts [ filteropt‐list ]
+
+logopts        = logopt [ "," logopts ] logopt         = "all"  |
+"user" | "to" interface‐name
+
+filteropt‐list  =  filteropt‐list filteropt | filteropt filteropt
+= user | group | flags | icmp‐type | icmp6‐type | tos |
+                 ( "no" | "keep"  |  "modulate"  |  "synproxy"  )
+"state"
+                 [ "(" state‐opts ")" ] |
+                 "fragment" | "no‐df" | "min‐ttl" number |
+                 "max‐mss"  number  |  "random‐id"  | "reassemble
+tcp" |
+                 fragmentation | "allow‐opts" |
+                 "label" string | "tag" string | [ !  ]  "tagged"
+string |
+                 "queue" ( string | "(" string [ [ "," ] string ]
+")" ) |
+                 "rtable" number | "probability" number"%"
+
+nat‐rule        =  [  "no" ] "nat" [ "pass" [ "log" [ "(" logopts
+")" ] ] ]
+                 [ "on" ifspec ] [ af ]
+                 [ protospec ] hosts [ "tag" string ] [  "tagged"
+string ]
+                 [ "‐" ( redirhost | "{" redirhost‐list "}" )
+                 [ portspec ] [ pooltype ] [ "static‐port" ] ]
+                 [ ( "if‐bound" | "group‐bound" | "floating" ) ]
+
+binat‐rule      = [ "no" ] "binat" [ "pass" [ "log" [ "(" logopts
+")" ] ] ]
+                 [ "on" interface‐name ] [ af ]
+                 [ "proto" ( proto‐name | proto‐number ) ]
+                 "from" address [ "/" mask‐bits ] "to" ipspec
+                 [ "tag" string ] [ "tagged" string ]
+                 [ "‐" address [ "/" mask‐bits ] ]
+
+rdr‐rule       = [ "no" ] "rdr" [ "pass" [ "log"  [  "("  logopts
+")" ] ] ]
+                 [ "on" ifspec ] [ af ]
+                 [  protospec ] hosts [ "tag" string ] [ "tagged"
+string ]
+                 [ "‐" ( redirhost | "{" redirhost‐list "}" )
+                 [ portspec ] [ pooltype ] ]
+                 [ ( "if‐bound" | "group‐bound" | "floating" ) ]
+
+antispoof‐rule = "antispoof" [ "log" ] [ "quick" ]
+                 "for" ifspec [ af ] [ "label" string ]
+
+table‐rule      =  "table"  ""  string  ""  [  tableopts‐list   ]
+tableopts‐list  =  tableopts‐list tableopts | tableopts tableopts
+= "persist" | "const" | "file" string |
+                 "{" [  tableaddr‐list  ]  "}"  tableaddr‐list  =
+tableaddr‐list [ "," ] tableaddr‐spec | tableaddr‐spec tableaddr‐
+spec = [ "!" ] tableaddr [ "/" mask‐bits ] tableaddr      = host‐
+name | ifspec | "self" |
+                 ipv4‐dotted‐quad | ipv6‐coloned‐hex
+
+altq‐rule      = "altq on" interface‐name queueopts‐list
+                 "queue" subqueue queue‐rule     = "queue" string
+[ "on" interface‐name ] queueopts‐list
+                 subqueue
+
+anchor‐rule     = "anchor" [ string ] [ ( "in" | "out" ) ] [ "on"
+ifspec ]
+                 [ af ] [ protospec ] [ hosts ] [ "{" ]
+
+anchor‐close   = "}"
+
+trans‐anchors  = ( "nat‐anchor" | "rdr‐anchor" | "binat‐anchor" )
+string
+                 [ "on" ifspec ] [ af ] [ "proto" ] [ protospec ]
+[ hosts ]
+
+load‐anchor    = "load anchor" string "from" filename
+
+queueopts‐list = queueopts‐list queueopts |  queueopts  queueopts
+= [ "bandwidth" bandwidth‐spec ] |
+                 [ "qlimit" number ] | [ "tbrsize" number ] |
+                 [  "priority"  number  ] | [ schedulers ] sched‐
+ulers     = ( cbq‐def | priq‐def | hfsc‐def  )  bandwidth‐spec  =
+"number" ( "b" | "Kb" | "Mb" | "Gb" | "%" )
+
+action          =  "pass" | "block" [ return ] | [ "no" ] "scrub"
+return         = "drop" | "return" | "return‐rst" [ "( ttl"  num‐
+ber ")" ] |
+                 "return‐icmp" [ "(" icmpcode [ [ "," ] icmp6code
+] ")" ] |
+                 "return‐icmp6"  [  "("  icmp6code ")" ] icmpcode
+= (  icmp‐code‐name  |  icmp‐code‐number  )  icmp6code       =  (
+icmp6‐code‐name | icmp6‐code‐number )
+
+ifspec         = ( [ "!" ] ( interface‐name | interface‐group ) )
+|
+                 "{"  interface‐list "}" interface‐list = [ "!" ]
+( interface‐name | interface‐group )
+                 [ [ "," ] interface‐list ]  route           =  (
+"route‐to" | "reply‐to" | "dup‐to" )
+                 ( routehost | "{" routehost‐list "}" )
+                 [ pooltype ] af             = "inet" | "inet6"
+
+protospec      = "proto" ( proto‐name | proto‐number |
+                 "{"  proto‐list  "}" ) proto‐list     = ( proto‐
+name | proto‐number ) [ [ "," ] proto‐list ]
+
+hosts          = "all" |
+                 "from" ( "any" | "no‐route"  |  "urpf‐failed"  |
+"self" | host |
+                 "{"  host‐list "}" | "route" string ) [ port ] [
+os ]
+                 "to"   ( "any" | "no‐route" | "self" | host |
+                 "{" host‐list "}" | "route" string ) [ port ]
+
+ipspec          =  "any"  |  host  |  "{"  host‐list   "}"   host
+=  [ "!" ] ( address [ "/" mask‐bits ] | "" string "" ) redirhost
+= address [ "/" mask‐bits ] routehost      = "(" interface‐name [
+address [ "/" mask‐bits ] ] ")" address        = ( interface‐name
+| interface‐group |
+                 "(" ( interface‐name | interface‐group ) ")" |
+                 hostname | ipv4‐dotted‐quad | ipv6‐coloned‐hex )
+host‐list      = host [ [ ","  ]  host‐list  ]  redirhost‐list  =
+redirhost [ [ "," ] redirhost‐list ] routehost‐list = routehost [
+[ "," ] routehost‐list ]
+
+port            = "port" ( unary‐op | binary‐op | "{" op‐list "}"
+) portspec       = "port" ( number | name ) [ ":" ( "*" |  number
+|  name  ) ] os             = "os"  ( os‐name | "{" os‐list "}" )
+user           = "user" ( unary‐op | binary‐op | "{" op‐list  "}"
+)
+
+unary‐op       = [ "=" | "!=" | "" | "" | "" | "" ]
+                 ( name | number ) binary‐op      = number ( "" |
+""  |  ":" ) number op‐list        = ( unary‐op | binary‐op ) [ [
+"," ] op‐list ]
+
+os‐name        = operating‐system‐name os‐list        = os‐name [
+[ "," ] os‐list ]
+
+flags          = "flags" ( [ flag‐set ] "/"  flag‐set |  "any"  )
+flag‐set        = [ "F" ] [ "S" ] [ "R" ] [ "P" ] [ "A" ] [ "U" ]
+[ "E" ]
+                 [ "W" ]
+
+icmp‐type      = "icmp‐type" ( icmp‐type‐code | "{" icmp‐list "}"
+) icmp6‐type     = "icmp6‐type" ( icmp‐type‐code | "{"  icmp‐list
+"}" ) icmp‐type‐code = ( icmp‐type‐name | icmp‐type‐number )
+                 [ "code" ( icmp‐code‐name | icmp‐code‐number ) ]
+icmp‐list      = icmp‐type‐code [ [ "," ] icmp‐list ]
+
+tos             =  "tos" ( "lowdelay" | "throughput" | "reliabil‐
+ity" |
+                 [ "0x" ] number )
+
+state‐opts     = state‐opt [  [  ","  ]  state‐opts  ]  state‐opt
+= ( "max" number | timeout |
+                 "source‐track" [ ( "rule" | "global" ) ] |
+                 "max‐src‐nodes" number | "max‐src‐states" number
+|
+                 "max‐src‐conn" number |
+                 "max‐src‐conn‐rate" number "/" number |
+                 "overload" "" string "" [ "flush" ] |
+                 "if‐bound" | "floating" )
+
+fragmentation  = [ "fragment reassemble" | "fragment crop" |
+                 "fragment drop‐ovl" ]
+
+timeout‐list    =  timeout  [  [  ","  ]  timeout‐list  ] timeout
+= ( "tcp.first" | "tcp.opening" | "tcp.established" |
+                 "tcp.closing" | "tcp.finwait" | "tcp.closed" |
+                 "udp.first" | "udp.single" | "udp.multiple" |
+                 "icmp.first" | "icmp.error" |
+                 "other.first" | "other.single"  |  "other.multi‐
+ple" |
+                 "frag" | "interval" | "src.track" |
+                 "adaptive.start" | "adaptive.end" ) number
+
+limit‐list      =  limit‐item  [  [ "," ] limit‐list ] limit‐item
+= ( "states" | "frags" | "src‐nodes" ) number
+
+pooltype       = ( "bitmask" | "random" |
+                 "source‐hash" [ ( hex‐key | string‐key ) ] |
+                 "round‐robin" ) [ sticky‐address ]
+
+subqueue       = string | "{"  queue‐list  "}"  queue‐list      =
+string  [ [ "," ] string ] cbq‐def        = "cbq" [ "(" cbq‐opt [
+[ "," ] cbq‐opt ] ")" ] priq‐def       = "priq" [ "(" priq‐opt  [
+[ "," ] priq‐opt ] ")" ] hfsc‐def       = "hfsc" [ "(" hfsc‐opt [
+[  "," ] hfsc‐opt ] ")" ] cbq‐opt        = ( "default" | "borrow"
+| "red" | "ecn" | "rio" ) priq‐opt       = ( "default" | "red"  |
+"ecn"  |  "rio"  ) hfsc‐opt       = ( "default" | "red" | "ecn" |
+"rio" |
+                 linkshare‐sc |  realtime‐sc  |  upperlimit‐sc  )
+linkshare‐sc    = "linkshare" sc‐spec realtime‐sc    = "realtime"
+sc‐spec upperlimit‐sc  = "upperlimit" sc‐spec sc‐spec        =  (
+bandwidth‐spec |
+                 "("  bandwidth‐spec  number bandwidth‐spec ")" )
+Host name database.  Default location of the ruleset  file.   De‐
+fault location of OS fingerprints.  Protocol name database.  Ser‐
+vice name database.  Example rulesets.  The file format first ap‐
+peared in

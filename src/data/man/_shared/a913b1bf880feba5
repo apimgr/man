@@ -1,0 +1,78 @@
+demonstrate  the use of a null file system layer The command cre‐
+ates a null layer, duplicating a sub‐tree of the file system name
+space under another part of the  global  file  system  namespace.
+This allows existing files and directories to be accessed using a
+different  pathname.   The  primary differences between a virtual
+copy of the filesystem and a symbolic  link  are  that  functions
+correctly  in the virtual copy, and that other filesystems may be
+mounted on the virtual copy without affecting  the  original.   A
+different  device  number for the virtual copy is returned by but
+in other respects it is indistinguishable from the original.  The
+filesystem differs from a traditional loopback file system in two
+respects: it is implemented using a stackable  layers  technique,
+and  its  null‐nodes stack above all lower‐layer vnodes (not just
+above directory vnodes).  Both  and  are  converted  to  absolute
+paths before use.  The options are as follows: Options are speci‐
+fied with a flag followed by a comma separated string of options.
+See  the  man  page for possible options and their meanings.  The
+null layer has two purposes.  First, it serves as a demonstration
+of layering by providing a layer which does nothing.  Second, the
+null layer can serve as a prototype layer.  Since it provides all
+necessary layer framework, new file system layers can be  created
+very easily by starting with a null layer.  The remainder of this
+man  page examines the null layer as a basis for constructing new
+layers.  New null layers are created with  takes  two  arguments,
+the  pathname of the lower vfs (target‐pn) and the pathname where
+the null layer will appear  in  the  namespace  (mount‐point‐pn).
+After the null layer is put into place, the contents of target‐pn
+subtree  will be aliased under mount‐point‐pn.  The null layer is
+the minimum file system layer, simply passing all possible opera‐
+tions to the lower layer for processing there.  The  majority  of
+its  activity centers on the bypass routine, through which nearly
+all vnode operations pass.  The bypass routine accepts  arbitrary
+vnode  operations  for handling by the lower layer.  It begins by
+examining vnode operation arguments and replacing any  null‐nodes
+by  their lower‐layer equivalents.  It then invokes the operation
+on the lower layer.  Finally, it replaces the null‐nodes  in  the
+arguments  and, if a vnode is returned by the operation, stacks a
+null‐node on top of the returned vnode.  Although bypass  handles
+most  operations, and are not bypassed.  must change the fsid be‐
+ing returned.  and are not bypassed so that they can handle free‐
+ing null‐layer specific data.  is not bypassed to avoid excessive
+debugging information.  Mounting associates the null layer with a
+lower layer, in effect stacking two VFSes.  Vnode stacks are  in‐
+stead created on demand as files are accessed.  The initial mount
+creates  a single vnode stack for the root of the new null layer.
+All other vnode stacks are created as a result  of  vnode  opera‐
+tions  on this or other null vnode stacks.  New vnode stacks come
+into existence as a result of an operation which returns a vnode.
+The bypass routine stacks a null‐node above the new vnode  before
+returning it to the caller.  For example, imagine mounting a null
+layer  with  mount_null /usr/include /dev/layer/null Changing di‐
+rectory to will assign the root null‐node (which was created when
+the null layer was mounted).  Now consider opening  A  vop_lookup
+would be done on the root null‐node.  This operation would bypass
+through  to the lower layer which would return a vnode represent‐
+ing the UFS null_bypass then builds a null‐node aliasing the  UFS
+and  returns  this  to the caller.  Later operations on the null‐
+node will repeat  this  process  when  constructing  other  vnode
+stacks.   One  of  the  easiest ways to construct new file system
+layers is to make a copy of the null layer, rename all files  and
+variables,  and  then  begin  modifying the copy.  can be used to
+easily rename all variables.  The umap layer is an example  of  a
+layer descended from the null layer.  There are two techniques to
+invoke  operations  on a lower layer when the operation cannot be
+completely bypassed.  Each method  is  appropriate  in  different
+situations.   In  both  cases,  it  is  the responsibility of the
+aliasing layer to make the operation arguments "correct" for  the
+lower  layer  by  mapping any vnode arguments to the lower layer.
+The first approach is to call the aliasing  layer’s  bypass  rou‐
+tine.   This  method is most suitable when you wish to invoke the
+operation currently being handled on the lower layer.  It has the
+advantage that the bypass routine already must do  argument  map‐
+ping.   An  example  of  this is in the null layer.  A second ap‐
+proach is to directly invoke vnode operations on the lower  layer
+with  the  interface.  The advantage of this method is that it is
+easy to invoke arbitrary operations on the lower layer.  The dis‐
+advantage is that vnode arguments must be manually mapped.   UCLA
+Technical Report CSD‐910056, The utility first appeared in

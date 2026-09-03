@@ -1,0 +1,126 @@
+CRON(8)                   BSD System Manager's Manual                  CRON(8)
+
+NNAAMMEE
+     ccrroonn — daemon to execute scheduled commands (Vixie Cron)
+
+SSYYNNOOPPSSIISS
+     ccrroonn [--jj _j_i_t_t_e_r] [--JJ _r_o_o_t_j_i_t_t_e_r] [--mm _m_a_i_l_t_o] [--nn] [--ss] [--oo]
+          [--xx _d_e_b_u_g_f_l_a_g[,_._._.]]
+
+DDEESSCCRRIIPPTTIIOONN
+     The ccrroonn utility should be started from _/_e_t_c_/_r_c or _/_e_t_c_/_r_c_._l_o_c_a_l.  It
+     will return immediately, so you do not need to start it with '&'.
+
+     The ccrroonn utility searches _/_v_a_r_/_c_r_o_n_/_t_a_b_s for crontab files which are
+     named after accounts in _/_e_t_c_/_p_a_s_s_w_d; crontabs found are loaded into mem‐
+     ory.  The ccrroonn utility also searches for _/_e_t_c_/_c_r_o_n_t_a_b and files in
+     _/_e_t_c_/_c_r_o_n_._d and _/_u_s_r_/_l_o_c_a_l_/_e_t_c_/_c_r_o_n_._d which are in a different format
+     (see crontab(5)).
+
+     The ccrroonn utility then wakes up every minute, examining all stored
+     crontabs, checking each command to see if it should be run in the current
+     minute.  Before running a command from a per-account crontab file, ccrroonn
+     checks the status of the account with pam(3) and skips the command if the
+     account is unavailable, e.g., locked out or expired.  Commands from
+     _/_e_t_c_/_c_r_o_n_t_a_b bypass this check.  When executing commands, any output is
+     mailed to the owner of the crontab (or to the user named in the MAILTO
+     environment variable in the crontab, if such exists).  The from address
+     of this mail may be set with the MAILFROM environment variable.
+
+     Additionally, ccrroonn checks each minute to see if its spool directory's
+     modification time (or the modification time on _/_e_t_c_/_c_r_o_n_t_a_b) has changed,
+     and if it has, ccrroonn will then examine the modification time on all
+     crontabs and reload those which have changed.  Thus ccrroonn need not be
+     restarted whenever a crontab file is modified.  Note that the crontab(1)
+     command updates the modification time of the spool directory whenever it
+     changes a crontab.
+
+     Available options:
+
+     --jj _j_i_t_t_e_r
+             Enable time jitter.  Prior to executing commands, ccrroonn will sleep
+             a random number of seconds in the range from 0 to _j_i_t_t_e_r.  This
+             will not affect superuser jobs (see --JJ).  A value for _j_i_t_t_e_r must
+             be between 0 and 60 inclusive.  Default is 0, which effectively
+             disables time jitter.
+
+             This option can help to smooth down system load spikes during mo‐
+             ments when a lot of jobs are likely to start at once, e.g., at
+             the beginning of the first minute of each hour.
+
+     --JJ _r_o_o_t_j_i_t_t_e_r
+             Enable time jitter for superuser jobs.  The same as --jj except
+             that it will affect jobs run by the superuser only.
+
+     --mm _m_a_i_l_t_o
+             Overrides the default recipient for ccrroonn mail.  Each crontab(5)
+             without MAILTO explicitly set will send mail to the _m_a_i_l_t_o mail‐
+             box.  Sending mail will be disabled by default if _m_a_i_l_t_o set to a
+             null string, usually specified in a shell as '' or "".
+
+     --nn      Do not daemonize; run in foreground instead.
+
+     --ss      Enable special handling of situations when the GMT offset of the
+             local timezone changes, such as the switches between the standard
+             time and daylight saving time.
+
+             The jobs run during the GMT offset changes time as intuitively
+             expected.  If a job falls into a time interval that disappears
+             (for example, during the switch from standard time) to daylight
+             saving time or is duplicated (for example, during the reverse
+             switch), then it is handled in one of two ways:
+
+             The first case is for the jobs that run every at hour of a time
+             interval overlapping with the disappearing or duplicated inter‐
+             val.  In other words, if the job had run within one hour before
+             the GMT offset change (and cron was not restarted nor the
+             crontab(5) changed after that) or would run after the change at
+             the next hour.  They work as always, skip the skipped time or run
+             in the added time as usual.
+
+             The second case is for the jobs that run less frequently.  They
+             are executed exactly once, they are not skipped nor executed
+             twice (unless cron is restarted or the user's crontab(5) is
+             changed during such a time interval).  If an interval disappears
+             due to the GMT offset change, such jobs are executed at the same
+             absolute point of time as they would be in the old time zone.
+             For example, if exactly one hour disappears, this point would be
+             during the next hour at the first minute that is specified for
+             them in crontab(5).
+
+     --oo      Disable the special handling of situations when the GMT offset of
+             the local timezone changes, to be compatible with the old (de‐
+             fault) behavior.  If both options --oo and --ss are specified, the
+             option specified last wins.
+
+     --xx _d_e_b_u_g_f_l_a_g[,_._._.]
+             Enable writing of debugging information to standard output.  One
+             or more of the following comma separated _d_e_b_u_g_f_l_a_g identifiers
+             must be specified:
+
+             bbiitt   currently not used
+             eexxtt   make the other debug flags more verbose
+             llooaadd  be verbose when loading crontab files
+             mmiisscc  be verbose about miscellaneous one-off events
+             ppaarrss  be verbose about parsing individual crontab lines
+             pprroocc  be verbose about the state of the process, including all of
+                   its offspring
+             sscchh   be verbose when iterating through the scheduling algorithms
+             tteesstt  trace through the execution, but do not perform any actions
+
+FFIILLEESS
+     /etc/crontab           System crontab file
+     /etc/cron.d            Directory for optional/modularized system crontab
+                            files.
+     /etc/pam.d/cron        pam.conf(5) configuration file for ccrroonn
+     /usr/local/etc/cron.d  Directory for third-party package provided crontab
+                            files.
+     /var/cron/tabs         Directory for personal crontab files
+
+SSEEEE AALLSSOO
+     crontab(1), pam(3), crontab(5), pam.conf(5), periodic(8)
+
+AAUUTTHHOORRSS
+     Paul Vixie <_p_a_u_l_@_v_i_x_._c_o_m>
+
+BSD                            February 9, 2022                            BSD

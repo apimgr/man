@@ -1,0 +1,96 @@
+This manual page describes the multiple data formats used in ATF.
+These  formats  affect configuration files, control files and any
+data that is externalized or internalized  by  the  tools.   Data
+files   are   always   organized   as  follows:  Header1:  Value1
+\
+    ...                    | head HeaderN: ValueN            /
+                           mandatory blank  line  Free‐form  text
+contents    \
+    ...                    | body
+    ...                     / A file must always contain a header
+and must always separate that header from the body with  a  blank
+line, even if the body is empty.  The is always of the form: Con‐
+tent‐Type: application/X‐atf‐<subtype>; version="<version>" where
+indicates  the specific file format and its format version.  This
+header must be the first one of the file.  The  main  purpose  of
+the  header,  aside from determining the format used in the file,
+is to allow future changes to a given format.  Whenever an incom‐
+patible change is made, the version is bumped by one.  By keeping
+the header in the first line, future versions may even remove the
+need for such a header ‐‐ e.g. if some format was replaced by XML
+files, which have their own mandatory header.  The rest  of  this
+document  details the different format types.  Atffiles are logi‐
+cally divided into three sections: Test  programs:  the  list  of
+test  programs  that  define the test suite described by the Atf‐
+file.  Meta‐data properties: these define  some  constant  values
+applicable to all the test programs defined in the file.  In some
+sense  they  define  the properties that describe the test suite.
+Configuration variables:  defaults  for  configuration  variables
+that can be overridden through configuration files or the command
+line.   The  grammar  for Atffiles is the following: DATA ::= ( (
+CONF | PROP | TP )? COMMENT? NEWLINE )* EOF CONF ::= ’conf:’ WORD
+EQUAL STRING PROP ::= ’prop:’ WORD EQUAL STRING TP ::=  TPFILE  |
+TPGLOB  TPFILE  ::=  ’tp:  ’ STRING TPGLOB ::= ’tp‐glob: ’ STRING
+STRING ::= WORD | ’"’ WORD* ’"’ The meaning of the  constructions
+above  is: Definition of a configuration variable.  Definition of
+a meta‐data property.  Addition of a test program into  the  test
+suite.   The string is taken literally as the program’s name, and
+this program must exist.  Addition of multiple test programs into
+the test suite.  The string is taken as a glob pattern, which may
+have or not have any matches in the current directory.  An  exam‐
+ple: prop: test‐suite = utilities
+
+conf: unprivileged‐user = nobody
+
+tp:  t_cp  tp: t_mv tp: t_df tp‐glob: t_dir_* Configuration files
+are very simple: they only contain a list of variable  name/vari‐
+able  value  pairs.   Their  grammar is: DATA ::= ( VAR? COMMENT?
+NEWLINE )* EOF VAR ::= WORD EQUAL STRING COMMENT ::=  HASH  WORD*
+STRING ::= WORD | ’"’ WORD* ’"’ An example: # This is the system‐
+wide  configuration  file for ATF.  # The above and this line are
+comments placed on their own line.
+
+var1 = this is a variable value var2 = this is another one      #
+Optional comment at the end.  The format multiplexes the standard
+output, standard error and results output streams  from  multiple
+test programs into a single data file.  This format is used by to
+report the execution of several test programs and is later parsed
+by  to  inform  the  user  of this process.  It has the following
+grammar: DATA ::= INFO* TPS‐COUNT TP‐STANZA* INFO* EOF  INFO  ::=
+’info’  COLON  STRING  COMMA  STRING  NEWLINE TPS‐COUNT ::= ’tps‐
+count’ COLON POSITIVE‐NUMBER NEWLINE TP‐STANZA ::=  TP‐START  TC‐
+STANZA*  TC‐END  TP‐START  ::=  ’tp‐start’  COLON TIMESTAMP COMMA
+STRING COMMA
+             POSITIVE‐NUMBER NEWLINE TP‐END  ::=  ’tc‐end’  COLON
+TIMESTAMP  COMMA  STRING  (COMMA STRING)?  TC‐STANZA ::= TC‐START
+(TC‐SO | TC‐SE)* TC‐END TC‐START ::= ’tc‐start’  COLON  TIMESTAMP
+COMMA STRING NEWLINE TC‐SO ::= ’tc‐so’ COLON STRING NEWLINE TC‐SE
+::=  ’tc‐se’ COLON STRING NEWLINE TC‐END ::= ’tc‐end’ COLON TIME‐
+STAMP COMMA STRING COMMA TCR NEWLINE TCR ::= ’passed’ | (’failed’
+| ’skipped’) COMMA STRING TIMESTAMP ::= [0‐9]+.[0‐9]+ The meaning
+of the constructions above is: Indicates the number of test  pro‐
+grams  that will be executed.  There will be this exact amount of
+constructions following it.  Indicates the beginning  of  a  test
+program.  This includes the program’s name and the amount of test
+cases  that will follow.  Indicates the completion of a test pro‐
+gram.  This is followed by the program’s name and, if the program
+ended prematurely, an error message indicating the reason of  its
+failure.  A successful execution of a test program (regardless of
+the status of its test cases) must not be accompanied by any rea‐
+son.   Indicates  the beginning of a test case.  This is accompa‐
+nied by the test case’s name.  Contains a text line sent  to  the
+standard  output  stream  during  the execution of the test case.
+Leading and trailing space is preserved.  Contains  a  text  line
+sent  to  the  standard  error stream during the execution of the
+test case.  Leading and trailing space is  preserved.   Indicates
+the  completion  of a test case.  This is accompanied by the test
+case’s name, its result and the reason associated with  this  re‐
+sult  (if applicable).  An example: tps‐count: 2 tp‐start: calcu‐
+lator, 1324318951.838923, 2 tc‐start: add, 1324318951.839101  tc‐
+end:   add,   1324318951.839500,   passed   tc‐start:   subtract,
+1324318951.840001 tc‐so: 3‐2 expected to return 1 but got  0  tc‐
+end:  subtract,  1324318952.000123,  failed,  Calculated an unex‐
+pected  value  tp‐end:  calculator,  1324318952.002301  tp‐start:
+files, 1, 1324318952.502348 tc‐start: copy, 1324318952.508291 tc‐
+se:   could   not   find   the   cp(1)   utility   tc‐end:  copy,
+1324318953.203145, skipped tp‐end: files, 1324318953.203800

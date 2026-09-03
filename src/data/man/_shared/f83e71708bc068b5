@@ -1,0 +1,72 @@
+The  utility  compresses  disk images in cloop2 format, which the
+kernel’s device can interpret as read‐only disk devices using the
+option to By default, compresses an image,  and  uncompresses  an
+image,  but  the  and  options can control whether either utility
+compresses or decompresses.  The following options are  available
+for  the compression operation: Set the compression block size to
+which must be a  multiple  of  512  and  must  be  no  more  than
+4294966784,  or 0xfffffe00.  (On 32‐bit systems, the limit may be
+smaller, limited by the available virtual  address  space.)   For
+compatibility  with the old version of the compression block size
+may instead be specified at the end of the command line.  Write a
+checkpoint after every blocks of  output.   If  interrupted,  can
+restart at the last checkpoint with the option.  You can also re‐
+quest  a checkpoint at any time by sending to the process.  Spec‐
+ify the length of the input, so that the input  may  be  a  pipe,
+socket,  or  FIFO.  Otherwise, the input must know its size, i.e.
+must have its size reported in by Stop after  writing  blocks  of
+output.   This  option  is mainly useful for automatic testing of
+restarts.  With the option, if restarting fails, then abort right
+now and don’t touch the output file.  Try to  restart  a  partial
+compression  from  the last checkpoint.  If restarting fails, and
+the option is not specified, then truncate the  output  file  and
+start  compression  afresh.  Restarting may fail for various rea‐
+sons: if there have been no checkpoints, or if  the  output  file
+has  been  corrupted  in some easily recognizable ways, or if the
+input file’s size has changed, or if  the  block  size  does  not
+match,  and  so  on.   The following option is available for both
+compression and decompression: Use an in‐memory window of entries
+into the table of compressed block offsets.  If is zero, will use
+memory proportional to the number of blocks in  the  uncompressed
+image,  namely 64 bits or 8 bytes per block.  If is nonzero, will
+use memory proportional to and independent of the size of the un‐
+compressed image.  A nonzero requires the compressed image to  be
+a  seekable  file, which compression requires anyway, in order to
+record the offsets of compressed blocks once they are  compressed
+and  written, but which is a limitation for decompression.  Thus,
+decompressing from a pipe is incompatible with a nonzero  By  de‐
+fault,  uses  a fixed window size, unless decompressing with non‐
+seekable input.  Compress an ISO 9660 CD‐ROM image: # vndcompress
+cdrom.iso cdrom.izo Send a 59 GB disk partition over a local net‐
+work with netcat  (don’t  do  this  over  the  internet!):  #  nc
+10.0.1.2 12345 < /dev/rcgd1h Receive it and save it compressed on
+another host, showing a progress bar interactively, restarting if
+possible,  and  taking  a checkpoint every 16 MB (i.e., every 256
+compression blocks, which are 64 KB by default): # nc ‐l 12345  |
+progress ‐l 59g \
+    vndcompress  ‐l  59g  ‐k 256 ‐r /dev/stdin disk.cloop2 If the
+process is interrupted and you rewire your network and  disks  so
+that  the  receiving host now has the disk you want to image, you
+can start up where you left off, using the option  to  keep  from
+clobbering the partial transfer if anything goes wrong: # vndcom‐
+press  ‐l  59g  ‐k 256 ‐rR /dev/rcgd1h disk.cloop2 Mount the disk
+with assuming your kernel was built with the  option  enabled:  #
+vndconfig ‐z vnd0 disk.cloop2 # mount /dev/vnd0d /mnt responds to
+the  following signals: Report progress to standard error.  Write
+a checkpoint to disk  now.   The  cloop2  format  consists  of  a
+header,  an  offset  table,  and a sequence of compressed blocks.
+The header is described by the following packed structure: struct
+cloop2_header     {              char            cl2h_magic[128];
+        uint32_t        cl2h_blocksize;
+        uint32_t        cl2h_n_blocks;  }  __packed; The field is
+an arbitrary sequence of 128 bits, the field is a big‐endian  in‐
+teger  number  of bytes per compression block, and the field is a
+big‐endian integer number of the compression blocks in the image.
+The offset table is a sequence of one more than big‐endian 64‐bit
+integers specifying the offset of each compression block relative
+to the start of the file.  The extra offset specifies the end  of
+the  last compression block, which may be truncated if the uncom‐
+pressed image’s size is not a multiple of the  compression  block
+size.   The command first appeared in It was rewritten to be more
+robust, to support restarting partial transfers, and  to  support
+bounded memory usage in

@@ -1,0 +1,273 @@
+_i_o_c_t_l___f_s_m_a_p(2)                System Calls Manual               _i_o_c_t_l___f_s_m_a_p(2)
+
+NNAAMMEE
+       ioctl_fsmap,  FS_IOC_GETFSMAP  -  retrieve  the  physical layout of the
+       filesystem
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<lliinnuuxx//ffssmmaapp..hh>>  /* Definition of FFSS__IIOOCC__GGEETTFFSSMMAAPP,
+                                    FFMM??__OOFF__**, and **FFMMRR__OOWWNN__** constants */
+       ##iinncclluuddee <<ssyyss//iiooccttll..hh>>
+
+       iinntt iiooccttll((iinntt _f_d,, FFSS__IIOOCC__GGEETTFFSSMMAAPP,, ssttrruucctt ffssmmaapp__hheeaadd ** _a_r_g));;
+
+DDEESSCCRRIIPPTTIIOONN
+       This iiooccttll(2)  operation  retrieves  physical  extent  mappings  for  a
+       filesystem.   This  information can be used to discover which files are
+       mapped to a physical block, examine  free  space,  or  find  known  bad
+       blocks, among other things.
+
+       The  sole  argument  to  this operation should be a pointer to a single
+       _s_t_r_u_c_t _f_s_m_a_p___h_e_a_d:
+
+           struct fsmap {
+               __u32 fmr_device;      /* Device ID */
+               __u32 fmr_flags;       /* Mapping flags */
+               __u64 fmr_physical;    /* Device offset of segment */
+               __u64 fmr_owner;       /* Owner ID */
+               __u64 fmr_offset;      /* File offset of segment */
+               __u64 fmr_length;      /* Length of segment */
+               __u64 fmr_reserved[3]; /* Must be zero */
+           };
+
+           struct fsmap_head {
+               __u32 fmh_iflags;       /* Control flags */
+               __u32 fmh_oflags;       /* Output flags */
+               __u32 fmh_count;        /* # of entries in array including input */
+               __u32 fmh_entries;      /* # of entries filled in (output) */
+               __u64 fmh_reserved[6];  /* Must be zero */
+
+               struct fsmap fmh_keys[2];  /* Low and high keys for
+                                             the mapping search */
+               struct fsmap fmh_recs[];   /* Returned records */
+           };
+
+       The two _f_m_h___k_e_y_s array elements specify the lowest and highest reverse‐
+       mapping key for which the application would like physical  mapping  in‐
+       formation.  A reverse mapping key consists of the tuple (device, block,
+       owner,  offset).   The  owner and offset fields are part of the key be‐
+       cause some filesystems support sharing physical blocks between multiple
+       files and therefore may return multiple mappings for a  given  physical
+       block.
+
+       Filesystem  mappings  are copied into the _f_m_h___r_e_c_s array, which immedi‐
+       ately follows the header data.
+
+   FFiieellddss ooff ssttrruucctt ffssmmaapp__hheeaadd
+       The _f_m_h___i_f_l_a_g_s field is a bit mask passed to the kernel  to  alter  the
+       output.   No  flags  are currently defined, so the caller must set this
+       value to zero.
+
+       The _f_m_h___o_f_l_a_g_s field is a bit mask of flags set by the kernel  concern‐
+       ing the returned mappings.  If FFMMHH__OOFF__DDEEVV__TT is set, then the _f_m_r___d_e_v_i_c_e
+       field  represents a _d_e_v___t structure containing the major and minor num‐
+       bers of the block device.
+
+       The _f_m_h___c_o_u_n_t field contains the number of elements in the array  being
+       passed  to  the kernel.  If this value is 0, _f_m_h___e_n_t_r_i_e_s will be set to
+       the number of records that would have been returned had the array  been
+       large enough; no mapping information will be returned.
+
+       The  _f_m_h___e_n_t_r_i_e_s  field contains the number of elements in the _f_m_h___r_e_c_s
+       array that contain useful information.
+
+       The _f_m_h___r_e_s_e_r_v_e_d fields must be set to zero.
+
+   KKeeyyss
+       The two key records in _f_s_m_a_p___h_e_a_d_._f_m_h___k_e_y_s specify the lowest and high‐
+       est extent records in the keyspace that the caller wants  returned.   A
+       filesystem  that can share blocks between files likely requires the tu‐
+       ple (_d_e_v_i_c_e, _p_h_y_s_i_c_a_l, _o_w_n_e_r, _o_f_f_s_e_t,  _f_l_a_g_s)  to  uniquely  index  any
+       filesystem  mapping  record.   Classic non‐sharing filesystems might be
+       able to identify any record with only (_d_e_v_i_c_e, _p_h_y_s_i_c_a_l,  _f_l_a_g_s).   For
+       example, if the low key is set to (8:0, 36864, 0, 0, 0), the filesystem
+       will  only  return  records  for extents starting at or above 36 KiB on
+       disk.  If the high key is set to (8:0, 1048576, 0, 0, 0), only  records
+       below  1 MiB  will  be  returned.  The format of _f_m_r___d_e_v_i_c_e in the keys
+       must match the format of the same field in the output records,  as  de‐
+       fined below.  By convention, the field _f_s_m_a_p___h_e_a_d_._f_m_h___k_e_y_s_[_0_] must con‐
+       tain  the  low key and _f_s_m_a_p___h_e_a_d_._f_m_h___k_e_y_s_[_1_] must contain the high key
+       for the operation.
+
+       For convenience, if _f_m_r___l_e_n_g_t_h is set in the low key, it will be  added
+       to  _f_m_r___b_l_o_c_k or _f_m_r___o_f_f_s_e_t as appropriate.  The caller can take advan‐
+       tage  of  this  subtlety  to  set  up  subsequent  calls   by   copying
+       _f_s_m_a_p___h_e_a_d_._f_m_h___r_e_c_s_[_f_s_m_a_p___h_e_a_d_._f_m_h___e_n_t_r_i_e_s  _- _1_] into the low key.  The
+       function _f_s_m_a_p___a_d_v_a_n_c_e (defined in _l_i_n_u_x_/_f_s_m_a_p_._h) provides  this  func‐
+       tionality.
+
+   FFiieellddss ooff ssttrruucctt ffssmmaapp
+       The _f_m_r___d_e_v_i_c_e field uniquely identifies the underlying storage device.
+       If  the FFMMHH__OOFF__DDEEVV__TT flag is set in the header’s _f_m_h___o_f_l_a_g_s field, this
+       field contains a _d_e_v___t from which major and minor numbers  can  be  ex‐
+       tracted.  If the flag is not set, this field contains a value that must
+       be unique for each unique storage device.
+
+       The  _f_m_r___p_h_y_s_i_c_a_l  field  contains  the  disk  address of the extent in
+       bytes.
+
+       The _f_m_r___o_w_n_e_r field contains the owner of the extent.  This is an inode
+       number unless FFMMRR__OOFF__SSPPEECCIIAALL__OOWWNNEERR is set in the  _f_m_r___f_l_a_g_s  field,  in
+       which  case the value is determined by the filesystem.  See the section
+       below about owner values for more details.
+
+       The _f_m_r___o_f_f_s_e_t field contains the logical address in the mapping record
+       in bytes.  This field has no meaning  if  the  FFMMRR__OOFF__SSPPEECCIIAALL__OOWWNNEERR  or
+       FFMMRR__OOFF__EEXXTTEENNTT__MMAAPP flags are set in _f_m_r___f_l_a_g_s.
+
+       The _f_m_r___l_e_n_g_t_h field contains the length of the extent in bytes.
+
+       The _f_m_r___f_l_a_g_s field is a bit mask of extent state flags.  The bits are:
+
+           FFMMRR__OOFF__PPRREEAALLLLOOCC
+                  The extent is allocated but not yet written.
+
+           FFMMRR__OOFF__AATTTTRR__FFOORRKK
+                  This extent contains extended attribute data.
+
+           FFMMRR__OOFF__EEXXTTEENNTT__MMAAPP
+                  This extent contains extent map information for the owner.
+
+           FFMMRR__OOFF__SSHHAARREEDD
+                  Parts of this extent may be shared.
+
+           FFMMRR__OOFF__SSPPEECCIIAALL__OOWWNNEERR
+                  The  _f_m_r___o_w_n_e_r  field contains a special value instead of an
+                  inode number.
+
+           FFMMRR__OOFF__LLAASSTT
+                  This is the last record in the data set.
+
+       The _f_m_r___r_e_s_e_r_v_e_d field will be set to zero.
+
+   OOwwnneerr vvaalluueess
+       Generally, the value of the _f_m_r___o_w_n_e_r field  for  non‐metadata  extents
+       should  be  an inode number.  However, filesystems are under no obliga‐
+       tion to report inode numbers; they may instead  report  FFMMRR__OOWWNN__UUNNKKNNOOWWNN
+       if  the  inode  number  cannot easily be retrieved, if the caller lacks
+       sufficient privilege, if the filesystem does not support  stable  inode
+       numbers,  or for any other reason.  If a filesystem wishes to condition
+       the reporting of inode numbers based on  process  capabilities,  it  is
+       strongly  urged that the CCAAPP__SSYYSS__AADDMMIINN capability be used for this pur‐
+       pose.
+
+       The following special owner values are generic to all filesystems:
+
+           FFMMRR__OOWWNN__FFRREEEE
+                  Free space.
+
+           FFMMRR__OOWWNN__UUNNKKNNOOWWNN
+                  This extent is in use but its owner is not known or not eas‐
+                  ily retrieved.
+
+           FFMMRR__OOWWNN__MMEETTAADDAATTAA
+                  This extent is filesystem metadata.
+
+       XFS can return the following special owner values:
+
+           XXFFSS__FFMMRR__OOWWNN__FFRREEEE
+                  Free space.
+
+           XXFFSS__FFMMRR__OOWWNN__UUNNKKNNOOWWNN
+                  This extent is in use but its owner is not known or not eas‐
+                  ily retrieved.
+
+           XXFFSS__FFMMRR__OOWWNN__FFSS
+                  Static filesystem metadata which exists at a fixed  address.
+                  These  are the AG superblock, the AGF, the AGFL, and the AGI
+                  headers.
+
+           XXFFSS__FFMMRR__OOWWNN__LLOOGG
+                  The filesystem journal.
+
+           XXFFSS__FFMMRR__OOWWNN__AAGG
+                  Allocation group metadata, such as the free space btrees and
+                  the reverse mapping btrees.
+
+           XXFFSS__FFMMRR__OOWWNN__IINNOOBBTT
+                  The inode and free inode btrees.
+
+           XXFFSS__FFMMRR__OOWWNN__IINNOODDEESS
+                  Inode records.
+
+           XXFFSS__FFMMRR__OOWWNN__RREEFFCC
+                  Reference count information.
+
+           XXFFSS__FFMMRR__OOWWNN__CCOOWW
+                  This extent is being used to stage a copy‐on‐write.
+
+           XXFFSS__FFMMRR__OOWWNN__DDEEFFEECCTTIIVVEE::
+                  This extent has been marked defective either by the filesys‐
+                  tem or the underlying device.
+
+       ext4 can return the following special owner values:
+
+           EEXXTT44__FFMMRR__OOWWNN__FFRREEEE
+                  Free space.
+
+           EEXXTT44__FFMMRR__OOWWNN__UUNNKKNNOOWWNN
+                  This extent is in use but its owner is not known or not eas‐
+                  ily retrieved.
+
+           EEXXTT44__FFMMRR__OOWWNN__FFSS
+                  Static filesystem metadata which exists at a fixed  address.
+                  This is the superblock and the group descriptors.
+
+           EEXXTT44__FFMMRR__OOWWNN__LLOOGG
+                  The filesystem journal.
+
+           EEXXTT44__FFMMRR__OOWWNN__IINNOODDEESS
+                  Inode records.
+
+           EEXXTT44__FFMMRR__OOWWNN__BBLLKKBBMM
+                  Block bit map.
+
+           EEXXTT44__FFMMRR__OOWWNN__IINNOOBBMM
+                  Inode bit map.
+
+RREETTUURRNN VVAALLUUEE
+       On error, -1 is returned, and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       The  error  placed  in  _e_r_r_n_o can be one of, but is not limited to, the
+       following:
+
+       EEBBAADDFF  _f_d is not open for reading.
+
+       EEBBAADDMMSSGG
+              The filesystem has detected a checksum error in the metadata.
+
+       EEFFAAUULLTT The pointer passed in was not mapped to a valid memory address.
+
+       EEIINNVVAALL The array is not long enough, the keys do not point to  a  valid
+              part  of the filesystem, the low key points to a higher point in
+              the filesystem’s physical storage address space  than  the  high
+              key,  or  a  nonzero  value was passed in one of the fields that
+              must be zero.
+
+       EENNOOMMEEMM Insufficient memory to process the operation.
+
+       EEOOPPNNOOTTSSUUPPPP
+              The filesystem does not support this operation.
+
+       EEUUCCLLEEAANN
+              The filesystem metadata is corrupt and needs repair.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+       Not all filesystems support it.
+
+HHIISSTTOORRYY
+       Linux 4.12.
+
+EEXXAAMMPPLLEESS
+       See _i_o_/_f_s_m_a_p_._c in the _x_f_s_p_r_o_g_s distribution for a sample program.
+
+SSEEEE AALLSSOO
+       iiooccttll(2)
+
+Linux man‐pages (unreleased)      2025‐09‐21                    _i_o_c_t_l___f_s_m_a_p(2)

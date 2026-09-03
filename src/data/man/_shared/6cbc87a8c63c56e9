@@ -1,0 +1,167 @@
+NG_BRIDGE(4)             BSD Kernel Interfaces Manual             NG_BRIDGE(4)
+
+NNAAMMEE
+     nngg__bbrriiddggee — Ethernet bridging netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__bbrriiddggee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The bbrriiddggee node type performs Ethernet bridging over one or more links.
+     Each link (represented by a connected hook) is used to transmit and re‐
+     ceive raw Ethernet frames.  As packets are received, the node learns
+     which link each host resides on.  Packets unicast to a known host are di‐
+     rected out the appropriate link only, and other links are spared the
+     traffic.  This behavior is in contrast to a hub, which always forwards
+     every received packet to every other link.
+
+LLOOOOPP DDEETTEECCTTIIOONN
+     The bbrriiddggee node incorporates a simple loop detection algorithm.  A loop
+     is when two ports are connected to the same physical medium.  Loops are
+     important to avoid because of packet storms, which severely degrade per‐
+     formance.  A packet storm results when the same packet is sent and re‐
+     ceived over and over again.  If a host is detected on link A, and is then
+     detected on link B within a certain time period after first being de‐
+     tected on link A, then link B is considered to be a looped back link.
+     The time period is called the minimum stable time.
+
+     A looped back link will be temporarily muted, i.e., all traffic received
+     on that link is ignored.
+
+IIPPFFWW PPRROOCCEESSSSIINNGG
+     Processing of IP packets via the ipfirewall(4) mechanism on a per-link
+     basis is not yet implemented.
+
+HHOOOOKKSS
+     This node type supports an unlimited number of hooks.  Each connected
+     hook represents a bridged link.  The hooks are named _l_i_n_k_0, _l_i_n_k_1, etc.
+     Typically these hooks are connected to the _l_o_w_e_r hooks of one or more
+     ng_ether(4) nodes.  To connect the host machine to a bridged network,
+     simply connect the _u_p_p_e_r hook of an ng_ether(4) node to the bridge node.
+
+     Instead of naming a hook _l_i_n_k_X the hook might be also named _u_p_l_i_n_k_X.  The
+     node does not learn MAC addresses on uplink hooks, which keeps the inter‐
+     nal address table small.  This way it is desirable to connect the _l_o_w_e_r
+     hook of an ng_ether(4) node to an _u_p_l_i_n_k hook of the bridge, and ignore
+     the complexity of the outside world.  Frames with unknown MACs are always
+     sent out to _u_p_l_i_n_k hooks, so no functionality is lost.
+
+     Frames with unknown destination MAC addresses are replicated to any
+     available hook, unless the first connected hook is an _u_p_l_i_n_k hook.  In
+     this case the node assumes, that all unknown MAC addresses are located
+     soley on the _u_p_l_i_n_k hooks and only those hooks will be used to send out
+     frames with unknown destination MACs.  If the first connected hook is an
+     _l_i_n_k hook, the node will replicate such frames to all types of hooks,
+     even if _u_p_l_i_n_k hooks are connected later.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_BRIDGE_SET_CONFIG (_s_e_t_c_o_n_f_i_g)
+          Set the node configuration.  This command takes a _s_t_r_u_c_t
+          _n_g___b_r_i_d_g_e___c_o_n_f_i_g as an argument:
+
+          /* Node configuration structure */
+          struct ng_bridge_config {
+            u_char      debugLevel;           /* debug level */
+            uint32_t    loopTimeout;          /* link loopback mute time */
+            uint32_t    maxStaleness;         /* max host age before nuking */
+            uint32_t    minStableAge;         /* min time for a stable host */
+          };
+
+          The _d_e_b_u_g_L_e_v_e_l field sets the debug level on the node.  At level of
+          2 or greater, detected loops are logged.  The default level is 1.
+
+          The _l_o_o_p_T_i_m_e_o_u_t determines how long (in seconds) a looped link is
+          muted.  The default is 60 seconds.  The _m_a_x_S_t_a_l_e_n_e_s_s parameter de‐
+          termines how long a period of inactivity before a host's entry is
+          forgotten.  The default is 15 minutes.  The _m_i_n_S_t_a_b_l_e_A_g_e determines
+          how quickly a host must jump from one link to another before we de‐
+          clare a loopback condition.  The default is one second.
+
+     NGM_BRIDGE_GET_CONFIG (_g_e_t_c_o_n_f_i_g)
+          Returns the current configuration as a _s_t_r_u_c_t _n_g___b_r_i_d_g_e___c_o_n_f_i_g.
+
+     NGM_BRIDGE_RESET (_r_e_s_e_t)
+          Causes the node to forget all hosts and unmute all links.  The node
+          configuration is not changed.
+
+     NGM_BRIDGE_GET_STATS (_g_e_t_s_t_a_t_s)
+          This command takes a four byte link number as an argument and re‐
+          turns a _s_t_r_u_c_t _n_g___b_r_i_d_g_e___l_i_n_k___s_t_a_t_s containing statistics for the
+          corresponding _l_i_n_k, which must be currently connected:
+
+          /* Statistics structure (one for each link) */
+          struct ng_bridge_link_stats {
+            uint64_t   recvOctets;     /* total octets rec'd on link */
+            uint64_t   recvPackets;    /* total pkts rec'd on link */
+            uint64_t   recvMulticasts; /* multicast pkts rec'd on link */
+            uint64_t   recvBroadcasts; /* broadcast pkts rec'd on link */
+            uint64_t   recvUnknown;    /* pkts rec'd with unknown dest addr */
+            uint64_t   recvRunts;      /* pkts rec'd less than 14 bytes */
+            uint64_t   recvInvalid;    /* pkts rec'd with bogus source addr */
+            uint64_t   xmitOctets;     /* total octets xmit'd on link */
+            uint64_t   xmitPackets;    /* total pkts xmit'd on link */
+            uint64_t   xmitMulticasts; /* multicast pkts xmit'd on link */
+            uint64_t   xmitBroadcasts; /* broadcast pkts xmit'd on link */
+            uint64_t   loopDrops;      /* pkts dropped due to loopback */
+            uint64_t   loopDetects;    /* number of loop detections */
+            uint64_t   memoryFailures; /* times couldn't get mem or mbuf */
+          };
+
+          Negative numbers refer to the _u_p_l_i_n_k hooks.  So querying for -7 will
+          get the statistics for hook _u_p_l_i_n_k_7.
+
+     NGM_BRIDGE_CLR_STATS (_c_l_r_s_t_a_t_s)
+          This command takes a four byte link number as an argument and clears
+          the statistics for that link.
+
+     NGM_BRIDGE_GETCLR_STATS (_g_e_t_c_l_r_s_t_a_t_s)
+          Same as NGM_BRIDGE_GET_STATS, but also atomically clears the statis‐
+          tics as well.
+
+     NGM_BRIDGE_GET_TABLE (_g_e_t_t_a_b_l_e)
+          Returns the current host mapping table used to direct packets, in a
+          _s_t_r_u_c_t _n_g___b_r_i_d_g_e___h_o_s_t___a_r_y.
+
+     NGM_BRIDGE_SET_PERSISTENT (_s_e_t_p_e_r_s_i_s_t_e_n_t)
+          This command sets the persistent flag on the node, and takes no ar‐
+          guments.
+
+     NGM_BRIDGE_MOVE_HOST (_m_o_v_e_h_o_s_t)
+          This command takes a _s_t_r_u_c_t _n_g___b_r_i_d_g_e___m_o_v_e___h_o_s_t as an argument.  It
+          assigns the MAC _a_d_d_r to the _h_o_o_k.  If the _h_o_o_k is the empty string,
+          the incoming hook of the control message is used as fallback.
+
+          If necessary, the MAC is removed from the currently assigned hook
+          and moved to the new one.  If the MAC is moved faster than
+          _m_i_n_S_t_a_b_l_e_A_g_e, the hook is considered as a loop and will block traf‐
+          fic for _l_o_o_p_T_i_m_e_o_u_t seconds.
+
+          struct ng_bridge_move_host {
+            u_char  addr[ETHER_ADDR_LEN]; /* ethernet address */
+            char    hook[NG_HOOKSIZ];     /* link where addr can be found */
+          };
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.  Setting the persistent flag via a
+     NGM_BRIDGE_SET_PERSISTENT control message disables automatic node shut‐
+     down when the last hook gets disconnected.
+
+FFIILLEESS
+     /usr/share/examples/netgraph/ether.bridge
+               Example script showing how to set up a bridging network
+
+SSEEEE AALLSSOO
+     if_bridge(4), netgraph(4), ng_ether(4), ng_hub(4), ng_one2many(4),
+     ngctl(8)
+
+HHIISSTTOORRYY
+     The nngg__bbrriiddggee node type was implemented in FreeBSD 4.2.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                              May 13, 2021                              BSD

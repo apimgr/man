@@ -1,0 +1,120 @@
+DPCPU(9)                 BSD Kernel Developer's Manual                DPCPU(9)
+
+NNAAMMEE
+     ddppccppuu — Kernel Dynamic Per-CPU Memory Allocator
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppccppuu..hh>>
+
+   PPeerr--CCPPUU VVaarriiaabbllee DDeeffiinniittiioonn aanndd DDeeccllaarraattiioonn
+     DDPPCCPPUU__DDEEFFIINNEE(_t_y_p_e, _n_a_m_e);
+
+     DDPPCCPPUU__DDEEFFIINNEE__SSTTAATTIICC(_t_y_p_e, _n_a_m_e);
+
+     DDPPCCPPUU__DDEECCLLAARREE(_t_y_p_e, _n_a_m_e);
+
+   CCuurrrreenntt CCPPUU AAcccceessssoorr FFuunnccttiioonnss
+     DDPPCCPPUU__PPTTRR(_n_a_m_e);
+
+     DDPPCCPPUU__GGEETT(_n_a_m_e);
+
+     DDPPCCPPUU__SSEETT(_n_a_m_e, _v_a_l_u_e);
+
+   NNaammeedd CCPPUU AAcccceessssoorr FFuunnccttiioonnss
+     DDPPCCPPUU__IIDD__PPTTRR(_c_p_u, _n_a_m_e);
+
+     DDPPCCPPUU__IIDD__GGEETT(_c_p_u, _n_a_m_e);
+
+     DDPPCCPPUU__IIDD__SSEETT(_c_p_u, _n_a_m_e, _v_a_l_u_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     ddppccppuu instantiates one instance of a global variable with each CPU in the
+     system.  Dynamically allocated per-CPU variables are defined using
+     DDPPCCPPUU__DDEEFFIINNEE(), which defines a variable of name _n_a_m_e and type _t_y_p_e.  Ar‐
+     bitrary C types may be used, including structures and arrays.  If no ini‐
+     tialization is provided, then each per-CPU instance of the variable will
+     be zero-filled (i.e., as though allocated in BSS):
+
+         DPCPU_DEFINE(int, foo_int);
+
+     Values may also be initialized statically with the definition, causing
+     each per-CPU instance to be initialized with the value:
+
+         DPCPU_DEFINE(int, foo_int) = 1;
+
+     Values that can be defined as static must use DDPPCCPPUU__DDEEFFIINNEE__SSTTAATTIICC():
+
+         DPCPU_DEFINE_STATIC(int, foo_int);
+
+     DDPPCCPPUU__DDEECCLLAARREE() produces a declaration of the per-CPU variable suitable
+     for use in header files.
+
+     The current CPU's variable instance can be accessed via DDPPCCPPUU__PPTTRR (which
+     returns a pointer to the per-CPU instance), DDPPCCPPUU__GGEETT (which retrieves
+     the value of the per-CPU instance), and DDPPCCPPUU__SSEETT (which sets the value
+     of the per-CPU instance).
+
+     Instances of variables associated with specific CPUs can be accessed via
+     the DDPPCCPPUU__IIDD__PPTTRR, DDPPCCPPUU__IIDD__GGEETT, and DDPPGGPPUU__IIDD__SSEETT accessor functions,
+     which accept an additional CPU ID argument, _c_p_u.
+
+   SSyynncchhrroonniizzaattiioonn
+     In addition to the ordinary synchronization concerns associated with
+     global variables, which may imply the use of atomic(9), mutex(9), or
+     other kernel synchronization primitives, it is further the case that
+     thread migration could dynamically change the instance of a variable be‐
+     ing accessed by a thread between operations.  This requires additional
+     care when reasoning about and protecting per-CPU variables.
+
+     For example, it may be desirable to protect access using
+     critical_section(9) to prevent both preemption and migration during use.
+     Alternatively, it may be desirable to cache the CPU ID at the start of a
+     sequence of accesses, using suitable synchronization to make non-atomic
+     sequences safe in the presence of migration.
+
+         DPCPU_DEFINE_STATIC(int, foo_int);
+         DPCPU_DEFINE_STATIC(struct mutex, foo_lock);
+
+         void
+         foo_int_increment(void)
+         {
+             int cpu, value;
+
+             /* Safe as atomic access. */
+             atomic_add_int(DPCPU_PTR(foo_int), 1);
+
+             /*
+              * Protect with a critical section, which prevents preemption
+              * and migration.  However, access to instances from remote CPUs
+              * is not safe, as critical sections prevent concurrent access
+              * only from the current CPU.
+              */
+             critical_enter();
+             value = DPCPU_GET(foo_int);
+             value++;
+             DPCPU_SET(foo_int, value);
+             critical_exit();
+
+             /*
+              * Protect with a per-CPU mutex, tolerating migration, but
+              * potentially accessing the variable from multiple CPUs if
+              * migration occurs after reading curcpu.  Remote access to a
+              * per-CPU variable is safe as long as the correct mutex is
+              * acquired.
+              */
+             cpu = curcpu;
+             mtx_lock(DPCPU_ID_PTR(cpu, foo_lock));
+             value = DPCPU_ID_GET(cpu, foo_int);
+             value++;
+             DPCPU_ID_SET(cpu, foo_int);
+             mtx_unlock(DPCPU_ID_PTR(cpu, foo_lock));
+         }
+
+SSEEEE AALLSSOO
+     atomic(9), critical_enter(9), mutex(9)
+
+HHIISSTTOORRYY
+     ddppccppuu was first introduced by Jeff Roberson in FreeBSD 8.0.  This manual
+     page was written by Robert N. M. Watson.
+
+BSD                              July 5, 2018                              BSD

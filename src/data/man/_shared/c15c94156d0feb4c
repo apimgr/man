@@ -1,0 +1,144 @@
+_E_V_P___K_D_F_‐_K_B(7)                       OpenSSL                      _E_V_P___K_D_F_‐_K_B(7)
+
+NNAAMMEE
+       EVP_KDF-KB - The Key-Based EVP_KDF implementation
+
+DDEESSCCRRIIPPTTIIOONN
+       The EVP_KDF-KB algorithm implements the Key‐Based key derivation
+       function (KBKDF).  KBKDF derives a key from repeated application of a
+       keyed MAC to an input secret (and other optional values).
+
+   IIddeennttiittyy
+       "KBKDF" is the name for this implementation; it can be used with the
+       EEVVPP__KKDDFF__ffeettcchh(()) function.
+
+   SSuuppppoorrtteedd ppaarraammeetteerrss
+       The supported parameters are:
+
+       "mode" (OOSSSSLL__KKDDFF__PPAARRAAMM__MMOODDEE) <UTF8 string>
+           The  mode  parameter  determines  which  flavor  of  KBKDF to use -
+           currently the choices are "counter" and  "feedback".  "counter"  is
+           the default, and will be used if unspecified.
+
+       "mac" (OOSSSSLL__KKDDFF__PPAARRAAMM__MMAACC) <UTF8 string>
+           The value is either CMAC or HMAC.
+
+       "digest" (OOSSSSLL__KKDDFF__PPAARRAAMM__DDIIGGEESSTT) <UTF8 string>
+       "cipher" (OOSSSSLL__KKDDFF__PPAARRAAMM__CCIIPPHHEERR) <UTF8 string>
+       "properties" (OOSSSSLL__KKDDFF__PPAARRAAMM__PPRROOPPEERRTTIIEESS) <UTF8 string>
+       "key" (OOSSSSLL__KKDDFF__PPAARRAAMM__KKEEYY) <octet string>
+       "salt" (OOSSSSLL__KKDDFF__PPAARRAAMM__SSAALLTT) <octet string>
+       "info (OOSSSSLL__KKDDFF__PPAARRAAMM__IINNFFOO) <octet string>
+       "seed" (OOSSSSLL__KKDDFF__PPAARRAAMM__SSEEEEDD) <octet string>
+           The seed parameter is unused in counter mode.
+
+       "use‐l" (OOSSSSLL__KKDDFF__PPAARRAAMM__KKBBKKDDFF__UUSSEE__LL) <integer>
+           Set  to  00 to disable use of the optional Fixed Input data ’L’ (see
+           SP800-108).  The default value of 11 will be used if unspecified.
+
+       "use‐separator" (OOSSSSLL__KKDDFF__PPAARRAAMM__KKBBKKDDFF__UUSSEE__SSEEPPAARRAATTOORR) <integer>
+           Set to 00 to disable use of the  optional  Fixed  Input  data  ’zero
+           separator’  (see  SP800-108)  that  is placed between the Label and
+           Context.  The default value of 11 will be used if unspecified.
+
+       Depending on whether mac is CMAC or HMAC, either digest  or  cipher  is
+       required (respectively) and the other is unused.
+
+       The  parameters  key,  salt,  info,  and  seed correspond to KI, Label,
+       Context, and IV (respectively) in  SP800-108.   As  in  that  document,
+       salt, info, and seed are optional and may be omitted.
+
+       "mac", "digest", cipher" and "properties" are described in "PARAMETERS"
+       in EEVVPP__KKDDFF(3).
+
+NNOOTTEESS
+       A context for KBKDF can be obtained by calling:
+
+        EVP_KDF *kdf = EVP_KDF_fetch(NULL, "KBKDF", NULL);
+        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new(kdf);
+
+       The  output  length of an KBKDF is specified via the "keylen" parameter
+       to the EEVVPP__KKDDFF__ddeerriivvee(3) function.
+
+       Note that currently OpenSSL only implements counter and feedback modes.
+       Other variants may be supported in the future.
+
+EEXXAAMMPPLLEESS
+       This example  derives  10  bytes  using  COUNTER-HMAC-SHA256,  with  KI
+       "secret", Label "label", and Context "context".
+
+        EVP_KDF *kdf;
+        EVP_KDF_CTX *kctx;
+        unsigned char out[10];
+        OSSL_PARAM params[6], *p = params;
+
+        kdf = EVP_KDF_fetch(NULL, "KBKDF", NULL);
+        kctx = EVP_KDF_CTX_new(kdf);
+        EVP_KDF_free(kdf);
+
+        *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST,
+                                                "SHA2-256", 0);
+        *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_MAC,
+                                                "HMAC", 0);
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY,
+                                                 "secret", strlen("secret"));
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT,
+                                                 "label", strlen("label"));
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_INFO,
+                                                 "context", strlen("context"));
+        *p = OSSL_PARAM_construct_end();
+        if (EVP_KDF_derive(kctx, out, sizeof(out), params) <= 0)
+            error("EVP_KDF_derive");
+
+        EVP_KDF_CTX_free(kctx);
+
+       This  example  derives  10  bytes  using  FEEDBACK-CMAC-AES256, with KI
+       "secret", Label "label", and IV "sixteen bytes iv".
+
+        EVP_KDF *kdf;
+        EVP_KDF_CTX *kctx;
+        unsigned char out[10];
+        OSSL_PARAM params[8], *p = params;
+        unsigned char *iv = "sixteen bytes iv";
+
+        kdf = EVP_KDF_fetch(NULL, "KBKDF", NULL);
+        kctx = EVP_KDF_CTX_new(kdf);
+        EVP_KDF_free(kdf);
+
+        *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_CIPHER, "AES256", 0);
+        *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_MAC, "CMAC", 0);
+        *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_MODE, "FEEDBACK", 0);
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY,
+                                                 "secret", strlen("secret"));
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT,
+                                                 "label", strlen("label"));
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_INFO,
+                                                 "context", strlen("context"));
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SEED,
+                                                 iv, strlen(iv));
+        *p = OSSL_PARAM_construct_end();
+        if (EVP_KDF_derive(kctx, out, sizeof(out), params) <= 0)
+            error("EVP_KDF_derive");
+
+        EVP_KDF_CTX_free(kctx);
+
+CCOONNFFOORRMMIINNGG TTOO
+       NIST SP800-108, IETF RFC 6803, IETF RFC 8009.
+
+SSEEEE AALLSSOO
+       EEVVPP__KKDDFF(3),      EEVVPP__KKDDFF__CCTTXX__ffrreeee(3),      EEVVPP__KKDDFF__CCTTXX__ggeett__kkddff__ssiizzee(3),
+       EEVVPP__KKDDFF__ddeerriivvee(3), "PARAMETERS" in EEVVPP__KKDDFF(3)
+
+HHIISSTTOORRYY
+       This functionality was added in OpenSSL 3.0.
+
+CCOOPPYYRRIIGGHHTT
+       Copyright  2019-2021  The OpenSSL Project Authors. All Rights Reserved.
+       Copyright 2019 Red Hat, Inc.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in   the   file   LICENSE   in   the   source   distribution   or    at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐07                     _E_V_P___K_D_F_‐_K_B(7)

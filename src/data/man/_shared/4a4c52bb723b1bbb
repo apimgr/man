@@ -1,0 +1,1105 @@
+_c_l_o_n_e(2)                      System Calls Manual                     _c_l_o_n_e(2)
+
+NNAAMMEE
+       clone, __clone2, clone3 - create a child process
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       /* Prototype for the glibc wrapper function */
+
+       ##ddeeffiinnee __GGNNUU__SSOOUURRCCEE
+       ##iinncclluuddee <<sscchheedd..hh>>
+
+       iinntt cclloonnee((ttyyppeeooff((iinntt ((vvooiidd **__NNuullllaabbllee)))) **_f_n,,
+                 vvooiidd **_s_t_a_c_k,,
+                 iinntt _f_l_a_g_s,,
+                 vvooiidd **__NNuullllaabbllee _a_r_g,, ......
+                 /* ppiidd__tt **__NNuullllaabbllee _p_a_r_e_n_t___t_i_d,,
+                    vvooiidd **__NNuullllaabbllee _t_l_s,,
+                    ppiidd__tt **__NNuullllaabbllee _c_h_i_l_d___t_i_d */ ));;
+
+       /* For the prototype of the raw clone() system call, see VERSIONS.  */
+
+       ##iinncclluuddee <<lliinnuuxx//sscchheedd..hh>>    /* Definition of ssttrruucctt cclloonnee__aarrggss */
+       ##iinncclluuddee <<sscchheedd..hh>>          /* Definition of CCLLOONNEE__** constants */
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>    /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       lloonngg ssyyssccaallll((SSYYSS__cclloonnee33,, ssttrruucctt cclloonnee__aarrggss **_c_l___a_r_g_s,, ssiizzee__tt _s_i_z_e));;
+
+       _N_o_t_e:  glibc provides no wrapper for cclloonnee33(), necessitating the use of
+       ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       These system calls create a new ("child") process, in a manner  similar
+       to ffoorrkk(2).
+
+       By  contrast with ffoorrkk(2), these system calls provide more precise con‐
+       trol over what pieces of execution context are shared between the call‐
+       ing process and the child process.  For  example,  using  these  system
+       calls,  the  caller  can control whether or not the two processes share
+       the virtual address space, the table of file descriptors, and the table
+       of signal handlers.  These  system  calls  also  allow  the  new  child
+       process to be placed in separate nnaammeessppaacceess(7).
+
+       Note  that  in this manual page, "calling process" normally corresponds
+       to "parent process".  But see  the  descriptions  of  CCLLOONNEE__PPAARREENNTT  and
+       CCLLOONNEE__TTHHRREEAADD below.
+
+       This page describes the following interfaces:
+
+       •  The glibc cclloonnee() wrapper function and the underlying system call on
+          which  it  is  based.  The main text describes the wrapper function;
+          the differences for the raw system call are described toward the end
+          of this page.
+
+       •  The newer cclloonnee33() system call.
+
+       In the remainder of this page, the terminology "the clone call" is used
+       when noting details that apply to all of these interfaces.
+
+   TThhee cclloonnee(()) wwrraappppeerr ffuunnccttiioonn
+       When the child process is created with the cclloonnee() wrapper function, it
+       commences execution by calling the function pointed to by the  argument
+       _f_n.  (This differs from ffoorrkk(2), where execution continues in the child
+       from the point of the ffoorrkk(2) call.)  The _a_r_g argument is passed as the
+       argument of the function _f_n.
+
+       When  the  _f_n(_a_r_g) function returns, the child process terminates.  The
+       integer returned by _f_n is the exit status for the child  process.   The
+       child process may also terminate explicitly by calling eexxiitt(2) or after
+       receiving a fatal signal.
+
+       The  _s_t_a_c_k  argument  specifies  the  location of the stack used by the
+       child process.  Since the child and calling process may  share  memory,
+       it  is  not possible for the child process to execute in the same stack
+       as the calling process.  The calling process must therefore set up mem‐
+       ory space for the child stack and pass  a  pointer  to  this  space  to
+       cclloonnee().  Stacks grow downward on all processors that run Linux (except
+       the  HP  PA processors), so _s_t_a_c_k usually points to the topmost address
+       of the memory space set up for the child stack.  Note that cclloonnee() does
+       not provide a means whereby the caller can inform  the  kernel  of  the
+       size of the stack area.
+
+       The remaining arguments to cclloonnee() are discussed below.
+
+   cclloonnee33(())
+       The  cclloonnee33()  system  call provides a superset of the functionality of
+       the older cclloonnee() interface.  It also provides a number of API improve‐
+       ments, including: space for additional flags bits;  cleaner  separation
+       in the use of various arguments; and the ability to specify the size of
+       the child’s stack area.
+
+       As with ffoorrkk(2), cclloonnee33() returns in both the parent and the child.  It
+       returns  0 in the child process and returns the PID of the child in the
+       parent.
+
+       The _c_l___a_r_g_s argument of cclloonnee33() is a structure of the following form:
+
+           struct clone_args {
+               u64 flags;        /* Flags bit mask */
+               u64 pidfd;        /* Where to store PID file descriptor
+                                    (_i_n_t _*) */
+               u64 child_tid;    /* Where to store child TID,
+                                    in child's memory (_p_i_d___t _*) */
+               u64 parent_tid;   /* Where to store child TID,
+                                    in parent's memory (_p_i_d___t _*) */
+               u64 exit_signal;  /* Signal to deliver to parent on
+                                    child termination */
+               u64 stack;        /* Pointer to lowest byte of stack */
+               u64 stack_size;   /* Size of stack */
+               u64 tls;          /* Location of new TLS */
+               u64 set_tid;      /* Pointer to a _p_i_d___t array
+                                    (since Linux 5.5) */
+               u64 set_tid_size; /* Number of elements in _s_e_t___t_i_d
+                                    (since Linux 5.5) */
+               u64 cgroup;       /* File descriptor for target cgroup
+                                    of child (since Linux 5.7) */
+           };
+
+       The _s_i_z_e argument that is supplied to cclloonnee33() should be initialized to
+       the size of this structure.  (The existence of the _s_i_z_e  argument  per‐
+       mits future extensions to the _c_l_o_n_e___a_r_g_s structure.)
+
+       The  stack  for the child process is specified via _c_l___a_r_g_s_._s_t_a_c_k, which
+       points to the lowest byte of the stack  area,  and  _c_l___a_r_g_s_._s_t_a_c_k___s_i_z_e,
+       which  specifies the size of the stack in bytes.  In the case where the
+       CCLLOONNEE__VVMM flag (see below) is specified, a stack must be explicitly  al‐
+       located and specified.  Otherwise, these two fields can be specified as
+       NULL  and  0,  which causes the child to use the same stack area as the
+       parent (in the child’s own virtual address space).
+
+       The remaining fields in the _c_l___a_r_g_s argument are discussed below.
+
+   EEqquuiivvaalleennccee bbeettwweeeenn cclloonnee(()) aanndd cclloonnee33(()) aarrgguummeennttss
+       Unlike the older cclloonnee() interface, where arguments are passed individ‐
+       ually, in the newer cclloonnee33() interface the arguments are packaged  into
+       the  _c_l_o_n_e___a_r_g_s structure shown above.  This structure allows for a su‐
+       perset of the information passed via the cclloonnee() arguments.
+
+       The following table shows the  equivalence  between  the  arguments  of
+       cclloonnee() and the fields in the _c_l_o_n_e___a_r_g_s argument supplied to cclloonnee33():
+           lb  lb  lb  l  l l li li l.  clone()   clone3()  Notes      _c_l___a_r_g_s
+           field flags & ~0xff  flags     T{ For most flags; details below  T}
+           parent_tid     pidfd     See   CLONE_PIDFD  child_tid child_tid See
+           CLONE_CHILD_SETTID   parent_tid     parent_tid     See   CLONE_PAR‐
+           ENT_SETTID     flags     &    0xff   exit_signal    stack     stack
+           ‐‐‐  stack_size tls  tls  See CLONE_SETTLS ‐‐‐  set_tid   See below
+           for details ‐‐‐  set_tid_size ‐‐‐  cgroup    See CLONE_INTO_CGROUP
+
+   TThhee cchhiilldd tteerrmmiinnaattiioonn ssiiggnnaall
+       When the child process terminates, a signal may be sent to the  parent.
+       The  termination signal is specified in the low byte of _f_l_a_g_s (cclloonnee())
+       or in _c_l___a_r_g_s_._e_x_i_t___s_i_g_n_a_l (cclloonnee33()).  If this signal is  specified  as
+       anything  other  than SSIIGGCCHHLLDD, then the parent process must specify the
+       ____WWAALLLL or ____WWCCLLOONNEE options when waiting for the child with wwaaiitt(2).  If
+       no signal (i.e., zero) is specified, then the  parent  process  is  not
+       signaled when the child terminates.
+
+   TThhee sseett__ttiidd aarrrraayy
+       By  default,  the  kernel  chooses  the next sequential PID for the new
+       process in each of the PID namespaces where it is present.  When creat‐
+       ing a process with cclloonnee33(), the _s_e_t___t_i_d array (available  since  Linux
+       5.5) can be used to select specific PIDs for the process in some or all
+       of  the  PID  namespaces  where it is present.  If the PID of the newly
+       created process should be set only for the current PID namespace or  in
+       the  newly  created PID namespace (if _f_l_a_g_s contains CCLLOONNEE__NNEEWWPPIIDD) then
+       the first element in the _s_e_t___t_i_d array has to be the  desired  PID  and
+       _s_e_t___t_i_d___s_i_z_e needs to be 1.
+
+       If  the PID of the newly created process should have a certain value in
+       multiple PID namespaces, then the _s_e_t___t_i_d array can have  multiple  en‐
+       tries.   The  first entry defines the PID in the most deeply nested PID
+       namespace and each of the following entries contains  the  PID  in  the
+       corresponding  ancestor PID namespace.  The number of PID namespaces in
+       which a PID should be set is defined by _s_e_t___t_i_d___s_i_z_e  which  cannot  be
+       larger than the number of currently nested PID namespaces.
+
+       To  create a process with the following PIDs in a PID namespace hierar‐
+       chy:
+           lb  lb  lb  l   l   l.    PID   NS   level   Requested   PID  Notes
+           0    31496     Outermost  PID namespace 1    42 2    7    Innermost
+           PID namespace
+
+       Set the array to:
+
+           set_tid[0] = 7;
+           set_tid[1] = 42;
+           set_tid[2] = 31496;
+           set_tid_size = 3;
+
+       If only the PIDs in the two innermost PID namespaces need to be  speci‐
+       fied, set the array to:
+
+           set_tid[0] = 7;
+           set_tid[1] = 42;
+           set_tid_size = 2;
+
+       The  PID in the PID namespaces outside the two innermost PID namespaces
+       is selected the same way as any other PID is selected.
+
+       The  _s_e_t___t_i_d  feature  requires  CCAAPP__SSYYSS__AADDMMIINN  or  (since  Linux  5.9)
+       CCAAPP__CCHHEECCKKPPOOIINNTT__RREESSTTOORREE  in all owning user namespaces of the target PID
+       namespaces.
+
+       Callers may only choose a PID greater than 1 in a given  PID  namespace
+       if  an iinniitt process (i.e., a process with PID 1) already exists in that
+       namespace.  Otherwise the PID entry for this PID namespace must be 1.
+
+   TThhee ffllaaggss mmaasskk
+       Both cclloonnee() and cclloonnee33() allow a flags bit mask  that  modifies  their
+       behavior  and  allows  the caller to specify what is shared between the
+       calling process and the child process.  This bit mask—the  _f_l_a_g_s  argu‐
+       ment  of  cclloonnee()  or the _c_l___a_r_g_s_._f_l_a_g_s field passed to cclloonnee33()—is re‐
+       ferred to as the _f_l_a_g_s mask in the remainder of this page.
+
+       The _f_l_a_g_s mask is specified as a bitwise OR of zero or more of the con‐
+       stants listed below.  Except as noted below, these flags are  available
+       (and have the same effect) in both cclloonnee() and cclloonnee33().
+
+       CCLLOONNEE__CCHHIILLDD__CCLLEEAARRTTIIDD (since Linux 2.5.49)
+              Clear  (zero)  the child thread ID at the location pointed to by
+              _c_h_i_l_d___t_i_d (cclloonnee()) or  _c_l___a_r_g_s_._c_h_i_l_d___t_i_d  (cclloonnee33())  in  child
+              memory  when  the  child  exits, and do a wakeup on the futex at
+              that address.  The  address  involved  may  be  changed  by  the
+              sseett__ttiidd__aaddddrreessss(2)  system  call.  This is used by threading li‐
+              braries.
+
+       CCLLOONNEE__CCHHIILLDD__SSEETTTTIIDD (since Linux 2.5.49)
+              Store the  child  thread  ID  at  the  location  pointed  to  by
+              _c_h_i_l_d___t_i_d  (cclloonnee())  or  _c_l___a_r_g_s_._c_h_i_l_d___t_i_d  (cclloonnee33())  in  the
+              child’s memory.  The store operation completes before the  clone
+              call  returns control to user space in the child process.  (Note
+              that the store operation may not have completed before the clone
+              call returns in the parent process, which  is  relevant  if  the
+              CCLLOONNEE__VVMM flag is also employed.)
+
+       CCLLOONNEE__CCLLEEAARR__SSIIGGHHAANNDD (since Linux 5.5)
+              By default, signal dispositions in the child thread are the same
+              as  in  the parent.  If this flag is specified, then all signals
+              that are handled in the parent (and not set to SSIIGG__IIGGNN) are  re‐
+              set to their default dispositions (SSIIGG__DDFFLL) in the child.
+
+              Specifying  this flag together with CCLLOONNEE__SSIIGGHHAANNDD is nonsensical
+              and disallowed.
+
+       CCLLOONNEE__DDEETTAACCHHEEDD (historical)
+              For a while (during the Linux 2.5 development series) there  was
+              a  CCLLOONNEE__DDEETTAACCHHEEDD flag, which caused the parent not to receive a
+              signal when the child terminated.   Ultimately,  the  effect  of
+              this  flag  was  subsumed under the CCLLOONNEE__TTHHRREEAADD flag and by the
+              time Linux 2.6.0 was released, this flag had no  effect.   Since
+              Linux   2.6.2,   the  need  to  give  this  flag  together  with
+              CCLLOONNEE__TTHHRREEAADD disappeared.
+
+              This flag is still defined, but it is usually ignored when call‐
+              ing cclloonnee().  However, see the description  of  CCLLOONNEE__PPIIDDFFDD  for
+              some exceptions.
+
+       CCLLOONNEE__FFIILLEESS (since Linux 2.0)
+              If CCLLOONNEE__FFIILLEESS is set, the calling process and the child process
+              share  the same file descriptor table.  Any file descriptor cre‐
+              ated by the calling process or by  the  child  process  is  also
+              valid  in the other process.  Similarly, if one of the processes
+              closes a file descriptor, or changes its associated flags (using
+              the ffccnnttll(2) FF__SSEETTFFDD operation), the other process is  also  af‐
+              fected.   If a process sharing a file descriptor table calls eexx‐‐
+              eeccvvee(2), its file descriptor table is duplicated (unshared).
+
+              If CCLLOONNEE__FFIILLEESS is not set, the child process inherits a copy  of
+              all  file  descriptors opened in the calling process at the time
+              of the clone call.  Subsequent operations  that  open  or  close
+              file  descriptors, or change file descriptor flags, performed by
+              either the calling process or the child process  do  not  affect
+              the  other process.  Note, however, that the duplicated file de‐
+              scriptors in the child refer to the same open file  descriptions
+              as  the  corresponding  file descriptors in the calling process,
+              and thus share file offsets and file status flags (see ooppeenn(2)).
+
+       CCLLOONNEE__FFSS (since Linux 2.0)
+              If CCLLOONNEE__FFSS is set, the caller and the child process  share  the
+              same  filesystem  information.   This  includes  the root of the
+              filesystem, the current working directory, and the  umask.   Any
+              call  to cchhrroooott(2), cchhddiirr(2), or uummaasskk(2) performed by the call‐
+              ing process or the child process also affects the other process.
+
+              If CCLLOONNEE__FFSS is not set, the child process works on a copy of the
+              filesystem information of the calling process at the time of the
+              clone call.  Calls to cchhrroooott(2), cchhddiirr(2), or uummaasskk(2) performed
+              later by one of the processes do not affect the other process.
+
+       CCLLOONNEE__IINNTTOO__CCGGRROOUUPP (since Linux 5.7)
+              By default, a child process is placed  in  the  same  version  2
+              cgroup  as  its  parent.   The CCLLOONNEE__IINNTTOO__CCGGRROOUUPP flag allows the
+              child process to be created in a  different  version  2  cgroup.
+              (Note  that  CCLLOONNEE__IINNTTOO__CCGGRROOUUPP  has  effect  only  for version 2
+              cgroups.)
+
+              In order to place the child process in a different  cgroup,  the
+              caller specifies CCLLOONNEE__IINNTTOO__CCGGRROOUUPP in _c_l___a_r_g_s_._f_l_a_g_s and passes a
+              file  descriptor  that  refers  to  a  version  2  cgroup in the
+              _c_l___a_r_g_s_._c_g_r_o_u_p field.  (This file descriptor can be obtained  by
+              opening  a  cgroup v2 directory using either the OO__RRDDOONNLLYY or the
+              OO__PPAATTHH flag.)  Note that all  of  the  usual  restrictions  (de‐
+              scribed  in  ccggrroouuppss(7))  on  placing a process into a version 2
+              cgroup apply.
+
+              Among the possible use cases for CCLLOONNEE__IINNTTOO__CCGGRROOUUPP are the  fol‐
+              lowing:
+
+              •  Spawning  a process into a cgroup different from the parent’s
+                 cgroup makes it possible for a service  manager  to  directly
+                 spawn  new  services into dedicated cgroups.  This eliminates
+                 the accounting jitter that  would  be  caused  if  the  child
+                 process  was  first  created in the same cgroup as the parent
+                 and then moved into the target cgroup.  Furthermore, spawning
+                 the child process directly into a target cgroup  is  signifi‐
+                 cantly  cheaper than moving the child process into the target
+                 cgroup after it has been created.
+
+              •  The CCLLOONNEE__IINNTTOO__CCGGRROOUUPP flag also allows the creation of frozen
+                 child processes by spawning them into a frozen cgroup.   (See
+                 ccggrroouuppss(7) for a description of the freezer controller.)
+
+              •  For  threaded  applications  (or  even thread implementations
+                 which make use of cgroups to limit individual threads), it is
+                 possible to establish a fixed cgroup layout  before  spawning
+                 each thread directly into its target cgroup.
+
+       CCLLOONNEE__IIOO (since Linux 2.6.25)
+              If  CCLLOONNEE__IIOO  is set, then the new process shares an I/O context
+              with the calling process.  If this flag is  not  set,  then  (as
+              with ffoorrkk(2)) the new process has its own I/O context.
+
+              The  I/O  context  is the I/O scope of the disk scheduler (i.e.,
+              what the I/O scheduler uses to model scheduling of  a  process’s
+              I/O).  If processes share the same I/O context, they are treated
+              as  one  by  the  I/O  scheduler.  As a consequence, they get to
+              share disk time.  For some  I/O  schedulers,  if  two  processes
+              share  an  I/O context, they will be allowed to interleave their
+              disk access.  If several threads are doing I/O on behalf of  the
+              same  process  (aaiioo__rreeaadd(3),  for  instance), they should employ
+              CCLLOONNEE__IIOO to get better I/O performance.
+
+              If the kernel is not configured with  the  CCOONNFFIIGG__BBLLOOCCKK  option,
+              this flag is a no‐op.
+
+       CCLLOONNEE__NNEEWWCCGGRROOUUPP (since Linux 4.6)
+              Create  the  process in a new cgroup namespace.  If this flag is
+              not set, then (as with ffoorrkk(2)) the process is  created  in  the
+              same cgroup namespaces as the calling process.
+
+              For  further  information on cgroup namespaces, see ccggrroouupp__nnaammee‐‐
+              ssppaacceess(7).
+
+              Only a privileged process (CCAAPP__SSYYSS__AADDMMIINN) can employ CCLLOONNEE__NNEEWWCC‐‐
+              GGRROOUUPP.
+
+       CCLLOONNEE__NNEEWWIIPPCC (since Linux 2.6.19)
+              If CCLLOONNEE__NNEEWWIIPPCC is set, then create the process  in  a  new  IPC
+              namespace.  If this flag is not set, then (as with ffoorrkk(2)), the
+              process  is  created  in  the  same IPC namespace as the calling
+              process.
+
+              For  further  information  on  IPC  namespaces,  see   iippcc__nnaammee‐‐
+              ssppaacceess(7).
+
+              Only   a   privileged   process   (CCAAPP__SSYYSS__AADDMMIINN)   can   employ
+              CCLLOONNEE__NNEEWWIIPPCC.  This flag can’t be specified in conjunction  with
+              CCLLOONNEE__SSYYSSVVSSEEMM.
+
+       CCLLOONNEE__NNEEWWNNEETT (since Linux 2.6.24)
+              (The  implementation  of  this  flag was completed only by about
+              Linux 2.6.29.)
+
+              If CCLLOONNEE__NNEEWWNNEETT is set, then create the process in a new network
+              namespace.  If this flag is not set, then (as with ffoorrkk(2))  the
+              process  is created in the same network namespace as the calling
+              process.
+
+              For further information on network namespaces, see nneettwwoorrkk__nnaammee‐‐
+              ssppaacceess(7).
+
+              Only   a   privileged   process   (CCAAPP__SSYYSS__AADDMMIINN)   can   employ
+              CCLLOONNEE__NNEEWWNNEETT.
+
+       CCLLOONNEE__NNEEWWNNSS (since Linux 2.4.19)
+              If  CCLLOONNEE__NNEEWWNNSS  is  set,  the  cloned child is started in a new
+              mount namespace, initialized with a copy of the namespace of the
+              parent.  If CCLLOONNEE__NNEEWWNNSS is not set, the child lives in the  same
+              mount namespace as the parent.
+
+              For  further  information on mount namespaces, see nnaammeessppaacceess(7)
+              and mmoouunntt__nnaammeessppaacceess(7).
+
+              Only   a   privileged   process   (CCAAPP__SSYYSS__AADDMMIINN)   can   employ
+              CCLLOONNEE__NNEEWWNNSS.   It  is  not permitted to specify both CCLLOONNEE__NNEEWWNNSS
+              and CCLLOONNEE__FFSS in the same clone call.
+
+       CCLLOONNEE__NNEEWWPPIIDD (since Linux 2.6.24)
+              If CCLLOONNEE__NNEEWWPPIIDD is set, then create the process  in  a  new  PID
+              namespace.   If this flag is not set, then (as with ffoorrkk(2)) the
+              process is created in the same  PID  namespace  as  the  calling
+              process.
+
+              For further information on PID namespaces, see nnaammeessppaacceess(7) and
+              ppiidd__nnaammeessppaacceess(7).
+
+              Only  a privileged process (CCAAPP__SSYYSS__AADDMMIINN) can employ CCLLOONNEE__NNEEWW‐‐
+              PPIIDD.   This  flag  can’t  be  specified  in   conjunction   with
+              CCLLOONNEE__TTHHRREEAADD.
+
+       CCLLOONNEE__NNEEWWUUSSEERR
+              (This  flag first became meaningful for cclloonnee() in Linux 2.6.23,
+              the current cclloonnee() semantics were merged in Linux 3.5, and  the
+              final  pieces to make the user namespaces completely usable were
+              merged in Linux 3.8.)
+
+              If CCLLOONNEE__NNEEWWUUSSEERR is set, then create the process in a  new  user
+              namespace.   If this flag is not set, then (as with ffoorrkk(2)) the
+              process is created in the same user  namespace  as  the  calling
+              process.
+
+              For  further  information  on user namespaces, see nnaammeessppaacceess(7)
+              and uusseerr__nnaammeessppaacceess(7).
+
+              Before Linux 3.8, use of CCLLOONNEE__NNEEWWUUSSEERR required that the  caller
+              have three capabilities: CCAAPP__SSYYSS__AADDMMIINN, CCAAPP__SSEETTUUIIDD, and CCAAPP__SSEETT‐‐
+              GGIIDD.   Starting with Linux 3.8, no privileges are needed to cre‐
+              ate a user namespace.
+
+              This flag can’t be specified in conjunction with CCLLOONNEE__TTHHRREEAADD or
+              CCLLOONNEE__PPAARREENNTT.  For security  reasons,  CCLLOONNEE__NNEEWWUUSSEERR  cannot  be
+              specified in conjunction with CCLLOONNEE__FFSS.
+
+       CCLLOONNEE__NNEEWWUUTTSS (since Linux 2.6.19)
+              If  CCLLOONNEE__NNEEWWUUTTSS  is  set,  then create the process in a new UTS
+              namespace, whose identifiers are initialized by duplicating  the
+              identifiers  from  the UTS namespace of the calling process.  If
+              this flag is not set, then (as with ffoorrkk(2)) the process is cre‐
+              ated in the same UTS namespace as the calling process.
+
+              For  further  information  on  UTS  namespaces,  see   uuttss__nnaammee‐‐
+              ssppaacceess(7).
+
+              Only   a   privileged   process   (CCAAPP__SSYYSS__AADDMMIINN)   can   employ
+              CCLLOONNEE__NNEEWWUUTTSS.
+
+       CCLLOONNEE__PPAARREENNTT (since Linux 2.3.12)
+              If CCLLOONNEE__PPAARREENNTT is set, then the parent of the new child (as re‐
+              turned by ggeettppppiidd(2)) will be the same as that  of  the  calling
+              process.
+
+              If  CCLLOONNEE__PPAARREENNTT  is not set, then (as with ffoorrkk(2)) the child’s
+              parent is the calling process.
+
+              Note that it is the parent process, as returned  by  ggeettppppiidd(2),
+              which  is  signaled  when  the  child  terminates,  so  that  if
+              CCLLOONNEE__PPAARREENNTT is set, then the parent  of  the  calling  process,
+              rather than the calling process itself, is signaled.
+
+              The CCLLOONNEE__PPAARREENNTT flag can’t be used in clone calls by the global
+              init  process  (PID  1  in  the  initial PID namespace) and init
+              processes in other PID namespaces.   This  restriction  prevents
+              the  creation  of multi‐rooted process trees as well as the cre‐
+              ation of unreapable zombies in the initial PID namespace.
+
+       CCLLOONNEE__PPAARREENNTT__SSEETTTTIIDD (since Linux 2.5.49)
+              Store the child thread ID at the location  pointed  to  by  _p_a_r_‐
+              _e_n_t___t_i_d  (cclloonnee())  or _c_l___a_r_g_s_._p_a_r_e_n_t___t_i_d (cclloonnee33()) in the par‐
+              ent’s  memory.   (In  Linux  2.5.32‐2.5.48  there  was  a   flag
+              CCLLOONNEE__SSEETTTTIIDD  that did this.)  The store operation completes be‐
+              fore the clone call returns control to user space.
+
+       CCLLOONNEE__PPIIDD (Linux 2.0 to Linux 2.5.15)
+              If CCLLOONNEE__PPIIDD is set, the child process is created with the  same
+              process ID as the calling process.  This is good for hacking the
+              system,  but  otherwise  of not much use.  From Linux 2.3.21 on‐
+              ward, this flag could be  specified  only  by  the  system  boot
+              process  (PID 0).  The flag disappeared completely from the ker‐
+              nel sources in Linux 2.5.16.  Subsequently, the kernel  silently
+              ignored  this  bit  if it was specified in the _f_l_a_g_s mask.  Much
+              later, the same bit was recycled  for  use  as  the  CCLLOONNEE__PPIIDDFFDD
+              flag.
+
+       CCLLOONNEE__PPIIDDFFDD (since Linux 5.2)
+              If  this  flag  is specified, a PID file descriptor referring to
+              the child process is allocated and placed at a  specified  loca‐
+              tion  in  the parent’s memory.  The close‐on‐exec flag is set on
+              this new file descriptor.  PID file descriptors can be used  for
+              the purposes described in ppiiddffdd__ooppeenn(2).
+
+              •  When using cclloonnee33(), the PID file descriptor is placed at the
+                 location pointed to by _c_l___a_r_g_s_._p_i_d_f_d.
+
+              •  When  using cclloonnee(), the PID file descriptor is placed at the
+                 location pointed to by _p_a_r_e_n_t___t_i_d.  Since the _p_a_r_e_n_t___t_i_d  ar‐
+                 gument is used to return the PID file descriptor, CCLLOONNEE__PPIIDDFFDD
+                 cannot be used with CCLLOONNEE__PPAARREENNTT__SSEETTTTIIDD when calling cclloonnee().
+
+              If  CCLLOONNEE__PPIIDDFFDD is specified together with CCLLOONNEE__TTHHRREEAADD, the ob‐
+              tained PID file descriptor refers to a specific thread,  as  op‐
+              posed to a thread‐group leader if CCLLOONNEE__TTHHRREEAADD is not specified.
+              This feature is available since Linux 6.9.
+
+              If  the  obsolete  CCLLOONNEE__DDEETTAACCHHEEDD  flag  is  specified alongside
+              CCLLOONNEE__PPIIDDFFDD when calling cclloonnee(), an error is returned.  An  er‐
+              ror  also  results  if  CCLLOONNEE__DDEETTAACCHHEEDD is specified when calling
+              cclloonnee33().  This error behavior ensures that the bit  correspond‐
+              ing  to  CCLLOONNEE__DDEETTAACCHHEEDD  can  be reused for further PID file de‐
+              scriptor features in the future.
+
+       CCLLOONNEE__PPTTRRAACCEE (since Linux 2.2)
+              If CCLLOONNEE__PPTTRRAACCEE is specified, and the calling process  is  being
+              traced, then trace the child also (see ppttrraaccee(2)).
+
+       CCLLOONNEE__SSEETTTTLLSS (since Linux 2.5.32)
+              The TLS (Thread Local Storage) descriptor is set to _t_l_s.
+
+              The  interpretation of _t_l_s and the resulting effect is architec‐
+              ture  dependent.   On  x86,  _t_l_s  is  interpreted  as  a  _s_t_r_u_c_t
+              _u_s_e_r___d_e_s_c  _*  (see sseett__tthhrreeaadd__aarreeaa(2)).  On x86‐64 it is the new
+              value to be set for the %fs base register (see  the  AARRCCHH__SSEETT__FFSS
+              argument  to  aarrcchh__pprrccttll(2)).  On architectures with a dedicated
+              TLS register, it is the new value of that register.
+
+              Use of this flag requires detailed knowledge  and  generally  it
+              should not be used except in libraries implementing threading.
+
+       CCLLOONNEE__SSIIGGHHAANNDD (since Linux 2.0)
+              If  CCLLOONNEE__SSIIGGHHAANNDD  is  set,  the  calling  process and the child
+              process share the same table of signal handlers.  If the calling
+              process or child process calls ssiiggaaccttiioonn(2) to change the behav‐
+              ior associated with a signal, the behavior  is  changed  in  the
+              other  process  as well.  However, the calling process and child
+              processes still have distinct signal masks and sets  of  pending
+              signals.   So,  one  of  them may block or unblock signals using
+              ssiiggpprrooccmmaasskk(2) without affecting the other process.
+
+              If CCLLOONNEE__SSIIGGHHAANNDD is not set, the child process inherits  a  copy
+              of the signal handlers of the calling process at the time of the
+              clone call.  Calls to ssiiggaaccttiioonn(2) performed later by one of the
+              processes have no effect on the other process.
+
+              Since  Linux 2.6.0, the _f_l_a_g_s mask must also include CCLLOONNEE__VVMM if
+              CCLLOONNEE__SSIIGGHHAANNDD is specified.
+
+       CCLLOONNEE__SSTTOOPPPPEEDD (since Linux 2.6.0)
+              If CCLLOONNEE__SSTTOOPPPPEEDD is set, then the child is initially stopped (as
+              though it was sent a SSIIGGSSTTOOPP signal), and  must  be  resumed  by
+              sending it a SSIIGGCCOONNTT signal.
+
+              This  flag  was _d_e_p_r_e_c_a_t_e_d from Linux 2.6.25 onward, and was _r_e_‐
+              _m_o_v_e_d altogether  in  Linux  2.6.38.   Since  then,  the  kernel
+              silently ignores it without error.  Starting with Linux 4.6, the
+              same bit was reused for the CCLLOONNEE__NNEEWWCCGGRROOUUPP flag.
+
+       CCLLOONNEE__SSYYSSVVSSEEMM (since Linux 2.5.10)
+              If  CCLLOONNEE__SSYYSSVVSSEEMM is set, then the child and the calling process
+              share a single list of System V  semaphore  adjustment  (_s_e_m_a_d_j)
+              values  (see  sseemmoopp(2)).   In this case, the shared list accumu‐
+              lates _s_e_m_a_d_j values across all processes sharing the  list,  and
+              semaphore  adjustments  are performed only when the last process
+              that is sharing the list terminates (or ceases sharing the  list
+              using  uunnsshhaarree(2)).  If this flag is not set, then the child has
+              a separate _s_e_m_a_d_j list that is initially empty.
+
+       CCLLOONNEE__TTHHRREEAADD (since Linux 2.4.0)
+              If CCLLOONNEE__TTHHRREEAADD is set, the child is placed in the  same  thread
+              group as the calling process.  To make the remainder of the dis‐
+              cussion of CCLLOONNEE__TTHHRREEAADD more readable, the term "thread" is used
+              to refer to the processes within a thread group.
+
+              Thread  groups  were a feature added in Linux 2.4 to support the
+              POSIX threads notion of a set of threads  that  share  a  single
+              PID.   Internally, this shared PID is the so‐called thread group
+              identifier (TGID) for the thread group.  Since Linux 2.4,  calls
+              to ggeettppiidd(2) return the TGID of the caller.
+
+              The  threads  within a group can be distinguished by their (sys‐
+              tem‐wide) unique thread IDs (TID).  A new thread’s TID is avail‐
+              able as the function result returned to the caller, and a thread
+              can obtain its own TID using ggeettttiidd(2).
+
+              When a clone call is made without specifying CCLLOONNEE__TTHHRREEAADD,  then
+              the  resulting thread is placed in a new thread group whose TGID
+              is the same as the thread’s TID.  This thread is the  _l_e_a_d_e_r  of
+              the new thread group.
+
+              A  new  thread  created  with  CCLLOONNEE__TTHHRREEAADD  has the same parent
+              process as the process that made  the  clone  call  (i.e.,  like
+              CCLLOONNEE__PPAARREENNTT), so that calls to ggeettppppiidd(2) return the same value
+              for  all  of the threads in a thread group.  When a CCLLOONNEE__TTHHRREEAADD
+              thread terminates, the thread that created  it  is  not  sent  a
+              SSIIGGCCHHLLDD  (or  other  termination)  signal; nor can the status of
+              such a thread be obtained using wwaaiitt(2).  (The thread is said to
+              be _d_e_t_a_c_h_e_d.)
+
+              After all of the threads in a thread group terminate the  parent
+              process of the thread group is sent a SSIIGGCCHHLLDD (or other termina‐
+              tion) signal.
+
+              If  any  of the threads in a thread group performs an eexxeeccvvee(2),
+              then all threads other than the thread group leader  are  termi‐
+              nated,  and  the  new  program  is  executed in the thread group
+              leader.
+
+              If one of the threads in a thread group creates  a  child  using
+              ffoorrkk(2),  then  any  thread  in  the  group can wwaaiitt(2) for that
+              child.
+
+              Since Linux 2.5.35, the _f_l_a_g_s mask must also include  CCLLOONNEE__SSIIGG‐‐
+              HHAANNDD  if  CCLLOONNEE__TTHHRREEAADD  is specified (and note that, since Linux
+              2.6.0, CCLLOONNEE__SSIIGGHHAANNDD also requires CCLLOONNEE__VVMM to be included).
+
+              Signal dispositions and actions are process‐wide: if  an  unhan‐
+              dled  signal is delivered to a thread, then it will affect (ter‐
+              minate, stop, continue, be ignored in) all members of the thread
+              group.
+
+              Each thread has its own signal mask, as set by ssiiggpprrooccmmaasskk(2).
+
+              A signal may be process‐directed or thread‐directed.  A process‐
+              directed signal is targeted at a thread group  (i.e.,  a  TGID),
+              and  is  delivered  to an arbitrarily selected thread from among
+              those that are  not  blocking  the  signal.   A  signal  may  be
+              process‐directed because it was generated by the kernel for rea‐
+              sons other than a hardware exception, or because it was sent us‐
+              ing  kkiillll(2)  or  ssiiggqquueeuuee(3).  A thread‐directed signal is tar‐
+              geted at (i.e., delivered to) a specific thread.  A  signal  may
+              be  thread  directed  because  it  was  sent  using ttggkkiillll(2) or
+              pptthhrreeaadd__ssiiggqquueeuuee(3), or because the thread  executed  a  machine
+              language  instruction that triggered a hardware exception (e.g.,
+              invalid memory access triggering SSIIGGSSEEGGVV or a floating‐point ex‐
+              ception triggering SSIIGGFFPPEE).
+
+              A call to ssiiggppeennddiinngg(2) returns a signal set that is  the  union
+              of the pending process‐directed signals and the signals that are
+              pending for the calling thread.
+
+              If a process‐directed signal is delivered to a thread group, and
+              the  thread  group  has installed a handler for the signal, then
+              the handler is invoked in exactly one, arbitrarily selected mem‐
+              ber of the thread group that has not  blocked  the  signal.   If
+              multiple  threads in a group are waiting to accept the same sig‐
+              nal using ssiiggwwaaiittiinnffoo(2), the kernel will arbitrarily select one
+              of these threads to receive the signal.
+
+       CCLLOONNEE__UUNNTTRRAACCEEDD (since Linux 2.5.46)
+              If CCLLOONNEE__UUNNTTRRAACCEEDD is specified, then a  tracing  process  cannot
+              force CCLLOONNEE__PPTTRRAACCEE on this child process.
+
+       CCLLOONNEE__VVFFOORRKK (since Linux 2.2)
+              If  CCLLOONNEE__VVFFOORRKK  is set, the execution of the calling process is
+              suspended until the child releases its virtual memory  resources
+              via a call to eexxeeccvvee(2) or __eexxiitt(2) (as with vvffoorrkk(2)).
+
+              If CCLLOONNEE__VVFFOORRKK is not set, then both the calling process and the
+              child  are schedulable after the call, and an application should
+              not rely on execution occurring in any particular order.
+
+       CCLLOONNEE__VVMM (since Linux 2.0)
+              If CCLLOONNEE__VVMM is set, the calling process and  the  child  process
+              run in the same memory space.  In particular, memory writes per‐
+              formed  by  the calling process or by the child process are also
+              visible in the other process.  Moreover, any memory  mapping  or
+              unmapping  performed  with  mmmmaapp(2) or mmuunnmmaapp(2) by the child or
+              calling process also affects the other process.
+
+              If CCLLOONNEE__VVMM is not set, the child process  runs  in  a  separate
+              copy  of  the memory space of the calling process at the time of
+              the clone call.  Memory writes or file mappings/unmappings  per‐
+              formed  by one of the processes do not affect the other, as with
+              ffoorrkk(2).
+
+              If the CCLLOONNEE__VVMM flag is specified and the  CCLLOONNEE__VVFFOORRKK  flag  is
+              not  specified,  then any alternate signal stack that was estab‐
+              lished by ssiiggaallttssttaacckk(2) is cleared in the child process.
+
+RREETTUURRNN VVAALLUUEE
+       On success, the thread ID of the  child  process  is  returned  in  the
+       caller’s  thread  of  execution.   On  failure,  -1  is returned in the
+       caller’s context, no child process is created, and _e_r_r_n_o is set to  in‐
+       dicate the error.
+
+EERRRROORRSS
+       EEAACCCCEESS (cclloonnee33() only)
+              CCLLOONNEE__IINNTTOO__CCGGRROOUUPP  was  specified  in _c_l___a_r_g_s_._f_l_a_g_s, but the re‐
+              strictions  (described  in  ccggrroouuppss(7))  on  placing  the  child
+              process  into the version 2 cgroup referred to by _c_l___a_r_g_s_._c_g_r_o_u_p
+              are not met.
+
+       EEAAGGAAIINN Too many processes are already running; see ffoorrkk(2).
+
+       EEBBUUSSYY (cclloonnee33() only)
+              CCLLOONNEE__IINNTTOO__CCGGRROOUUPP was specified in _c_l___a_r_g_s_._f_l_a_g_s, but  the  file
+              descriptor  specified  in  _c_l___a_r_g_s_._c_g_r_o_u_p  refers to a version 2
+              cgroup in which a domain controller is enabled.
+
+       EEEEXXIISSTT (cclloonnee33() only)
+              One (or more) of the PIDs specified in _s_e_t___t_i_d already exists in
+              the corresponding PID namespace.
+
+       EEIINNVVAALL Both CCLLOONNEE__SSIIGGHHAANNDD and CCLLOONNEE__CCLLEEAARR__SSIIGGHHAANNDD were specified in the
+              _f_l_a_g_s mask.
+
+       EEIINNVVAALL CCLLOONNEE__SSIIGGHHAANNDD was specified in the _f_l_a_g_s mask, but CCLLOONNEE__VVMM  was
+              not.  (Since Linux 2.6.0.)
+
+       EEIINNVVAALL CCLLOONNEE__TTHHRREEAADD  was specified in the _f_l_a_g_s mask, but CCLLOONNEE__SSIIGGHHAANNDD
+              was not.  (Since Linux 2.5.35.)
+
+       EEIINNVVAALL CCLLOONNEE__TTHHRREEAADD was specified in the _f_l_a_g_s mask,  but  the  current
+              process  previously called uunnsshhaarree(2) with the CCLLOONNEE__NNEEWWPPIIDD flag
+              or used sseettnnss(2) to reassociate itself with a PID namespace.
+
+       EEIINNVVAALL Both CCLLOONNEE__FFSS and CCLLOONNEE__NNEEWWNNSS were specified in the _f_l_a_g_s mask.
+
+       EEIINNVVAALL (since Linux 3.9)
+              Both CCLLOONNEE__NNEEWWUUSSEERR and CCLLOONNEE__FFSS  were  specified  in  the  _f_l_a_g_s
+              mask.
+
+       EEIINNVVAALL Both  CCLLOONNEE__NNEEWWIIPPCC and CCLLOONNEE__SSYYSSVVSSEEMM were specified in the _f_l_a_g_s
+              mask.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWPPIIDD and one (or both) of CCLLOONNEE__TTHHRREEAADD  or  CCLLOONNEE__PPAARREENNTT
+              were specified in the _f_l_a_g_s mask.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWUUSSEERR and CCLLOONNEE__TTHHRREEAADD were specified in the _f_l_a_g_s mask.
+
+       EEIINNVVAALL (since Linux 2.6.32)
+              CCLLOONNEE__PPAARREENNTT was specified, and the caller is an init process.
+
+       EEIINNVVAALL Returned  by the glibc cclloonnee() wrapper function when _f_n or _s_t_a_c_k
+              is specified as NULL.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWIIPPCC was specified in the _f_l_a_g_s mask, but the kernel was
+              not configured with the  CCOONNFFIIGG__SSYYSSVVIIPPCC  and  CCOONNFFIIGG__IIPPCC__NNSS  op‐
+              tions.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWNNEETT was specified in the _f_l_a_g_s mask, but the kernel was
+              not configured with the CCOONNFFIIGG__NNEETT__NNSS option.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWPPIIDD was specified in the _f_l_a_g_s mask, but the kernel was
+              not configured with the CCOONNFFIIGG__PPIIDD__NNSS option.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWUUSSEERR  was  specified  in the _f_l_a_g_s mask, but the kernel
+              was not configured with the CCOONNFFIIGG__UUSSEERR__NNSS option.
+
+       EEIINNVVAALL CCLLOONNEE__NNEEWWUUTTSS was specified in the _f_l_a_g_s mask, but the kernel was
+              not configured with the CCOONNFFIIGG__UUTTSS__NNSS option.
+
+       EEIINNVVAALL _s_t_a_c_k is not aligned to a suitable boundary for  this  architec‐
+              ture.  For example, on aarch64, _s_t_a_c_k must be a multiple of 16.
+
+       EEIINNVVAALL (cclloonnee33() only)
+              CCLLOONNEE__DDEETTAACCHHEEDD was specified in the _f_l_a_g_s mask.
+
+       EEIINNVVAALL (cclloonnee() only)
+              CCLLOONNEE__PPIIDDFFDD  was  specified  together with CCLLOONNEE__DDEETTAACCHHEEDD in the
+              _f_l_a_g_s mask.
+
+       EEIINNVVAALL (before Linux 6.9)
+              CCLLOONNEE__PPIIDDFFDD was specified  together  with  CCLLOONNEE__TTHHRREEAADD  in  the
+              _f_l_a_g_s mask.
+
+       EEIINNVVAALL (cclloonnee() only)
+              CCLLOONNEE__PPIIDDFFDD  was  specified together with CCLLOONNEE__PPAARREENNTT__SSEETTTTIIDD in
+              the _f_l_a_g_s mask.
+
+       EEIINNVVAALL (cclloonnee33() only)
+              _s_e_t___t_i_d___s_i_z_e is greater than the  number  of  nested  PID  name‐
+              spaces.
+
+       EEIINNVVAALL (cclloonnee33() only)
+              One of the PIDs specified in _s_e_t___t_i_d was an invalid.
+
+       EEIINNVVAALL (cclloonnee33() only)
+              CCLLOONNEE__TTHHRREEAADD  or  CCLLOONNEE__PPAARREENNTT  was specified in the _f_l_a_g_s mask,
+              but a signal was specified in _e_x_i_t___s_i_g_n_a_l.
+
+       EEIINNVVAALL (AArch64 only, Linux 4.6 and earlier)
+              _s_t_a_c_k was not aligned to a 128‐bit boundary.
+
+       EENNOOMMEEMM Cannot allocate sufficient memory to allocate a  task  structure
+              for  the  child,  or to copy those parts of the caller’s context
+              that need to be copied.
+
+       EENNOOSSPPCC (since Linux 3.7)
+              CCLLOONNEE__NNEEWWPPIIDD was specified in the _f_l_a_g_s mask, but the  limit  on
+              the  nesting  depth  of PID namespaces would have been exceeded;
+              see ppiidd__nnaammeessppaacceess(7).
+
+       EENNOOSSPPCC (since Linux 4.9; beforehand EEUUSSEERRSS)
+              CCLLOONNEE__NNEEWWUUSSEERR was specified in the  _f_l_a_g_s  mask,  and  the  call
+              would cause the limit on the number of nested user namespaces to
+              be exceeded.  See uusseerr__nnaammeessppaacceess(7).
+
+              From  Linux  3.11 to Linux 4.8, the error diagnosed in this case
+              was EEUUSSEERRSS.
+
+       EENNOOSSPPCC (since Linux 4.9)
+              One of the values in the _f_l_a_g_s mask specified the creation of  a
+              new user namespace, but doing so would have caused the limit de‐
+              fined  by  the  corresponding  file  in _/_p_r_o_c_/_s_y_s_/_u_s_e_r to be ex‐
+              ceeded.  For further details, see nnaammeessppaacceess(7).
+
+       EEOOPPNNOOTTSSUUPPPP (cclloonnee33() only)
+              CCLLOONNEE__IINNTTOO__CCGGRROOUUPP was specified in _c_l___a_r_g_s_._f_l_a_g_s, but  the  file
+              descriptor  specified  in  _c_l___a_r_g_s_._c_g_r_o_u_p  refers to a version 2
+              cgroup that is in the _d_o_m_a_i_n _i_n_v_a_l_i_d state.
+
+       EEPPEERRMM  CCLLOONNEE__NNEEWWCCGGRROOUUPP,   CCLLOONNEE__NNEEWWIIPPCC,   CCLLOONNEE__NNEEWWNNEETT,    CCLLOONNEE__NNEEWWNNSS,
+              CCLLOONNEE__NNEEWWPPIIDD,  or  CCLLOONNEE__NNEEWWUUTTSS was specified by an unprivileged
+              process (process without CCAAPP__SSYYSS__AADDMMIINN).
+
+       EEPPEERRMM  CCLLOONNEE__PPIIDD was specified by  a  process  other  than  process  0.
+              (This error occurs only on Linux 2.5.15 and earlier.)
+
+       EEPPEERRMM  CCLLOONNEE__NNEEWWUUSSEERR  was  specified  in the _f_l_a_g_s mask, but either the
+              effective user ID or the effective group ID of the  caller  does
+              not  have  a  mapping  in  the  parent namespace (see uusseerr__nnaammee‐‐
+              ssppaacceess(7)).
+
+       EEPPEERRMM (since Linux 3.9)
+              CCLLOONNEE__NNEEWWUUSSEERR was specified in the _f_l_a_g_s mask and the caller  is
+              in  a chroot environment (i.e., the caller’s root directory does
+              not match the root directory of the mount namespace in which  it
+              resides).
+
+       EEPPEERRMM (cclloonnee33() only)
+              _s_e_t___t_i_d___s_i_z_e  was  greater  than  zero, and the caller lacks the
+              CCAAPP__SSYYSS__AADDMMIINN capability in one or more of the  user  namespaces
+              that own the corresponding PID namespaces.
+
+       EERREESSTTAARRTTNNOOIINNTTRR (since Linux 2.6.17)
+              System  call  was interrupted by a signal and will be restarted.
+              (This can be seen only during a trace.)
+
+       EEUUSSEERRSS (Linux 3.11 to Linux 4.8)
+              CCLLOONNEE__NNEEWWUUSSEERR was specified in the _f_l_a_g_s mask, and the limit  on
+              the number of nested user namespaces would be exceeded.  See the
+              discussion of the EENNOOSSPPCC error above.
+
+VVEERRSSIIOONNSS
+       The  glibc  cclloonnee()  wrapper  function makes some changes in the memory
+       pointed to by _s_t_a_c_k (changes required to set the stack up correctly for
+       the child) _b_e_f_o_r_e invoking the cclloonnee() system call.  So, in cases where
+       cclloonnee() is used to recursively create children, do not use  the  buffer
+       employed for the parent’s stack as the stack of the child.
+
+       On  i386,  cclloonnee()  should not be called through vsyscall, but directly
+       through _i_n_t _$_0_x_8_0.
+
+   CC lliibbrraarryy//kkeerrnneell ddiiffffeerreenncceess
+       The raw cclloonnee() system call corresponds more closely to ffoorrkk(2) in that
+       execution in the child continues from the point of the call.  As  such,
+       the _f_n and _a_r_g arguments of the cclloonnee() wrapper function are omitted.
+
+       In  contrast  to the glibc wrapper, the raw cclloonnee() system call accepts
+       NULL as a _s_t_a_c_k argument (and cclloonnee33() likewise allows _c_l___a_r_g_s_._s_t_a_c_k to
+       be NULL).  In this case, the child uses a  duplicate  of  the  parent’s
+       stack.   (Copy‐on‐write  semantics  ensure that the child gets separate
+       copies of stack pages when either process modifies the stack.)  In this
+       case, for correct operation, the CCLLOONNEE__VVMM option should not  be  speci‐
+       fied.   (If  the child _s_h_a_r_e_s the parent’s memory because of the use of
+       the CCLLOONNEE__VVMM flag, then no copy‐on‐write duplication occurs  and  chaos
+       is likely to result.)
+
+       The  order  of  the  arguments also differs in the raw system call, and
+       there are variations in the arguments across architectures, as detailed
+       in the following paragraphs.
+
+       The raw system call interface on x86‐64 and  some  other  architectures
+       (including sh, tile, and alpha) is:
+
+           lloonngg cclloonnee((uunnssiiggnneedd lloonngg _f_l_a_g_s,, vvooiidd **_s_t_a_c_k,,
+                      iinntt **_p_a_r_e_n_t___t_i_d,, iinntt **_c_h_i_l_d___t_i_d,,
+                      uunnssiiggnneedd lloonngg _t_l_s));;
+
+       On  x86‐32,  and  several  other common architectures (including score,
+       ARM, ARM 64, PA‐RISC, arc, Power PC, xtensa, and MIPS),  the  order  of
+       the last two arguments is reversed:
+
+           lloonngg cclloonnee((uunnssiiggnneedd lloonngg _f_l_a_g_s,, vvooiidd **_s_t_a_c_k,,
+                     iinntt **_p_a_r_e_n_t___t_i_d,, uunnssiiggnneedd lloonngg _t_l_s,,
+                     iinntt **_c_h_i_l_d___t_i_d));;
+
+       On  the  cris  and s390 architectures, the order of the first two argu‐
+       ments is reversed:
+
+           lloonngg cclloonnee((vvooiidd **_s_t_a_c_k,, uunnssiiggnneedd lloonngg _f_l_a_g_s,,
+                      iinntt **_p_a_r_e_n_t___t_i_d,, iinntt **_c_h_i_l_d___t_i_d,,
+                      uunnssiiggnneedd lloonngg _t_l_s));;
+
+       On the microblaze architecture, an additional argument is supplied:
+
+           lloonngg cclloonnee((uunnssiiggnneedd lloonngg _f_l_a_g_s,, vvooiidd **_s_t_a_c_k,,
+                      iinntt _s_t_a_c_k___s_i_z_e,,         /* Size of stack */
+                      iinntt **_p_a_r_e_n_t___t_i_d,, iinntt **_c_h_i_l_d___t_i_d,,
+                      uunnssiiggnneedd lloonngg _t_l_s));;
+
+   bbllaacckkffiinn,, mm6688kk,, aanndd ssppaarrcc
+       The argument‐passing conventions on blackfin, m68k, and sparc are  dif‐
+       ferent  from  the descriptions above.  For details, see the kernel (and
+       glibc) source.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       cclloonnee33()
+              Linux 5.3.
+
+   LLiinnuuxx 22..44 aanndd eeaarrlliieerr
+       In the Linux 2.4.x series, CCLLOONNEE__TTHHRREEAADD generally  does  not  make  the
+       parent of the new thread the same as the parent of the calling process.
+       However, from Linux 2.4.7 to Linux 2.4.18 the CCLLOONNEE__TTHHRREEAADD flag implied
+       the CCLLOONNEE__PPAARREENNTT flag (as in Linux 2.6.0 and later).
+
+       In  Linux  2.4 and earlier, cclloonnee() does not take arguments _p_a_r_e_n_t___t_i_d,
+       _t_l_s, and _c_h_i_l_d___t_i_d.
+
+   iiaa6644
+       On ia64, a different interface is used:
+
+           iinntt ____cclloonnee22((ttyyppeeooff((iinntt ((vvooiidd **)))) **_f_n,,
+                        vvooiidd **_s_t_a_c_k___b_a_s_e,, ssiizzee__tt _s_t_a_c_k___s_i_z_e,,
+                        iinntt _f_l_a_g_s,, vvooiidd **_a_r_g,, ......
+                     /* ppiidd__tt **_p_a_r_e_n_t___t_i_d,, ssttrruucctt uusseerr__ddeesscc **_t_l_s,,
+                        ppiidd__tt **_c_h_i_l_d___t_i_d */ ));;
+
+       The prototype shown above is for the glibc wrapper  function;  for  the
+       system  call  itself,  the prototype can be described as follows (it is
+       identical to the cclloonnee() prototype on microblaze):
+
+           lloonngg cclloonnee22((uunnssiiggnneedd lloonngg _f_l_a_g_s,, vvooiidd **_s_t_a_c_k___b_a_s_e,,
+                       iinntt _s_t_a_c_k___s_i_z_e,,         /* Size of stack */
+                       iinntt **_p_a_r_e_n_t___t_i_d,, iinntt **_c_h_i_l_d___t_i_d,,
+                       uunnssiiggnneedd lloonngg _t_l_s));;
+
+       ____cclloonnee22() operates in the same way as cclloonnee(), except that  _s_t_a_c_k___b_a_s_e
+       points  to the lowest address of the child’s stack area, and _s_t_a_c_k___s_i_z_e
+       specifies the size of the stack pointed to by _s_t_a_c_k___b_a_s_e.
+
+NNOOTTEESS
+       One use of these system calls is to implement threads:  multiple  flows
+       of  control  in  a  program  that  run concurrently in a shared address
+       space.
+
+       The kkccmmpp(2) system call can be used to test whether two processes share
+       various resources such as a file descriptor table, System  V  semaphore
+       undo operations, or a virtual address space.
+
+       Handlers  registered  using pptthhrreeaadd__aattffoorrkk(3) are not executed during a
+       clone call.
+
+BBUUGGSS
+       GNU C library versions 2.3.4 up to and including 2.24 contained a wrap‐
+       per function for  ggeettppiidd(2)  that  performed  caching  of  PIDs.   This
+       caching relied on support in the glibc wrapper for cclloonnee(), but limita‐
+       tions  in the implementation meant that the cache was not up to date in
+       some circumstances.  In particular, if a signal was  delivered  to  the
+       child immediately after the cclloonnee() call, then a call to ggeettppiidd(2) in a
+       handler  for  the  signal  could  return the PID of the calling process
+       ("the parent"), if the clone wrapper had not yet had a chance to update
+       the PID cache in the child.  (This discussion ignores  the  case  where
+       the  child was created using CCLLOONNEE__TTHHRREEAADD, when ggeettppiidd(2) _s_h_o_u_l_d return
+       the same value in the child and in the  process  that  called  cclloonnee(),
+       since  the  caller  and  the  child  are in the same thread group.  The
+       stale‐cache problem also does not occur if the _f_l_a_g_s argument  includes
+       CCLLOONNEE__VVMM.)   To  get  the truth, it was sometimes necessary to use code
+       such as the following:
+
+           #include <syscall.h>
+
+           pid_t mypid;
+
+           mypid = syscall(SYS_getpid);
+
+       Because of the stale‐cache problem, as well as other problems noted  in
+       ggeettppiidd(2), the PID caching feature was removed in glibc 2.25.
+
+EEXXAAMMPPLLEESS
+       The following program demonstrates the use of cclloonnee() to create a child
+       process  that  executes in a separate UTS namespace.  The child changes
+       the hostname in its UTS namespace.  Both parent and child then  display
+       the  system  hostname, making it possible to see that the hostname dif‐
+       fers in the UTS namespaces of the parent and child.  For an example  of
+       the use of this program, see sseettnnss(2).
+
+       Within  the  sample  program, we allocate the memory that is to be used
+       for the child’s stack using mmmmaapp(2) rather than mmaalllloocc(3) for the  fol‐
+       lowing reasons:
+
+       •  mmmmaapp(2)  allocates  a block of memory that starts on a page boundary
+          and is a multiple of the page size.  This is useful if  we  want  to
+          establish a guard page (a page with protection PPRROOTT__NNOONNEE) at the end
+          of the stack using mmpprrootteecctt(2).
+
+       •  We can specify the MMAAPP__SSTTAACCKK flag to request a mapping that is suit‐
+          able  for  a  stack.  For the moment, this flag is a no‐op on Linux,
+          but it exists and has effect on some other systems, so we should in‐
+          clude it for portability.
+
+   PPrrooggrraamm ssoouurrccee
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <sched.h>
+       #include <signal.h>
+       #include <stdint.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <string.h>
+       #include <sys/mman.h>
+       #include <sys/types.h>
+       #include <sys/utsname.h>
+       #include <sys/wait.h>
+       #include <unistd.h>
+
+       static int              /* Start function for cloned child */
+       childFunc(void *arg)
+       {
+           struct utsname uts;
+
+           /* Change hostname in UTS namespace of child.  */
+
+           if (sethostname(arg, strlen(arg)) == -1)
+               err(EXIT_FAILURE, "sethostname");
+
+           /* Retrieve and display hostname.  */
+
+           if (uname(&uts) == -1)
+               err(EXIT_FAILURE, "uname");
+           printf("uts.nodename in child:  %s\n", uts.nodename);
+
+           /* Keep the namespace open for a while, by sleeping.
+              This allows some experimentation--for example, another
+              process might join the namespace.  */
+
+           sleep(200);
+
+           return 0;           /* Child terminates now */
+       }
+
+       #define STACK_SIZE (1024 * 1024)    /* Stack size for cloned child */
+
+       int
+       main(int argc, char *argv[])
+       {
+           char            *stack;         /* Start of stack buffer */
+           char            *stackTop;      /* End of stack buffer */
+           pid_t           pid;
+           struct utsname  uts;
+
+           if (argc < 2) {
+               fprintf(stderr, "Usage: %s <child-hostname>\n", argv[0]);
+               exit(EXIT_SUCCESS);
+           }
+
+           /* Allocate memory to be used for the stack of the child.  */
+
+           stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+           if (stack == MAP_FAILED)
+               err(EXIT_FAILURE, "mmap");
+
+           stackTop = stack + STACK_SIZE;  /* Assume stack grows downward */
+
+           /* Create child that has its own UTS namespace;
+              child commences execution in childFunc().  */
+
+           pid = clone(childFunc, stackTop, CLONE_NEWUTS | SIGCHLD, argv[1]);
+           if (pid == -1)
+               err(EXIT_FAILURE, "clone");
+           if (munmap(stack, STACK_SIZE))
+               err(EXIT_FAILURE, "munmap");
+           printf("clone() returned %jd\n", (intmax_t) pid);
+
+           /* Parent falls through to here */
+
+           sleep(1);           /* Give child time to change its hostname */
+
+           /* Display hostname in parent's UTS namespace.  This will be
+              different from hostname in child's UTS namespace.  */
+
+           if (uname(&uts) == -1)
+               err(EXIT_FAILURE, "uname");
+           printf("uts.nodename in parent: %s\n", uts.nodename);
+
+           if (waitpid(pid, NULL, 0) == -1)    /* Wait for child */
+               err(EXIT_FAILURE, "waitpid");
+           printf("child has terminated\n");
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       ffoorrkk(2),   ffuutteexx(2),   ggeettppiidd(2),    ggeettttiidd(2),    kkccmmpp(2),    mmmmaapp(2),
+       ppiiddffdd__ooppeenn(2),    sseett__tthhrreeaadd__aarreeaa(2),   sseett__ttiidd__aaddddrreessss(2),   sseettnnss(2),
+       ttkkiillll(2),   uunnsshhaarree(2),   wwaaiitt(2),   ccaappaabbiilliittiieess(7),    nnaammeessppaacceess(7),
+       pptthhrreeaaddss(7)
+
+Linux man‐pages (unreleased)      2025‐10‐12                          _c_l_o_n_e(2)

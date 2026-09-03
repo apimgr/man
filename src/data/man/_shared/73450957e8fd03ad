@@ -1,0 +1,291 @@
+MAC_DO(4)                BSD Kernel Interfaces Manual                MAC_DO(4)
+
+NNAAMMEE
+     mmaacc__ddoo — policy allowing unprivileged users to change process credentials
+
+SSYYNNOOPPSSIISS
+     To compile the mmaacc__ddoo policy into your kernel, place the following lines
+     in your kernel configuration file:
+
+           ooppttiioonnss MMAACC
+           ooppttiioonnss MMAACC__DDOO
+
+     Alternately, to load this policy module at boot time, place the following
+     line in your kernel configuration file:
+
+           ooppttiioonnss MMAACC
+
+     and in loader.conf(5):
+
+           mac_do_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmaacc__ddoo policy module allows unprivileged users to change process cre‐
+     dentials according to rules configured by the administrator.  It supports
+     per-jail configuration.
+
+     Currently, the mmaacc__ddoo policy module only produces effects to processes
+     spwaned from the _/_u_s_r_/_b_i_n_/_m_d_o executable, please see mdo(1) for more de‐
+     tails on this program.
+
+CCRREEDDEENNTTIIAALLSS RRUULLEESS
+     Rules specify which transitions of process credentials mmaacc__ddoo will allow,
+     based on current process credentials and the desired final ones.  They
+     are passed by an administrator in the form of a string having the spe‐
+     cific syntax described below in a top-bottom manner.  They have been de‐
+     signed to be able to finely describe the desired target credentials in a
+     safe and compact way.
+
+   TToopp--LLeevveell LLiisstt ooff RRuulleess
+     At the top, rules are a possibly empty list of individual rules separated
+     by a semi-colon (‘’);:
+           ⟨rules⟩  â¶  [⟨rule⟩ [‘;’ ⟨rule⟩]*]
+     They form a disjunction, i.e., mmaacc__ddoo authorizes a credentials transition
+     as soon as at least one rule in the list matches.
+
+     One rule is composed of a ⟨from⟩ part (also called “match”) and a ⟨to⟩
+     part (also called “target”), in this order, separated by a greater-than
+     sign (‘>’):
+           ⟨rule⟩  â¶  ⟨from⟩ ‘>’ ⟨to⟩
+
+   RRuullee''ss ⟨from⟩ Part
+     The first part of a rule, ⟨from⟩, is matched against the credentials of
+     the process requesting some credentials transition.  It has the form:
+           ⟨from⟩  â¶  ⟨type⟩ ‘=’ ⟨id⟩
+
+     ⟨type⟩ must be:
+           ⟨type⟩  â¶  [‘uid’ | ‘gid’]
+     i.e., one of the literal strings ‘uid’ or ‘gid’.  ⟨id⟩ must be the numer‐
+     ical ID of a user or group, and is matched with the current process real
+     ID of the corresponding type.
+
+   RRuullee''ss ⟨to⟩ Part
+     The second part of a rule, ⟨to⟩, is a comma-separated (‘’), non-empty
+     list of target clauses:
+           ⟨to⟩  â¶  ⟨target_clause⟩ [‘,’ ⟨target_clause⟩]*
+     Target clauses of a given rule also form a disjunction, i.e., the IDs
+     they specify are alternatives for the target credentials, except in some
+     cases described below.
+
+     The next subsections describe the syntax of target clauses, the defaults
+     that apply and the principle of non-redundancy and non-contradiction in
+     each rule's ⟨to⟩ part.
+
+   TTaarrggeett CCllaauusseess
+     A target clause in a rule's ⟨to⟩ part must be of one of the following
+     forms:
+           ⟨target_clause⟩  â¶  ‘any’
+           ⟨target_clause⟩  â¶  ⟨flags⟩ ⟨type⟩ ‘=’ ⟨id⟩
+     The first form is a compact way to specify that any target credentials
+     are allowed.  The second form is similar to that of ⟨from⟩ clauses, with
+     the following extensions:
+     ••   ⟨id⟩ may also be a literal ‘*’ or ‘any’ or ‘’..  ‘*’ and ‘any’ both
+         designate any ID for the specified ⟨type⟩, and are treated identi‐
+         cally.  ‘’.  designates the process' current IDs for the specified
+         ⟨type⟩, as explained below.
+     ••   ⟨flags⟩ may contain at most one of the ‘+’, ‘-’ and ‘’!  characters,
+         and may be non-empty only when ⟨type⟩ is ‘gid’.  Additionally, if
+         ⟨id⟩ is ‘*’ or ‘any’, only the ‘+’ flag may appear.
+
+     For target clauses of ‘gid’ type, an absence of flag indicates that the
+     specified group ID is allowed as the real, effective and/or saved group
+     IDs (the “primary” groups).  Conversely, the presence of any allowed flag
+     indicates that the specification concerns supplementary groups.  Each
+     flag has a specific meaning:
+     ••   ‘+’ indicates that the group ID is allowed as a supplementary group.
+     ••   ‘’!  indicates that the group ID is mandatory, i.e., it must be
+         listed in the supplementary groups.
+     ••   ‘-’ indicates that the group ID must not be listed in the supplemen‐
+         tary groups.
+     A specification with ‘-’ is only useful in conjunction with a ‘+’-tagged
+     specification where only one of them has ‘’.  as its ⟨id⟩.  Target
+     clauses having the ‘’!  or ‘-’ flag are “forcing” clauses, and as such do
+     not take part in the disjunction of the other target clauses but rather
+     unconditionally apply in their rule.
+
+     ‘’.  is a placeholder for IDs that the calling process already has on
+     privilege check.  For type ‘uid’, it designates any of the process' real,
+     effective or saved user IDs.  For type ‘gid’, its effect depends on
+     whether flags are present.  If none is present, it designates any of the
+     process' real, effective or saved group IDs.  If one is present, it des‐
+     ignates any of the process' supplementary groups.
+
+   DDeeffaauullttss ffoorr tthhee ⟨to⟩ Part
+     If the ⟨to⟩ part does not list a target clause with type ‘uid’, any of
+     the current user IDs of the calling process is accepted.  In other words,
+     in this case, mmaacc__ddoo behaves as if a target clause of:
+           uid=.
+     had been listed.
+
+     Similarly, if the ⟨to⟩ part does not list a target clause with type
+     ‘gid’, all the groups of the calling process are assumed to be required.
+     More precisely, each of the desired real, effective and saved group IDs
+     must be one of the current real, effective or saved group ID, and all
+     supplementary groups must be the same as those that are current.  It is
+     as if the ⟨to⟩ part had contained the following two clauses:
+           gid=.,!gid=.
+
+   NNoonn--RReedduunnddaannccyy aanndd NNoonn--CCoonnttrraaddiiccttiioonn iinn aa ⟨to⟩ Part
+     No two target clauses of a single rule may express the exact same logical
+     intent nor contradictory ones.
+
+     In practice, no two clauses may display the same ID except for group IDs
+     but only if, each time the same ID appears, it does so with a different
+     flag, or no flags only once.  Additionally, the specified flags in multi‐
+     ple occurences must not be contradictory.  For example, the same group ID
+     appearing with both ‘+’ and ‘-’ will cause rejection of the rule.
+
+   PPaarrssiinngg SSppeecciiffiiccss
+     Any amount of whitespace is allowed around tokens of the above grammar,
+     except that there may be no spaces between ⟨flags⟩ and ⟨id⟩ in target
+     clauses.
+
+     For convenience, numerical IDs may be specified as negative integers,
+     which are then converted to unsigned ones as specified in the C standard
+     for the _u_i_d___t and _g_i_d___t types, which are both 64-bit unsigned integers.
+
+RRUUNNTTIIMMEE CCOONNFFIIGGUURRAATTIIOONN
+     The following sysctl(8) knobs are available:
+
+     _s_e_c_u_r_i_t_y_._m_a_c_._d_o_._e_n_a_b_l_e_d
+             Enable the mmaacc__ddoo policy.  (Default: 1).
+
+     _s_e_c_u_r_i_t_y_._m_a_c_._d_o_._r_u_l_e_s
+             The list of credential rules, whose syntax is described in the
+             _C_R_E_D_E_N_T_I_A_L_S _R_U_L_E_S section above.  This list is specific to each
+             jail.  Please see the _J_A_I_L _S_U_P_P_O_R_T section below for more details
+             on the interaction of mmaacc__ddoo with jails.
+
+     _s_e_c_u_r_i_t_y_._m_a_c_._d_o_._p_r_i_n_t___p_a_r_s_e___e_r_r_o_r
+             Logs a message on trying to set incorrect rules via the
+             _s_e_c_u_r_i_t_y_._m_a_c_._d_o_._r_u_l_e_s sysctl(8) knob.
+
+JJAAIILL SSUUPPPPOORRTT
+     mmaacc__ddoo supports per-jail configuration of rules.
+
+     By default, at creation, a new jail has no credentials rules, effectively
+     disabling mmaacc__ddoo for its processes.
+
+     The following jail parameters are defined:
+
+     _m_a_c_._d_o  Possible values are:
+             ‘enable’   mmaacc__ddoo will enforce specific credential rules in the
+                        jail.  The _m_a_c_._d_o_._r_u_l_e_s jail parameter must also be
+                        set in this case.
+             ‘disable’  Disables mmaacc__ddoo in the jail.  Strictly equivalent to
+                        jail creation's default behavior and to setting the
+                        rules to an empty string.
+             ‘inherit’  The jail's credentials rules are inherited from the
+                        jail's parent (which may themselves have been
+                        inherited).  Modified rules propagate to all children
+                        jails configured for inheritance.
+
+     _m_a_c_._d_o_._r_u_l_e_s
+             The credentials rules for the jail.  It is always equal to the
+             value that can be retrieved by the sysctl(8) knob
+             _s_e_c_u_r_i_t_y_._m_a_c_._d_o_._r_u_l_e_s described in section _R_U_N_T_I_M_E _C_O_N_F_I_G_U_R_A_T_I_O_N.
+             If set, and the jail parameter _m_a_c_._d_o is not so explicitly, the
+             value of the latter will default to ‘disable’ if empty, else to
+             ‘enable’.
+
+     Each jail must have mdo(1) installed at path _/_u_s_r_/_b_i_n_/_m_d_o, as this path
+     is currently not configurable.
+
+EEXXAAMMPPLLEESS
+     Here are several examples of single rules matching processes having a
+     real user ID of 10001:
+
+     uid=10001>uid=10002
+             Allows the process to switch any of its real, effective or saved
+             user ID to 10002, but keeping the groups it is already in, and
+             with the same primary/supplementary groups split.
+
+     uid=10001>uid=10002,uid=10003
+             Same as the first example, but also allows to switch to UID 10003
+             instead of 10002.
+
+     uid=10001>uid=10002,gid=10002
+             Same as the first example, but the new primary groups must be set
+             to 10002 and no supplementary groups should be set.
+
+     uid=10001>uid=10002,gid=10002,+gid=.
+             Same as the previous example, but in addition allowing to retain
+             any current supplementary groups.
+
+     uid=10001>uid=10002,gid=10002,!gid=.
+             Same as the previous example, but with the additional constraint
+             that all current supplementary groups must be kept.
+
+     uid=10001>uid=10002,gid=10002,+gid=.,-gid=10001
+             Same as ‘uid=10001>uid=10002,gid=10002,+gid=.’ above, but 10001
+             cannot be retained as a supplementary group.
+
+     uid=10001>uid=10002,gid=10002,+gid=.,!gid=10003
+             Same as ‘uid=10001>uid=10002,gid=10002,+gid=.’ above, with the
+             additional constraint that 10003 must appear in the supplementary
+             groups.
+
+     uid=10001>uid=10002,gid=*,+gid=*
+             Same as the first example, but lifting any constraints on groups,
+             allowing the process to become part of any groups it sees fit.
+
+     Here are several examples of single rules matching processes having a
+     real group ID of 10001:
+
+     gid=10001>uid=0
+             Makes 10001 a more powerful ‘wheel’ group, allowing its members
+             to switch to root without password.
+
+     gid=10001>gid=10002
+             Allows the process to enter GID 10002 as a primary group, but
+             only if giving up all its supplementary groups.
+
+     security.mac.do.rules=gid=10001>gid=10002,+gid=.
+             Same as the previous example, but allows to retain any current
+             supplementary groups.
+
+     gid=10001>gid=10002,!gid=.
+             Same as the previous example, but with the additional constraint
+             that all current supplementary groups must be kept.
+
+SSEEEE AALLSSOO
+     mdo(1), setcred(2), mac(4), jail(8), sysctl(8)
+
+AAUUTTHHOORRSS
+     Olivier Certner <_o_l_c_e_@_F_r_e_e_B_S_D_._o_r_g>
+     Baptiste Daroussin <_b_a_p_t_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     Currently, mmaacc__ddoo considers only credentials transitions requested
+     through the setcred(2) system call.  This system call was in large part
+     created so that mmaacc__ddoo can see whole credentials transitions to decide
+     whether to authorize them, which the traditional UNIX's piecewise ap‐
+     proach of successively changing different parts of them cannot allow.
+
+     However, calls to traditional or standard credentials-changing functions
+     can be considered as full transitions on their own, however limited, and
+     as such should be equally monitored by mmaacc__ddoo.  Future work will lift
+     this restriction.
+
+SSEECCUURRIITTYY CCOONNSSIIDDEERRAATTIIOONNSS
+     The threat model for mmaacc__ddoo is to consider userland programs as generally
+     untrustable to decide upon which credentials changes are acceptable.  It
+     is in contrast with the traditional UNIX way to change credentials, in
+     which specialized programs are installed with the setuid bit, giving them
+     full administrator privileges so that they are effectively able to estab‐
+     lish new ones.  Vulnerabilities in such credentials-changing programs can
+     have catastrophic consequences on the integrity of the system.
+
+     Consequently, mmaacc__ddoo does not rely on companion userland programs to de‐
+     cide whether some credentials transition is acceptable.  Instead, it
+     maintains its own configuration independently from the userland password
+     and group databases.  Establishing this configuration currently itself
+     relies on userland programs issuing calls to sysctl(3) or jail(2).  It
+     should thus be established near system boot or jail start, before any
+     possible attacks could happen on the system, and further measures should
+     be taken to ensure that potential corruptions does not affect the config‐
+     uration in subsequent restarts, such as re-establishing pristine state or
+     ensuring that the boot procedure up to the configuration of mmaacc__ddoo can be
+     trusted.
+
+BSD                            December 19, 2024                           BSD

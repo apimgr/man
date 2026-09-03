@@ -1,0 +1,168 @@
+MOD_CC(4)                BSD Kernel Interfaces Manual                MOD_CC(4)
+
+NNAAMMEE
+     mmoodd__cccc — Modular congestion control
+
+DDEESSCCRRIIPPTTIIOONN
+     The modular congestion control framework allows the TCP implementation to
+     dynamically change the congestion control algorithm used by new and ex‐
+     isting connections.  Algorithms are identified by a unique ascii(7) name.
+     Algorithm modules can be compiled into the kernel or loaded as kernel
+     modules using the kld(4) facility.
+
+     The default algorithm is CUBIC, and all connections use the default un‐
+     less explicitly overridden using the TCP_CONGESTION socket option (see
+     tcp(4) for details).  The default can be changed using a sysctl(3) MIB
+     variable detailed in the _M_I_B _V_a_r_i_a_b_l_e_s section below.
+
+     Algorithm specific parameters can be set or queried using the
+     TCP_CCALGOOPT socket option (see tcp(4) for details).  Callers must pass
+     a pointer to an algorithm specific data, and specify its size.
+
+     Unloading a congestion control module will fail if it is used as a de‐
+     fault by any Vnet.  When unloading a module, the Vnet default is used to
+     switch a connection to an alternate congestion control.  Note that the
+     new congestion control module may fail to initialize its internal memory,
+     if so it will fail the module unload.  If this occurs often times retry‐
+     ing the unload will succeed since the temporary memory shortage as the
+     new CC module malloc's memory, that prevented the switch is often tran‐
+     sient.
+
+MMIIBB VVaarriiaabblleess
+     The framework exposes the following variables in the _n_e_t_._i_n_e_t_._t_c_p_._c_c
+     branch of the sysctl(3) MIB:
+
+     _a_v_a_i_l_a_b_l_e                       Read-only list of currently available
+                                     congestion control algorithms by name.
+
+     _a_l_g_o_r_i_t_h_m                       Returns the current default congestion
+                                     control algorithm when read, and changes
+                                     the default when set.  When attempting to
+                                     change the default algorithm, this vari‐
+                                     able should be set to one of the names
+                                     listed by the _n_e_t_._i_n_e_t_._t_c_p_._c_c_._a_v_a_i_l_a_b_l_e
+                                     MIB variable.
+
+     _a_b_e                             Enable support for RFC 8511, which alters
+                                     the window decrease factor applied to the
+                                     congestion window in response to an ECN
+                                     congestion signal.  Refer to individual
+                                     congestion control man pages to determine
+                                     if they implement support for ABE and for
+                                     configuration details.
+
+     _a_b_e___f_r_l_o_s_s_r_e_d_u_c_e                If non-zero, apply standard beta instead
+                                     of ABE-beta during ECN-signalled conges‐
+                                     tion recovery episodes if loss also needs
+                                     to be repaired.
+
+     _h_y_s_t_a_r_t_p_l_u_s_p_l_u_s_._b_b_l_o_g_s          This boolean controls if black box log‐
+                                     ging will be done for hystart++ events.
+                                     If set to zero (the default) no logging
+                                     is performed.  If set to one then black
+                                     box logs will be generated on all hys‐
+                                     tart++ events.
+
+     _h_y_s_t_a_r_t_p_l_u_s_p_l_u_s_._c_s_s___r_o_u_n_d_s      This value controls the number of rounds
+                                     that CSS runs for.  The default value
+                                     matches the current internet-draft of 5.
+
+     _h_y_s_t_a_r_t_p_l_u_s_p_l_u_s_._c_s_s___g_r_o_w_t_h___d_i_v  This value controls the divisor applied
+                                     to slowstart during CSS.  The default
+                                     value matches the current internet-draft
+                                     of 4.
+
+     _h_y_s_t_a_r_t_p_l_u_s_p_l_u_s_._n___r_t_t_s_a_m_p_l_e_s    This value controls how many rtt samples
+                                     must be collected in each round for hys‐
+                                     tart++ to be active.  The default value
+                                     matches the current internet-draft of 8.
+
+     _h_y_s_t_a_r_t_p_l_u_s_p_l_u_s_._m_a_x_r_t_t___t_h_r_e_s_h   This value controls the maximum rtt vari‐
+                                     ance clamp when considering if CSS is
+                                     needed.  The default value matches the
+                                     current internet-draft of 16000 (in mi‐
+                                     croseconds).  For further explanation
+                                     please see the internet-draft.
+
+     _h_y_s_t_a_r_t_p_l_u_s_p_l_u_s_._m_i_n_r_t_t___t_h_r_e_s_h   This value controls the minimum rtt vari‐
+                                     ance clamp when considering if CSS is
+                                     needed.  The default value matches the
+                                     current internet-draft of 4000 (in mi‐
+                                     croseconds).  For further explanation
+                                     please see the internet-draft.
+
+     Each congestion control module may also expose other MIB variables to
+     control their behaviour.  Note that both NewReno and CUBIC now support
+     Hystart++ based on the version 3 of the internet-draft.
+
+KKeerrnneell CCoonnffiigguurraattiioonn
+     All of the available congestion control modules may also be loaded via
+     kernel configutation options.  A kernel configuration is required to have
+     at least one congestion control algorithm built into it via kernel option
+     and a system default specified.  Compilation of the kernel will fail if
+     these two conditions are not met.
+
+KKeerrnneell CCoonnffiigguurraattiioonn OOppttiioonnss
+     The framework exposes the following kernel configuration options.
+
+     _C_C___N_E_W_R_E_N_O  This directive loads the NewReno congestion control algo‐
+                 rithm.
+
+     _C_C___C_U_B_I_C    This directive loads the CUBIC congestion control algorithm
+                 and is included in GENERIC by default.
+
+     _C_C___V_E_G_A_S    This directive loads the vegas congestion control algorithm,
+                 note that this algorithm also requires the TCP_HHOOK option
+                 as well.
+
+     _C_C___C_D_G      This directive loads the cdg congestion control algorithm,
+                 note that this algorithm also requires the TCP_HHOOK option
+                 as well.
+
+     _C_C___D_C_T_C_P    This directive loads the dctcp congestion control algorithm.
+
+     _C_C___H_D       This directive loads the hd congestion control algorithm,
+                 note that this algorithm also requires the TCP_HHOOK option
+                 as well.
+
+     _C_C___C_H_D      This directive loads the chd congestion control algorithm,
+                 note that this algorithm also requires the TCP_HHOOK option
+                 as well.
+
+     _C_C___H_T_C_P     This directive loads the htcp congestion control algorithm.
+
+     _C_C___D_E_F_A_U_L_T  This directive specifies the string that represents the name
+                 of the system default algorithm, the GENERIC kernel defaults
+                 this to CUBIC.
+
+SSEEEE AALLSSOO
+     cc_cdg(4), cc_chd(4), cc_cubic(4), cc_dctcp(4), cc_hd(4), cc_htcp(4),
+     cc_newreno(4), cc_vegas(4), tcp(4), config(5), config(8), mod_cc(9)
+
+AACCKKNNOOWWLLEEDDGGEEMMEENNTTSS
+     Development and testing of this software were made possible in part by
+     grants from the FreeBSD Foundation and Cisco University Research Program
+     Fund at Community Foundation Silicon Valley.
+
+HHIISSTTOORRYY
+     The mmoodd__cccc modular congestion control framework first appeared in
+     FreeBSD 9.0.
+
+     The framework was first released in 2007 by James Healy and Lawrence
+     Stewart whilst working on the NewTCP research project at Swinburne Uni‐
+     versity of Technology's Centre for Advanced Internet Architectures, Mel‐
+     bourne, Australia, which was made possible in part by a grant from the
+     Cisco University Research Program Fund at Community Foundation Silicon
+     Valley.  More details are available at:
+
+     http://caia.swin.edu.au/urp/newtcp/
+
+AAUUTTHHOORRSS
+     The mmoodd__cccc facility was written by Lawrence Stewart
+     <_l_s_t_e_w_a_r_t_@_F_r_e_e_B_S_D_._o_r_g>, James Healy <_j_i_m_m_y_@_d_e_e_f_a_._c_o_m> and David Hayes
+     <_d_a_v_i_d_._h_a_y_e_s_@_i_e_e_e_._o_r_g>.
+
+     This manual page was written by David Hayes <_d_a_v_i_d_._h_a_y_e_s_@_i_e_e_e_._o_r_g> and
+     Lawrence Stewart <_l_s_t_e_w_a_r_t_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                           September 13, 2022                           BSD

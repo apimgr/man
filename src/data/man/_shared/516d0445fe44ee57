@@ -1,0 +1,333 @@
+PERLFORK(1)            Perl Programmers Reference Guide            PERLFORK(1)
+
+
+
+NNAAMMEE
+       perlfork - Perl's fork() emulation
+
+SSYYNNOOPPSSIISS
+           NOTE:  As of the 5.8.0 release, fork() emulation has considerably
+           matured.  However, there are still a few known bugs and differences
+           from real fork() that might affect you.  See the "BUGS" and
+           "CAVEATS AND LIMITATIONS" sections below.
+
+       Perl provides a ffoorrkk(()) keyword that corresponds to the Unix system call
+       of the same name.  On most Unix-like platforms where the ffoorrkk(()) system
+       call is available, Perl's ffoorrkk(()) simply calls it.
+
+       On some platforms such as Windows where the ffoorrkk(()) system call is not
+       available, Perl can be built to emulate ffoorrkk(()) at the interpreter
+       level.  While the emulation is designed to be as compatible as possible
+       with the real ffoorrkk(()) at the level of the Perl program, there are
+       certain important differences that stem from the fact that all the
+       pseudo child "processes" created this way live in the same real process
+       as far as the operating system is concerned.
+
+       This document provides a general overview of the capabilities and
+       limitations of the ffoorrkk(()) emulation.  Note that the issues discussed
+       here are not applicable to platforms where a real ffoorrkk(()) is available
+       and Perl has been configured to use it.
+
+DDEESSCCRRIIPPTTIIOONN
+       The ffoorrkk(()) emulation is implemented at the level of the Perl
+       interpreter.  What this means in general is that running ffoorrkk(()) will
+       actually clone the running interpreter and all its state, and run the
+       cloned interpreter in a separate thread, beginning execution in the new
+       thread just after the point where the ffoorrkk(()) was called in the parent.
+       We will refer to the thread that implements this child "process" as the
+       pseudo-process.
+
+       To the Perl program that called ffoorrkk(()), all this is designed to be
+       transparent.  The parent returns from the ffoorrkk(()) with a pseudo-process
+       ID that can be subsequently used in any process-manipulation functions;
+       the child returns from the ffoorrkk(()) with a value of 0 to signify that it
+       is the child pseudo-process.
+
+   BBeehhaavviioorr ooff ootthheerr PPeerrll ffeeaattuurreess iinn ffoorrkkeedd ppsseeuuddoo--pprroocceesssseess
+       Most Perl features behave in a natural way within pseudo-processes.
+
+       $$ or $PROCESS_ID
+               This special variable is correctly set to the pseudo-process
+               ID.  It can be used to identify pseudo-processes within a
+               particular session.  Note that this value is subject to
+               recycling if any pseudo-processes are launched after others
+               have been wwaaiitt(())-ed on.
+
+       %ENV    Each pseudo-process maintains its own virtual environment.
+               Modifications to %ENV affect the virtual environment, and are
+               only visible within that pseudo-process, and in any processes
+               (or pseudo-processes) launched from it.
+
+       cchhddiirr(()) and all other builtins that accept filenames
+               Each pseudo-process maintains its own virtual idea of the
+               current directory.  Modifications to the current directory
+               using cchhddiirr(()) are only visible within that pseudo-process, and
+               in any processes (or pseudo-processes) launched from it.  All
+               file and directory accesses from the pseudo-process will
+               correctly map the virtual working directory to the real working
+               directory appropriately.
+
+       wwaaiitt(()) and wwaaiittppiidd(())
+               wwaaiitt(()) and wwaaiittppiidd(()) can be passed a pseudo-process ID returned
+               by ffoorrkk(()).  These calls will properly wait for the termination
+               of the pseudo-process and return its status.
+
+       kkiillll(())  "kill('KILL', ...)" can be used to terminate a pseudo-process
+               by passing it the ID returned by ffoorrkk(()). The outcome of kill on
+               a pseudo-process is unpredictable and it should not be used
+               except under dire circumstances, because the operating system
+               may not guarantee integrity of the process resources when a
+               running thread is terminated.  The process which implements the
+               pseudo-processes can be blocked and the Perl interpreter hangs.
+               Note that using "kill('KILL', ...)" on a pseudo-pprroocceessss(()) may
+               typically cause memory leaks, because the thread that
+               implements the pseudo-process does not get a chance to clean up
+               its resources.
+
+               "kill('TERM', ...)" can also be used on pseudo-processes, but
+               the signal will not be delivered while the pseudo-process is
+               blocked by a system call, e.g. waiting for a socket to connect,
+               or trying to read from a socket with no data available.
+               Starting in Perl 5.14 the parent process will not wait for
+               children to exit once they have been signalled with
+               "kill('TERM', ...)" to avoid deadlock during process exit.  You
+               will have to explicitly call wwaaiittppiidd(()) to make sure the child
+               has time to clean-up itself, but you are then also responsible
+               that the child is not blocking on I/O either.
+
+       eexxeecc(())  Calling eexxeecc(()) within a pseudo-process actually spawns the
+               requested executable in a separate process and waits for it to
+               complete before exiting with the same exit status as that
+               process.  This means that the process ID reported within the
+               running executable will be different from what the earlier Perl
+               ffoorrkk(()) might have returned.  Similarly, any process
+               manipulation functions applied to the ID returned by ffoorrkk(())
+               will affect the waiting pseudo-process that called eexxeecc(()), not
+               the real process it is waiting for after the eexxeecc(()).
+
+               When eexxeecc(()) is called inside a pseudo-process then DESTROY
+               methods and END blocks will still be called after the external
+               process returns.
+
+       eexxiitt(())  eexxiitt(()) always exits just the executing pseudo-process, after
+               automatically wwaaiitt(())-ing for any outstanding child pseudo-
+               processes.  Note that this means that the process as a whole
+               will not exit unless all running pseudo-processes have exited.
+               See below for some limitations with open filehandles.
+
+       Open handles to files, directories and network sockets
+               All open handles are dduupp(())-ed in pseudo-processes, so that
+               closing any handles in one process does not affect the others.
+               See below for some limitations.
+
+   RReessoouurrccee lliimmiittss
+       In the eyes of the operating system, pseudo-processes created via the
+       ffoorrkk(()) emulation are simply threads in the same process.  This means
+       that any process-level limits imposed by the operating system apply to
+       all pseudo-processes taken together.  This includes any limits imposed
+       by the operating system on the number of open file, directory and
+       socket handles, limits on disk space usage, limits on memory size,
+       limits on CPU utilization etc.
+
+   KKiilllliinngg tthhee ppaarreenntt pprroocceessss
+       If the parent process is killed (either using Perl's kkiillll(()) builtin, or
+       using some external means) all the pseudo-processes are killed as well,
+       and the whole process exits.
+
+   LLiiffeettiimmee ooff tthhee ppaarreenntt pprroocceessss aanndd ppsseeuuddoo--pprroocceesssseess
+       During the normal course of events, the parent process and every
+       pseudo-process started by it will wait for their respective pseudo-
+       children to complete before they exit.  This means that the parent and
+       every pseudo-child created by it that is also a pseudo-parent will only
+       exit after their pseudo-children have exited.
+
+       Starting with Perl 5.14 a parent will not wwaaiitt(()) automatically for any
+       child that has been signalled with "kill('TERM', ...)"  to avoid a
+       deadlock in case the child is blocking on I/O and never receives the
+       signal.
+
+CCAAVVEEAATTSS AANNDD LLIIMMIITTAATTIIOONNSS
+       BEGIN blocks
+               The ffoorrkk(()) emulation will not work entirely correctly when
+               called from within a BEGIN block.  The forked copy will run the
+               contents of the BEGIN block, but will not continue parsing the
+               source stream after the BEGIN block.  For example, consider the
+               following code:
+
+                   BEGIN {
+                       fork and exit;          # fork child and exit the parent
+                       print "inner\n";
+                   }
+                   print "outer\n";
+
+               This will print:
+
+                   inner
+
+               rather than the expected:
+
+                   inner
+                   outer
+
+               This limitation arises from fundamental technical difficulties
+               in cloning and restarting the stacks used by the Perl parser in
+               the middle of a parse.
+
+       Open filehandles
+               Any filehandles open at the time of the ffoorrkk(()) will be
+               dduupp(())-ed.  Thus, the files can be closed independently in the
+               parent and child, but beware that the dduupp(())-ed handles will
+               still share the same seek pointer.  Changing the seek position
+               in the parent will change it in the child and vice-versa.  One
+               can avoid this by opening files that need distinct seek
+               pointers separately in the child.
+
+               On some operating systems, notably Solaris and Unixware,
+               calling exit() from a child process will flush and close open
+               filehandles in the parent, thereby corrupting the filehandles.
+               On these systems, calling _exit() is suggested instead.
+               _exit() is available in Perl through the "POSIX" module.
+               Please consult your system's manpages for more information on
+               this.
+
+       Open directory handles
+               Perl will completely read from all open directory handles until
+               they reach the end of the stream.  It will then sseeeekkddiirr(()) back
+               to the original location and all future rreeaaddddiirr(()) requests will
+               be fulfilled from the cache buffer.  That means that neither
+               the directory handle held by the parent process nor the one
+               held by the child process will see any changes made to the
+               directory after the ffoorrkk(()) call.
+
+               Note that rreewwiinnddddiirr(()) has a similar limitation on Windows and
+               will not force rreeaaddddiirr(()) to read the directory again either.
+               Only a newly opened directory handle will reflect changes to
+               the directory.
+
+       Forking pipe ooppeenn(()) not yet implemented
+               The "open(FOO, "|-")" and "open(BAR, "-|")" constructs are not
+               yet implemented.  This limitation can be easily worked around
+               in new code by creating a pipe explicitly.  The following
+               example shows how to write to a forked child:
+
+                   # simulate open(FOO, "|-")
+                   sub pipe_to_fork ($) {
+                       my $parent = shift;
+                       pipe my $child, $parent or die;
+                       my $pid = fork();
+                       die "fork() failed: $!" unless defined $pid;
+                       if ($pid) {
+                           close $child;
+                       }
+                       else {
+                           close $parent;
+                           open(STDIN, "<&=" . fileno($child)) or die;
+                       }
+                       $pid;
+                   }
+
+                   if (pipe_to_fork('FOO')) {
+                       # parent
+                       print FOO "pipe_to_fork\n";
+                       close FOO;
+                   }
+                   else {
+                       # child
+                       while (<STDIN>) { print; }
+                       exit(0);
+                   }
+
+               And this one reads from the child:
+
+                   # simulate open(FOO, "-|")
+                   sub pipe_from_fork ($) {
+                       my $parent = shift;
+                       pipe $parent, my $child or die;
+                       my $pid = fork();
+                       die "fork() failed: $!" unless defined $pid;
+                       if ($pid) {
+                           close $child;
+                       }
+                       else {
+                           close $parent;
+                           open(STDOUT, ">&=" . fileno($child)) or die;
+                       }
+                       $pid;
+                   }
+
+                   if (pipe_from_fork('BAR')) {
+                       # parent
+                       while (<BAR>) { print; }
+                       close BAR;
+                   }
+                   else {
+                       # child
+                       print "pipe_from_fork\n";
+                       exit(0);
+                   }
+
+               Forking pipe ooppeenn(()) constructs will be supported in future.
+
+       Global state maintained by XSUBs
+               External subroutines (XSUBs) that maintain their own global
+               state may not work correctly.  Such XSUBs will either need to
+               maintain locks to protect simultaneous access to global data
+               from different pseudo-processes, or maintain all their state on
+               the Perl symbol table, which is copied naturally when ffoorrkk(()) is
+               called.  A callback mechanism that provides extensions an
+               opportunity to clone their state will be provided in the near
+               future.
+
+       Interpreter embedded in larger application
+               The ffoorrkk(()) emulation may not behave as expected when it is
+               executed in an application which embeds a Perl interpreter and
+               calls Perl APIs that can evaluate bits of Perl code.  This
+               stems from the fact that the emulation only has knowledge about
+               the Perl interpreter's own data structures and knows nothing
+               about the containing application's state.  For example, any
+               state carried on the application's own call stack is out of
+               reach.
+
+       Thread-safety of extensions
+               Since the ffoorrkk(()) emulation runs code in multiple threads,
+               extensions calling into non-thread-safe libraries may not work
+               reliably when calling ffoorrkk(()).  As Perl's threading support
+               gradually becomes more widely adopted even on platforms with a
+               native ffoorrkk(()), such extensions are expected to be fixed for
+               thread-safety.
+
+PPOORRTTAABBIILLIITTYY CCAAVVEEAATTSS
+       In portable Perl code, "kill(9, $child)" must not be used on forked
+       processes.  Killing a forked process is unsafe and has unpredictable
+       results.  See "kkiillll(())", above.
+
+BBUUGGSS
+       •       Having pseudo-process IDs be negative integers breaks down for
+               the integer -1 because the wwaaiitt(()) and wwaaiittppiidd(()) functions treat
+               this number as being special.  The tacit assumption in the
+               current implementation is that the system never allocates a
+               thread ID of 1 for user threads.  A better representation for
+               pseudo-process IDs will be implemented in future.
+
+       •       In certain cases, the OS-level handles created by the ppiippee(()),
+               ssoocckkeett(()), and aacccceepptt(()) operators are apparently not duplicated
+               accurately in pseudo-processes.  This only happens in some
+               situations, but where it does happen, it may result in
+               deadlocks between the read and write ends of pipe handles, or
+               inability to send or receive data across socket handles.
+
+       •       This document may be incomplete in some respects.
+
+AAUUTTHHOORR
+       Support for concurrent interpreters and the ffoorrkk(()) emulation was
+       implemented by ActiveState, with funding from Microsoft Corporation.
+
+       This document is authored and maintained by Gurusamy Sarathy
+       <gsar@activestate.com>.
+
+SSEEEE AALLSSOO
+       "fork" in perlfunc, perlipc
+
+
+
+perl v5.40.1                      2015-04-25                       PERLFORK(1)

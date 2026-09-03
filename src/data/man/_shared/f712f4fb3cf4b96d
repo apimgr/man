@@ -1,0 +1,193 @@
+AR(5)                       BSD File Formats Manual                      AR(5)
+
+NNAAMMEE
+     aarr — archive file format for ar(1) and ranlib(1)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<aarr..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     ar(1) archives are created and managed by the ar(1) and ranlib(1) utili‐
+     ties.  These archives are typically used during program development to
+     hold libraries of program objects.  An ar(1) archive is contained in a
+     single operating system file.
+
+     This manual page documents two variants of the ar(1) archive format: the
+     BSD archive format, and the SVR4/GNU archive format.
+
+     In both variants the archive file starts with an identifying byte se‐
+     quence of the seven ASCII characters ‘!<arch>’ followed by a ASCII line‐
+     feed character (see the constant “ARMAG” in the header file <_a_r_._h>).
+
+     Archive members follow the initial identifying byte sequence.  Each ar‐
+     chive member is prefixed by a fixed size header describing the file at‐
+     tributes associated with the member.
+
+   AArrcchhiivvee HHeeaaddeerrss
+     An archive header describes the file attributes for the archive member
+     that follows it.  The aarr format only supports a limited number of at‐
+     tributes: the file name, the file creation time stamp, the uid and gid of
+     the creator, the file mode and the file size.
+
+     Archive headers are placed at an even byte offset in the archive file.
+     If the data for an archive member ends at an odd byte offset, then a pad‐
+     ding byte with value 0x0A is used to position the next archive header on
+     an even byte offset.
+
+     An archive header comprises the following fixed sized fields:
+
+     _a_r___n_a_m_e     (16 bytes) The file name of the archive member.  The format
+                 of this field varies between the BSD and SVR4/GNU formats and
+                 is described in more detail in the section _R_e_p_r_e_s_e_n_t_i_n_g _F_i_l_e
+                 _N_a_m_e_s below.
+
+     _a_r___d_a_t_e     (12 bytes) The file modification time for the member in sec‐
+                 onds since the epoch, encoded as a decimal number.
+
+     _a_r___u_i_d      (6 bytes) The uid associated with the archive member, encoded
+                 as a decimal number.
+
+     _a_r___g_i_d      (6 bytes) The gid associated with the archive member, encoded
+                 as a decimal number.
+
+     _a_r___m_o_d_e     (8 bytes) The file mode for the archive member, encoded as an
+                 octal number.
+
+     _a_r___s_i_z_e     (10 bytes) In the SVR4/GNU archive format this field holds
+                 the size in bytes of the archive member, encoded as a decimal
+                 number.  In the BSD archive format, for short file names,
+                 this field holds the size in bytes of the archive member, en‐
+                 coded as a decimal number.  For long file names (see
+                 _R_e_p_r_e_s_e_n_t_i_n_g _F_i_l_e _N_a_m_e_s below), the field contains the com‐
+                 bined size of the archive member and its file name, encoded
+                 as a decimal number.
+
+     _a_r___f_m_a_g     (2 bytes) This field holds 2 bytes with values 0x96 and 0x0A
+                 respectively, marking the end of the header.
+
+     Unused bytes in the fields of an archive header are set to the value
+     0x20.
+
+   RReepprreesseennttiinngg FFiillee NNaammeess
+     The BSD and SVR4/GNU variants use different schemes for encoding file
+     names for members.
+
+     BSD       File names that are up to 16 bytes long and which do not con‐
+               tain embedded spaces are stored directly in the _a_r___n_a_m_e field
+               of the archive header.  File names that are either longer than
+               16 bytes or which contain embedded spaces are stored immedi‐
+               ately after the archive header and the _a_r___n_a_m_e field of the ar‐
+               chive header is set to the string “#1/” followed by a decimal
+               representation of the number of bytes needed for the file name.
+               In addition, the _a_r___s_i_z_e field of the archive header is set to
+               the decimal representation of the combined sizes of the archive
+               member and the file name.  The file contents of the member fol‐
+               lows the file name without further padding.
+
+               As an example, if the file name for a member was “A B” and its
+               contents was the string “C D”, then the _a_r___n_a_m_e field of the
+               header would contain “#1/3”, the _a_r___s_i_z_e field of the header
+               would contain “6”, and the bytes immediately following the
+               header would be 0x41, 0x20, 0x42, 0x43, 0x20 and 0x44 (ASCII “A
+               BC D”).
+
+     SVR4/GNU  File names that are up to 15 characters long are stored di‐
+               rectly in the _a_r___n_a_m_e field of the header, terminated by a “/”
+               character.
+
+               If the file name is larger than would fit in space for the
+               _a_r___n_a_m_e field, then the actual file name is kept in the archive
+               string table (see _A_r_c_h_i_v_e _S_t_r_i_n_g _T_a_b_l_e_s below), and the decimal
+               offset of the file name in the string table is stored in the
+               _a_r___n_a_m_e field, prefixed by a “/” character.
+
+               As an example, if the real file name has been stored at offset
+               768 in the archive string table, the _a_r___n_a_m_e field of the
+               header will contain the string “/768”.
+
+   SSppeecciiaall AArrcchhiivvee MMeemmbbeerrss
+     The following archive members are special.
+
+     “/”     In the SVR4/GNU variant of the archive format, the archive member
+             with name “/” denotes an archive symbol table.  If present, this
+             member will be the very first member in the archive.
+
+     “//”    In the SVR4/GNU variant of the archive format, the archive member
+             with name “//” denotes the archive string table.  This special
+             member is used to hold filenames that do not fit in the file name
+             field of the header (see _R_e_p_r_e_s_e_n_t_i_n_g _F_i_l_e _N_a_m_e_s above).  If
+             present, this member immediately follows the archive symbol table
+             if an archive symbol table is present, or is the first member
+             otherwise.
+
+     “__.SYMDEF”
+             This special member contains the archive symbol table in the BSD
+             variant of the archive format.  If present, this member will be
+             the very first member in the archive.
+
+   AArrcchhiivvee SSttrriinngg TTaabblleess
+     An archive string table is used in the SVR4/GNU archive format to hold
+     file names that are too large to fit into the constraints of the _a_r___n_a_m_e
+     field of the archive header.  An archive string table contains a sequence
+     of file names.  Each file name in the archive string table is terminated
+     by the byte sequence 0x2F, 0x0A (the ASCII string “/\n”).  No padding is
+     used to separate adjacent file names.
+
+   AArrcchhiivvee SSyymmbbooll TTaabblleess
+     Archive symbol tables are used to speed up link editing by providing a
+     mapping between the program symbols defined in the archive and the corre‐
+     sponding archive members.  Archive symbol tables are managed by the
+     ranlib(1) utility.
+
+     The format of archive symbol tables is as follows:
+
+     BSD       In the BSD archive format, the archive symbol table comprises
+               of two parts: a part containing an array of _s_t_r_u_c_t _r_a_n_l_i_b de‐
+               scriptors, followed by a part containing a symbol string table.
+               The sizes and layout of the structures that make up a BSD for‐
+               mat archive symbol table are machine dependent.
+
+               The part containing _s_t_r_u_c_t _r_a_n_l_i_b descriptors begins with a
+               field containing the size in bytes of the array of _s_t_r_u_c_t
+               _r_a_n_l_i_b descriptors encoded as a C _l_o_n_g value.
+
+               The array of _s_t_r_u_c_t _r_a_n_l_i_b descriptors follows the size field.
+               Each _s_t_r_u_c_t _r_a_n_l_i_b descriptor describes one symbol.
+
+               A _s_t_r_u_c_t _r_a_n_l_i_b descriptor comprises two fields:
+               _r_a_n___s_t_r_x     (C _l_o_n_g) This field contains the zero-based offset
+                            of the symbol name in the symbol string table.
+               _r_a_n___o_f_f      (C _l_o_n_g) This field is the file offset to the ar‐
+                            chive header for the archive member defining the
+                            symbol.
+
+               The part containing the symbol string table begins with a field
+               containing the size in bytes of the string table, encoded as a
+               C _l_o_n_g value.  This string table follows the size field, and
+               contains NUL-terminated strings for the symbols in the symbol
+               table.
+
+     SVR4/GNU  In the SVR4/GNU archive format, the archive symbol table starts
+               with a 4-byte binary value containing the number of entries
+               contained in the archive symbol table.  This count of entries
+               is stored most significant byte first.
+
+               Next, there are _c_o_u_n_t 4-byte numbers, each stored most signifi‐
+               cant byte first.  Each number is a binary offset to the archive
+               header for the member in the archive file for the corresponding
+               symbol table entry.
+
+               After the binary offset values, there are _c_o_u_n_t NUL-terminated
+               strings in sequence, holding the symbol names for the corre‐
+               sponding symbol table entries.
+
+SSTTAANNDDAARRDDSS CCOOMMPPLLIIAANNCCEE
+     The ar(1) archive format is not currently specified by a standard.
+
+     This manual page documents the ar(1) archive formats used by the 4.4BSD
+     and UNIX SVR4 operating system releases.
+
+SSEEEE AALLSSOO
+     ar(1), ld(1), ranlib(1), elf(3), elf_getarsym(3), elf_rand(3)
+
+BSD                            November 28, 2010                           BSD

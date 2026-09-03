@@ -1,0 +1,956 @@
+DDB(4)                   BSD Kernel Interfaces Manual                   DDB(4)
+
+NNAAMMEE
+     ddddbb — interactive kernel debugger
+
+SSYYNNOOPPSSIISS
+     In order to enable kernel debugging facilities include:
+
+           ooppttiioonnss KKDDBB
+           ooppttiioonnss DDDDBB
+
+     To prevent activation of the debugger on kernel panic(9):
+
+           ooppttiioonnss KKDDBB__UUNNAATTTTEENNDDEEDD
+
+     In order to print a stack trace of the current thread on the console for
+     a panic:
+
+           ooppttiioonnss KKDDBB__TTRRAACCEE
+
+     To print the numerical value of symbols in addition to the symbolic rep‐
+     resentation, define:
+
+           ooppttiioonnss DDDDBB__NNUUMMSSYYMM
+
+     To enable the gdb(4) backend, so that remote debugging with kgdb(1)
+     (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) is possible, include:
+
+           ooppttiioonnss GGDDBB
+
+DDEESSCCRRIIPPTTIIOONN
+     The ddddbb kernel debugger is an interactive debugger with a syntax inspired
+     by gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b).  If linked into the running kernel, it can
+     be invoked locally with the ‘debug’ keymap(5) action, usually mapped to
+     Ctrl+Alt+Esc, or by setting the _d_e_b_u_g_._k_d_b_._e_n_t_e_r sysctl to 1.  The debug‐
+     ger is also invoked on kernel panic(9) if the _d_e_b_u_g_._d_e_b_u_g_g_e_r___o_n___p_a_n_i_c
+     sysctl(8) MIB variable is set non-zero, which is the default unless the
+     KDB_UNATTENDED option is specified.  Similarly, if the
+     _d_e_b_u_g_._d_e_b_u_g_g_e_r___o_n___r_e_c_u_r_s_i_v_e___p_a_n_i_c variable is set to 1, then the debugger
+     will be invoked on a recursive kernel panic.  This variable has a default
+     value of 0, and has no effect if _d_e_b_u_g_._d_e_b_u_g_g_e_r___o_n___p_a_n_i_c is already set
+     non-zero.
+
+     The current location is called _d_o_t.  The _d_o_t is displayed with a hexadec‐
+     imal format at a prompt.  The commands eexxaammiinnee and wwrriittee update _d_o_t to
+     the address of the last line examined or the last location modified, and
+     set _n_e_x_t to the address of the next location to be examined or changed.
+     Other commands do not change _d_o_t, and set _n_e_x_t to be the same as _d_o_t.
+
+     The general command syntax is: _c_o_m_m_a_n_d[/_m_o_d_i_f_i_e_r] [_a_d_d_r][,_c_o_u_n_t]
+
+     A blank line repeats the previous command from the address _n_e_x_t with
+     count 1 and no modifiers.  Specifying _a_d_d_r sets _d_o_t to the address.
+     Omitting _a_d_d_r uses _d_o_t.  A missing _c_o_u_n_t is taken to be 1 for printing
+     commands or infinity for stack traces.  A _c_o_u_n_t of -1 is equivalent to a
+     missing _c_o_u_n_t.  Options that are supplied but not supported by the given
+     _c_o_m_m_a_n_d are usually ignored.
+
+     The ddddbb debugger has a pager feature (like the more(1) command) for the
+     output.  If an output line exceeds the number set in the _l_i_n_e_s variable,
+     it displays “--More--” and waits for a response.  The valid responses for
+     it are:
+
+     SPC  one more page
+     RET  one more line
+     q    abort the current command, and return to the command input mode
+
+     Finally, ddddbb provides a small (currently 10 items) command history, and
+     offers simple eemmaaccss-style command line editing capabilities.  In addition
+     to the eemmaaccss control keys, the usual ANSI arrow keys may be used to
+     browse through the history buffer, and move the cursor within the current
+     line.
+
+CCOOMMMMAANNDDSS
+   CCOOMMMMOONN DDEEBBUUGGGGEERR CCOOMMMMAANNDDSS
+     hheellpp    Print a short summary of the available commands and command ab‐
+             breviations.
+
+     eexxaammiinnee[/AAIISSaabbccddgghhiillmmoorrssuuxxzz ......] [_a_d_d_r][,_c_o_u_n_t]
+     xx[/AAIISSaabbccddgghhiillmmoorrssuuxxzz ......] [_a_d_d_r][,_c_o_u_n_t]
+             Display the addressed locations according to the formats in the
+             modifier.  Multiple modifier formats display multiple locations.
+             If no format is specified, the last format specified for this
+             command is used.
+
+             The format characters are:
+             bb       look at by bytes (8 bits)
+             hh       look at by half words (16 bits)
+             ll       look at by long words (32 bits)
+             gg       look at by quad words (64 bits)
+             aa       print the location being displayed
+             AA       print the location with a line number if possible
+             xx       display in unsigned hex
+             zz       display in signed hex
+             oo       display in unsigned octal
+             dd       display in signed decimal
+             uu       display in unsigned decimal
+             rr       display in current radix, signed
+             cc       display low 8 bits as a character.  Non-printing charac‐
+                     ters are displayed as an octal escape code (e.g.,
+                     ‘\000’).
+             ss       display the null-terminated string at the location.  Non-
+                     printing characters are displayed as octal escapes.
+             mm       display in unsigned hex with character dump at the end of
+                     each line.  The location is also displayed in hex at the
+                     beginning of each line.
+             ii       display as a disassembled instruction
+             II       display as a disassembled instruction with possible al‐
+                     ternate formats depending on the machine.  On i386, this
+                     selects the alternate format for the instruction decoding
+                     (16 bits in a 32-bit code segment and vice versa).
+             SS       display a symbol name for the pointer stored at the ad‐
+                     dress
+
+     xxff      Examine forward: execute an eexxaammiinnee command with the last speci‐
+             fied parameters to it except that the next address displayed by
+             it is used as the start address.
+
+     xxbb      Examine backward: execute an eexxaammiinnee command with the last speci‐
+             fied parameters to it except that the last start address sub‐
+             tracted by the size displayed by it is used as the start address.
+
+     pprriinntt[/aaccddoorruuxxzz]
+     pp[/aaccddoorruuxxzz]
+             Print _a_d_d_rs according to the modifier character (as described
+             above for eexxaammiinnee).  Valid formats are: aa, xx, zz, oo, dd, uu, rr, and
+             cc.  If no modifier is specified, the last one specified to it is
+             used.  The argument _a_d_d_r can be a string, in which case it is
+             printed as it is.  For example:
+
+                   print/x "eax = " $eax "\necx = " $ecx "\n"
+
+             will print like:
+
+                   eax = xxxxxx
+                   ecx = yyyyyy
+
+     wwrriittee[/bbhhll] _a_d_d_r _e_x_p_r_1 [_e_x_p_r_2 _._._.]
+     ww[/bbhhll] _a_d_d_r _e_x_p_r_1 [_e_x_p_r_2 _._._.]
+             Write the expressions specified after _a_d_d_r on the command line at
+             succeeding locations starting with _a_d_d_r.  The write unit size can
+             be specified in the modifier with a letter bb (byte), hh (half
+             word) or ll (long word) respectively.  If omitted, long word is
+             assumed.
+
+             WWaarrnniinngg: since there is no delimiter between expressions, strange
+             things may happen.  It is best to enclose each expression in
+             parentheses.
+
+     sseett $_v_a_r_i_a_b_l_e [=] _e_x_p_r
+             Set the named variable or register with the value of _e_x_p_r.  Valid
+             variable names are described below.
+
+     bbrreeaakk[/uu] [_a_d_d_r][,_c_o_u_n_t]
+     bb[/uu] [_a_d_d_r][,_c_o_u_n_t]
+             Set a break point at _a_d_d_r.  If _c_o_u_n_t is supplied, the ccoonnttiinnuuee
+             command will not stop at this break point on the first _c_o_u_n_t - 1
+             times that it is hit.  If the break point is set, a break point
+             number is printed with ‘#’.  This number can be used in deleting
+             the break point or adding conditions to it.
+
+             If the uu modifier is specified, this command sets a break point
+             in user address space.  Without the uu option, the address is con‐
+             sidered to be in the kernel space, and a wrong space address is
+             rejected with an error message.  This modifier can be used only
+             if it is supported by machine dependent routines.
+
+             WWaarrnniinngg: If a user text is shadowed by a normal user space debug‐
+             ger, user space break points may not work correctly.  Setting a
+             break point at the low-level code paths may also cause strange
+             behavior.
+
+     ddeelleettee [_a_d_d_r]
+     dd [_a_d_d_r]
+     ddeelleettee #_n_u_m_b_e_r
+     dd #_n_u_m_b_e_r
+             Delete the specified break point.  The break point can be speci‐
+             fied by a break point number with ‘#’, or by using the same _a_d_d_r
+             specified in the original bbrreeaakk command, or by omitting _a_d_d_r to
+             get the default address of _d_o_t.
+
+     hhaalltt    Halt the system.
+
+     wwaattcchh [_a_d_d_r][,_s_i_z_e]
+             Set a watchpoint for a region.  Execution stops when an attempt
+             to modify the region occurs.  The _s_i_z_e argument defaults to 4.
+             If you specify a wrong space address, the request is rejected
+             with an error message.
+
+             WWaarrnniinngg: Attempts to watch wired kernel memory may cause unrecov‐
+             erable error in some systems such as i386.  Watchpoints on user
+             addresses work best.
+
+     hhwwaattcchh [_a_d_d_r][,_s_i_z_e]
+             Set a hardware watchpoint for a region if supported by the archi‐
+             tecture.  Execution stops when an attempt to modify the region
+             occurs.  The _s_i_z_e argument defaults to 4.
+
+             WWaarrnniinngg: The hardware debug facilities do not have a concept of
+             separate address spaces like the watch command does.  Use hhwwaattcchh
+             for setting watchpoints on kernel address locations only, and
+             avoid its use on user mode address spaces.
+
+     ddhhwwaattcchh [_a_d_d_r][,_s_i_z_e]
+             Delete specified hardware watchpoint.
+
+     kkiillll _s_i_g _p_i_d
+             Send signal _s_i_g to process _p_i_d.  The signal is acted on upon re‐
+             turning from the debugger.  This command can be used to kill a
+             process causing resource contention in the case of a hung system.
+             See signal(3) for a list of signals.  Note that the arguments are
+             reversed relative to kill(2).
+
+     sstteepp[/pp][,_c_o_u_n_t]
+     ss[/pp][,_c_o_u_n_t]
+             Single step _c_o_u_n_t times.  If the pp modifier is specified, print
+             each instruction at each step.  Otherwise, only print the last
+             instruction.
+
+             WWaarrnniinngg: depending on machine type, it may not be possible to
+             single-step through some low-level code paths or user space code.
+             On machines with software-emulated single-stepping (e.g., pmax),
+             stepping through code executed by interrupt handlers will proba‐
+             bly do the wrong thing.
+
+     ccoonnttiinnuuee[/cc]
+     cc[/cc]   Continue execution until a breakpoint or watchpoint.  If the cc
+             modifier is specified, count instructions while executing.  Some
+             machines (e.g., pmax) also count loads and stores.
+
+             WWaarrnniinngg: when counting, the debugger is really silently single-
+             stepping.  This means that single-stepping on low-level code may
+             cause strange behavior.
+
+     uunnttiill[/pp]
+             Stop at the next call or return instruction.  If the pp modifier
+             is specified, print the call nesting depth and the cumulative in‐
+             struction count at each call or return.  Otherwise, only print
+             when the matching return is hit.
+
+     nneexxtt[/pp]
+     mmaattcchh[/pp]
+             Stop at the matching return instruction.  If the pp modifier is
+             specified, print the call nesting depth and the cumulative in‐
+             struction count at each call or return.  Otherwise, only print
+             when the matching return is hit.
+
+     ttrraaccee[/uu] [_p_i_d | _t_i_d][,_c_o_u_n_t]
+     tt[/uu] [_p_i_d | _t_i_d][,_c_o_u_n_t]
+     wwhheerree[/uu] [_p_i_d | _t_i_d][,_c_o_u_n_t]
+     bbtt[/uu] [_p_i_d | _t_i_d][,_c_o_u_n_t]
+             Stack trace.  The uu option traces user space; if omitted, ttrraaccee
+             only traces kernel space.  The optional argument _c_o_u_n_t is the
+             number of frames to be traced.  If _c_o_u_n_t is omitted, all frames
+             are printed.
+
+             WWaarrnniinngg: User space stack trace is valid only if the machine de‐
+             pendent code supports it.
+
+     sseeaarrcchh[/bbhhll] _a_d_d_r _v_a_l_u_e [_m_a_s_k][,_c_o_u_n_t]
+             Search memory for _v_a_l_u_e.  The optional _c_o_u_n_t argument limits the
+             search.
+
+     rreebboooott[/ss] [_s_e_c_o_n_d_s]
+     rreesseett[/ss] [_s_e_c_o_n_d_s]
+             Hard reset the system.  If the optional argument _s_e_c_o_n_d_s is
+             given, the debugger will wait for this long, at most a week, be‐
+             fore rebooting.  When the ss modifier is given, the command will
+             skip running any registered shutdown handlers and attempt the
+             most basic reset.
+
+     tthhrreeaadd _a_d_d_r | _t_i_d
+             Switch the debugger to the thread with ID _t_i_d, if the argument is
+             a decimal number, or address _a_d_d_r, otherwise.
+
+     wwaattcchhddoogg [_e_x_p]
+             Program the watchdog(4) timer to fire in 2^_e_x_p seconds.  If no
+             argument is provided, the watchdog timer is disabled.
+
+   SSPPEECCIIAALLIIZZEEDD HHEELLPPEERR CCOOMMMMAANNDDSS
+     ffiinnddssttaacckk _a_d_d_r
+             Prints the address of the thread whose kernel-mode stack contains
+             _a_d_d_r, if any.
+
+     sshhooww aaccttiivvee ttrraaccee
+     acttrace
+             Show a stack trace for every thread running on a CPU.
+
+     sshhooww aallll pprrooccss[/aa]
+     ppss[/aa]  Display all process information.  The process information may not
+             be shown if it is not supported in the machine, or the bottom of
+             the stack of the target process is not in the main memory at that
+             time.  The aa modifier will print command line arguments for each
+             process.
+
+     sshhooww aallll ttrraaccee
+     aallllttrraaccee
+             Show a stack trace for every thread in the system.
+
+     sshhooww aallll ttttyyss
+             Show all TTY's within the system.  Output is similar to pstat(8),
+             but also includes the address of the TTY structure.
+
+     sshhooww aallll vvnneettss
+             Show the same output as "show vnet" does, but lists all virtual‐
+             ized network stacks within the system.
+
+     sshhooww aallllcchhaaiinnss
+             Show the same information like "show lockchain" does, but for ev‐
+             ery thread in the system.
+
+     sshhooww aalllllloocckkss
+             Show all locks that are currently held.  This command is only
+             available if witness(4) is included in the kernel.
+
+     sshhooww aallllppccppuu
+             The same as "show pcpu", but for every CPU present in the system.
+
+     sshhooww aallllrrmmaann
+             Show information related with resource management, including in‐
+             terrupt request lines, DMA request lines, I/O ports, I/O memory
+             addresses, and Resource IDs.
+
+     sshhooww aappiicc
+             Dump data about APIC IDT vector mappings.
+
+     sshhooww bbaaddssttaacckkss
+             Walk the witness(4) graph and print any lock-order violations.
+             This command is only available if witness(4) is included in the
+             kernel.
+
+     sshhooww bbrreeaakkss
+             Show breakpoints set with the "break" command.
+
+     sshhooww bbiioo _a_d_d_r
+             Show information about the bio structure _s_t_r_u_c_t _b_i_o present at
+             _a_d_d_r.  See the _s_y_s_/_b_i_o_._h header file and g_bio(9) for more de‐
+             tails on the exact meaning of the structure fields.
+
+     sshhooww bbuuffffeerr _a_d_d_r
+             Show information about the buf structure _s_t_r_u_c_t _b_u_f present at
+             _a_d_d_r.  See the _s_y_s_/_b_u_f_._h header file for more details on the ex‐
+             act meaning of the structure fields.
+
+     sshhooww ccaalllloouutt _a_d_d_r
+             Show information about the callout structure _s_t_r_u_c_t _c_a_l_l_o_u_t
+             present at _a_d_d_r.
+
+     sshhooww ccddeevv [_a_d_d_r]
+             Show the internal devfs state of the cdev structure located at
+             _a_d_d_r.  If no argument is provided, show the list of all created
+             cdevs, consisting of the devfs node name and the _s_t_r_u_c_t _c_d_e_v ad‐
+             dress.
+
+     sshhooww ccoonniiffhhkk
+             Lists hooks currently waiting for completion in
+             rruunn__iinntteerrrruupptt__ddrriivveenn__ccoonnffiigg__hhooookkss().
+
+     sshhooww ccppuusseettss
+             Print numbered root and assigned CPU affinity sets.  See
+             cpuset(2) for more details.
+
+     sshhooww ccyyrriixxrreegg
+             Show registers specific to the Cyrix processor.
+
+     sshhooww ddeevvmmaapp
+             Prints the contents of the static device mapping table.  Cur‐
+             rently only available on the ARM architecture.
+
+     sshhooww ddoommaaiinn _a_d_d_r
+             Print protocol domain structure _s_t_r_u_c_t _d_o_m_a_i_n at address _a_d_d_r.
+             See the _s_y_s_/_d_o_m_a_i_n_._h header file for more details on the exact
+             meaning of the structure fields.
+
+     sshhooww ffffss [_a_d_d_r]
+             Show brief information about ffs mount at the address _a_d_d_r, if
+             argument is given.  Otherwise, provides the summary about each
+             ffs mount.
+
+     sshhooww ffiillee _a_d_d_r
+             Show information about the file structure _s_t_r_u_c_t _f_i_l_e present at
+             address _a_d_d_r.
+
+     sshhooww ffiilleess
+             Show information about every file structure in the system.
+
+     sshhooww ffrreeeeppaaggeess
+             Show the number of physical pages in each of the free lists.
+
+     sshhooww ggeeoomm [_a_d_d_r]
+             If the _a_d_d_r argument is not given, displays the entire GEOM
+             topology.  If _a_d_d_r is given, displays details about the given
+             GEOM object (class, geom, provider or consumer).
+
+     sshhooww iiddtt
+             Show IDT layout.  The first column specifies the IDT vector.  The
+             second one is the name of the interrupt/trap handler.  Those
+             functions are machine dependent.
+
+     sshhooww iiggii__lliisstt _a_d_d_r
+             Show information about the IGMP structure _s_t_r_u_c_t _i_g_m_p___i_f_s_o_f_t_c
+             present at _a_d_d_r.
+
+     sshhooww iioosscchheedd _a_d_d_r
+             Show information about the I/O scheduler _s_t_r_u_c_t _c_a_m___i_o_s_c_h_e_d___s_o_f_t_c
+             located at _a_d_d_r.
+
+     sshhooww iinnooddeeddeeppss [_a_d_d_r]
+             Show brief information about each inodedep structure.  If _a_d_d_r is
+             given, only inodedeps belonging to the fs located at the supplied
+             address are shown.
+
+     sshhooww iinnppccbb _a_d_d_r
+             Show information on IP Control Block _s_t_r_u_c_t _i_n___p_c_b present at
+             _a_d_d_r.
+
+     sshhooww iinnttrr
+             Dump information about interrupt handlers.
+
+     sshhooww iinnttrrccnntt
+             Dump the interrupt statistics.
+
+     sshhooww iirrqqss
+             Show interrupt lines and their respective kernel threads.
+
+     sshhooww kkttrr[/aavvVV]
+             Print the contents of the ktr(4) trace buffer.  The vv modifier
+             will request fully verbose output, causing the file, line number,
+             and timestamp to be printed for each trace entry.  The VV modifier
+             will request only the timestamps to be printed.  The aa modifier
+             will request that the output be unpaginated.
+
+     sshhooww llaappiicc
+             Show information from the local APIC registers for this CPU.
+
+     sshhooww lloocckk _a_d_d_r
+             Show lock structure.  The output format is as follows:
+
+             ccllaassss:
+                    Class of the lock.  Possible types include mutex(9),
+                    rmlock(9), rwlock(9), sx(9).
+
+             nnaammee:  Name of the lock.
+
+             ffllaaggss:
+                    Flags passed to the lock initialization function.  _f_l_a_g_s
+                    values are lock class specific.
+
+             ssttaattee:
+                    Current state of a lock.  _s_t_a_t_e values are lock class spe‐
+                    cific.
+
+             oowwnneerr:
+                    Lock owner.
+
+     sshhooww lloocckkcchhaaiinn _a_d_d_r
+             Show all threads a particular thread at address _a_d_d_r is waiting
+             on based on non-spin locks.
+
+     sshhooww lloocckkeeddbbuuffss
+             Show the same information as "show buf", but for every locked
+             _s_t_r_u_c_t _b_u_f object.
+
+     sshhooww lloocckkeeddvvnnooddss
+             List all locked vnodes in the system.
+
+     sshhooww lloocckkss
+             Prints all locks that are currently acquired.  This command is
+             only available if witness(4) is included in the kernel.
+
+     sshhooww lloocckkttrreeee
+
+     sshhooww mmaalllloocc[/ii]
+             Prints malloc(9) memory allocator statistics.  If the ii modifier
+             is specified, format output as machine-parseable comma-separated
+             values ("CSV").  The output columns are as follows:
+
+                   TTyyppee      Specifies a type of memory.  It is the same as a
+                             description string used while defining the given
+                             memory type with MALLOC_DECLARE(9).
+                   IInnUUssee     Number of memory allocations of the given type,
+                             for which free(9) has not been called yet.
+                   MMeemmUUssee    Total memory consumed by the given allocation
+                             type.
+                   RReeqquueessttss  Number of memory allocation requests for the
+                             given memory type.
+
+             The same information can be gathered in userspace with “vvmmssttaatt
+             --mm”.
+
+     sshhooww mmaapp[/ff] _a_d_d_r
+             Prints the VM map at _a_d_d_r.  If the ff modifier is specified the
+             complete map is printed.
+
+     sshhooww mmssggbbuuff
+             Print the system's message buffer.  It is the same output as in
+             the “ddmmeessgg” case.  It is useful if you got a kernel panic, at‐
+             tached a serial cable to the machine and want to get the boot
+             messages from before the system hang.
+
+     sshhooww mmoouunntt [_a_d_d_r]
+             Displays details about the mount point located at _a_d_d_r.  If no
+             _a_d_d_r is specified, displays short info about all currently
+             mounted file systems.
+
+     sshhooww oobbjjeecctt[/ff] _a_d_d_r
+             Prints the VM object at _a_d_d_r.  If the ff option is specified the
+             complete object is printed.
+
+     sshhooww ppaanniicc
+             Print the panic message if set.
+
+     sshhooww ppaaggee
+             Show statistics on VM pages.
+
+     sshhooww ppaaggeeqq
+             Show statistics on VM page queues.
+
+     sshhooww ppcciirreeggss
+             Print PCI bus registers.  The same information can be gathered in
+             userspace by running “ppcciiccoonnff --llvv”.
+
+     sshhooww ppccppuu
+             Print current processor state.  The output format is as follows:
+
+                   ccppuuiidd             Processor identifier.
+                   ccuurrtthhrreeaadd         Thread pointer, process identifier and
+                                     the name of the process.
+                   ccuurrppccbb            Control block pointer.
+                   ffppccuurrtthhrreeaadd       FPU thread pointer.
+                   iiddlleetthhrreeaadd        Idle thread pointer.
+                   AAPPIICC IIDD           CPU identifier coming from APIC.
+                   ccuurrrreennttllddtt        LDT pointer.
+                   ssppiinn lloocckkss hheelldd   Names of spin locks held.
+
+     sshhooww ppggrrppdduummpp
+             Dump process groups present within the system.
+
+     sshhooww pprriissoonn [_a_d_d_r]
+             Show the prison structure located at _a_d_d_r.  If no _a_d_d_r argument
+             is specified, show information about all prisons in the system.
+
+     sshhooww pprroocc [_a_d_d_r]
+             Show information about the process structure located at address
+             _a_d_d_r, or the current process if no argument is specified.
+
+     sshhooww pprrooccvvmm [_a_d_d_r]
+             Show process virtual memory layout for the process located at
+             _a_d_d_r, or the current process if no argument is specified.
+
+     sshhooww pprroottoossww _a_d_d_r
+             Print protocol switch structure _s_t_r_u_c_t _p_r_o_t_o_s_w at address _a_d_d_r.
+
+     sshhooww rreeggiisstteerrss[/uu]
+             Display the register set.  If the uu modifier is specified, the
+             register contents of the thread's previous trapframe are dis‐
+             played instead.  Usually, this corresponds to the saved state
+             from userspace.
+
+     sshhooww rrmmaann _a_d_d_r
+             Show resource manager object _s_t_r_u_c_t _r_m_a_n at address _a_d_d_r.  Ad‐
+             dresses of particular pointers can be gathered with "show allr‐
+             man" command.
+
+     sshhooww rroouuttee _a_d_d_r
+             Show route table result for destination _a_d_d_r.  At this time, INET
+             and INET6 formatted addresses are supported.
+
+     sshhooww rroouutteettaabbllee [_a_f]
+             Show full route table or tables.  If _a_f is specified, show only
+             routes for the given numeric address family.  If no argument is
+             specified, dump the route table for all address families.
+
+     sshhooww rrttcc
+             Show real time clock value.  Useful for long debugging sessions.
+
+     sshhooww sslleeeeppcchhaaiinn
+             Deprecated.  Now an alias for sshhooww lloocckkcchhaaiinn.
+
+     sshhooww sslleeeeppqq _a_d_d_r
+     sshhooww sslleeeeppqquueeuuee _a_d_d_r
+             Show the sleepqueue(9) structure located at _a_d_d_r.
+
+     sshhooww ssoocckkbbuuff _a_d_d_r
+             Show the socket buffer _s_t_r_u_c_t _s_o_c_k_b_u_f located at _a_d_d_r.
+
+     sshhooww ssoocckkeett _a_d_d_r
+             Show the socket object _s_t_r_u_c_t _s_o_c_k_e_t located at _a_d_d_r.
+
+     sshhooww ssyyssrreeggss
+             Show system registers (e.g., cr0-4 on i386.)  Not present on some
+             platforms.
+
+     sshhooww ttccppccbb _a_d_d_r
+             Print TCP control block _s_t_r_u_c_t _t_c_p_c_b lying at address _a_d_d_r.  For
+             exact interpretation of output, visit _n_e_t_i_n_e_t_/_t_c_p_._h header file.
+
+     sshhooww tthhrreeaadd [_a_d_d_r | _t_i_d]
+             If no _a_d_d_r or _t_i_d is specified, show detailed information about
+             current thread.  Otherwise, print information about the thread
+             with ID _t_i_d or kernel address _a_d_d_r.  (If the argument is a deci‐
+             mal number, it is assumed to be a tid.)
+
+     sshhooww tthhrreeaaddss
+             Show all threads within the system.  Output format is as follows:
+
+                   FFiirrsstt ccoolluummnn   Thread identifier (TID)
+                   SSeeccoonndd ccoolluummnn  Thread structure address
+                   TThhiirrdd ccoolluummnn   Backtrace.
+
+     sshhooww ttttyy _a_d_d_r
+             Display the contents of a TTY structure in a readable form.
+
+     sshhooww ttuurrnnssttiillee _a_d_d_r
+             Show turnstile _s_t_r_u_c_t _t_u_r_n_s_t_i_l_e structure at address _a_d_d_r.  Turn‐
+             stiles are structures used within the FreeBSD kernel to implement
+             synchronization primitives which, while holding a specific type
+             of lock, cannot sleep or context switch to another thread.  Cur‐
+             rently, those are: mutex(9), rwlock(9), rmlock(9).
+
+     sshhooww uummaa[/ii]
+             Show UMA allocator statistics.  If the ii modifier is specified,
+             format output as machine-parseable comma-separated values
+             ("CSV").  The output contains the following columns:
+
+                   ZZoonnee       Name of the UMA zone.  The same string that was
+                              passed to uma_zcreate(9) as a first argument.
+                   SSiizzee       Size of a given memory object (slab).
+                   UUsseedd       Number of slabs being currently used.
+                   FFrreeee       Number of free slabs within the UMA zone.
+                   RReeqquueessttss   Number of allocations requests to the given
+                              zone.
+                   TToottaall MMeemm  Total memory in use (either allocated or free)
+                              by a zone, in bytes.
+                   XXFFrreeee      Number of free slabs within the UMA zone that
+                              were freed on a different NUMA domain than allo‐
+                              cated.  (The count in the FFrreeee column is inclu‐
+                              sive of XXFFrreeee.)
+
+             The same information might be gathered in the userspace with the
+             help of “vvmmssttaatt --zz”.
+
+     sshhooww uunnppccbb _a_d_d_r
+             Shows UNIX domain socket private control block _s_t_r_u_c_t _u_n_p_c_b
+             present at the address _a_d_d_r.
+
+     sshhooww vvmmoocchhkk
+             Prints, whether the internal VM objects are in a map somewhere
+             and none have zero ref counts.
+
+     sshhooww vvmmooppaagg
+             Walk the list of VM objects in the system, printing the indices
+             and physical addresses of the VM pages belonging to each object.
+
+     sshhooww vvnneett _a_d_d_r
+             Prints virtualized network stack _s_t_r_u_c_t _v_n_e_t structure present at
+             the address _a_d_d_r.
+
+     sshhooww vvnnooddee _a_d_d_r
+             Prints vnode _s_t_r_u_c_t _v_n_o_d_e structure lying at _a_d_d_r.  For the exact
+             interpretation of the output, look at the _s_y_s_/_v_n_o_d_e_._h header
+             file.
+
+     sshhooww vvnnooddeebbuuffss _a_d_d_r
+             Shows clean/dirty buffer lists of the vnode located at _a_d_d_r.
+
+     sshhooww vvppaatthh _a_d_d_r
+             Walk the namecache to lookup the pathname of the vnode located at
+             _a_d_d_r.
+
+     sshhooww wwaattcchheess
+             Displays all watchpoints.  Shows watchpoints set with "watch"
+             command.
+
+     sshhooww wwiittnneessss
+             Shows information about lock acquisition coming from the
+             witness(4) subsystem.
+
+   OOFFFFLLIINNEE DDEEBBUUGGGGIINNGG CCOOMMMMAANNDDSS
+     dduummpp    Initiate a kernel core dump to the device(s) configured by
+             dumpon(8).
+
+     ggddbb     Switches to remote GDB mode.  In remote GDB mode, another machine
+             is required that runs gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) using the remote
+             debug feature, with a connection to the serial console port on
+             the target machine.
+
+     nneettdduummpp --ss _s_e_r_v_e_r [--gg _g_a_t_e_w_a_y --cc _c_l_i_e_n_t --ii _i_f_a_c_e]
+             Configure netdump(4) with the provided parameters, and immedi‐
+             ately perform a netdump.
+
+             There are some known limitations.  Principally, netdump(4) only
+             supports IPv4 at this time.  The address arguments to the nneettdduummpp
+             command must be dotted decimal IPv4 addresses.  (Hostnames are
+             not supported.)  At present, the command only works if the ma‐
+             chine is in a panic state.  Finally, the ddddbb nneettdduummpp command does
+             not provide any way to configure compression or encryption.
+
+     nneettggddbb --ss _s_e_r_v_e_r [--gg _g_a_t_e_w_a_y --cc _c_l_i_e_n_t --ii _i_f_a_c_e]
+             Initiate a netgdb(4) session with the provided parameters.
+
+             nneettggddbb has identical limitations to nneettdduummpp.
+
+     ccaappttuurree oonn
+     ccaappttuurree ooffff
+     ccaappttuurree rreesseett
+     ccaappttuurree ssttaattuuss
+             ddddbb supports a basic output capture facility, which can be used
+             to retrieve the results of debugging commands from userspace us‐
+             ing sysctl(3).  ccaappttuurree oonn enables output capture; ccaappttuurree ooffff
+             disables capture.  ccaappttuurree rreesseett will clear the capture buffer
+             and disable capture.  ccaappttuurree ssttaattuuss will report current buffer
+             use, buffer size, and disposition of output capture.
+
+             Userspace processes may inspect and manage ddddbb capture state us‐
+             ing sysctl(8):
+
+             _d_e_b_u_g_._d_d_b_._c_a_p_t_u_r_e_._b_u_f_s_i_z_e may be used to query or set the current
+             capture buffer size.
+
+             _d_e_b_u_g_._d_d_b_._c_a_p_t_u_r_e_._m_a_x_b_u_f_s_i_z_e may be used to query the compile-
+             time limit on the capture buffer size.
+
+             _d_e_b_u_g_._d_d_b_._c_a_p_t_u_r_e_._b_y_t_e_s may be used to query the number of bytes
+             of output currently in the capture buffer.
+
+             _d_e_b_u_g_._d_d_b_._c_a_p_t_u_r_e_._d_a_t_a returns the contents of the buffer as a
+             string to an appropriately privileged process.
+
+             This facility is particularly useful in concert with the script‐
+             ing and textdump(4) facilities, allowing scripted debugging out‐
+             put to be captured and committed to disk as part of a textdump
+             for later analysis.  The contents of the capture buffer may also
+             be inspected in a kernel core dump using kgdb(1)
+             (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b).
+
+     rruunn
+     ssccrriipptt
+     ssccrriippttss
+     uunnssccrriipptt
+             Run, define, list, and delete scripts.  See the _S_C_R_I_P_T_I_N_G section
+             for more information on the scripting facility.
+
+     tteexxttdduummpp dduummpp
+     tteexxttdduummpp sseett
+     tteexxttdduummpp ssttaattuuss
+     tteexxttdduummpp uunnsseett
+             Use the tteexxttdduummpp dduummpp command to immediately perform a textdump.
+             More information may be found in textdump(4).  The tteexxttdduummpp sseett
+             command may be used to force the next kernel core dump to be a
+             textdump rather than a traditional memory dump or minidump.
+             tteexxttdduummpp ssttaattuuss reports whether a textdump has been scheduled.
+             tteexxttdduummpp uunnsseett cancels a request to perform a textdump as the
+             next kernel core dump.
+
+VVAARRIIAABBLLEESS
+     The debugger accesses registers and variables as $_n_a_m_e.  Register names
+     are as in the “sshhooww rreeggiisstteerrss” command.  Some variables are suffixed with
+     numbers, and may have some modifier following a colon immediately after
+     the variable name.  For example, register variables can have a uu modifier
+     to indicate user register (e.g., “$eax:u”).
+
+     Built-in variables currently supported are:
+
+     _r_a_d_i_x     Input and output radix.
+     _m_a_x_o_f_f    Addresses are printed as “_s_y_m_b_o_l+_o_f_f_s_e_t” unless _o_f_f_s_e_t is
+               greater than _m_a_x_o_f_f.
+     _m_a_x_w_i_d_t_h  The width of the displayed line.
+     _l_i_n_e_s     The number of lines.  It is used by the built-in pager.  Set‐
+               ting it to 0 disables paging.
+     _t_a_b_s_t_o_p_s  Tab stop width.
+     _w_o_r_k_x_x    Work variable; _x_x can take values from 0 to 31.
+
+EEXXPPRREESSSSIIOONNSS
+     Most expression operators in C are supported except ‘~’, ‘^’, and unary
+     ‘&’.  Special rules in ddddbb are:
+
+     Identifiers  The name of a symbol is translated to the value of the sym‐
+                  bol, which is the address of the corresponding object.  ‘.’
+                  and ‘:’ can be used in the identifier.  If supported by an
+                  object format dependent routine, [_f_i_l_e_n_a_m_e:]_f_u_n_c:_l_i_n_e_n_o,
+                  [_f_i_l_e_n_a_m_e:]_v_a_r_i_a_b_l_e, and [_f_i_l_e_n_a_m_e:]_l_i_n_e_n_o can be accepted
+                  as a symbol.
+
+     Numbers      Radix is determined by the first two letters: ‘0x’: hex,
+                  ‘0o’: octal, ‘0t’: decimal; otherwise, follow current radix.
+
+     .            _d_o_t
+
+     +            _n_e_x_t
+
+     ..           address of the start of the last line examined.  Unlike _d_o_t
+                  or _n_e_x_t, this is only changed by eexxaammiinnee or wwrriittee command.
+
+     '            last address explicitly specified.
+
+     $_v_a_r_i_a_b_l_e    Translated to the value of the specified variable.  It may
+                  be followed by a ‘:’ and modifiers as described above.
+
+     _a#_b          A binary operator which rounds up the left hand side to the
+                  next multiple of right hand side.
+
+     *_e_x_p_r        Indirection.  It may be followed by a ‘:’ and modifiers as
+                  described above.
+
+SSCCRRIIPPTTIINNGG
+     ddddbb supports a basic scripting facility to allow automating tasks or re‐
+     sponses to specific events.  Each script consists of a list of DDB com‐
+     mands to be executed sequentially, and is assigned a unique name.  Cer‐
+     tain script names have special meaning, and will be automatically run on
+     various ddddbb events if scripts by those names have been defined.
+
+     The ssccrriipptt command may be used to define a script by name.  Scripts con‐
+     sist of a series of ddddbb commands separated with the ‘;’ character.  For
+     example:
+
+           script kdb.enter.panic=bt; show pcpu
+           script lockinfo=show alllocks; show lockedvnods
+
+     The ssccrriippttss command lists currently defined scripts.
+
+     The rruunn command execute a script by name.  For example:
+
+           run lockinfo
+
+     The uunnssccrriipptt command may be used to delete a script by name.  For exam‐
+     ple:
+
+           unscript kdb.enter.panic
+
+     These functions may also be performed from userspace using the ddb(8)
+     command.
+
+     Certain scripts are run automatically, if defined, for specific ddddbb
+     events.  The follow scripts are run when various events occur:
+
+     _k_d_b_._e_n_t_e_r_._a_c_p_i       The kernel debugger was entered as a result of an
+                          acpi(4) event.
+
+     _k_d_b_._e_n_t_e_r_._b_o_o_t_f_l_a_g_s  The kernel debugger was entered at boot as a result
+                          of the debugger boot flag being set.
+
+     _k_d_b_._e_n_t_e_r_._b_r_e_a_k      The kernel debugger was entered as a result of a se‐
+                          rial or console break.
+
+     _k_d_b_._e_n_t_e_r_._c_a_m        The kernel debugger was entered as a result of a
+                          CAM(4) event.
+
+     _k_d_b_._e_n_t_e_r_._m_a_c        The kernel debugger was entered as a result of an
+                          assertion failure in the mac_test(4) module of the
+                          TrustedBSD MAC Framework.
+
+     _k_d_b_._e_n_t_e_r_._n_e_t_g_r_a_p_h   The kernel debugger was entered as a result of a
+                          netgraph(4) event.
+
+     _k_d_b_._e_n_t_e_r_._p_a_n_i_c      panic(9) was called.
+
+     _k_d_b_._e_n_t_e_r_._p_o_w_e_r_p_c    The kernel debugger was entered as a result of an
+                          unimplemented interrupt type on the powerpc plat‐
+                          form.
+
+     _k_d_b_._e_n_t_e_r_._s_y_s_c_t_l     The kernel debugger was entered as a result of the
+                          _d_e_b_u_g_._k_d_b_._e_n_t_e_r sysctl being set.
+
+     _k_d_b_._e_n_t_e_r_._u_n_i_o_n_f_s    The kernel debugger was entered as a result of an
+                          assertion failure in the union file system.
+
+     _k_d_b_._e_n_t_e_r_._u_n_k_n_o_w_n    The kernel debugger was entered, but no reason has
+                          been set.
+
+     _k_d_b_._e_n_t_e_r_._v_f_s_l_o_c_k    The kernel debugger was entered as a result of a VFS
+                          lock violation.
+
+     _k_d_b_._e_n_t_e_r_._w_a_t_c_h_d_o_g   The kernel debugger was entered as a result of a
+                          watchdog firing.
+
+     _k_d_b_._e_n_t_e_r_._w_i_t_n_e_s_s    The kernel debugger was entered as a result of a
+                          witness(4) violation.
+
+     In the event that none of these scripts is found, ddddbb will attempt to ex‐
+     ecute a default script:
+
+     _k_d_b_._e_n_t_e_r_._d_e_f_a_u_l_t    The kernel debugger was entered, but a script ex‐
+                          actly matching the reason for entering was not de‐
+                          fined.  This can be used as a catch-all to handle
+                          cases not specifically of interest; for example,
+                          _k_d_b_._e_n_t_e_r_._w_i_t_n_e_s_s might be defined to have special
+                          handling, and _k_d_b_._e_n_t_e_r_._d_e_f_a_u_l_t might be defined to
+                          simply panic and reboot.
+
+HHIINNTTSS
+     On machines with an ISA expansion bus, a simple NMI generation card can
+     be constructed by connecting a push button between the A01 and B01
+     (CHCHK# and GND) card fingers.  Momentarily shorting these two fingers
+     together may cause the bridge chipset to generate an NMI, which causes
+     the kernel to pass control to ddddbb.  Some bridge chipsets do not generate
+     a NMI on CHCHK#, so your mileage may vary.  The NMI allows one to break
+     into the debugger on a wedged machine to diagnose problems.  Other bus'
+     bridge chipsets may be able to generate NMI using bus specific methods.
+     There are many PCI and PCIe add-in cards which can generate NMI for de‐
+     bugging.  Modern server systems typically use IPMI to generate signals to
+     enter the debugger.  The _d_e_v_e_l_/_i_p_m_i_t_o_o_l port can be used to send the
+     cchhaassssiiss ppoowweerr ddiiaagg command which delivers an NMI to the processor.  Em‐
+     bedded systems often use JTAG for debugging, but rarely use it in combi‐
+     nation with ddddbb.
+
+     Serial consoles can break to the debugger by sending a BREAK condition on
+     the serial line.  This requires a kernel built with ooppttiioonnss
+     BBRREEAAKK__TTOO__DDEEBBUUGGGGEERR is specified in the kernel.  Most terminal emulation
+     programs can send a break sequence with a special key sequence or menu
+     selection.  Sending the break can be difficult or even happen spuriously
+     in some setups.  An alternative method is to build a kernel with ooppttiioonnss
+     AALLTT__BBRREEAAKK__TTOO__DDEEBBUUGGGGEERR then the sequence of CR TILDE CTRL-B enters the de‐
+     bugger; CR TILDE CTRL-P causes a panic; and CR TILDE CTRL-R causes an im‐
+     mediate reboot.  In all these sequences, CR represents Carriage Return
+     and is usually sent by pressing the Enter or Return key.  TILDE is the
+     ASCII tilde character (~).  CTRL-x is Control x, sent by pressing the
+     Control key, then x, then releasing both.
+
+     The break-to-debugger behavior can be enabled by setting sysctl(8)
+     _d_e_b_u_g_._k_d_b_._b_r_e_a_k___t_o___d_e_b_u_g_g_e_r to 1.  The alt-break-to-debugger behavior can
+     be enabled by setting sysctl(8) _d_e_b_u_g_._k_d_b_._a_l_t___b_r_e_a_k___t_o___d_e_b_u_g_g_e_r to 1.
+     The debugger can be entered by setting sysctl(8) _d_e_b_u_g_._k_d_b_._e_n_t_e_r to 1.
+
+     Output can be interrupted, paused, and resumed with the control charac‐
+     ters CTRL-C, CTRL-S, and CTRL-Q.  Because these control characters are
+     received as in-band data from the console, there is an input buffer, and
+     once that buffer fills ddddbb must either stop responding to control charac‐
+     ters or drop additional input while continuing to search for control
+     characters.  This behavior is controlled by the tunable sysctl(8)
+     _d_e_b_u_g_._d_d_b_._p_r_i_o_r_i_t_i_z_e___c_o_n_t_r_o_l___i_n_p_u_t, which defaults to 1.  The input buf‐
+     fer size is 512 bytes.
+
+FFIILLEESS
+     Header files mentioned in this manual page can be found below
+     _/_u_s_r_/_i_n_c_l_u_d_e directory.
+
+     --   sys/buf.h
+     --   sys/domain.h
+     --   netinet/in_pcb.h
+     --   sys/socket.h
+     --   sys/vnode.h
+
+SSEEEE AALLSSOO
+     gdb(1) (ports/devel/gdb), kgdb(1) (ports/devel/gdb), acpi(4), CAM(4),
+     gdb(4), mac_ddb(4), mac_test(4), netgraph(4), textdump(4), witness(4),
+     ddb(8), sysctl(8), panic(9)
+
+HHIISSTTOORRYY
+     The ddddbb debugger was developed for Mach, and ported to 386BSD 0.1.  This
+     manual page translated from man(7) macros by Garrett Wollman.
+
+     Robert N. M. Watson added support for ddddbb output capture, textdump(4) and
+     scripting in FreeBSD 7.1.
+
+BSD                            November 10, 2022                           BSD

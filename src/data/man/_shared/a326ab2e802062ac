@@ -1,0 +1,178 @@
+SOFTRAID(4)              BSD Kernel Interfaces Manual              SOFTRAID(4)
+
+NNAAMMEE
+     ssooffttrraaiidd — software RAID
+
+SSYYNNOOPPSSIISS
+     ssooffttrraaiidd00 aatt rroooott
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssooffttrraaiidd device emulates a Host Bus Adapter (HBA) that provides RAID
+     and other I/O related services.  The ssooffttrraaiidd device provides a scaffold
+     to implement more complex I/O transformation disciplines.  For example,
+     one can tie chunks together into a mirroring discipline.  There really is
+     no limit on what type of discipline one can write as long as it fits the
+     SCSI model.
+
+     ssooffttrraaiidd supports a number of _d_i_s_c_i_p_l_i_n_e_s.  A discipline is a collection
+     of functions that provides specific I/O functionality.  This includes I/O
+     path, bring-up, failure recovery, and statistical information gathering.
+     Essentially a discipline is a lower level driver that provides the I/O
+     transformation for the softraid device.
+
+     A _v_o_l_u_m_e is a virtual disk device that is made up of a collection of
+     chunks.
+
+     A _c_h_u_n_k is a partition or storage area of fstype “RAID”.  disklabel(8) is
+     used to alter the fstype.
+
+     Currently ssooffttrraaiidd supports the following disciplines:
+
+           RAID 0
+           A _s_t_r_i_p_i_n_g discipline.  It segments data over a number of chunks to
+           increase performance.  RAID 0 does not provide for data loss (re‐
+           dundancy).
+
+           RAID 1
+           A _m_i_r_r_o_r_i_n_g discipline.  It copies data across more than one chunk
+           to provide for data loss.  Read performance is increased, though at
+           the cost of write speed.  Unlike traditional RAID 1, ssooffttrraaiidd sup‐
+           ports the use of more than two chunks in a RAID 1 setup.
+
+           RAID 5
+           A _s_t_r_i_p_i_n_g discipline with _f_l_o_a_t_i_n_g _p_a_r_i_t_y across all chunks.  It
+           stripes data across chunks and provides parity to prevent data loss
+           of a single chunk failure.  Read performance is increased; write
+           performance does incur additional overhead.
+
+           CRYPTO
+           An _e_n_c_r_y_p_t_i_n_g discipline.  It encrypts data on a single chunk to
+           provide for data confidentiality.  CRYPTO does not provide redun‐
+           dancy.
+
+           CONCAT
+           A _c_o_n_c_a_t_e_n_a_t_i_n_g discipline.  It writes data to each chunk in se‐
+           quence to provide increased capacity.  CONCAT does not provide re‐
+           dundancy.
+
+           RAID 1C
+           A _m_i_r_r_o_r_i_n_g and _e_n_c_r_y_p_t_i_n_g discipline.  It encrypts data to provide
+           for data confidentiality and copies the encrypted data across more
+           than one chunk to prevent data loss in case of a chunk failure.
+           Unlike traditional RAID 1, ssooffttrraaiidd supports the use of more than
+           two chunks in a RAID 1C setup.
+
+     installboot(8) may be used to install boot(8) in the boot storage area of
+     the ssooffttrraaiidd volume.  All chunks in the volume will then be bootable.
+     Boot support is currently limited to the CRYPTO, RAID 1, and RAID 1C dis‐
+     ciplines on the amd64, arm64, riscv64 and sparc64 platforms.  Boot sup‐
+     port on i386 is limited to CRYPTO and RAID 1.  On sparc64, bootable
+     chunks must be RAID partitions using the letter ‘a’.  At the boot(8)
+     prompt, softraid volumes have names beginning with ‘sr’ and can be booted
+     from like a normal disk device.  CRYPTO and 1C volumes will require a de‐
+     cryption passphrase or keydisk at boot time.
+
+     The status of ssooffttrraaiidd volumes is reported via sysctl(8) such that it can
+     be monitored by sensorsd(8).  Each volume has one fourth level node named
+     _h_w_._s_e_n_s_o_r_s_._s_o_f_t_r_a_i_d_0_._d_r_i_v_e_N, where _N is a small integer indexing the vol‐
+     ume.  The format of the volume status is:
+
+           _v_a_l_u_e (_d_e_v_i_c_e), _s_t_a_t_u_s
+
+     The _d_e_v_i_c_e identifies the ssooffttrraaiidd volume.  The following combinations of
+     _v_a_l_u_e and _s_t_a_t_u_s can occur:
+
+           oonnlliinnee, OOKK
+                   The volume is operating normally.
+
+           ddeeggrraaddeedd, WWAARRNNIINNGG
+                   The volume as a whole is operational, but not all of its
+                   chunks are.  In many cases, using bioctl(8) --RR to rebuild
+                   the failed chunk is advisable.
+
+           rreebbuuiillddiinngg, WWAARRNNIINNGG
+                   A rebuild operation was recently started and has not yet
+                   completed.
+
+           ffaaiilleedd, CCRRIITTIICCAALL
+                   The device is currently unable to process I/O.
+
+           uunnkknnoowwnn, UUNNKKNNOOWWNN
+                   The status is unknown to the system.
+
+EEXXAAMMPPLLEESS
+     An example to create a 3 chunk RAID 1 from scratch is as follows:
+
+     Initialize the partition tables of all disks:
+
+           # fdisk -iy wd1
+           # fdisk -iy wd2
+           # fdisk -iy wd3
+
+     Now create RAID partitions on all disks:
+
+           # echo 'RAID *' | disklabel -wAT- wd1
+           # echo 'RAID *' | disklabel -wAT- wd2
+           # echo 'RAID *' | disklabel -wAT- wd3
+
+     Assemble the RAID volume:
+
+           # bioctl -c 1 -l /dev/wd1a,/dev/wd2a,/dev/wd3a softraid0
+
+     The console will show what device was added to the system:
+
+           scsibus0 at softraid0: 1 targets
+           sd0 at scsibus0 targ 0 lun 0: <OPENBSD, SR RAID 1, 001> SCSI2
+           sd0: 1MB, 0 cyl, 255 head, 63 sec, 512 bytes/sec, 3714 sec total
+
+     It is good practice to wipe the front of the disk before using it:
+
+           # dd if=/dev/zero of=/dev/rsd0c bs=1m count=1
+
+     Initialize the partition table and create a filesystem on the new RAID
+     volume:
+
+           # fdisk -iy sd0
+           # echo '/ *' | disklabel -wAT- sd0
+           # newfs /dev/rsd0a
+
+     The RAID volume is now ready to be used as a normal disk device.  See
+     bioctl(8) for more information on configuration of RAID sets.
+
+     Install boot(8) on the RAID volume, writing boot loaders to all 3 chunks:
+
+           # installboot sd0
+
+     At the boot(8) prompt, load the /bsd kernel from the RAID volume:
+
+           boot> boot sr0a:/bsd
+
+SSEEEE AALLSSOO
+     bio(4), bioctl(8), boot(8), boot_sparc64(8), disklabel(8), fdisk(8),
+     installboot(8), newfs(8)
+
+HHIISSTTOORRYY
+     The ssooffttrraaiidd driver first appeared in OpenBSD 4.2.
+
+AAUUTTHHOORRSS
+     Marco Peereboom.
+
+CCAAVVEEAATTSS
+     The driver relies on underlying hardware to properly fail chunks.
+
+     The RAID 1 discipline does not initialize the mirror upon creation.  This
+     is by design because all sectors that are read are written first.  There
+     is no point in wasting a lot of time syncing random data.
+
+     The RAID 5 discipline does not initialize parity upon creation, instead
+     parity is only updated upon write.
+
+     Stacking disciplines (CRYPTO on top of RAID 5, for example) is not sup‐
+     ported at this time.
+
+     Currently there is no automated mechanism to recover from failed disks.
+
+     Certain RAID levels can protect against some data loss due to component
+     failure.  RAID is _n_o_t a substitute for good backup practices.
+
+BSD                             April 13, 2025                             BSD

@@ -1,0 +1,175 @@
+_s_p_u___r_u_n(2)                    System Calls Manual                   _s_p_u___r_u_n(2)
+
+NNAAMMEE
+       spu_run - execute an SPU context
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssppuu..hh>>          /* Definition of SSPPUU__** constants */
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__ssppuu__rruunn,, iinntt _f_d,, uuiinntt3322__tt **_n_p_c,, uuiinntt3322__tt **_e_v_e_n_t));;
+
+       _N_o_t_e: glibc provides no wrapper for ssppuu__rruunn(), necessitating the use of
+       ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       The  ssppuu__rruunn()  system  call is used on PowerPC machines that implement
+       the Cell Broadband Engine Architecture in order to  access  Synergistic
+       Processor  Units (SPUs).  The _f_d argument is a file descriptor returned
+       by ssppuu__ccrreeaattee(2) that refers to a specific SPU context.  When the  con‐
+       text  gets  scheduled to a physical SPU, it starts execution at the in‐
+       struction pointer passed in _n_p_c.
+
+       Execution of SPU code happens  synchronously,  meaning  that  ssppuu__rruunn()
+       blocks  while  the SPU is still running.  If there is a need to execute
+       SPU code in parallel with other code on either the main  CPU  or  other
+       SPUs,  a  new  thread  of  execution must be created first (e.g., using
+       pptthhrreeaadd__ccrreeaattee(3)).
+
+       When ssppuu__rruunn() returns, the current value of the SPU program counter is
+       written to _n_p_c, so successive calls to ssppuu__rruunn() can use the  same  _n_p_c
+       pointer.
+
+       The  _e_v_e_n_t  argument provides a buffer for an extended status code.  If
+       the SPU context was created with  the  SSPPUU__CCRREEAATTEE__EEVVEENNTTSS__EENNAABBLLEEDD  flag,
+       then  this buffer is populated by the Linux kernel before ssppuu__rruunn() re‐
+       turns.
+
+       The status code may be one (or more) of the following constants:
+
+       SSPPEE__EEVVEENNTT__DDMMAA__AALLIIGGNNMMEENNTT
+              A DMA alignment error occurred.
+
+       SSPPEE__EEVVEENNTT__IINNVVAALLIIDD__DDMMAA
+              An invalid MFC DMA command was attempted.
+
+       SSPPEE__EEVVEENNTT__SSPPEE__DDAATTAA__SSTTOORRAAGGEE
+              A DMA storage error occurred.
+
+       SSPPEE__EEVVEENNTT__SSPPEE__EERRRROORR
+              An illegal instruction was executed.
+
+       NULL is a valid value for the _e_v_e_n_t argument.  In this case, the events
+       will not be reported to the calling process.
+
+RREETTUURRNN VVAALLUUEE
+       On success, ssppuu__rruunn() returns the value of the _s_p_u___s_t_a_t_u_s register.  On
+       failure, it returns -1 and sets _e_r_r_n_o is set to indicate the error.
+
+       The _s_p_u___s_t_a_t_u_s register value is a bit mask of status codes and option‐
+       ally a 14‐bit code returned from the ssttoopp‐‐aanndd‐‐ssiiggnnaall instruction on the
+       SPU.  The bit masks for the status codes are:
+
+       00xx0022   SPU was stopped by a ssttoopp‐‐aanndd‐‐ssiiggnnaall instruction.
+
+       00xx0044   SPU was stopped by a hhaalltt instruction.
+
+       00xx0088   SPU is waiting for a channel.
+
+       00xx1100   SPU is in single‐step mode.
+
+       00xx2200   SPU has tried to execute an invalid instruction.
+
+       00xx4400   SPU has tried to access an invalid channel.
+
+       00xx33ffffff00000000
+              The bits masked with this value contain the code returned from a
+              ssttoopp‐‐aanndd‐‐ssiiggnnaall instruction.  These bits are valid only  if  the
+              0x02 bit is set.
+
+       If  ssppuu__rruunn()  has  not  returned  an error, one or more bits among the
+       lower eight ones are always set.
+
+EERRRROORRSS
+       EEBBAADDFF  _f_d is not a valid file descriptor.
+
+       EEFFAAUULLTT _n_p_c is not a valid pointer, or _e_v_e_n_t is non‐NULL and an  invalid
+              pointer.
+
+       EEIINNTTRR  A  signal  occurred  while  ssppuu__rruunn()  was in progress; see ssiigg‐‐
+              nnaall(7).  The _n_p_c value has  been  updated  to  the  new  program
+              counter value if necessary.
+
+       EEIINNVVAALL _f_d is not a valid file descriptor returned from ssppuu__ccrreeaattee(2).
+
+       EENNOOMMEEMM There was not enough memory available to handle a page fault re‐
+              sulting  from  a  Memory Flow Controller (MFC) direct memory ac‐
+              cess.
+
+       EENNOOSSYYSS The functionality is not provided by the current system, because
+              either the hardware does not provide SPUs or the spufs module is
+              not loaded.
+
+SSTTAANNDDAARRDDSS
+       Linux on PowerPC.
+
+HHIISSTTOORRYY
+       Linux 2.6.16.
+
+NNOOTTEESS
+       ssppuu__rruunn() is meant to be used from libraries that implement a more  ab‐
+       stract  interface  to  SPUs,  not to be used from regular applications.
+       See  ⟨http://www.bsc.es/projects/deepcomputing/linuxoncell/⟩  for   the
+       recommended libraries.
+
+EEXXAAMMPPLLEESS
+       The  following  is  an example of running a simple, one‐instruction SPU
+       program with the ssppuu__rruunn() system call.
+
+       #include <err.h>
+       #include <fcntl.h>
+       #include <stdint.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       int main(void)
+       {
+           int       context, fd, spu_status;
+           uint32_t  instruction, npc;
+
+           context = syscall(SYS_spu_create, "/spu/example-context", 0, 0755);
+           if (context == -1)
+               err(EXIT_FAILURE, "spu_create");
+
+           /*
+            * Write a 'stop 0x1234' instruction to the SPU's
+            * local store memory.
+            */
+           instruction = 0x00001234;
+
+           fd = open("/spu/example-context/mem", O_RDWR);
+           if (fd == -1)
+               err(EXIT_FAILURE, "open");
+           write(fd, &instruction, sizeof(instruction));
+
+           /*
+            * set npc to the starting instruction address of the
+            * SPU program.  Since we wrote the instruction at the
+            * start of the mem file, the entry point will be 0x0.
+            */
+           npc = 0;
+
+           spu_status = syscall(SYS_spu_run, context, &npc, NULL);
+           if (spu_status == -1)
+               err(EXIT_FAILURE, "open");
+
+           /*
+            * We should see a status code of 0x12340002:
+            *   0x00000002 (spu was stopped due to stop-and-signal)
+            * | 0x12340000 (the stop-and-signal code)
+            */
+           printf("SPU Status: %#08x\n", spu_status);
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       cclloossee(2), ssppuu__ccrreeaattee(2), ccaappaabbiilliittiieess(7), ssppuuffss(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                        _s_p_u___r_u_n(2)

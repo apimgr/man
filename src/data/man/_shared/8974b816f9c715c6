@@ -1,0 +1,127 @@
+security features supports a variety of security features.  Below
+is  a  brief  description  of them with some quick usage examples
+that will help you get started.  Contents: Veriexec Exploit miti‐
+gation Per‐user directory  Information  filtering  Administrative
+security See also is a file integrity subsystem.  For more infor‐
+mation  about  it, and a quick guide on how to use it, please see
+In a nutshell, once enabled, can be started as follows: # veriex‐
+ecgen && veriexecctl load incorporates  some  exploit  mitigation
+features.   The  purpose of exploit mitigation features is to in‐
+terfere with the way exploits work, in order to prevent them from
+succeeding.  Due to that, some features may have other impacts on
+the system, so be sure to fully understand  the  implications  of
+each  feature.   provides  the  following exploit mitigation fea‐
+tures: restrictions)  stack‐smashing  protection  bounds  checked
+libc  functions  Protections  against pointer dereferences imple‐
+ments Address Space Layout Randomization meant to complement non‐
+executable mappings.  Its purpose is to harden prediction of  the
+address  space layout, namely location of library and application
+functions that can be used by an attacker to circumvent  non‐exe‐
+cutable  mappings  by using a technique called to bypass the need
+to write new code to (potentially executable) regions of  memory.
+When is used, it is more likely the attacker will fail to predict
+the  addresses of such functions, causing the application to seg‐
+fault.  To detect cases where an attacker might  try  and  brute‐
+force the return address of respawning services, can be used (see
+below).   For  non‐PIE executables, the implementation introduces
+randomization to the following memory regions: The stack For exe‐
+cutables: The program itself (exec base) All shared libraries The
+data segment The stack While it can be enabled globally, provides
+a tool, to enable on a per‐program basis.  Example usage: #  pax‐
+ctl  +A  /usr/sbin/sshd  Enabling  globally:  #  sysctl  ‐w secu‐
+rity.pax.aslr.global=1 implements memory protection restrictions,
+meant to complement non‐executable mappings.  The purpose  is  to
+prevent situations where malicious code attempts to mark writable
+memory  regions  as executable, often by trashing arguments to an
+call.  While it can be enabled globally, provides a tool, to  en‐
+able  on  a  per‐program  basis.   Example  usage:  #  paxctl  +M
+/usr/sbin/sshd Enabling globally: # sysctl ‐w  security.pax.mpro‐
+tect.global=1  PaX  MPROTECT  affects  the  following three uses:
+Processes that utilize code generation (such as  the  JVM)  might
+need  to  have MPROTECT disabled.  Miscompiled programs that have
+text relocations, will now core dump instead of having their  re‐
+locations corrected.  You will need to fix those programs (recom‐
+pile  them  properly).  Debugger breakpoints: needs to be able to
+write to the text segment in order to insert  and  delete  break‐
+points.   This  will  not work unless MPROTECT is disabled on the
+executable.  monitors the number of segmentation faults in a pro‐
+gram on a per‐user basis, in an attempt to  detect  on‐going  ex‐
+ploitation attempts and possibly prevent them.  For instance, can
+help  detect when an attacker tries to brute‐force a function re‐
+turn address, when attempting to perform a return‐to‐lib  attack.
+consumes  kernel  memory,  so  use  it wisely.  While it provides
+rate‐limiting protections, records are tracked for all users on a
+per‐program basis, meaning that irresponsible use may  result  in
+tracking  all segmentation faults in the system, possibly consum‐
+ing all kernel memory.  For this reason, it is highly recommended
+to have enabled explicitly only for  network  services  or  other
+processes  deemed  as  critical to system security.  Enabling ex‐
+plicitly works like this: # paxctl +G /usr/sbin/sshd  However,  a
+global  knob  is  still  provided, for use in strict environments
+with no local users (for example, some network appliances, embed‐
+ded  devices,  and  firewalls)  #  sysctl  ‐w  security.pax.segv‐
+guard.global=1 Explicitly disabling is also possible: # paxctl +g
+/bin/ls In addition, provides several tunable options.  For exam‐
+ple,  to  limit  a program to 5 segmentation faults from the same
+user in a 60 second timeframe:  #  sysctl  ‐w  security.pax.segv‐
+guard.max_crashes=5   #   sysctl   ‐w  security.pax.segvguard.ex‐
+piry_timeout=60 The number of seconds a user  will  be  suspended
+from running the culprit program is also configurable.  For exam‐
+ple,  10  minutes  seem  like  a  sane setting: # sysctl ‐w secu‐
+rity.pax.segvguard.suspend_timeout=600 As of includes  a  set  of
+compiler  extensions to raise the bar on exploitation attempts by
+detecting corruption of variables and buffer overruns, which  may
+be  used  to  affect  program  control flow.  Upon detection of a
+buffer overrun, will immediately abort execution of  the  program
+and send a log message to The system (userland and kernel) can be
+built with by using the flag in USE_SSP=yes You are encouraged to
+use  for  software you build, by providing one of the or flags to
+Keep in mind, however, that will not work for functions that make
+use of as the latter modifies the  stack  size  during  run‐time,
+while  relies on it being a compile‐time static.  Use of is espe‐
+cially encouraged on platforms without per‐page execute bit gran‐
+ularity such as i386.  As of is used by default on i386 and amd64
+architectures.  The so‐called is a relatively simple technique to
+detect a subset of buffer overflows before these can  do  damage.
+It  is  integrated to together with some common memory and string
+functions in the standard C library of The underlying idea builds
+on the observation that there are cases where the compiler  knows
+the  size  of  a  buffer.  If a buffer overflow is suspected in a
+function that does little or no bounds checking, either a compile
+time warning can be issued or a safer substitute function can  be
+used  at  runtime.   Refer to for additional details.  The is en‐
+abled by default in some parts of the source tree.   It  is  also
+possible  to  explicitly  enable  it by defining the following in
+USE_FORT=yes A certain class of attacks rely on kernel bugs  that
+dereference  pointers.   If user processes are allowed to map the
+virtual address 0 with or by other means, there is  a  risk  that
+code  or  data can be injected into the kernel address space.  In
+it is possible to restrict whether user processes are allowed  to
+make  mappings  at  the zero address.  By default, address 0 map‐
+pings are restricted on all architectures.  It is  however  known
+that some third‐party programs may not function properly with the
+restriction.   Such  mappings  can be allowed either by using the
+kernel configuration option or by changing the following variable
+at runtime: # sysctl ‐w vm.user_va0_disable=0 Note that  if  (see
+is  greater than zero, it is not possible to change the variable.
+It is possible to configure per‐user temporary storage  to  avoid
+potential  security  issues  (race  conditions, etc.) in programs
+that do not make secure usage of  To  enable  per‐user  temporary
+storage, add the following line to per_user_tmp=YES If is a mount
+point, you will also need to update its entry to use (or whatever
+directory  you  want,  if you override the default using the key‐
+word) instead of  Following  that,  run:  #  /etc/rc.d/perusertmp
+start  The  per‐user  temporary  storage  is implemented by using
+These are further described in provides administrators the  abil‐
+ity to restrict information passed from the kernel to userland so
+that  users  can only view information they The hooks that manage
+this restriction are located in various parts of the  system  and
+affect  programs  such as and Information filtering is enabled as
+follows: # sysctl ‐w security.curtain=1 Also certain  administra‐
+tive  tasks  are  related  to  security.  For instance, the daily
+maintenance script includes some basic  consistency  checks;  see
+for  more details.  In particular, it is possible to configure to
+automatically audit all third‐party packages installed via To au‐
+dit for any known vulnerabilities on daily basis, set the follow‐
+ing in fetch_pkg_vulnerabilities=YES Many of  the  security  fea‐
+tures were pioneered by

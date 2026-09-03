@@ -1,0 +1,248 @@
+GJOURNAL(8)               BSD System Manager's Manual              GJOURNAL(8)
+
+NNAAMMEE
+     ggjjoouurrnnaall — control utility for journaled devices
+
+SSYYNNOOPPSSIISS
+     ggjjoouurrnnaall llaabbeell [--ccffhhvv] [--ss _j_s_i_z_e] _d_a_t_a_p_r_o_v [_j_p_r_o_v]
+     ggjjoouurrnnaall ssttoopp [--ffvv] _n_a_m_e _._._.
+     ggjjoouurrnnaall ssyynncc [--vv]
+     ggjjoouurrnnaall cclleeaarr [--vv] _p_r_o_v _._._.
+     ggjjoouurrnnaall dduummpp _p_r_o_v _._._.
+     ggjjoouurrnnaall lliisstt
+     ggjjoouurrnnaall ssttaattuuss
+     ggjjoouurrnnaall llooaadd
+     ggjjoouurrnnaall uunnllooaadd
+
+DDEESSCCRRIIPPTTIIOONN
+     The ggjjoouurrnnaall utility is used for journal configuration on the given GEOM
+     provider.  The Journal and data may be stored on the same provider or on
+     two separate providers.  This is block level journaling, not file system
+     level journaling, which means everything gets logged, e.g. for file sys‐
+     tems, it journals both data and metadata.  The ggjjoouurrnnaall GEOM class can
+     talk to file systems, which allows the use of ggjjoouurrnnaall for file system
+     journaling and to keep file systems in a consistent state.  At this time,
+     only UFS file system is supported.
+
+     To configure journaling on the UFS file system using ggjjoouurrnnaall, one should
+     first create a ggjjoouurrnnaall provider using the ggjjoouurrnnaall utility, then run
+     newfs(8) or tunefs(8) on it with the --JJ flag which instructs UFS to coop‐
+     erate with the ggjjoouurrnnaall provider below.  There are important differences
+     in how journaled UFS works.  The most important one is that sync(2) and
+     fsync(2) system calls do not work as expected anymore.  To ensure that
+     data is stored on the data provider, the ggjjoouurrnnaall ssyynncc command should be
+     used after calling sync(2).  For the best performance possible, soft-up‐
+     dates should be disabled when ggjjoouurrnnaall is used.  It is also safe and rec‐
+     ommended to use the aassyynncc mount(8) option.
+
+     When ggjjoouurrnnaall is configured on top of gmirror(8) or graid3(8) providers,
+     it also keeps them in a consistent state, thus automatic synchronization
+     on power failure or system crash may be disabled on those providers.
+
+     The ggjjoouurrnnaall utility uses on-disk metadata, stored in the provider's last
+     sector, to store all needed information.  This could be a problem when an
+     existing file system is converted to use ggjjoouurrnnaall.
+
+     The first argument to ggjjoouurrnnaall indicates an action to be performed:
+
+     llaabbeell   Configures ggjjoouurrnnaall on the given provider(s).  If only one
+             provider is given, both data and journal are stored on the same
+             provider.  If two providers are given, the first one will be used
+             as data provider and the second will be used as the journal
+             provider.
+
+             Additional options include:
+
+             --cc        Checksum journal records.
+
+             --ff        May be used to convert an existing file system to use
+                       ggjjoouurrnnaall, but only if the journal will be configured on
+                       a separate provider and if the last sector in the data
+                       provider is not used by the existing file system.  If
+                       ggjjoouurrnnaall detects that the last sector is used, it will
+                       refuse to overwrite it and return an error.  This be‐
+                       havior may be forced by using the --ff flag, which will
+                       force ggjjoouurrnnaall to overwrite the last sector.
+
+             --hh        Hardcode provider names in metadata.
+
+             --ss _j_s_i_z_e  Specifies size of the journal if only one provider is
+                       used for both data and journal.  The default is one gi‐
+                       gabyte.  Size should be chosen based on provider's
+                       load, and not on its size; recommended minimum is twice
+                       the size of the physical memory installed.  It is not
+                       recommended to use ggjjoouurrnnaall for small file systems
+                       (e.g.: only few gigabytes big).
+
+     cclleeaarr   Clear metadata on the given providers.
+
+     ssttoopp    Stop the given provider.
+
+             Additional options include:
+
+             --ff  Stop the given provider even if it is opened.
+
+     ssyynncc    Trigger journal switch and enforce sending data to the data
+             provider.
+
+     dduummpp    Dump metadata stored on the given providers.
+
+     lliisstt    See geom(8).
+
+     ssttaattuuss  See geom(8).
+
+     llooaadd    See geom(8).
+
+     uunnllooaadd  See geom(8).
+
+     Additional options include:
+
+     --vv  Be more verbose.
+
+EEXXIITT SSTTAATTUUSS
+     Exit status is 0 on success, and 1 if the command fails.
+
+EEXXAAMMPPLLEESS
+     Create a ggjjoouurrnnaall based UFS file system and mount it:
+
+           gjournal load
+           gjournal label da0
+           newfs -J /dev/da0.journal
+           mount -o async /dev/da0.journal /mnt
+
+     Configure journaling on an existing file system, but only if ggjjoouurrnnaall al‐
+     lows this (i.e., if the last sector is not already used by the file sys‐
+     tem):
+
+           umount /dev/da0s1d
+           gjournal label da0s1d da0s1e && \
+               tunefs -J enable -n disable da0s1d.journal && \
+               mount -o async /dev/da0s1d.journal /mnt || \
+               mount /dev/da0s1d /mnt
+
+SSYYSSCCTTLLSS
+     Gjournal adds the sysctl level kern.geom.journal.  The string and integer
+     information available is detailed below.  The changeable column shows
+     whether a process with appropriate privilege may change the value.
+
+           ssyyssccttll nnaammee                 TTyyppee          CChhaannggeeaabbllee
+           debug                       integer       yes
+           switch_time                 integer       yes
+           force_switch                integer       yes
+           parallel_flushes            integer       yes
+           accept_immediately          integer       yes
+           parallel_copies             integer       yes
+           record_entries              integer       yes
+           optimize                    integer       yes
+
+     debug   Setting a non-zero value enables debugging at various levels.
+             Debug level 1 will record actions at a journal level, relating to
+             journal switches, metadata updates, etc.  Debug level 2 will
+             record actions at a higher level, relating to the numbers of en‐
+             tries in journals, access requests, etc.  Debug level 3 will
+             record verbose detail, including insertion of I/Os to the jour‐
+             nal.
+
+     switch_time
+             The maximum number of seconds a journal is allowed to remain open
+             before switching to a new journal.
+
+     force_switch
+             Force a journal switch when the journal uses more than N% of the
+             free journal space.
+
+     parallel_flushes
+             The number of flush I/O requests to be sent in parallel when
+             flushing the journal to the data provider.
+
+     accept_immediately
+             The maximum number of I/O requests accepted at the same time.
+
+     parallel_copies
+             The number of copy I/O requests to send in parallel.
+
+     record_entries
+             The maximum number of record entries to allow in a single jour‐
+             nal.
+
+     optimize
+             Controls whether entries in a journal will be optimized by com‐
+             bining overlapping I/Os into a single I/O and reordering the en‐
+             tries in a journal.  This can be disabled by setting the sysctl
+             to 0.
+
+   ccaacchhee
+     The string and integer information available for the cache level is de‐
+     tailed below.  The changeable column shows whether a process with appro‐
+     priate privilege may change the value.
+
+           ssyyssccttll nnaammee             TTyyppee          CChhaannggeeaabbllee
+           used                    integer       no
+           limit                   integer       yes
+           divisor                 integer       no
+           switch                  integer       yes
+           misses                  integer       yes
+           alloc_failures          integer       yes
+
+     used    The number of bytes currently allocated to the cache.
+
+     limit   The maximum number of bytes to be allocated to the cache.
+
+     divisor
+             Sets the cache size to be used as a proportion of kmem_size.  A
+             value of 2 (the default) will cause the cache size to be set to
+             1/2 of the kmem_size.
+
+     switch  Force a journal switch when this percentage of cache has been
+             used.
+
+     misses  The number of cache misses, when data has been read, but was not
+             found in the cache.
+
+     alloc_failures
+             The number of times memory failed to be allocated to the cache
+             because the cache limit was hit.
+
+   ssttaattss
+     The string and integer information available for the statistics level is
+     detailed below.  The changeable column shows whether a process with ap‐
+     propriate privilege may change the value.
+
+           ssyyssccttll nnaammee            TTyyppee          CChhaannggeeaabbllee
+           skipped_bytes          integer       yes
+           combined_ios           integer       yes
+           switches               integer       yes
+           wait_for_copy          integer       yes
+           journal_full           integer       yes
+           low_mem                integer       yes
+
+     skipped_bytes
+             The number of bytes skipped.
+
+     combined_ios
+             The number of I/Os which were combined by journal optimization.
+
+     switches
+             The number of journal switches.
+
+     wait_for_copy
+             The number of times the journal switch process had to wait for
+             the previous journal copy to complete.
+
+     journal_full
+             The number of times the journal was almost full, forcing a jour‐
+             nal switch.
+
+     low_mem
+             The number of times the low_mem hook was called.
+
+SSEEEE AALLSSOO
+     geom(4), geom(8), mount(8), newfs(8), tunefs(8), umount(8)
+
+HHIISSTTOORRYY
+     The ggjjoouurrnnaall utility appeared in FreeBSD 7.0.
+
+AAUUTTHHOORRSS
+     Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                            February 17, 2009                           BSD

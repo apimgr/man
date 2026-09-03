@@ -1,0 +1,173 @@
+REBOOT(9)                BSD Kernel Developer's Manual               REBOOT(9)
+
+NNAAMMEE
+     kkeerrnn__rreebboooott, sshhuuttddoowwnn__nniiccee — reboot, halt, or power off the system
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssyyssttmm..hh>>
+     ##iinncclluuddee <<ssyyss//rreebboooott..hh>>
+
+     _e_x_t_e_r_n _i_n_t _r_e_b_o_o_t_i_n_g_;
+
+     _v_o_i_d
+     kkeerrnn__rreebboooott(_i_n_t _h_o_w_t_o);
+
+     _v_o_i_d
+     sshhuuttddoowwnn__nniiccee(_i_n_t _h_o_w_t_o);
+
+     ##iinncclluuddee <<ssyyss//eevveenntthhaannddlleerr..hh>>
+
+     EEVVEENNTTHHAANNDDLLEERR__RREEGGIISSTTEERR(_s_h_u_t_d_o_w_n___p_r_e___s_y_n_c, _s_h_u_t_d_o_w_n___f_n, _p_r_i_v_a_t_e, _p_r_i_o_r_i_t_y);
+
+     EEVVEENNTTHHAANNDDLLEERR__RREEGGIISSTTEERR(_s_h_u_t_d_o_w_n___p_o_s_t___s_y_n_c, _s_h_u_t_d_o_w_n___f_n, _p_r_i_v_a_t_e,
+         _p_r_i_o_r_i_t_y);
+
+     EEVVEENNTTHHAANNDDLLEERR__RREEGGIISSTTEERR(_s_h_u_t_d_o_w_n___f_i_n_a_l, _s_h_u_t_d_o_w_n___f_n, _p_r_i_v_a_t_e, _p_r_i_o_r_i_t_y);
+
+DDEESSCCRRIIPPTTIIOONN
+     The kkeerrnn__rreebboooott() function handles final system shutdown, and either
+     halts, reboots, or powers down the system.  The exact action to be taken
+     is determined by the flags passed in _h_o_w_t_o.
+
+     The relevant flags are:
+           RB_HALT        Halt the system in-place rather than restarting.
+           RB_POWEROFF    Power down the system rather than restarting.
+           RB_POWERCYCLE  Request a power-cycle in addition to restarting.
+           RB_NOSYNC      Do not sync filesystems during shutdown.
+           RB_DUMP        Dump kernel memory during shutdown.
+
+     The _h_o_w_t_o field, and its full list of flags are described in additional
+     detail by reboot(2).
+
+     kkeerrnn__rreebboooott() performs the following actions:
+
+           1.   Set the _r_e_b_o_o_t_i_n_g variable to 1, indicating that the reboot
+                process has begun and cannot be stopped.
+
+           2.   Unless the RB_NOSYNC flag is set in _h_o_w_t_o, sync and unmount
+                the system's disks by calling vfs_unmountall(9).
+
+           3.   If rebooting after a panic (RB_DUMP is set in _h_o_w_t_o, but
+                RB_HALT is not set), initiate a system crash dump via
+                ddooaadduummpp().
+
+           4.   Print a message indicating that the system is about to be
+                halted or rebooted, and a report of the total system uptime.
+
+           5.   Execute all registered shutdown hooks.  See _S_H_U_T_D_O_W_N _H_O_O_K_S be‐
+                low.
+
+           6.   As a last resort, if none of the shutdown hooks handled the
+                reboot, call the machine-dependent ccppuu__rreesseett() function.  In
+                the unlikely case that this is not supported, kkeerrnn__rreebboooott()
+                will loop forever at the end of the function.  This requires a
+                manual reset of the system.
+
+     kkeerrnn__rreebboooott() may be called from a typical kernel execution context, when
+     the system is running normally.  It may also be called as the final step
+     of a kernel panic, or from the kernel debugger.  Therefore, the code in
+     this function is subject to restrictions described by the _E_X_E_C_U_T_I_O_N
+     _C_O_N_T_E_X_T section of the panic(9) man page.
+
+     The sshhuuttddoowwnn__nniiccee() function is the intended path for performing a clean
+     reboot or shutdown when the system is operating under normal conditions.
+     Calling this function will send a signal to the init(8) process, in‐
+     structing it to perform a shutdown.  When init(8) has cleanly terminated
+     its children, it will perform the reboot(2) system call, which in turn
+     calls kkeerrnn__rreebboooott().
+
+     If sshhuuttddoowwnn__nniiccee() is called before the init(8) process has been spawned,
+     or if the system has panicked or otherwise halted, kkeerrnn__rreebboooott() will be
+     called directly.
+
+SSHHUUTTDDOOWWNN HHOOOOKKSS
+     The system defines three separate EVENTHANDLER(9) events, which are in‐
+     voked successively during the shutdown procedure.  These are
+     _s_h_u_t_d_o_w_n___p_r_e___s_y_n_c, _s_h_u_t_d_o_w_n___p_o_s_t___s_y_n_c, and _s_h_u_t_d_o_w_n___f_i_n_a_l.  They will be
+     executed unconditionally in the listed order.  Handler functions regis‐
+     tered to any of these events will receive the value of _h_o_w_t_o as their
+     second argument, which may be used to decide what action to take.
+
+     The _s_h_u_t_d_o_w_n___p_r_e___s_y_n_c event is invoked before syncing filesystems to
+     disk.  It enables any action or state transition that must happen before
+     this point to take place.
+
+     The _s_h_u_t_d_o_w_n___p_o_s_t___s_y_n_c event is invoked at the point immediately after
+     the filesystem sync has finished.  It enables, for example, disk drivers
+     to complete the sync by flushing their cache to disk.  Note that this
+     event still takes place before the optional kernel core dump.
+
+     The _s_h_u_t_d_o_w_n___f_i_n_a_l event is invoked as the very last step of
+     kkeerrnn__rreebboooott().  Drivers and subsystems such as acpi(4) can register han‐
+     dlers to this event that will perform the actual reboot, power-off, or
+     halt.
+
+     Notably, the _s_h_u_t_d_o_w_n___f_i_n_a_l event is also the point at which all kernel
+     modules will have their shutdown (MOD_SHUTDOWN) hooks executed, and when
+     the DEVICE_SHUTDOWN(9) method will be executed recursively on all de‐
+     vices.
+
+     All event handlers, like kkeerrnn__rreebboooott() itself, may be run in either nor‐
+     mal shutdown context or a kernel panic or debugger context.  Handler
+     functions are expected to take care not to trigger recursive panics.
+
+RREETTUURRNN VVAALLUUEESS
+     The kkeerrnn__rreebboooott() function does not return.
+
+     The sshhuuttddoowwnn__nniiccee() function will usually return to its caller, having
+     initiated the asynchronous system shutdown.  It will not return when
+     called from a panic or debugger context, or during early boot.
+
+EEXXAAMMPPLLEESS
+     A hypothetical driver, foo(4), defines a _s_h_u_t_d_o_w_n___f_i_n_a_l event handler
+     that can handle system power-off by writing to a device register, but it
+     does not handle halt or reset.
+
+           void
+           foo_poweroff_handler(struct void *arg, int howto)
+           {
+                   struct foo_softc *sc = arg;
+                   uint32_t reg;
+
+                   if ((howto & RB_POWEROFF) != 0) {
+                           reg = FOO_POWEROFF;
+                           WRITE4(sc, FOO_POWEROFF_REG, reg);
+                   }
+           }
+
+     The handler is then registered in the device attach routine:
+
+           int
+           foo_attach(device_t dev)
+           {
+                   struct foo_softc *sc;
+
+                   ...
+
+                   /* Pass the device's software context as the private arg. */
+                   EVENTHANDLER_REGISTER(shutdown_final, foo_poweroff_handler, sc,
+                       SHUTDOWN_PRI_DEFAULT);
+
+                   ...
+           }
+
+     This _s_h_u_t_d_o_w_n___f_i_n_a_l handler uses the RB_NOSYNC flag to detect that a
+     panic or other unusual condition has occurred, and returns early:
+
+           void
+           bar_shutdown_final(struct void *arg, int howto)
+           {
+
+                   if ((howto & RB_NOSYNC) != 0)
+                           return;
+
+                   /* Some code that is not panic-safe. */
+                   ...
+           }
+
+SSEEEE AALLSSOO
+     reboot(2), init(8), DEVICE_SHUTDOWN(9), EVENTHANDLER(9), module(9),
+     panic(9), vfs_unmountall(9)
+
+BSD                             March 20, 2023                             BSD

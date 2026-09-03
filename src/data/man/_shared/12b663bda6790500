@@ -1,0 +1,774 @@
+CTF(5)                      BSD File Formats Manual                     CTF(5)
+
+NNAAMMEE
+     ccttff — Compact C Type Format
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ccttff..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     ccttff is designed to be a compact representation of the C programming lan‐
+     guage's type information focused on serving the needs of dynamic tracing,
+     debuggers, and other in-situ and post-mortem introspection tools.  ccttff
+     data is generally included in EELLFF objects and is tagged as SSHHTT__PPRROOGGBBIITTSS
+     to ensure that the data is accessible in a running process and in subse‐
+     quent core dumps, if generated.
+
+     The ccttff data contained in each file has information about the layout and
+     sizes of C types, including intrinsic types, enumerations, structures,
+     typedefs, and unions, that are used by the corresponding EELLFF object.  The
+     ccttff data may also include information about the types of global objects
+     and the return type and arguments of functions in the symbol table.
+
+     Because a ccttff file is often embedded inside a file, rather than being a
+     standalone file itself, it may also be referred to as a ccttff ccoonnttaaiinneerr.
+
+     On FreeBSD systems, ccttff data is consumed by dtrace(1).  Programmatic ac‐
+     cess to ccttff data can be obtained through libctf.
+
+     The ccttff file format is broken down into seven different sections.  The
+     first two sections are the pprreeaammbbllee and hheeaaddeerr, which describe the ver‐
+     sion of the ccttff file, the links it has to other ccttff files, and the sizes
+     of the other sections.  The next section is the llaabbeell section, which pro‐
+     vides a way of identifying similar groups of ccttff data across multiple
+     files.  This is followed by the oobbjjeecctt information section, which de‐
+     scribes the types of global symbols.  The subsequent section is the
+     ffuunnccttiioonn information section, which describes the return types and argu‐
+     ments of functions.  The next section is the ttyyppee information section,
+     which describes the format and layout of the C types themselves, and fi‐
+     nally the last section is the ssttrriinngg section, which contains the names of
+     types, enumerations, members, and labels.
+
+     While strictly speaking, only the pprreeaammbbllee and hheeaaddeerr are required, to be
+     actually useful, both the type and string sections are necessary.
+
+     A ccttff file may contain all of the type information that it requires, or
+     it may optionally refer to another ccttff file which holds the remaining
+     types.  When a ccttff file refers to another file, it is called the cchhiilldd
+     and the file it refers to is called the ppaarreenntt.  A given file may only
+     refer to one parent.  This process is called _u_n_i_q_u_i_f_i_c_a_t_i_o_n because it
+     ensures each child only has type information that is unique to it.  A
+     common example of this is that most kernel modules in illumos are uniqui‐
+     fied against the kernel module ggeennuunniixx and the type information that
+     comes from the IIPP module.  This means that a module only has types that
+     are unique to itself and the most common types in the kernel are not du‐
+     plicated.  Uniquification is not used when building kernel modules on
+     FreeBSD.
+
+FFIILLEE FFOORRMMAATT
+     This documents version _t_h_r_e_e of the ccttff file format.  The ctfconvert(1)
+     and ctfmerge(1) utilities emit ccttff version 3, and all other applications
+     and libraries can operate on versions 2 and 3.
+
+     The file format can be summarized with the following image, the following
+     sections will cover this in more detail.
+
+
+              +-------------+  0t0
+     +--------| Preamble    |
+     |        +-------------+  0t4
+     |+-------| Header      |
+     ||       +-------------+  0t36 + cth_lbloff
+     ||+------| Labels      |
+     |||      +-------------+  0t36 + cth_objtoff
+     |||+-----| Objects     |
+     ||||     +-------------+  0t36 + cth_funcoff
+     ||||+----| Functions   |
+     |||||    +-------------+  0t36 + cth_typeoff
+     |||||+---| Types       |
+     ||||||   +-------------+  0t36 + cth_stroff
+     ||||||+--| Strings     |
+     |||||||  +-------------+  0t36 + cth_stroff + cth_strlen
+     |||||||
+     |||||||
+     |||||||
+     |||||||    +-- magic -   vers   flags
+     |||||||    |          |    |      |
+     |||||||   +------+------+------+------+
+     +---------| 0xcf | 0xf1 | 0x03 | 0x00 |
+      ||||||   +------+------+------+------+
+      ||||||   0      1      2      3      4
+      ||||||
+      ||||||    + parent label        + objects
+      ||||||    |       + parent name |     + functions    + strings
+      ||||||    |       |     + label |     |      + types |       + strlen
+      ||||||    |       |     |       |     |      |       |       |
+      ||||||   +------+------+------+------+------+-------+-------+-------+
+      +--------| 0x00 | 0x00 | 0x00 | 0x08 | 0x36 | 0x110 | 0x5f4 | 0x611 |
+       |||||   +------+------+------+------+------+-------+-------+-------+
+       |||||   0x04   0x08   0x0c   0x10   0x14    0x18    0x1c    0x20   0x24
+       |||||
+       |||||         + Label name
+       |||||         |       + Label type
+       |||||         |       |       + Next label
+       |||||         |       |       |
+       |||||       +-------+------+-----+
+       +-----------| 0x01  | 0x42 | ... |
+        ||||       +-------+------+-----+
+        ||||  cth_lbloff   +0x4   +0x8  cth_objtoff
+        ||||
+        ||||
+        |||| Symidx  0t15   0t43   0t44
+        ||||       +------+------+------+-----+
+        +----------| 0x00 | 0x42 | 0x36 | ... |
+         |||       +------+------+------+-----+
+         ||| cth_objtoff  +0x4   +0x8   +0xc   cth_funcoff
+         |||
+         |||        + CTF_TYPE_INFO         + CTF_TYPE_INFO
+         |||        |        + Return type  |
+         |||        |        |       + arg0 |
+         |||       +--------+------+------+-----+
+         +---------| 0x2c10 | 0x08 | 0x0c | ... |
+          ||       +--------+------+------+-----+
+          || cth_funcff     +0x4   +0x8   +0xc  cth_typeoff
+          ||
+          ||         + ctf_stype_t for type 1
+          ||         |  integer           + integer encoding
+          ||         |                    |          + ctf_stype_t for type 2
+          ||         |                    |          |
+          ||       +--------------------+-----------+-----+
+          +--------| 0x19 * 0xc01 * 0x0 | 0x1000000 | ... |
+           |       +--------------------+-----------+-----+
+           | cth_typeoff               +0x0c      +0x10  cth_stroff
+           |
+           |     +--- str 0
+           |     |    +--- str 1       + str 2
+           |     |    |                |
+           |     v    v                v
+           |   +----+---+---+---+----+---+---+---+---+---+----+
+           +---| \0 | i | n | t | \0 | f | o | o | _ | t | \0 |
+               +----+---+---+---+----+---+---+---+---+---+----+
+               0    1   2   3   4    5   6   7   8   9   10   11
+
+     Every ccttff file begins with a pprreeaammbbllee, followed by a hheeaaddeerr.  The
+     pprreeaammbbllee is defined as follows:
+
+     typedef struct ctf_preamble {
+             uint16_t ctp_magic;     /* magic number (CTF_MAGIC) */
+             uint8_t ctp_version;    /* data format version number (CTF_VERSION) */
+             uint8_t ctp_flags;      /* flags (see below) */
+     } ctf_preamble_t;
+
+     The pprreeaammbbllee is four bytes long and must be four byte aligned.  This
+     pprreeaammbbllee defines the version of the ccttff file which defines the format of
+     the rest of the header.  While the header may change in subsequent ver‐
+     sions, the preamble will not change across versions, though the interpre‐
+     tation of its flags may change from version to version.  The _c_t_p___m_a_g_i_c
+     member defines the magic number for the ccttff file format.  This must al‐
+     ways be 0xcff1.  If another value is encountered, then the file should
+     not be treated as a ccttff file.  The _c_t_p___v_e_r_s_i_o_n member defines the version
+     of the ccttff file.  The current version is 3.  It is possible to encounter
+     an unsupported version.  In that case, software should not try to parse
+     the format, as it may have changed.  Finally, the _c_t_p___f_l_a_g_s member de‐
+     scribes aspects of the file which modify its interpretation.  The follow‐
+     ing flags are currently defined:
+
+     #define CTF_F_COMPRESS          0x01
+
+     The flag CCTTFF__FF__CCOOMMPPRREESSSS indicates that the body of the ccttff file, all the
+     data following the hheeaaddeerr, has been compressed through the zzlliibb library
+     and its ddeeffllaattee algorithm.  If this flag is not present, then the body
+     has not been compressed and no special action is needed to interpret it.
+     All offsets into the data as described by hheeaaddeerr, always refer to the
+     uunnccoommpprreesssseedd data.
+
+     In versions two and three of the ccttff file format, the hheeaaddeerr denotes
+     whether or not this ccttff file is the child of another ccttff file and also
+     indicates the size of the remaining sections.  The structure for the
+     hheeaaddeerr logically contains a copy of the pprreeaammbbllee and the two have a com‐
+     bined size of 36 bytes.
+
+     typedef struct ctf_header {
+             ctf_preamble_t cth_preamble;
+             uint32_t cth_parlabel;  /* ref to name of parent lbl uniq'd against */
+             uint32_t cth_parname;   /* ref to basename of parent */
+             uint32_t cth_lbloff;    /* offset of label section */
+             uint32_t cth_objtoff;   /* offset of object section */
+             uint32_t cth_funcoff;   /* offset of function section */
+             uint32_t cth_typeoff;   /* offset of type section */
+             uint32_t cth_stroff;    /* offset of string section */
+             uint32_t cth_strlen;    /* length of string section in bytes */
+     } ctf_header_t;
+
+     After the pprreeaammbbllee, the next two members _c_t_h___p_a_r_l_a_b_e_l and _c_t_h___p_a_r_n_a_m_e,
+     are used to identify the parent.  The value of both members are offsets
+     into the ssttrriinngg section which point to the start of a null-terminated
+     string.  For more information on the encoding of strings, see the subsec‐
+     tion on _S_t_r_i_n_g _I_d_e_n_t_i_f_i_e_r_s.  If the value of either is zero, then there
+     is no entry for that member.  If the member _c_t_h___p_a_r_l_a_b_e_l is set, then the
+     _c_t_f___p_a_r_n_a_m_e member must be set, otherwise it will not be possible to find
+     the parent.  If _c_t_f___p_a_r_n_a_m_e is set, it is not necessary to define
+     _c_t_h___p_a_r_l_a_b_e_l, as the parent may not have a label.  For more information
+     on labels and their interpretation, see _T_h_e _L_a_b_e_l _S_e_c_t_i_o_n.
+
+     The remaining members (excepting _c_t_h___s_t_r_l_e_n) describe the beginning of
+     the corresponding sections.  These offsets are relative to the end of the
+     hheeaaddeerr.  Therefore, something with an offset of 0 is at an offset of
+     thirty-six bytes relative to the start of the ccttff file.  The difference
+     between members indicates the size of the section itself.  Different off‐
+     sets have different alignment requirements.  The start of the _c_t_h___o_b_j_t_o_f_f
+     and _c_t_h___f_u_n_c_o_f_f must be two byte aligned, while the sections _c_t_h___l_b_l_o_f_f
+     and _c_t_h___t_y_p_e_o_f_f must be four-byte aligned.  The section _c_t_h___s_t_r_o_f_f has no
+     alignment requirements.  To calculate the size of a given section, ex‐
+     cepting the ssttrriinngg section, one should subtract the offset of the section
+     from the following one.  For example, the size of the ttyyppeess section can
+     be calculated by subtracting _c_t_h___t_y_p_e_o_f_f from _c_t_h___s_t_r_o_f_f.
+
+     Finally, the member _c_t_h___s_t_r_l_e_n describes the length of the string section
+     itself.  From it, you can also calculate the size of the entire ccttff file
+     by adding together the size of the ccttff__hheeaaddeerr__tt, the offset of the string
+     section in _c_t_h___s_t_r_o_f_f, and the size of the string section in _c_t_h___s_r_l_e_n.
+
+   TTyyppee IIddeennttiiffiieerrss
+     Through the ccttff data, types are referred to by identifiers.  A given ccttff
+     file supports up to 2147483646 (0x7ffffffe) types.  ccttff version 2 had a
+     much smaller limit of 32767 types.  The first valid type identifier is
+     0x1.  When a given ccttff file is a child, indicated by a non-zero entry for
+     the hheeaaddeerr's _c_t_h___p_a_r_n_a_m_e, then the first valid type identifier is
+     0x80000000 and the last is 0xfffffffe.  In this case, type identifiers
+     0x1 through 0x7ffffffe are references to the parent.  0x7fffffff and
+     0xffffffff are not treated as valid type identifiers so as to enable the
+     use of -1 as an error value.
+
+     The type identifier zero is a sentinel value used to indicate that there
+     is no type information available or it is an unknown type.
+
+     Throughout the file format, the identifier is stored in different sized
+     values; however, the minimum size to represent a given identifier is a
+     uuiinntt1166__tt.  Other consumers of ccttff information may use larger or opaque
+     identifiers.
+
+   SSttrriinngg IIddeennttiiffiieerrss
+     String identifiers are always encoded as four byte unsigned integers
+     which are an offset into a string table.  The ccttff format supports two
+     different string tables which have an identifier of zero or one.  This
+     identifier is stored in the high-order bit of the unsigned four byte off‐
+     set.  Therefore, the maximum supported offset into one of these tables is
+     0x7ffffffff.
+
+     Table identifier zero, always refers to the ssttrriinngg section in the CTF
+     file itself.  String table identifier one refers to an external string
+     table which is the ELF string table for the ELF symbol table associated
+     with the ccttff container.
+
+   TTyyppee EEnnccooddiinngg
+     Every ccttff type begins with metadata encoded into a uuiinntt3322__tt.  This en‐
+     coded information tells us three different pieces of information:
+           ••   The kind of the type
+           ••   Whether this type is a root type or not
+           ••   The length of the variable data
+
+     The 32 bits that make up the encoding are broken down into six bits for
+     the kind (bits 26 to 31), one bit for the root type flag (bit 25), and 25
+     bits for the length of the variable data.
+
+     The current version of the file format defines 14 different kinds.  The
+     interpretation of these different kinds will be discussed in the section
+     _T_h_e _T_y_p_e _S_e_c_t_i_o_n.  If a kind is encountered that is not listed below,
+     then it is not a valid ccttff file.  The kinds are defined as follows:
+
+           #define CTF_K_UNKNOWN   0
+           #define CTF_K_INTEGER   1
+           #define CTF_K_FLOAT     2
+           #define CTF_K_POINTER   3
+           #define CTF_K_ARRAY     4
+           #define CTF_K_FUNCTION  5
+           #define CTF_K_STRUCT    6
+           #define CTF_K_UNION     7
+           #define CTF_K_ENUM      8
+           #define CTF_K_FORWARD   9
+           #define CTF_K_TYPEDEF   10
+           #define CTF_K_VOLATILE  11
+           #define CTF_K_CONST     12
+           #define CTF_K_RESTRICT  13
+
+     Programs directly reference many types; however, other types are refer‐
+     enced indirectly because they are part of some other structure.  These
+     types that are referenced directly and used are called rroooott types.  Other
+     types may be used indirectly, for example, a program may reference a
+     structure directly, but not one of its members which has a type.  That
+     type is not considered a rroooott type.  If a type is a rroooott type, then it
+     will have bit 25 set.
+
+     The variable length section is specific to each kind and is discussed in
+     the section _T_h_e _T_y_p_e _S_e_c_t_i_o_n.
+
+     The following macros are useful for constructing and deconstructing the
+     encoded type information:
+
+
+           #define CTF_V3_MAX_VLEN                 0x00ffffff
+           #define CTF_V3_INFO_KIND(info)          (((info) & 0xfc000000) >> 26)
+           #define CTF_V3_INFO_ISROOT(info)        (((info) & 0x02000000) >> 25)
+           #define CTF_V3_INFO_VLEN(info)          (((info) & CTF_V3_MAX_VLEN))
+
+           #define CTF_V3_TYPE_INFO(kind, isroot, vlen) \
+                   (((kind) << 26) | (((isroot) ? 1 : 0) << 25) | ((vlen) & CTF_V3_MAX_VLEN))
+
+   TThhee LLaabbeell SSeeccttiioonn
+     When consuming ccttff data, it is often useful to know whether two different
+     ccttff containers come from the same source base and version.  For example,
+     when building illumos, there are many kernel modules that are built
+     against a single collection of source code.  A label is encoded into the
+     ccttff files that corresponds with the particular build.  This ensures that
+     if files on the system were to become mixed up from multiple releases,
+     that they are not used together by tools, particularly when a child needs
+     to refer to a type in the parent.  Because they are linked using the type
+     identifiers, if the wrong parent is used then the wrong type will be en‐
+     countered.  Note that this mechanism is not currently used on FreeBSD.
+     In particular, kernel modules built on FreeBSD each contain a complete
+     type graph.
+
+     Each label is encoded in the file format using the following eight byte
+     structure:
+
+     typedef struct ctf_lblent {
+             uint32_t ctl_label;     /* ref to name of label */
+             uint32_t ctl_typeidx;   /* last type associated with this label */
+     } ctf_lblent_t;
+
+     Each label has two different components, a name and a type identifier.
+     The name is encoded in the _c_t_l___l_a_b_e_l member which is in the format de‐
+     fined in the section _S_t_r_i_n_g _I_d_e_n_t_i_f_i_e_r_s.  Generally, the names of all la‐
+     bels are found in the internal string section.
+
+     The type identifier encoded in the member _c_t_l___t_y_p_e_i_d_x refers to the last
+     type identifier that a label refers to in the current file.  Labels only
+     refer to types in the current file, if the ccttff file is a child, then it
+     will have the same label as its parent; however, its label will only re‐
+     fer to its types, not its parent's.
+
+     It is also possible, though rather uncommon, for a ccttff file to have mul‐
+     tiple labels.  Labels are placed one after another, every eight bytes.
+     When multiple labels are present, types may only belong to a single la‐
+     bel.
+
+   TThhee OObbjjeecctt SSeeccttiioonn
+     The object section provides a mapping from ELF symbols of type SSTTTT__OOBBJJEECCTT
+     in the symbol table to a type identifier.  Every entry in this section is
+     a uuiinntt3322__tt which contains a type identifier as described in the section
+     _T_y_p_e _I_d_e_n_t_i_f_i_e_r_s.  If there is no information for an object, then the
+     type identifier 0x0 is stored for that entry.
+
+     To walk the object section, you need to have a corresponding ssyymmbbooll ttaabbllee
+     in the ELF object that contains the ccttff data.  Not every object is in‐
+     cluded in this section.  Specifically, when walking the symbol table, an
+     entry is skipped if it matches any of the following conditions:
+
+           ••   The symbol type is not SSTTTT__OOBBJJEECCTT
+           ••   The symbol's section index is SSHHNN__UUNNDDEEFF
+           ••   The symbol's name offset is zero
+           ••   The symbol's section index is SSHHNN__AABBSS and the value of the sym‐
+               bol is zero.
+           ••   The symbol's name is _START_ or _END_.  These are skipped be‐
+               cause they are used for scoping local symbols in ELF.
+
+     The following sample code shows an example of iterating the object sec‐
+     tion and skipping the correct symbols:
+
+     #include <gelf.h>
+     #include <stdio.h>
+
+     /*
+      * Given the start of the object section in a CTFv3 file, the number of symbols,
+      * and the ELF Data sections for the symbol table and the string table, this
+      * prints the type identifiers that correspond to objects. Note, a more robust
+      * implementation should ensure that they don't walk beyond the end of the CTF
+      * object section.
+      *
+      * An implementation that handles CTFv2 must take into account the fact that
+      * type identifiers are 16 bits wide rather than 32 bits wide.
+      */
+     static int
+     walk_symbols(uint32_t *objtoff, Elf_Data *symdata, Elf_Data *strdata,
+         long nsyms)
+     {
+             long i;
+             uintptr_t strbase = strdata->d_buf;
+
+             for (i = 1; i < nsyms; i++, objftoff++) {
+                     const char *name;
+                     GElf_Sym sym;
+
+                     if (gelf_getsym(symdata, i, &sym) == NULL)
+                             return (1);
+
+                     if (GELF_ST_TYPE(sym.st_info) != STT_OBJECT)
+                             continue;
+                     if (sym.st_shndx == SHN_UNDEF || sym.st_name == 0)
+                             continue;
+                     if (sym.st_shndx == SHN_ABS && sym.st_value == 0)
+                             continue;
+                     name = (const char *)(strbase + sym.st_name);
+                     if (strcmp(name, "_START_") == 0 || strcmp(name, "_END_") == 0)
+                             continue;
+
+                     (void) printf("Symbol %d has type %d0, i, *objtoff);
+             }
+
+             return (0);
+     }
+
+   TThhee FFuunnccttiioonn SSeeccttiioonn
+     The function section of the ccttff file encodes the types of both the func‐
+     tion's arguments and the function's return value.  Similar to _T_h_e _O_b_j_e_c_t
+     _S_e_c_t_i_o_n, the function section encodes information for all symbols of type
+     SSTTTT__FFUUNNCCTTIIOONN, excepting those that fit specific criteria.  Unlike with
+     objects, because functions have a variable number of arguments, they
+     start with a type encoding as defined in _T_y_p_e _E_n_c_o_d_i_n_g, which is the size
+     of a uuiinntt3322__tt.  For functions which have no type information available,
+     they are encoded as CTF_V3_TYPE_INFO(CTF_K_UNKNOWN, 0, 0).  Functions
+     with arguments are encoded differently.  Here, the variable length is
+     turned into the number of arguments in the function.  If a function is a
+     vvaarraarrggss type function, then the number of arguments is increased by one.
+     Functions with type information are encoded as:
+     CTF_V3_TYPE_INFO(CTF_K_FUNCTION, 0, nargs).
+
+     For functions that have no type information, nothing else is encoded, and
+     the next function is encoded.  For functions with type information, the
+     next uuiinntt3322__tt is encoded with the type identifier of the return type of
+     the function.  It is followed by each of the type identifiers of the ar‐
+     guments, if any exist, in the order that they appear in the function.
+     Therefore, argument 0 is the first type identifier and so on.  When a
+     function has a final varargs argument, that is encoded with the type
+     identifier of zero.
+
+     Like _T_h_e _O_b_j_e_c_t _S_e_c_t_i_o_n, the function section is encoded in the order of
+     the symbol table.  It has similar, but slightly different considerations
+     from objects.  While iterating the symbol table, if any of the following
+     conditions are true, then the entry is skipped and no corresponding entry
+     is written:
+
+           ••   The symbol type is not SSTTTT__FFUUNNCCTTIIOONN
+           ••   The symbol's section index is SSHHNN__UUNNDDEEFF
+           ••   The symbol's name offset is zero
+           ••   The symbol's name is _START_ or _END_.  These are skipped be‐
+               cause they are used for scoping local symbols in ELF.
+
+   TThhee TTyyppee SSeeccttiioonn
+     The type section is the heart of the ccttff data.  It encodes all of the in‐
+     formation about the types themselves.  The base of the type information
+     comes in two forms, a short form and a long form, each of which may be
+     followed by a variable number of arguments.  The following definitions
+     describe the short and long forms:
+
+     #define CTF_V3_MAX_SIZE         0xfffffffe      /* max size of a type in bytes */
+     #define CTF_V3_LSIZE_SENT       0xffffffff      /* sentinel for ctt_size */
+     #define CTF_V3_MAX_LSIZE        UINT64_MAX
+
+     struct ctf_stype_v3 {
+             uint32_t ctt_name;      /* reference to name in string table */
+             uint32_t ctt_info;      /* encoded kind, variant length */
+             union {
+                     uint32_t _size; /* size of entire type in bytes */
+                     uint32_t _type; /* reference to another type */
+             } _u;
+     };
+
+     struct ctf_type_v3 {
+             uint32_t ctt_name;      /* reference to name in string table */
+             uint32_t ctt_info;      /* encoded kind, variant length */
+             union {
+                     uint32_t _size; /* always CTF_LSIZE_SENT */
+                     uint32_t _type; /* do not use */
+             } _u;
+             uint32_t ctt_lsizehi;   /* high 32 bits of type size in bytes */
+             uint32_t ctt_lsizelo;   /* low 32 bits of type size in bytes */
+     };
+
+     #define ctt_size _u._size       /* for fundamental types that have a size */
+     #define ctt_type _u._type       /* for types that reference another type */
+
+     Type sizes are stored in bbyytteess.  The basic small form uses a uuiinntt3322__tt to
+     store the number of bytes.  If the number of bytes in a structure would
+     exceed 0xfffffffe, then the alternate form, the ssttrruucctt ccttff__ttyyppee__vv33, is
+     used instead.  To indicate that the larger form is being used, the member
+     _c_t_t___s_i_z_e is set to value of CCTTFF__VV33__LLSSIIZZEE__SSEENNTT (0xffffffff).  In general,
+     when going through the type section, consumers use the ssttrruucctt ccttff__ttyyppee__vv33
+     structure, but pay attention to the value of the member _c_t_t___s_i_z_e to de‐
+     termine whether they should increment their scan by the size of ssttrruucctt
+     ccttff__ssttyyppee__vv33 or ssttrruucctt ccttff__ttyyppee__vv33.  Not all kinds of types use cctttt__ssiizzee.
+     Those which do not, will always use the ssttrruucctt ccttff__ssttyyppee__vv33 structure.
+     The individual sections for each kind have more information.
+
+     Types are written out in order.  Therefore the first entry encountered
+     has a type id of 0x1, or 0x8000 if a child.  The member _c_t_t___n_a_m_e is en‐
+     coded as described in the section _S_t_r_i_n_g _I_d_e_n_t_i_f_i_e_r_s.  The string that it
+     points to is the name of the type.  If the identifier points to an empty
+     string (one that consists solely of a null terminator) then the type does
+     not have a name, this is common with anonymous structures and unions that
+     only have a typedef to name them, as well as pointers and qualifiers.
+
+     The next member, the _c_t_t___i_n_f_o, is encoded as described in the section
+     _T_y_p_e _E_n_c_o_d_i_n_g.  The type's kind tells us how to interpret the remaining
+     data in the ssttrruucctt ccttff__ttyyppee__vv33 and any variable length data that may ex‐
+     ist.  The rest of this section will be broken down into the interpreta‐
+     tion of the various kinds.
+
+   EEnnccooddiinngg ooff IInntteeggeerrss
+     Integers, which are of type CCTTFF__KK__IINNTTEEGGEERR, have no variable length argu‐
+     ments.  Instead, they are followed by a uuiinntt3322__tt which describes their
+     encoding.  All integers must be encoded with a variable length of zero.
+     The _c_t_t___s_i_z_e member describes the length of the integer in bytes.  In
+     general, integer sizes will be rounded up to the closest power of two.
+
+     The integer encoding contains three different pieces of information:
+           ••   The encoding of the integer
+           ••   The offset in bbiittss of the type
+           ••   The size in bbiittss of the type
+
+     This encoding can be expressed through the following macros:
+
+           #define CTF_INT_ENCODING(data)  (((data) & 0xff000000) >> 24)
+           #define CTF_INT_OFFSET(data)    (((data) & 0x00ff0000) >> 16)
+           #define CTF_INT_BITS(data)      (((data) & 0x0000ffff))
+
+           #define CTF_INT_DATA(encoding, offset, bits) \
+                   (((encoding) << 24) | ((offset) << 16) | (bits))
+
+     The following flags are defined for the encoding at this time:
+
+           #define CTF_INT_SIGNED          0x01
+           #define CTF_INT_CHAR            0x02
+           #define CTF_INT_BOOL            0x04
+           #define CTF_INT_VARARGS         0x08
+
+     By default, an integer is considered to be unsigned, unless it has the
+     CCTTFF__IINNTT__SSIIGGNNEEDD flag set.  If the flag CCTTFF__IINNTT__CCHHAARR is set, that indicates
+     that the integer is of a type that stores character data, for example the
+     intrinsic C type cchhaarr would have the CCTTFF__IINNTT__CCHHAARR flag set.  If the flag
+     CCTTFF__IINNTT__BBOOOOLL is set, that indicates that the integer represents a boolean
+     type.  For example, the intrinsic C type __BBooooll would have the
+     CCTTFF__IINNTT__BBOOOOLL flag set.  Finally, the flag CCTTFF__IINNTT__VVAARRAARRGGSS indicates that
+     the integer is used as part of a variable number of arguments.  This en‐
+     coding is rather uncommon.
+
+   EEnnccooddiinngg ooff FFllooaattss
+     Floats, which are of type CCTTFF__KK__FFLLOOAATT, are similar to their integer coun‐
+     terparts.  They have no variable length arguments and are followed by a
+     four byte encoding which describes the kind of float that exists.  The
+     _c_t_t___s_i_z_e member is the size, in bytes, of the float.  The float encoding
+     has three different pieces of information inside of it:
+
+           ••   The specific kind of float that exists
+           ••   The offset in bbiittss of the float
+           ••   The size in bbiittss of the float
+
+     This encoding can be expressed through the following macros:
+
+           #define CTF_FP_ENCODING(data)   (((data) & 0xff000000) >> 24)
+           #define CTF_FP_OFFSET(data)     (((data) & 0x00ff0000) >> 16)
+           #define CTF_FP_BITS(data)       (((data) & 0x0000ffff))
+
+           #define CTF_FP_DATA(encoding, offset, bits) \
+                   (((encoding) << 24) | ((offset) << 16) | (bits))
+
+     Where as the encoding for integers is a series of flags, the encoding for
+     floats maps to a specific kind of float.  It is not a flag-based value.
+     The kinds of floats correspond to both their size, and the encoding.
+     This covers all of the basic C intrinsic floating point types.  The fol‐
+     lowing are the different kinds of floats represented in the encoding:
+
+           #define CTF_FP_SINGLE   1       /* IEEE 32-bit float encoding */
+           #define CTF_FP_DOUBLE   2       /* IEEE 64-bit float encoding */
+           #define CTF_FP_CPLX     3       /* Complex encoding */
+           #define CTF_FP_DCPLX    4       /* Double complex encoding */
+           #define CTF_FP_LDCPLX   5       /* Long double complex encoding */
+           #define CTF_FP_LDOUBLE  6       /* Long double encoding */
+           #define CTF_FP_INTRVL   7       /* Interval (2x32-bit) encoding */
+           #define CTF_FP_DINTRVL  8       /* Double interval (2x64-bit) encoding */
+           #define CTF_FP_LDINTRVL 9       /* Long double interval (2x128-bit) encoding */
+           #define CTF_FP_IMAGRY   10      /* Imaginary (32-bit) encoding */
+           #define CTF_FP_DIMAGRY  11      /* Long imaginary (64-bit) encoding */
+           #define CTF_FP_LDIMAGRY 12      /* Long double imaginary (128-bit) encoding */
+
+   EEnnccooddiinngg ooff AArrrraayyss
+     Arrays, which are of type CCTTFF__KK__AARRRRAAYY, have no variable length arguments.
+     They are followed by a structure which describes the number of elements
+     in the array, the type identifier of the elements in the array, and the
+     type identifier of the index of the array.  With arrays, the _c_t_t___s_i_z_e
+     member is set to zero.  The structure that follows an array is defined
+     as:
+
+     struct ctf_array_v3 {
+             uint32_t cta_contents;  /* reference to type of array contents */
+             uint32_t cta_index;     /* reference to type of array index */
+             uint32_t cta_nelems;    /* number of elements */
+     };
+
+     The _c_t_a___c_o_n_t_e_n_t_s and _c_t_a___i_n_d_e_x members of the ssttrruucctt ccttff__aarrrraayy__vv33 are
+     type identifiers which are encoded as per the section _T_y_p_e _I_d_e_n_t_i_f_i_e_r_s.
+     The member _c_t_a___n_e_l_e_m_s is a simple four byte unsigned count of the number
+     of elements.  This count may be zero when encountering C99's flexible ar‐
+     ray members.
+
+   EEnnccooddiinngg ooff FFuunnccttiioonnss
+     Function types, which are of type CCTTFF__KK__FFUUNNCCTTIIOONN, use the variable length
+     list to be the number of arguments in the function.  When the function
+     has a final member which is a varargs, then the argument count is incre‐
+     mented by one to account for the variable argument.  Here, the _c_t_t___t_y_p_e
+     member is encoded with the type identifier of the return type of the
+     function.  Note that the _c_t_t___s_i_z_e member is not used here.
+
+     The variable argument list contains the type identifiers for the argu‐
+     ments of the function, if any.  Each one is represented by a uuiinntt3322__tt and
+     encoded according to the _T_y_p_e _I_d_e_n_t_i_f_i_e_r_s section.  If the function's
+     last argument is of type varargs, then it is also written out, but the
+     type identifier is zero.  This is included in the count of the function's
+     arguments.  In ccttff version 2, an extra type identifier may follow the ar‐
+     gument and return type identifiers in order to maintain four-byte align‐
+     ment for the following type definition.  Such a type identifier is not
+     included in the argument count and has a value of zero.  In ccttff version
+     3, four-byte alignment occurs naturally and no padding is used.
+
+   EEnnccooddiinngg ooff SSttrruuccttuurreess aanndd UUnniioonnss
+     Structures and Unions, which are encoded with CCTTFF__KK__SSTTRRUUCCTT and
+     CCTTFF__KK__UUNNIIOONN respectively,  are very similar constructs in C.  The main
+     difference between them is the fact that members of a structure follow
+     one another, where as in a union, all members share the same memory.
+     They are also very similar in terms of their encoding in ccttff.  The vari‐
+     able length argument for structures and unions represents the number of
+     members that they have.  The value of the member _c_t_t___s_i_z_e is the size of
+     the structure and union.  There are two different structures which are
+     used to encode members in the variable list.  When the size of a struc‐
+     ture or union is greater than or equal to the large member threshold,
+     536870912, then a different structure is used to encode the member; all
+     members are encoded using the same structure.  The structure for members
+     is as follows:
+
+     struct ctf_member_v3 {
+             uint32_t ctm_name;      /* reference to name in string table */
+             uint32_t ctm_type;      /* reference to type of member */
+             uint32_t ctm_offset;    /* offset of this member in bits */
+     };
+
+     struct ctf_lmember_v3 {
+             uint32_t ctlm_name;     /* reference to name in string table */
+             uint32_t ctlm_type;     /* reference to type of member */
+             uint32_t ctlm_offsethi; /* high 32 bits of member offset in bits */
+             uint32_t ctlm_offsetlo; /* low 32 bits of member offset in bits */
+     };
+
+     Both the _c_t_m___n_a_m_e and _c_t_l_m___n_a_m_e refer to the name of the member.  The
+     name is encoded as an offset into the string table as described by the
+     section _S_t_r_i_n_g _I_d_e_n_t_i_f_i_e_r_s.  The members ccttmm__ttyyppee and ccttllmm__ttyyppee both re‐
+     fer to the type of the member.  They are encoded as per the section _T_y_p_e
+     _I_d_e_n_t_i_f_i_e_r_s.
+
+     The last piece of information that is present is the offset which de‐
+     scribes the offset in memory at which the member begins.  For unions,
+     this value will always be zero because each member of a union has an off‐
+     set of zero.  For structures, this is the offset in bbiittss at which the
+     member begins.  Note that a compiler may lay out a type with padding.
+     This means that the difference in offset between two consecutive members
+     may be larger than the size of the member.  When the size of the overall
+     structure is strictly less than 536870912 bytes, the normal structure,
+     ssttrruucctt ccttff__mmeemmbbeerr__vv33, is used and the offset in bits is stored in the
+     member _c_t_m___o_f_f_s_e_t.  However, when the size of the structure is greater
+     than or equal to 536870912 bytes, then the number of bits is split into
+     two 32-bit quantities.  One member, _c_t_l_m___o_f_f_s_e_t_h_i, represents the upper
+     32 bits of the offset, while the other member, _c_t_l_m___o_f_f_s_e_t_l_o, represents
+     the lower 32 bits of the offset.  These can be joined together to get a
+     64-bit sized offset in bits by shifting the member _c_t_l_m___o_f_f_s_e_t_h_i to the
+     left by thirty two and then doing a binary or of _c_t_l_m___o_f_f_s_e_t_l_o.
+
+   EEnnccooddiinngg ooff EEnnuummeerraattiioonnss
+     Enumerations, noted by the type CCTTFF__KK__EENNUUMM, are similar to structures.
+     Enumerations use the variable list to note the number of values that the
+     enumeration contains, which we'll term enumerators.  In C, an enumeration
+     is always equivalent to the intrinsic type iinntt, thus the value of the
+     member _c_t_t___s_i_z_e is always the size of an integer which is determined
+     based on the current model.  For FreeBSD systems, this will always be 4,
+     as an integer is always defined to be 4 bytes large in both IILLPP3322 and
+     LLPP6644, regardless of the architecture.  For further details, see arch(7).
+
+     The enumerators encoded in an enumeration have the following structure in
+     the variable list:
+
+     typedef struct ctf_enum {
+             uint32_t cte_name;      /* reference to name in string table */
+             int32_t cte_value;      /* value associated with this name */
+     } ctf_enum_t;
+
+     The member _c_t_e___n_a_m_e refers to the name of the enumerator's value, it is
+     encoded according to the rules in the section _S_t_r_i_n_g _I_d_e_n_t_i_f_i_e_r_s.  The
+     member _c_t_e___v_a_l_u_e contains the integer value of this enumerator.
+
+   EEnnccooddiinngg ooff FFoorrwwaarrdd RReeffeerreenncceess
+     Forward references, types of kind CCTTFF__KK__FFOORRWWAARRDD, in a ccttff file refer to
+     types which may not have a definition at all, only a name.  If the ccttff
+     file is a child, then it may be that the forward is resolved to an actual
+     type in the parent, otherwise the definition may be in another ccttff con‐
+     tainer or may not be known at all.  The only member of the ssttrruucctt
+     ccttff__ttyyppee__vv33 that matters for a forward declaration is the _c_t_t___n_a_m_e which
+     points to the name of the forward reference in the string table as de‐
+     scribed earlier.  There is no other information recorded for forward ref‐
+     erences.
+
+   EEnnccooddiinngg ooff PPooiinntteerrss,, TTyyppeeddeeffss,, VVoollaattiillee,, CCoonnsstt,, aanndd RReessttrriicctt
+     Pointers, typedefs, volatile, const, and restrict are all similar in ccttff.
+     They all refer to another type.  In the case of typedefs, they provide an
+     alternate name, while volatile, const, and restrict change how the type
+     is interpreted in the C programming language.  This covers the ccttff kinds
+     CCTTFF__KK__PPOOIINNTTEERR, CCTTFF__KK__TTYYPPEEDDEEFF, CCTTFF__KK__VVOOLLAATTIILLEE, CCTTFF__KK__RREESSTTRRIICCTT, and
+     CCTTFF__KK__CCOONNSSTT.
+
+     These types have no variable list entries and use the member _c_t_t___t_y_p_e to
+     refer to the base type that they modify.
+
+   EEnnccooddiinngg ooff UUnnkknnoowwnn TTyyppeess
+     Types with the kind CCTTFF__KK__UUNNKKNNOOWWNN are used to indicate gaps in the type
+     identifier space.  These entries consume an identifier, but do not define
+     anything.  Nothing should refer to these gap identifiers.
+
+   DDeeppeennddeenncciieess BBeettwweeeenn TTyyppeess
+     C types can be imagined as a directed, cyclic, graph.  Structures and
+     unions may refer to each other in a way that creates a cyclic dependency.
+     In cases such as these, the entire type section must be read in and pro‐
+     cessed.  Consumers must not assume that every type can be laid out in de‐
+     pendency order; they cannot.
+
+   TThhee SSttrriinngg SSeeccttiioonn
+     The last section of the ccttff file is the ssttrriinngg section.  This section en‐
+     codes all of the strings that appear throughout the other sections.  It
+     is laid out as a series of characters followed by a null terminator.
+     Generally, all names are written out in ASCII, as most C compilers do not
+     allow any characters to appear in identifiers outside of a subset of
+     ASCII.  However, any extended characters sets should be written out as a
+     series of UTF-8 bytes.
+
+     The first entry in the section, at offset zero, is a single null termina‐
+     tor to reference the empty string.  Following that, each C string should
+     be written out, including the null terminator.  Offsets that refer to
+     something in this section should refer to the first byte which begins a
+     string.  Beyond the first byte in the section being the null terminator,
+     the order of strings is unimportant.
+
+   DDaattaa EEnnccooddiinngg aanndd EELLFF CCoonnssiiddeerraattiioonnss
+     ccttff data is generally included in ELF objects which specify information
+     to identify the architecture and endianness of the file.  A ccttff container
+     inside such an object must match the endianness of the ELF object.  Aside
+     from the question of the endian encoding of data, there should be no
+     other differences between architectures.  While many of the types in this
+     document refer to non-fixed size C integral types, they are equivalent in
+     the models IILLPP3322 and LLPP6644.  If any other model is being used with ccttff
+     data that has different sizes, then it must not use the model's sizes for
+     those integral types and instead use the fixed size equivalents based on
+     an IILLPP3322 environment.
+
+     When placing a ccttff container inside of an ELF object, there are certain
+     conventions that are expected for the purposes of tooling being able to
+     find the ccttff data.  In particular, a given ELF object should only contain
+     a single ccttff section.  Multiple containers should be merged together into
+     a single one.
+
+     The ccttff file should be included in its own ELF section.  The section's
+     name must be ‘.SUNW_ctf’.  The type of the section must be SSHHTT__PPRROOGGBBIITTSS.
+     The section should have a link set to the symbol table and its address
+     alignment must be 4.
+
+SSEEEE AALLSSOO
+     ctfconvert(1), ctfdump(1), ctfmerge(1), dtrace(1), elf(3), gelf(3),
+     a.out(5), elf(5), arch(7)
+
+BSD                            February 28, 2022                           BSD

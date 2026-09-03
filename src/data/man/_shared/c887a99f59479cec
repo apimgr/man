@@ -1,0 +1,325 @@
+SNDIOD(8)                 BSD System Manager's Manual                SNDIOD(8)
+
+NNAAMMEE
+     ssnnddiioodd — audio/MIDI server
+
+SSYYNNOOPPSSIISS
+     ssnnddiioodd [--dd] [--aa _f_l_a_g] [--bb _n_f_r_a_m_e_s] [--CC _m_i_n:_m_a_x] [--cc _m_i_n:_m_a_x] [--ee _e_n_c]
+            [--FF _d_e_v_i_c_e] [--ff _d_e_v_i_c_e] [--jj _f_l_a_g] [--LL _a_d_d_r] [--mm _m_o_d_e] [--QQ _p_o_r_t]
+            [--qq _p_o_r_t] [--rr _r_a_t_e] [--ss _n_a_m_e] [--tt _m_o_d_e] [--UU _u_n_i_t] [--vv _v_o_l_u_m_e]
+            [--ww _f_l_a_g] [--zz _n_f_r_a_m_e_s]
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssnnddiioodd daemon is an intermediate layer between audio or MIDI programs
+     and the hardware.  It performs the necessary audio processing to allow
+     any program to work on any supported hardware.  By default, ssnnddiioodd ac‐
+     cepts connections from programs running on the same system only; it ini‐
+     tializes only when programs are using its services, allowing ssnnddiioodd to
+     consume a negligible amount of system resources the rest of the time.
+     Systems with no audio hardware can use ssnnddiioodd to keep hot-pluggable de‐
+     vices usable by default at virtually no cost.
+
+     ssnnddiioodd operates as follows: it exposes at least one _s_u_b_-_d_e_v_i_c_e that any
+     number of audio programs can connect to and use as if it was audio hard‐
+     ware.  During playback, ssnnddiioodd receives audio data concurrently from all
+     programs, mixes it and sends the result to the hardware device.  Simi‐
+     larly, during recording it duplicates audio data recorded from the device
+     and sends it to all programs.  Since audio data flows through the ssnnddiioodd
+     process, it has the opportunity to process audio data on the fly:
+
+           ••   Change the sound encoding to overcome incompatibilities between
+               software and hardware.
+           ••   Route the sound from one channel to another, join stereo or
+               split mono.
+           ••   Control the per-application playback volume as well as the mas‐
+               ter volume.
+           ••   Monitor the sound being played, allowing one program to record
+               what other programs play.
+
+     Processing is configured on a per sub-device basis, meaning that the
+     sound of all programs connected to the same sub-device will be processed
+     according to the same configuration.  Multiple sub-devices can be de‐
+     fined, allowing multiple configurations to coexist.  The user selects the
+     configuration a given program will use by selecting the sub-device the
+     program uses.
+
+     ssnnddiioodd exposes MIDI thru boxes (hubs), allowing programs to send MIDI
+     messages to each other or to hardware MIDI ports in a uniform way.
+
+     Finally, ssnnddiioodd exposes a control MIDI port usable for:
+
+           ••   Volume control.
+           ••   Common clock source for audio and MIDI programs.
+           ••   Start, stop and relocate groups of audio programs.
+
+     The options are as follows:
+
+     --aa _f_l_a_g
+             Control whether ssnnddiioodd opens the audio device or the MIDI port
+             only when needed or keeps it open all the time.  If the flag is
+             _o_n then the audio device or MIDI port is kept open all the time,
+             ensuring no other program can steal it.  If the flag is _o_f_f, then
+             it's automatically closed, allowing other programs to have direct
+             access to the audio device, or the device to be disconnected.
+             The default is _o_f_f.
+
+     --bb _n_f_r_a_m_e_s
+             The buffer size of the audio device in frames.  A frame consists
+             of one sample for each channel in the stream.  This is the number
+             of frames that will be buffered before being played and thus con‐
+             trols the playback latency.  The default is 7680 or twice the
+             block size (--zz), if the block size is set.
+
+     --CC _m_i_n:_m_a_x, --cc _m_i_n:_m_a_x
+             The range of channel numbers for recording and playback direc‐
+             tions, respectively any client is allowed to use.  This is a sub‐
+             set of the audio device channels.  The default is 0:1, i.e.
+             stereo.
+
+     --dd      Enable debugging to standard error, and do not disassociate from
+             the controlling terminal.  Can be specified multiple times to
+             further increase log verbosity.
+
+     --ee _e_n_c  Attempt to configure the device to use this encoding.  The de‐
+             fault is _s_1_6.  Encoding names use the following scheme: signed‐
+             ness (_s or _u) followed by the precision in bits, the byte-order
+             (_l_e or _b_e), the number of bytes per sample, and the alignment
+             (_m_s_b or _l_s_b).  Only the signedness and the precision are manda‐
+             tory.  Examples: _u_8, _s_1_6_l_e, _s_2_4_l_e_3, _s_2_4_l_e_4_l_s_b.
+
+     --FF _d_e_v_i_c_e
+             Same as --ff except that if the device is disconnected, the one
+             given with the previous --ff or --FF option will be used.
+
+     --ff _d_e_v_i_c_e
+             Add this sndio(7) audio device to devices used for playing and/or
+             recording.  Preceding per-device options (--aabbeerrwwzz) apply to this
+             device.  Sub-devices (--ss) that are applied after will be attached
+             to this device.  Device mode and parameters are determined from
+             sub-devices attached to it.  If no --ff option is used, ssnnddiioodd will
+             use _r_s_n_d_/_0, _r_s_n_d_/_1, ..., _r_s_n_d_/_3.
+
+     --jj _f_l_a_g
+             Control whether program channels are joined or expanded if the
+             number of channels requested by a program is not equal to the de‐
+             vice number of channels.  If the flag is _o_f_f then client channels
+             are routed to the corresponding device channel, possibly discard‐
+             ing channels not present in the device.  If the flag is _o_n, then
+             a single client channel may be sent on multiple device channels,
+             or multiple client channels may be sent to a single device chan‐
+             nel.  For instance, this feature could be used for mono to stereo
+             conversions.  The default is _o_n.
+
+     --LL _a_d_d_r
+             Specify a local network address ssnnddiioodd should listen on; ssnnddiioodd
+             will listen on TCP port 11025+n, where n is the unit number spec‐
+             ified with --UU.  Without this option, ssnnddiioodd listens on the
+             UNIX-domain socket only, and is not reachable from any network.
+             If the option argument is ‘-’ then ssnnddiioodd will accept connections
+             from any address.  As the communication is not secure, this op‐
+             tion is only suitable for local networks where all hosts and
+             users are trusted.
+
+     --mm _m_o_d_e
+             Set the sub-device mode.  Valid modes are _p_l_a_y, _r_e_c, and _m_o_n,
+             corresponding to playback, recording and monitoring.  A monitor‐
+             ing stream is a fake recording stream corresponding to the mix of
+             all playback streams.  Multiple modes can be specified, separated
+             by commas, but the same sub-device cannot be used for both
+             recording and monitoring.  The default is _p_l_a_y,_r_e_c (i.e. full-du‐
+             plex).
+
+     --QQ _p_o_r_t
+             Specify an alternate MIDI port to use.  If it doesn't work, the
+             one given with the last --QQ or --qq options will be used.  For in‐
+             stance, this allows a USB MIDI controller to be replaced without
+             the need to restart programs using it.
+
+     --qq _p_o_r_t
+             Expose the given MIDI port.  This allows multiple programs to
+             share the port.  If no --qq option is used, ssnnddiioodd will use
+             _r_m_i_d_i_/_0, _r_m_i_d_i_/_1, ..., _r_m_i_d_i_/_7.
+
+     --rr _r_a_t_e
+             Attempt to force the device to use this sample rate in Hertz.
+             The default is 48000.
+
+     --ss _n_a_m_e
+             Add _n_a_m_e to the list of sub-devices to expose.  This allows
+             clients to use ssnnddiioodd instead of the physical audio device for
+             audio input and output in order to share the physical device with
+             other clients.  Defining multiple sub-devices allows splitting a
+             physical audio device into sub-devices having different proper‐
+             ties (e.g. channel ranges).  The given _n_a_m_e corresponds to the
+             “option” part of the sndio(7) device name string.
+
+     --tt _m_o_d_e
+             Select the way clients are controlled by MIDI Machine Control
+             (MMC) messages received by ssnnddiioodd.  If the mode is _o_f_f (the de‐
+             fault), then programs are not affected by MMC messages.  If the
+             mode is _s_l_a_v_e, then programs are started synchronously by MMC
+             start messages; additionally, the server clock is exposed as MIDI
+             Time Code (MTC) messages allowing MTC-capable software or hard‐
+             ware to be synchronized to audio programs.
+
+     --UU _u_n_i_t
+             Unit number.  Each ssnnddiioodd server instance has a unique unit num‐
+             ber, used in sndio(7) device names.  The default is 0.
+
+     --vv _v_o_l_u_m_e
+             Software volume attenuation of playback.  The value must be be‐
+             tween 1 and 127, corresponding to -42dB and -0dB attenuation in
+             1/3dB steps.  Clients inherit this parameter.  Reducing the vol‐
+             ume in advance allows a client's volume to stay independent from
+             the number of clients as long as their number is small enough.
+             18 volume units (i.e. -6dB attenuation) allows the number of
+             playback programs to be doubled.  The default is 127.
+
+     --ww _f_l_a_g
+             Control ssnnddiioodd behaviour when the maximum volume of the hardware
+             is reached and a new program starts playing.  This happens only
+             when volumes are not properly set using the --vv option.  If the
+             flag is _o_n, then the master volume is automatically adjusted to
+             avoid clipping.  The default is _o_f_f.
+
+     --zz _n_f_r_a_m_e_s
+             The audio device block size in frames.  This is the number of
+             frames between audio clock ticks, i.e. the clock resolution.  If
+             a sub-device is created with the --tt option, and MTC is used for
+             synchronization, the clock resolution must be 96, 100 or 120
+             ticks per second for maximum accuracy.  For instance, 100 ticks
+             per second at 48000Hz corresponds to a 480 frame block size.  The
+             default is 480 or half of the buffer size (--bb), if the buffer
+             size is set.
+
+     On the command line, per-device parameters (--aabbeerrwwzz) must precede the de‐
+     vice definition (--ff), and per-sub-device parameters (--CCccjjmmttvvxx) must pre‐
+     cede the sub-device definition (--ss).  Sub-device definitions (--ss) must
+     follow the definition of the device (--ff) to which they are attached.
+
+     If no audio devices (--ff) are specified, settings are applied as if the
+     default device is specified.  If no sub-devices (--ss) are specified for a
+     device, a default sub-device is created attached to it.  If a device (--ff)
+     is defined twice, both definitions are merged: parameters of the first
+     one are used but sub-devices (--ss) of both definitions are created.  The
+     default sndio(7) device used by ssnnddiioodd is _r_s_n_d_/_0, and the default sub-de‐
+     vice exposed by ssnnddiioodd is _s_n_d_/_d_e_f_a_u_l_t.
+
+     If ssnnddiioodd is sent SIGINT or SIGTERM, it terminates.  If ssnnddiioodd is sent
+     SIGHUP, it reopens all audio devices and MIDI ports.
+
+     By default, when the program cannot accept recorded data fast enough or
+     cannot provide data to play fast enough, the program is paused, i.e. sam‐
+     ples that cannot be written are discarded and samples that cannot be read
+     are replaced by silence.  If a sub-device is created with the --tt option,
+     then recorded samples are discarded, but the same amount of silence will
+     be written once the program is unblocked, in order to reach the right po‐
+     sition in time.  Similarly silence is played, but the same amount of sam‐
+     ples will be discarded once the program is unblocked.  This ensures
+     proper synchronization between programs.
+
+MMIIDDII CCOONNTTRROOLL
+     ssnnddiioodd creates a MIDI port with the same name as the exposed audio sub-
+     device to which MIDI programs can connect.  ssnnddiioodd exposes the audio de‐
+     vice clock and allows audio device properties to be controlled through
+     MIDI.
+
+     A MIDI channel is assigned to each program, and the volume is changed us‐
+     ing the standard volume controller (number 7).  Similarly, when the audio
+     client changes its volume, the same MIDI controller message is sent out;
+     it can be used for instance for monitoring or as feedback for motorized
+     faders.  Multiple instances of the same program will share the same set‐
+     ting.
+
+     The master volume can be changed using the standard master volume system
+     exclusive message.
+
+     Streams created with the --tt option are controlled by the following MMC
+     messages:
+
+           relocate     This message is ignored by audio ssnnddiioodd clients, but
+                        the given time position is sent to MIDI ports as an
+                        MTC “full frame” message forcing all MTC-slaves to re‐
+                        locate to the given position (see below).
+
+           start        Put all streams in starting mode.  In this mode,
+                        ssnnddiioodd waits for all streams to become ready to start,
+                        and then starts them synchronously.  Once started, new
+                        streams can be created (ssnnddiioodd) but they will be
+                        blocked until the next stop-to-start transition.
+
+           stop         Put all streams in stopped mode (the default).  In
+                        this mode, any stream attempting to start playback or
+                        recording is paused.  Client streams that are already
+                        started are not affected until they stop and try to
+                        start again.
+
+     Streams created with the --tt option export the ssnnddiioodd device clock using
+     MTC, allowing non-audio software or hardware to be synchronized to the
+     audio stream.  Maximum accuracy is achieved when the number of blocks per
+     second is equal to one of the standard MTC clock rates (96, 100 and
+     120Hz).  The following sample rates (--rr) and block sizes (--zz) are recom‐
+     mended:
+
+           ••   44100Hz, 441 frames (MTC rate is 100Hz)
+           ••   48000Hz, 400 frames (MTC rate is 120Hz)
+           ••   48000Hz, 480 frames (MTC rate is 100Hz)
+           ••   48000Hz, 500 frames (MTC rate is 96Hz)
+
+     For instance, the following command will create two devices: the default
+     _s_n_d_/_d_e_f_a_u_l_t and a MIDI-controlled _s_n_d_/_m_m_c:
+
+           $ sndiod -r 48000 -z 400 -s default -t slave -s mmc
+
+     Streams connected to _s_n_d_/_d_e_f_a_u_l_t behave normally, while streams connected
+     to _s_n_d_/_m_m_c wait for the MMC start signal and start synchronously.  Re‐
+     gardless of which device a stream is connected to, its playback volume
+     knob is exposed.
+
+HHOOTT PPLLUUGGGGIINNGG
+     If devices specified with --FF are unavailable when needed or unplugged at
+     runtime, ssnnddiioodd will attempt to seamlessly fall back to the last device
+     specified.
+
+     ssnnddiioodd will not automatically switch to specified device that is plugged
+     at runtime.  Instead, sndioctl(1) must be used to change the
+     _s_e_r_v_e_r_._d_e_v_i_c_e control.
+
+     For instance, specifying a USB device with --FF following a PCI device with
+     --ff allows ssnnddiioodd to use the USB one preferably when it's connected and to
+     fall back to the PCI one when it's disconnected.
+
+EEXXAAMMPPLLEESS
+     Start server using default parameters, creating an additional sub-device
+     for output to channels 2:3 only (rear speakers on most cards), exposing
+     the _s_n_d_/_d_e_f_a_u_l_t and _s_n_d_/_r_e_a_r devices:
+
+           $ sndiod -s default -c 2:3 -s rear
+
+     Start server creating the default sub-device with low volume and an addi‐
+     tional sub-device for high volume output, exposing the _s_n_d_/_d_e_f_a_u_l_t and
+     _s_n_d_/_m_a_x devices:
+
+           $ sndiod -v 65 -s default -v 127 -s max
+
+     Start server configuring the audio device to use a 48kHz sample fre‐
+     quency, 240-frame block size, and 2-block buffers.  The corresponding la‐
+     tency is 10ms, which is the time it takes the sound to propagate 3.5 me‐
+     ters.
+
+           $ sndiod -r 48000 -b 480 -z 240
+
+SSEEEE AALLSSOO
+     sndio(7)
+
+BBUUGGSS
+     Resampling is low quality; down-sampling especially should be avoided
+     when recording.
+
+     If --aa _o_f_f is used, ssnnddiioodd creates sub-devices to expose first and then
+     opens the audio hardware on demand.  Technically, this allows ssnnddiioodd to
+     attempt to use one of the sub-devices it exposes as an audio device, cre‐
+     ating a deadlock.  There's nothing to prevent the user from shooting
+     themselves in the foot by creating such a deadlock.
+
+BSD                              June 19, 2025                             BSD

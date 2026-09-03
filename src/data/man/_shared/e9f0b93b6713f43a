@@ -1,0 +1,120 @@
+FFCLOCK(2)                  BSD System Calls Manual                 FFCLOCK(2)
+
+NNAAMMEE
+     ffffcclloocckk__ggeettccoouunntteerr, ffffcclloocckk__ggeetteessttiimmaattee, ffffcclloocckk__sseetteessttiimmaattee — Retrieve
+     feed-forward counter, get and set feed-forward clock estimates
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttiimmeeffffcc..hh>>
+
+     _i_n_t
+     ffffcclloocckk__ggeettccoouunntteerr(_f_f_c_o_u_n_t_e_r _*_f_f_c_o_u_n_t);
+
+     _i_n_t
+     ffffcclloocckk__ggeetteessttiimmaattee(_s_t_r_u_c_t _f_f_c_l_o_c_k___e_s_t_i_m_a_t_e _*_c_e_s_t);
+
+     _i_n_t
+     ffffcclloocckk__sseetteessttiimmaattee(_s_t_r_u_c_t _f_f_c_l_o_c_k___e_s_t_i_m_a_t_e _*_c_e_s_t);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ffclock is an alternative method to synchronise the system clock.
+     The ffclock implements a feed-forward paradigm and decouples the times‐
+     tamping and timekeeping kernel functions.  This ensures that past clock
+     errors do not affect current timekeeping, an approach radically different
+     from the feedback alternative implemented by the ntpd daemon when adjust‐
+     ing the system clock.  The feed-forward approach has demonstrated better
+     performance and higher robustness than a feedback approach when synchro‐
+     nising over the network.
+
+     In the feed-forward context, a _t_i_m_e_s_t_a_m_p is a cumulative value of the
+     ticks of the timecounter, which can be converted into seconds by using
+     the feed-forward _c_l_o_c_k _e_s_t_i_m_a_t_e_s.
+
+     The ffffcclloocckk__ggeettccoouunntteerr() system call allows the calling process to re‐
+     trieve the current value of the feed-forward counter maintained by the
+     kernel.
+
+     The ffffcclloocckk__ggeetteessttiimmaattee() and ffffcclloocckk__sseetteessttiimmaattee() system calls allow
+     the caller to get and set the kernel's feed-forward clock parameter esti‐
+     mates respectively.  The ffffcclloocckk__sseetteessttiimmaattee() system call should be in‐
+     voked by a single instance of a feed-forward synchronisation daemon.  The
+     ffffcclloocckk__ggeetteessttiimmaattee() system call can be called by any process to re‐
+     trieve the feed-forward clock estimates.
+
+     The feed-forward approach does not require that the clock estimates be
+     retrieved every time a timestamp is to be converted into seconds.  The
+     number of system calls can therefore be greatly reduced if the calling
+     process retrieves the clock estimates from the clock synchronisation dae‐
+     mon instead.  The ffffcclloocckk__ggeetteessttiimmaattee() must be used when the feed-for‐
+     ward synchronisation daemon is not running (see _U_S_A_G_E below).
+
+     The clock parameter estimates structure pointed to by _c_e_s_t is defined in
+     <_s_y_s_/_t_i_m_e_f_f_c_._h> as:
+
+     struct ffclock_estimate {
+             struct bintime update_time;    /* Time of last estimates update. */
+             ffcounter      update_ffcount; /* Counter value at last update. */
+             ffcounter      leapsec_next;   /* Counter value of next leap second. */
+             uint64_t       period;         /* Estimate of counter period. */
+             uint32_t       errb_abs;       /* Bound on absolute clock error [ns]. */
+             uint32_t       errb_rate;      /* Bound on counter rate error [ps/s]. */
+             uint32_t       status;         /* Clock status. */
+             int16_t        leapsec_total;  /* All leap seconds seen so far. */
+             int8_t         leapsec;        /* Next leap second (in {-1,0,1}). */
+     };
+
+     Only the super-user may set the feed-forward clock estimates.
+
+RREETTUURRNN VVAALLUUEESS
+     Upon successful completion, the value 0 is returned; otherwise the
+     value -1 is returned and the global variable _e_r_r_n_o is set to indicate the
+     error.
+
+EERRRROORRSS
+     The following error codes may be set in _e_r_r_n_o:
+
+     [EFAULT]           The _f_f_c_o_u_n_t or _c_e_s_t pointer referenced invalid memory.
+
+     [EPERM]            A user other than the super-user attempted to set the
+                        feed-forward clock parameter estimates.
+
+UUSSAAGGEE
+     The feed-forward paradigm enables the definition of specialised clock
+     functions.
+
+     In its simplest form, ffffcclloocckk__ggeettccoouunntteerr() can be used to establish
+     strict order between events or to measure small time intervals very accu‐
+     rately with a minimum performance cost.
+
+     Different methods exist to access absolute time (or "wall-clock time")
+     tracked by the ffclock. The simplest method uses the ffclock sysctl in‐
+     terface _k_e_r_n_._f_f_c_l_o_c_k to make the system clock return the ffclock time.
+     The clock_gettime(2) system call can then be used to retrieve the current
+     time seen by the feed-forward clock.  Note that this setting affects the
+     entire system and that a feed-forward synchronisation daemon should be
+     running.
+
+     A less automated method consists of retrieving the feed-forward counter
+     timestamp from the kernel and using the feed-forward clock parameter es‐
+     timates to convert the timestamp into seconds.  The feed-forward clock
+     parameter estimates can be retrieved from the kernel or from the synchro‐
+     nisation daemon directly (preferred).  This method allows converting
+     timestamps using different clock models as needed by the application,
+     while collecting meaningful upper bounds on current clock error.
+
+SSEEEE AALLSSOO
+     date(1), adjtime(2), clock_gettime(2), ctime(3)
+
+HHIISSTTOORRYY
+     Feed-forward clock support first appeared in FreeBSD 10.0.
+
+AAUUTTHHOORRSS
+     The feed-forward clock support was written by Julien Ridoux
+     <_j_r_i_d_o_u_x_@_u_n_i_m_e_l_b_._e_d_u_._a_u> in collaboration with Darryl Veitch
+     <_d_v_e_i_t_c_h_@_u_n_i_m_e_l_b_._e_d_u_._a_u> at the University of Melbourne under sponsorship
+     from the FreeBSD Foundation.
+
+BSD                            November 21, 2011                           BSD

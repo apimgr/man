@@ -1,0 +1,243 @@
+GBDE(4)                  BSD Kernel Interfaces Manual                  GBDE(4)
+
+NNAAMMEE
+     ggbbddee — Geom Based Disk Encryption
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss GGEEOOMM__BBDDEE
+
+DDEESSCCRRIIPPTTIIOONN
+     NNOOTTIICCEE:: PPlleeaassee bbee aawwaarree tthhaatt tthhiiss ccooddee hhaass nnoott yyeett rreecceeiivveedd mmuucchh rreevviieeww
+     aanndd aannaallyyssiiss bbyy qquuaalliiffiieedd ccrryyppttooggrraapphheerrss aanndd tthheerreeffoorree sshhoouulldd bbee ccoonnssiidd‐‐
+     eerreedd aa sslliigghhttllyy ssuussppeecctt eexxppeerriimmeennttaall ffaacciilliittyy..
+
+     WWee ccaannnnoott aatt tthhiiss ppooiinntt gguuaarraanntteeee tthhaatt tthhee oonn--ddiisskk ffoorrmmaatt wwiillll nnoott cchhaannggee
+     iinn rreessppoonnssee ttoo rreevviieewwss oorr bbuugg--ffiixxeess,, ssoo ppootteennttiiaall uusseerrss aarree aaddvviisseedd ttoo bbee
+     pprreeppaarreedd tthhaatt dump(88)//restore(88) bbaasseedd mmiiggrraattiioonnss mmaayy bbee ccaalllleedd ffoorr iinn
+     tthhee ffuuttuurree..
+
+     The objective of this facility is to provide a high degree of denial of
+     access to the contents of a “cold” storage device.
+
+     Be aware that if the computer is compromised while up and running _a_n_d the
+     storage device is actively attached and opened with a valid pass-phrase,
+     this facility offers no protection or denial of access to the contents of
+     the storage device.
+
+     If, on the other hand, the device is “cold”, it should present a formida‐
+     ble challenge for an attacker to gain access to the contents in the ab‐
+     sence of a valid pass-phrase.
+
+     Four cryptographic barriers must be passed to gain access to the data,
+     and only a valid pass-phrase will yield this access.
+
+     When the pass-phrase is entered, it is hashed with SHA2 into a 512 bit
+     “key-material”.  This is a way of producing cryptographic usable keys
+     from a typically all-ASCII pass-phrase of an unpredictable user-selected
+     length.
+
+   FFiirrsstt bbaarrrriieerr:: tthhee llooccaattiioonn ooff tthhee ""lloocckk--sseeccttoorr""..
+     During initialization, up to four independent but mutually aware “lock”
+     sectors are written to the device in randomly chosen locations.  These
+     lock-sectors contain the 2048 random bit master-key and a number of pa‐
+     rameters of the layout geometry (more on this later).  Since the entire
+     device will contain isotropic data, there is no short-cut to rapidly de‐
+     termine which sequence of bytes contain a lock-sector.
+
+     To locate a lock-sector, a small piece of data called the “metadata” and
+     the key-material must be available.  The key-material decrypts the meta‐
+     data, which contains the byte offset on the device where the correspond‐
+     ing lock-sector is located.  If the metadata is lost or unavailable but
+     the key-material is at hand, it would be feasible to do a brute force
+     scan where each byte offset of the device is checked to see if it con‐
+     tains the lock-sector data.
+
+   SSeeccoonndd bbaarrrriieerr:: ddeeccrryyppttiioonn ooff tthhee mmaasstteerr--kkeeyy uussiinngg kkeeyy--mmaatteerriiaall..
+     The lock-sector contains an encrypted copy of an architecture neutral
+     byte-sequence which encodes the fields of the lock-structure.  The order
+     in which these fields are encoded is determined from the key-material.
+     The encoded byte stream is encrypted with 256bit AES in CBC mode.
+
+   TThhiirrdd bbaarrrriieerr:: ddeeccrryyppttiioonn ooff tthhee sseeccttoorr kkeeyy..
+     For each sector, an MD5 hash over a “salt” from the lock-sector and the
+     sector number is used to “cherry-pick” a subset of the master key, which
+     hashed together with the sector offset through MD5 produces the “kkey”,
+     the key which encrypts the sector key.
+
+   FFoouurrtthh bbaarrrriieerr:: ddeeccrryyppttiioonn ooff tthhee sseeccttoorr ddaattaa..
+     The actual payload of the sector is encrypted with 128 bit AES in CBC
+     mode using a single-use random bits key.
+
+   EExxaammiinniinngg tthhee rreevveerrssee ppaatthh
+     Assuming an attacker knows an amount of plaintext and has managed to lo‐
+     cate the corresponding encrypted sectors on the device, gaining access to
+     the plaintext context of other sectors is a daunting task:
+
+     First he will have to derive from the encrypted sector and the known
+     plain text the sector key(s) used.  At the time of writing, it has been
+     speculated that it could maybe be possible to break open AES in only 2^80
+     operations; even so, that is still a very impossible task.
+
+     Armed with one or more sector keys, our patient attacker will then go
+     through essentially the same exercise, using the sector key and the en‐
+     crypted sector key to find the key used to encrypt the sector key.
+
+     Armed with one or more of these “kkeys”, our attacker has to run them
+     backwards through MD5.  Even though he knows that the input to MD5 was 24
+     bytes and has the value of 8 of these bytes from the sector number, he is
+     still faced with 2^128 equally likely possibilities.
+
+     Having successfully done that, our attacker has successfully discovered
+     up to 16 bytes of the master-key, but is still unaware which 16 bytes,
+     and in which other sectors any of these known bytes contribute to the
+     kkey.
+
+     To unravel the last bit, the attacker has to guess the 16 byte random-
+     bits salt stored in the lock-sector to recover the indexes into the mas‐
+     terkey.
+
+     Any attacker with access to the necessary machine power to even attempt
+     this attack will be better off attempting to brute-force the pass-phrase.
+
+   PPoossiittiivvee ddeenniiaall ffaacciilliittiieess
+     Considering the infeasibility of the above attack, gaining access to the
+     pass-phrase will be of paramount importance for an attacker, and a number
+     of scenarios can be imagined where undue pressure will be applied to an
+     individual to divulge the pass-phrase.
+
+     A “Blackening” feature provides a way for the user, given a moment of op‐
+     portunity, to destroy the master-key in such a way that the pass-phrase
+     will be acknowledged as good but access to the data will still be denied.
+
+   AA pprraaccttiiccaall aannaallooggyy
+     For persons who think cryptography is only slightly more interesting than
+     watching silicon sublimate the author humbly offers this analogy to the
+     keying scheme for a protected device:
+
+     Imagine an installation with a vault with walls of several hundred meters
+     thick solid steel.  This vault can only be feasibly accessed using the
+     single key, which has a complexity comparable to a number with 600 dig‐
+     its.
+
+     This key exists in four copies, each of which is stored in one of four
+     small safes, each of which can be opened with unique key which has a com‐
+     plexity comparable to an 80 digit number.
+
+     In addition to the masterkey, each of the four safes also contains the
+     exact locations of all four key-safes which are located in randomly cho‐
+     sen places on the outside surface of the vault where they are practically
+     impossible to detect when they are closed.
+
+     Finally, each safe contains four switches which are wired to a bar of dy‐
+     namite inside each of the four safes.
+
+     In addition to this, a keyholder after opening his key-safe is also able
+     to install a copy of the master-key and re-key any of key-safes (includ‐
+     ing his own).
+
+     In normal use, the user will open the safe for which he has the key, take
+     out the master-key and access the vault.  When done, he will lock up the
+     master-key in the safe again.
+
+     If a keyholder-X for some reason distrusts keyholder-Y, she has the op‐
+     tion of opening her own safe, flipping one of the switches and detonating
+     the bar of dynamite in safe-Y.  This will obliterate the master-key in
+     that safe and thereby deny keyholder-Y access to the vault.
+
+     Should the facility come under attack, any of the keyholders can detonate
+     all four bars of dynamite and thereby make sure that access to the vault
+     is denied to everybody, keyholders and attackers alike.  Should the fa‐
+     cility fall to the enemy, and a keyholder be forced to apply his personal
+     key, he can do so in confidence that the contents of his safe will not
+     yield access to the vault, and the enemy will hopefully realize that ap‐
+     plying further pressure on the personnel will not give access to the
+     vault.
+
+     The final point to make here is that it is perfectly possible to make a
+     detached copy of any one of these keys, including the master key, and de‐
+     posit or hide it as one sees fit.
+
+   SStteeggaannooggrraapphhyy ssuuppppoorrtt
+     When the device is initialized, it is possible to restrict the encrypted
+     data to a single contiguous area of the device.  If configured with care,
+     this area could masquerade as some sort of valid data or as random trash
+     left behind by the systems operation.
+
+     This can be used to offer a plausible deniability of existence, where it
+     will be impossible to prove that this specific area of the device is in
+     fact used to store encrypted data and not just random junk.
+
+     The main obstacle in this is that the output from any encryption algo‐
+     rithm worth its salt is so totally random looking that it stands out like
+     a sore thumb amongst practically any other sort of data which contains at
+     least some kind of structure or identifying byte sequences.
+
+     Certain file formats like ELF contain multiple distinct sections, and it
+     would be possible to locate things just right in such a way that a device
+     contains a partition with a file system with a large executable, (“a
+     backup copy of my kernel”) where a non-loaded ELF section is laid out
+     consecutively on the device and thereby could be used to contain a ggbbddee
+     encrypted device.
+
+     Apart from the ability to instruct ggbbddee which those sectors are, no sup‐
+     port is provided for creating such a setup.
+
+   DDeeppllooyymmeenntt ssuuggggeessttiioonnss
+     For personal use, it may be wise to make a backup copy of the masterkey
+     or use one of the four keys as a backup.  Fitting protection of this key
+     is up to yourself, your local circumstances and your imagination.
+
+     For company or institutional use, it is strongly advised to make a copy
+     of the master-key and put it under whatever protection you have at your
+     means.  If you fail to do this, a disgruntled employee can deny you ac‐
+     cess to the data “by accident”.  (The employee can still intentionally
+     deny access by applying another encryption scheme to the data, but that
+     problem has no technical solution.)
+
+   CCrryyppttooggrraapphhiicc ssttrreennggtthh
+     This section lists the specific components which contribute to the cryp‐
+     tographic strength of ggbbddee.
+
+     The payload is encrypted with AES in CBC mode using a 128 bit random sin‐
+     gle-use key (“the skey”).  AES is well documented.
+
+     No IV is used in the encryption of the sectors, the assumption being that
+     since the key is random bits and single-use, an IV adds nothing to the
+     security of AES.
+
+     The random key is produced with arc4rand(9) which is believed to do a re‐
+     spectable job at producing unpredictable bytes.
+
+     The skey is stored on the device in a location which can be derived from
+     the location of the encrypted payload data.  The stored copy is encrypted
+     with AES in CBC mode using a 128 bit key (“the kkey”) derived from a sub‐
+     set of the master key chosen by the output of an MD5 hash over a 16 byte
+     random bit static salt and the sector offset.  Up to 6.25% of the mas‐
+     terkey (16 bytes out of 2048 bits) will be selected and hashed through
+     MD5 with the sector offset to generate the kkey.
+
+     Up to four copies of the master-key and associated geometry information
+     is stored on the device in static randomly chosen sectors.  The exact lo‐
+     cation inside the sector is randomly chosen.  The order in which the
+     fields are encoded depends on the key-material.  The encoded byte-stream
+     is encrypted with AES in CBC mode using 256 bit key-material.
+
+     The key-material is derived from the user-entered pass-phrase using 512
+     bit SHA2.
+
+     No chain is stronger than its weakest link, which usually is poor pass-
+     phrases.
+
+SSEEEE AALLSSOO
+     gbde(8)
+
+HHIISSTTOORRYY
+     This software was developed for the FreeBSD Project by Poul-Henning Kamp
+     and NAI Labs, the Security Research Division of Network Associates, Inc.
+     under DARPA/SPAWAR contract N66001-01-C-8035 (“CBOSS”), as part of the
+     DARPA CHATS research program.
+
+AAUUTTHHOORRSS
+     Poul-Henning Kamp <_p_h_k_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                            October 19, 2002                            BSD

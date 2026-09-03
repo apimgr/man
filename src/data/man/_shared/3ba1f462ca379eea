@@ -1,0 +1,312 @@
+is  the  default  configuration  file  for the NPF packet filter.
+This manual page serves as a reference for editing  Please  refer
+to  the  official NPF documentation website for comprehensive and
+in‐depth information.  There  are  multiple  structural  elements
+that  may  contain, such as: variables table definitions (with or
+without content) abstraction groups packet  filtering  rules  map
+rules  for  address translation application level gateways proce‐
+dure definitions to call on filtered packets parameter  settings.
+Variables  are specified using the dollar sign, which is used for
+both definition and referencing of a variable.  Variables are de‐
+fined by assigning a value to them as  follows:  A  variable  may
+also  be defined as a set: Common variable definitions are for IP
+addresses, networks, ports, and interfaces.  Tables are specified
+using a name between angle brackets and The following is an exam‐
+ple of table definition: Currently,  tables  support  three  data
+storage  types:  or  The  contents of the table may be pre‐loaded
+from the specified file.  The tables are immutable (no insertions
+or deletions after loading) and therefore must always  be  loaded
+from  a file.  The specified file should contain a list of IP ad‐
+dresses and/or networks in the form of or Tables of type and  can
+only  contain  IP addresses (without masks).  The tables can con‐
+tain networks and they will perform the longest prefix  match  on
+lookup.  In NPF, an interface can be referenced directly by using
+its  name,  or can be passed to an extraction function which will
+return a list of IP addresses configured on the actual associated
+interface.  It is legal to pass an extracted list from an  inter‐
+face  in  keywords where NPF would expect instead a direct refer‐
+ence to said interface.  In this case, NPF infers a direct refer‐
+ence to the interface, and does not consider the list.  There are
+two types of IP address lists.  With a static list, NPF will cap‐
+ture the interface addresses on configuration load, whereas  with
+a  dynamic  list  NPF will capture the runtime list of addresses,
+reflecting any changes to the interface, including the attach and
+detach.  Note that with a dynamic list,  bringing  the  interface
+down  has  no  effect,  all addresses will remain present.  Three
+functions exist, to extract addresses from an  interface  with  a
+chosen  list  type  and  IP  address type: Static list.  IPv4 ad‐
+dresses.  Static list.  IPv6 addresses.  Dynamic list.  Both IPv4
+and IPv6.  The keyword of a filtering rule can be used in  combi‐
+nation  to  explicitly  select an IP address type.  This function
+can also be used with to specify the translation address, see be‐
+low.  Example of configuration: $var1 = inet4(wm0) $var2 =  ifad‐
+drs(wm0)
+
+group  default {         block in on wm0 all               # rule
+1          block  in  on   $var1   all               #   rule   2
+        block  in  on inet4(wm0) all        # rule 3         pass
+in on inet6(wm0) from $var2  # rule 4         pass in on wm0 from
+ifaddrs(wm0)  # rule 5 } In the above example, is the static list
+of IPv4 addresses configured on wm0, and is the dynamic  list  of
+all  the  IPv4  and  IPv6 addresses configured on wm0.  The first
+three rules are equivalent, because with the syntax, NPF  expects
+a  direct  reference to an interface, and therefore does not con‐
+sider the extraction functions.  The fourth and fifth  rules  are
+equivalent,  for the same reason.  NPF requires that all rules be
+defined within groups.  Groups can be thought of as higher  level
+rules  which can contain subrules.  Groups may have the following
+options: name, interface, and direction.  Packets matching  group
+criteria  are  passed  to the ruleset of that group.  If a packet
+does not match any group, it is passed to the group.   The  group
+must  always  be  defined.   Example of configuration: group "my‐
+name" in on wm0 {         # List of rules, for  packets  received
+on  wm0  } group default {         # List of rules, for the other
+packets } With a rule statement NPF is instructed to or a  packet
+depending on packet header information, transit direction and the
+interface  it  arrived on, either immediately upon match or using
+the last match.  If a packet matches a rule which has the  option
+set,  this rule is considered the last matching rule, and evalua‐
+tion of subsequent rules is skipped.  Otherwise, the last  match‐
+ing  rule  is used.  The keyword can be used to filter packets by
+layer 4 protocol (TCP, UDP, ICMP or other).  Its parameter should
+be a protocol number or its symbolic name, as  specified  in  the
+file.   This  keyword can additionally have protocol‐specific op‐
+tions, such as The keyword can  be  used  to  match  the  packets
+against  specific  TCP  flags, according to the following syntax:
+Where is the set of TCP flags to be matched, out of the set, both
+sets being represented as a string combination of: (SYN),  (ACK),
+(FIN), and (RST).  The flags that are not present in are ignored.
+To notify the sender of a blocking decision, three options can be
+used  in  conjunction  with  a  rule:  Behaves as or depending on
+whether the packet being blocked is TCP or UDP.  Return a TCP RST
+message, when the packet being blocked is a TCP packet.   Applies
+to  IPv4  and IPv6.  Return an ICMP UNREACHABLE message, when the
+packet being blocked is a UDP packet.  Applies to IPv4 and  IPv6.
+The  and keywords are provided to filter by source or destination
+IP addresses.  They can be used in conjunction with the  keyword.
+Negation  (the  exclamation mark) can be used in front of the ad‐
+dress filter criteria.  Further packet specification  at  present
+is  limited  to  TCP and UDP understanding source and destination
+ports, and ICMP and IPv6‐ICMP understanding  icmp‐type.   A  rule
+can  also instruct NPF to create an entry in the state table when
+passing the packet or to apply a procedure to  the  packet  (e.g.
+"log").  A rule would for example be: pass stateful in final fam‐
+ily inet4 proto tcp flags S/SA \
+        from $source port $sport to $dest port $dport    \
+        apply  someproc  Alternatively,  NPF supports syntax, for
+example: Fragments are not selectable since NPF  always  reassem‐
+bles  packets  before  further processing.  NPF supports stateful
+packet inspection which can be used to  bypass  unnecessary  rule
+processing as well as to complement NAT.  The connection state is
+uniquely  identified by an n‐tuple: IP version, layer 4 protocol,
+source and destination IP addresses and port numbers.  Each state
+is represented by two keys: one for the original flow and one for
+the reverse flow, so that the reverse  lookup  on  the  returning
+packets  would succeed.  The packets are matched against the con‐
+nection direction respectively.  Depending on the  settings  (see
+the  section  on in the manual), the connection identifier (keys)
+may also include the interface ID, making the  states  per‐inter‐
+face.   Stateful  packet  inspection is enabled using the or key‐
+words.  The former matches the interface after the state  lookup,
+while  the latter avoids matching the interface (assuming the pa‐
+rameter is disabled), i.e. making the state global, and  must  be
+used  with  caution.  In both cases, a full TCP state tracking is
+performed for TCP connections and a limited tracking for message‐
+based protocols (UDP and ICMP).  By default, a stateful rule  im‐
+plies  SYN‐only flag check for the TCP packets.  It is not advis‐
+able to change this behavior; however, it can be overridden  with
+the aforementioned keyword.  Network Address Translation (NAT) is
+expressed  in  a form of segment mapping.  The translation may be
+(stateful) or  (stateless).   The  following  mapping  types  are
+available:  outbound  NAT (translation of the source) inbound NAT
+(translation of the destination) bi‐directional NAT  (combination
+of  inbound  and  outbound NAT) The following would translate the
+source (10.1.1.0/24) to the IP address specified by for the pack‐
+ets on the interface Translations are implicitly filtered by lim‐
+iting the operation to the network segments specified,  that  is,
+translation  would  be performed only on packets originating from
+the 10.1.1.0/24 network.  Explicit filter criteria can be  speci‐
+fied  using  as an additional option of the mapping.  The dynamic
+NAT implies network address and  port  translation  (NAPT).   The
+port  translation can be controlled explicitly.  For example, the
+following provides redirecting the public port 9022 to  the  port
+22  of  an  internal host: In the regular dynamic NAT case, it is
+also possible to disable port translation using  the  flag.   The
+translation  address can also be dynamic, based on the interface.
+The following would select the  IPv4  address(es)  currently  as‐
+signed  to  the  interface: If the dynamic NAT is configured with
+multiple translation addresses, then a custom selection algorithm
+can be chosen using the keyword.  The currently  available  algo‐
+rithms  for  the dynamic translation are: The translation address
+for a new connection is selected based on a hash of the  original
+source  and  destination  addresses.  This algorithms attempts to
+keep all connections of particular  client  associated  with  the
+same  translation  address.   This is the default algorithm.  The
+translation address for each new  connection  is  selected  on  a
+round‐robin  basis.   See  the description below.  The static NAT
+can also have different address  translation  algorithms,  chosen
+using  the keyword.  The currently available algorithms are: Net‐
+work address mapping from one segment  to  another,  leaving  the
+host  part  as‐is.   The  new  address  is computed as following:
+IPv6‐to‐IPv6 network prefix translation (NPTv6).  If no algorithm
+is specified, then 1:1 address mapping  is  assumed.   Currently,
+the  static NAT algorithms do not perform port translation.  Cer‐
+tain application layer protocols are not compatible with NAT  and
+require  translation outside layers 3 and 4.  Such translation is
+performed by packet filter extensions  called  Application  Level
+Gateways (ALGs).  NPF supports the following ALGs: ICMP ALG.  Ap‐
+plies  to  IPv4 and IPv6.  Allows to find an active connection by
+looking at the ICMP payload, and to perform  NAT  translation  of
+the  ICMP  payload.   Generally, this ALG is necessary to support
+behind the NAT, when using the UDP or TCP probes.  The  ALGs  are
+built‐in.   If  NPF  is  used as kernel module, then they come as
+kernel modules too.  In such case, the ALG kernel modules can  be
+autoloaded through the configuration, using the keyword.  For ex‐
+ample:  Alternatively, the ALG kernel modules can be loaded manu‐
+ally, using A rule procedure is defined as a collection of exten‐
+sion calls (it may have none).  Every extension call has  a  name
+and  a list of options in the form of key‐value pairs.  Depending
+on the call, the key might represent the argument and  the  value
+might be optional.  Available options: Log events.  This requires
+the  kernel  module, which would normally get auto‐loaded by NPF.
+The specified npflog interface would also  be  auto‐created  once
+the configuration is loaded.  The log packets can be written to a
+file using the daemon.  Modify packets according to the specified
+normalization  options.   This  requires  the module, which would
+normally get auto‐loaded by NPF.  The available normalization op‐
+tions are: Enforce a maximum value for the Maximum  Segment  Size
+(MSS) TCP option.  Typically, for Enforce a minimum value for the
+IPv4  Time  To  Live  (TTL) parameter.  Remove the Don’t Fragment
+(DF) flag from IPv4 packets.  Randomize the  IPv4  ID  parameter.
+For   example:   procedure   "someproc"  {          log:  npflog0
+        normalize: "random‐id", "min‐ttl" 64, "max‐mss" 1432 } In
+this case, the procedure calls the logging and normalization mod‐
+ules.  NPF supports a set of dynamically  tunable  configuration‐
+wide  parameters.  For example: set state.tcp.timeout.time_wait 0
+# destroy the state immediately See for the  list  of  parameters
+and  their  details.  Text after a hash character is considered a
+comment.  The backslash character at the end of a  line  marks  a
+continuation line, i.e., the next line is considered an extension
+of the present line.  The following is a non‐formal BNF‐like def‐
+inition  of the grammar.  The definition is simplified and is in‐
+tended to be human readable, therefore it does not strictly  rep‐
+resent the formal grammar.  # Syntax of a single line.  Lines can
+be  separated by LF (\n) or # a semicolon.  Comments start with a
+hash (#) character.
+
+syntax          =  var‐def  |  set‐param  |  alg  |  table‐def  |
+                  map | group | proc | comment
+
+# Variable definition.  Names can be alpha‐numeric, including "_"
+# character.
+
+var‐name        = "$" . string interface       = interface‐name |
+var‐name var‐def         = var "=" ( var‐value | "{" value *[ ","
+value ] "}" )
+
+# Parameter setting.  set‐param       = "set" param‐value
+
+#  Application  level  gateway.   The  name  should  be in double
+quotes.
+
+alg             = "alg" alg‐name alg‐name        = "icmp"
+
+# Table definition.  Table ID shall be numeric.  Path is in the #
+double quotes.
+
+table‐id        = <table‐name> table‐def       = "table" table‐id
+"type" ( "ipset" | "lpm" | "const" )                    [  "file"
+path ]
+
+# Mapping for address translation.
+
+map             =   map‐common  |  map‐ruleset  map‐common      =
+"map" interface                   ( "static" [ "algo" map‐algo  ]
+|   "dynamic"  )                     [  map‐flags  ]  [  proto  ]
+                  map‐seg  (  "‐>"  |  "<‐"  |  "<‐>"  )  map‐seg
+                   [  "pass"  [  proto  ]  filt‐opts  ] map‐rule‐
+set     = "map" "ruleset" group‐opts
+
+map‐algo        = "ip‐hash" | "round‐robin" | "netmap" |  "npt66"
+map‐flags       =  "no‐ports" map‐seg         = ( addr‐mask | in‐
+terface ) [ port‐opts ]
+
+# Rule procedure definition.  The name should be  in  the  double
+quotes.  # # Each call can have its own options in a form of key‐
+value  pairs.   #  Both  key and values may be strings (either in
+double quotes or not) # and numbers, depending on the extension.
+
+proc            = "procedure" proc‐name "{" *( proc‐call  [  new‐
+line  ] ) "}" proc‐opts       = key [ " " val ] [ "," proc‐opts ]
+proc‐call       = call‐name ":" proc‐opts new‐line
+
+# Group definition and the rule list.
+
+group           = "group" ( "default" | group‐opts  )  "{"  rule‐
+list  "}"  group‐opts      =  name‐string [ "in" | "out" ] [ "on"
+interface ] rule‐list       = [ rule new‐line ] rule‐list
+
+npf‐filter      = [ "family" family‐opt ] [ proto  ]  (  "all"  |
+filt‐opts ) static‐rule     = ( "block" [ block‐opts ] | "pass" )
+                      [    "stateful"    |    "stateful‐all"    ]
+                  [ "in" | "out" ] [ "final" ] [ "on" interface ]
+                  ( npf‐filter | "pcap‐filter" pcap‐filter‐expr )
+                  [ "apply" proc‐name ]
+
+dynamic‐ruleset = "ruleset" group‐opts rule            =  static‐
+rule | dynamic‐ruleset
+
+tcp‐flag‐mask   =  tcp‐flags  tcp‐flags       = [ "S" ] [ "A" ] [
+"F" ] [ "R" ] block‐opts      = "return‐rst"  |  "return‐icmp"  |
+"return"
+
+family‐opt      =  "inet4"  |  "inet6"  proto‐opts      = "flags"
+tcp‐flags [ "/" tcp‐flag‐mask ] |                     "icmp‐type"
+type  [  "code"  icmp‐code ] proto           = "proto" protocol [
+proto‐opts ]
+
+filt‐opts       = "from" filt‐addr [ port‐opts ] "to" filt‐addr [
+port‐opts ] filt‐addr       = [ "!" ] [ interface |  addr‐mask  |
+table‐id | "any" ]
+
+port‐opts       =  "port"  (  port‐num  | port‐from "‐" port‐to |
+var‐name ) addr‐mask       = addr [ "/" mask ] control device de‐
+fault configuration file directory  containing  further  examples
+$ext_if = { inet4(wm0) } $int_if = { inet4(wm1) }
+
+table  <blocklist>  type  ipset  file  "/etc/npf_blocklist" table
+<limited> type lpm
+
+$services_tcp = { http, https, smtp, domain, 6000, 9022  }  $ser‐
+vices_udp = { domain, ntp, 6000 } $localnet = { 10.1.1.0/24 }
+
+alg "icmp"
+
+#  These  NAT  rules  will  dynamically  select the interface ad‐
+dress(es).  map $ext_if dynamic 10.1.1.0/24  ‐>  ifaddrs($ext_if)
+map   $ext_if  dynamic  proto  tcp  10.1.1.2  port  22  <‐  ifad‐
+drs($ext_if) port 9022
+
+procedure "log" {         # The logging facility can be used  to‐
+gether with npfd(8).          log: npflog0 }
+
+group "external" on $ext_if {         pass stateful out final all
+
+        block  in final from <blocklist>         pass stateful in
+final family inet4 proto tcp to  $ext_if  \                  port
+ssh  apply  "log"          pass  stateful  in  final proto tcp to
+$ext_if \                 port $services_tcp         pass  state‐
+ful  in  final  proto udp to $ext_if \                 port $ser‐
+vices_udp         pass stateful in final proto tcp to  $ext_if  \
+                port  49151‐65535   #  passive  FTP          pass
+stateful in final proto udp  to  $ext_if  \                  port
+33434‐33600  # traceroute }
+
+group  "internal" on $int_if {         block in all         block
+in final from <limited>
+
+        #  Ingress  filtering  as  per  BCP  38   /   RFC   2827.
+        pass in final from $localnet         pass out final all }
+
+group default {         pass final on lo0 all         block all }
+NPF first appeared in NPF was designed and implemented by

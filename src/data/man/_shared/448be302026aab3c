@@ -1,0 +1,176 @@
+MBUF_TAGS(9)             BSD Kernel Developer's Manual            MBUF_TAGS(9)
+
+NNAAMMEE
+     mmbbuuff__ttaaggss — a framework for generic packet attributes
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//mmbbuuff..hh>>
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__aalllloocc(_u_i_n_t_3_2___t _c_o_o_k_i_e, _u_i_n_t_1_6___t _t_y_p_e, _i_n_t _l_e_n, _i_n_t _w_a_i_t);
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__ccooppyy(_s_t_r_u_c_t _m___t_a_g _*_t, _i_n_t _h_o_w);
+
+     _i_n_t
+     mm__ttaagg__ccooppyy__cchhaaiinn(_s_t_r_u_c_t _m_b_u_f _*_t_o, _c_o_n_s_t _s_t_r_u_c_t _m_b_u_f _*_f_r_o_m, _i_n_t _h_o_w);
+
+     _v_o_i_d
+     mm__ttaagg__ddeelleettee(_s_t_r_u_c_t _m_b_u_f _*_m, _s_t_r_u_c_t _m___t_a_g _*_t);
+
+     _v_o_i_d
+     mm__ttaagg__ddeelleettee__cchhaaiinn(_s_t_r_u_c_t _m_b_u_f _*_m, _s_t_r_u_c_t _m___t_a_g _*_t);
+
+     _v_o_i_d
+     mm__ttaagg__ddeelleettee__nnoonnppeerrssiisstteenntt(_s_t_r_u_c_t _m_b_u_f _*_m);
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__ffiinndd(_s_t_r_u_c_t _m_b_u_f _*_m, _u_i_n_t_1_6___t _t_y_p_e, _s_t_r_u_c_t _m___t_a_g _*_s_t_a_r_t);
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__ffiirrsstt(_s_t_r_u_c_t _m_b_u_f _*_m);
+
+     _v_o_i_d
+     mm__ttaagg__ffrreeee(_s_t_r_u_c_t _m___t_a_g _*_t);
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__ggeett(_u_i_n_t_1_6___t _t_y_p_e, _i_n_t _l_e_n, _i_n_t _w_a_i_t);
+
+     _v_o_i_d
+     mm__ttaagg__iinniitt(_s_t_r_u_c_t _m_b_u_f _*_m);
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__llooccaattee(_s_t_r_u_c_t _m_b_u_f _*_m, _u_i_n_t_3_2___t _c_o_o_k_i_e, _u_i_n_t_1_6___t _t_y_p_e,
+         _s_t_r_u_c_t _m___t_a_g _*_t);
+
+     _s_t_r_u_c_t _m___t_a_g _*
+     mm__ttaagg__nneexxtt(_s_t_r_u_c_t _m_b_u_f _*_m, _s_t_r_u_c_t _m___t_a_g _*_t);
+
+     _v_o_i_d
+     mm__ttaagg__pprreeppeenndd(_s_t_r_u_c_t _m_b_u_f _*_m, _s_t_r_u_c_t _m___t_a_g _*_t);
+
+     _v_o_i_d
+     mm__ttaagg__uunnlliinnkk(_s_t_r_u_c_t _m_b_u_f _*_m, _s_t_r_u_c_t _m___t_a_g _*_t);
+
+DDEESSCCRRIIPPTTIIOONN
+     Mbuf tags allow additional meta-data to be associated with in-flight
+     packets by providing a mechanism for the tagging of additional kernel
+     memory onto packet header mbufs.  Tags are maintained in chains off of
+     the mbuf(9) header, and maintained using a series of API calls to allo‐
+     cate, search, and delete tags.  Tags are identified using an ID and
+     cookie that uniquely identify a class of data tagged onto the packet, and
+     may contain an arbitrary amount of additional storage.  Typical uses of
+     mbuf tags include Mandatory Access Control (MAC) labels as described in
+     mac(9), IPsec policy information as described in ipsec(4), and packet
+     filter tags used by pf(4).
+
+     Tags will be maintained across a variety of operations, including the
+     copying of packet headers using facilities such as MM__CCOOPPYY__PPKKTTHHDDRR() and
+     MM__MMOOVVEE__PPKKTTHHDDRR().  Any tags associated with an mbuf header will be auto‐
+     matically freed when the mbuf is freed, although some subsystems will
+     wish to delete the tags prior to that time.
+
+     Packet tags are used by different kernel APIs to keep track of operations
+     done or scheduled to happen to packets.  Each packet tag can be distin‐
+     guished by its type and cookie.  The cookie is used to identify a spe‐
+     cific module or API.  The packet tags are attached to mbuf packet head‐
+     ers.
+
+     The first ssiizzeeooff(_s_t_r_u_c_t _m___t_a_g) bytes of a tag contain a _s_t_r_u_c_t _m___t_a_g:
+
+     struct m_tag {
+             SLIST_ENTRY(m_tag)      m_tag_link;     /* List of packet tags */
+             uint16_t                m_tag_id;       /* Tag ID */
+             uint16_t                m_tag_len;      /* Length of data */
+             uint32_t                m_tag_cookie;   /* ABI/Module ID */
+             void                    (*m_tag_free)(struct m_tag *);
+     };
+
+     The _m___t_a_g___l_i_n_k field is used to link tags together (see queue(3) for more
+     details).  The _m___t_a_g___i_d, _m___t_a_g___l_e_n and _m___t_a_g___c_o_o_k_i_e fields are set to
+     type, length, and cookie, respectively.  _m___t_a_g___f_r_e_e points to
+     mm__ttaagg__ffrreeee__ddeeffaauulltt().  Following this structure are _m___t_a_g___l_e_n bytes of
+     space that can be used to store tag-specific information.  Addressing
+     this data region may be tricky.  A safe way is embedding _s_t_r_u_c_t _m___t_a_g
+     into a private data structure, as follows:
+
+           struct foo {
+                   struct m_tag    tag;
+                   ...
+           };
+           struct foo *p = (struct foo *)m_tag_alloc(...);
+           struct m_tag *mtag = &p->tag;
+
+     Note that OpenBSD does not support cookies, it needs _m___t_a_g___i_d to be glob‐
+     ally unique.  To keep compatibility with OpenBSD, a cookie
+     MTAG_ABI_COMPAT is provided along with some compatibility functions.
+     When writing an OpenBSD compatible code, one should be careful not to
+     take already used tag type.  Tag types are defined in <_s_y_s_/_m_b_u_f_._h>.
+
+   PPaacckkeett TTaagg MMaanniippuullaattiioonn FFuunnccttiioonnss
+           mm__ttaagg__aalllloocc(_c_o_o_k_i_e, _t_y_p_e, _l_e_n, _w_a_i_t)
+           Allocate a new tag of type _t_y_p_e and cookie _c_o_o_k_i_e with _l_e_n bytes of
+           space following the tag header itself.  The _w_a_i_t argument is passed
+           directly to malloc(9).  If successful, mm__ttaagg__aalllloocc() returns a mem‐
+           ory buffer of (_l_e_n + ssiizzeeooff(_s_t_r_u_c_t _m___t_a_g)) bytes.  Otherwise, NULL
+           is returned.  A compatibility function mm__ttaagg__ggeett() is also pro‐
+           vided.
+
+           mm__ttaagg__ccooppyy(_t_a_g, _h_o_w)
+           Allocate a copy of _t_a_g.  The _h_o_w argument is passed directly to
+           mm__ttaagg__aalllloocc().  The return values are the same as in mm__ttaagg__aalllloocc().
+
+           mm__ttaagg__ccooppyy__cchhaaiinn(_t_o_m_b_u_f, _f_r_o_m_m_b_u_f, _h_o_w)
+           Allocate and copy all tags from mbuf _f_r_o_m_m_b_u_f to mbuf _t_o_m_b_u_f.  Re‐
+           turns 1 on success, and 0 on failure.  In the latter case, mbuf
+           _t_o_m_b_u_f loses all its tags, even previously present.
+
+           mm__ttaagg__ddeelleettee(_m_b_u_f, _t_a_g)
+           Remove _t_a_g from _m_b_u_f's list and free it.
+
+           mm__ttaagg__ddeelleettee__cchhaaiinn(_m_b_u_f, _t_a_g)
+           Remove and free a packet tag chain, starting from _t_a_g.  If _t_a_g is
+           NULL, all tags are deleted.
+
+           mm__ttaagg__ddeelleettee__nnoonnppeerrssiisstteenntt(_m_b_u_f)
+           Traverse _m_b_u_f's tags and delete those which do not have the
+           MTAG_PERSISTENT flag set.
+
+           mm__ttaagg__ffiirrsstt(_m_b_u_f)
+           Return the first tag associated with _m_b_u_f.
+
+           mm__ttaagg__ffrreeee(_t_a_g)
+           Free _t_a_g using its _m___t_a_g___f_r_e_e method.  The mm__ttaagg__ffrreeee__ddeeffaauulltt()
+           function is used by default.
+
+           mm__ttaagg__iinniitt(_m_b_u_f)
+           Initialize the tag storage for packet _m_b_u_f.
+
+           mm__ttaagg__llooccaattee(_m_b_u_f, _c_o_o_k_i_e, _t_y_p_e, _t_a_g)
+           Search for a tag defined by _t_y_p_e and _c_o_o_k_i_e in _m_b_u_f, starting from
+           position specified by _t_a_g.  If the latter is NULL, then search
+           through the whole list.  Upon success, a pointer to the first found
+           tag is returned.  In either case, NULL is returned.  A compatibil‐
+           ity function mm__ttaagg__ffiinndd() is also provided.
+
+           mm__ttaagg__nneexxtt(_m_b_u_f, _t_a_g)
+           Return tag next to _t_a_g in _m_b_u_f.  If absent, NULL is returned.
+
+           mm__ttaagg__pprreeppeenndd(_m_b_u_f, _t_a_g)
+           Add the new tag _t_a_g at the head of the tag list for packet _m_b_u_f.
+
+           mm__ttaagg__uunnlliinnkk(_m_b_u_f, _t_a_g)
+           Remove tag _t_a_g from the list of tags of packet _m_b_u_f.
+
+CCOODDEE RREEFFEERREENNCCEESS
+     The tag-manipulating code is contained in the file _s_y_s_/_k_e_r_n_/_u_i_p_c___m_b_u_f_2_._c.
+     Inlined functions are defined in <_s_y_s_/_m_b_u_f_._h>.
+
+SSEEEE AALLSSOO
+     queue(3), mbuf(9)
+
+HHIISSTTOORRYY
+     The packet tags first appeared in OpenBSD 2.9 and were written by Angelos
+     D. Keromytis <_a_n_g_e_l_o_s_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BSD                            December 28, 2021                           BSD

@@ -1,0 +1,233 @@
+_f_s_o_p_e_n(2)                     System Calls Manual                    _f_s_o_p_e_n(2)
+
+NNAAMMEE
+       fsopen - create a new filesystem context
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//mmoouunntt..hh>>
+
+       iinntt ffssooppeenn((ccoonnsstt cchhaarr **_f_s_n_a_m_e,, uunnssiiggnneedd iinntt _f_l_a_g_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  ffssooppeenn() system call is part of the suite of file‐descriptor‐based
+       mount facilities in Linux.
+
+       ffssooppeenn() creates a blank filesystem configuration  context  within  the
+       kernel  for  the filesystem named by _f_s_n_a_m_e and places it into creation
+       mode.  A new file descriptor associated with the filesystem  configura‐
+       tion  context  is  then  returned.   The  calling process must have the
+       CCAAPP__SSYYSS__AADDMMIINN capability in order to create a new filesystem configura‐
+       tion context.
+
+       A filesystem configuration context is an in‐kernel representation of  a
+       pending  transaction, containing a set of configuration parameters that
+       are to be applied when creating a new instance of a filesystem (or mod‐
+       ifying the configuration of an existing filesystem  instance,  such  as
+       when using ffssppiicckk(2)).
+
+       After  obtaining  a filesystem configuration context with ffssooppeenn(), the
+       general workflow for operating on the context looks like the following:
+
+       (1)  Pass the filesystem context  file  descriptor  to  ffssccoonnffiigg(2)  to
+            specify  any  desired  filesystem parameters.  This may be done as
+            many times as necessary.
+
+       (2)  Pass the same filesystem context file  descriptor  to  ffssccoonnffiigg(2)
+            with  FFSSCCOONNFFIIGG__CCMMDD__CCRREEAATTEE  to create an instance of the configured
+            filesystem.
+
+       (3)  Pass the same filesystem context file descriptor to ffssmmoouunntt(2)  to
+            create  a new detached mount object for the root of the filesystem
+            instance, which is then attached to a new file descriptor.   (This
+            also places the filesystem context file descriptor into reconfigu‐
+            ration  mode,  similar to the mode produced by ffssppiicckk(2).)  Once a
+            mount object has been created with ffssmmoouunntt(2), the filesystem con‐
+            text file descriptor can be safely closed.
+
+       (4)  Now that a mount object has been created, you may
+
+            •  use the detached mount object file descriptor as a _d_i_r_f_d  argu‐
+               ment to "*at()" system calls; and/or
+
+            •  attach  the  mount object to a mount point by passing the mount
+               object file descriptor to mmoovvee__mmoouunntt(2).  This will  also  pre‐
+               vent  the  mount object from being unmounted and destroyed when
+               the mount object file descriptor is closed.
+
+            The mount object file descriptor will remain associated  with  the
+            mount object even after doing the above operations, so you may re‐
+            peatedly  use  the mount object file descriptor with mmoovvee__mmoouunntt(2)
+            and/or "*at()" system calls as many times as necessary.
+
+       A filesystem context will move between different modes  throughout  its
+       lifecycle  (such  as the creation phase when created with ffssooppeenn(), the
+       reconfiguration phase when an existing filesystem instance is  selected
+       with  ffssppiicckk(2),  and  the  intermediate "awaiting‐mount" phase between
+       FFSSCCOONNFFIIGG__CCMMDD__CCRREEAATTEE and ffssmmoouunntt(2)), which has an impact on what opera‐
+       tions are permitted on the filesystem context.
+
+       The file descriptor returned by ffssooppeenn() also acts  as  a  channel  for
+       filesystem drivers to provide more comprehensive diagnostic information
+       than  is  normally provided through the standard eerrrrnnoo(3) interface for
+       system calls.  If an error occurs at any time during the workflow  men‐
+       tioned above, calling rreeaadd(2) on the filesystem context file descriptor
+       will  retrieve  any ancillary information about the encountered errors.
+       (See the "Message retrieval interface" section for more details on  the
+       message format.)
+
+       _f_l_a_g_s  can be used to control aspects of the creation of the filesystem
+       configuration context file descriptor.   A  value  for  _f_l_a_g_s  is  con‐
+       structed by bitwise ORing zero or more of the following constants:
+
+              FFSSOOPPEENN__CCLLOOEEXXEECC
+                     Set  the  close‐on‐exec (FFDD__CCLLOOEEXXEECC) flag on the new file
+                     descriptor.  See the description of the OO__CCLLOOEEXXEECC flag in
+                     ooppeenn(2) for reasons why this may be useful.
+
+       A list of filesystems supported by the running kernel (and thus a  list
+       of  valid  values  for  _f_s_n_a_m_e) can be obtained from _/_p_r_o_c_/_f_i_l_e_s_y_s_t_e_m_s.
+       (See also pprroocc__ffiilleessyysstteemmss(5).)
+
+   MMeessssaaggee rreettrriieevvaall iinntteerrffaaccee
+       When doing  operations  on  a  filesystem  configuration  context,  the
+       filesystem  driver may choose to provide ancillary information to user‐
+       space in the form of message strings.
+
+       The filesystem  context  file  descriptors  returned  by  ffssooppeenn()  and
+       ffssppiicckk(2)  may  be  queried  for message strings at any time by calling
+       rreeaadd(2) on the file descriptor.  Each call to  rreeaadd(2)  will  return  a
+       single message, prefixed to indicate its class:
+
+              ee _m_e_s_s_a_g_e
+                     An  error message was logged.  This is usually associated
+                     with an error being returned from the corresponding  sys‐
+                     tem call which triggered this message.
+
+              ww _m_e_s_s_a_g_e
+                     A warning message was logged.
+
+              ii _m_e_s_s_a_g_e
+                     An informational message was logged.
+
+       Messages  are  removed  from the queue as they are read.  Note that the
+       message queue has limited depth, so it is possible for messages to  get
+       lost.   If there are no messages in the message queue, rreeaadd((22)) will re‐
+       turn -1 and _e_r_r_n_o will be set to  EENNOODDAATTAA.   If  the  _b_u_f  argument  to
+       rreeaadd(2) is not large enough to contain the entire message, rreeaadd(2) will
+       return -1 and _e_r_r_n_o will be set to EEMMSSGGSSIIZZEE.  (See BUGS.)
+
+       If there are multiple filesystem contexts referencing the same filesys‐
+       tem instance (such as if you call ffssppiicckk(2) multiple times for the same
+       mount), each one gets its own independent message queue.  This does not
+       apply to multiple file descriptors that are tied to the same underlying
+       open file description (such as those created with dduupp(2)).
+
+       Message  strings will usually be prefixed by the name of the filesystem
+       or kernel subsystem that logged the message, though this may not always
+       be the case.  See the Linux kernel source code for details.
+
+RREETTUURRNN VVAALLUUEE
+       On success, a new file descriptor is returned.  On  error,  -1  is  re‐
+       turned, and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEFFAAUULLTT _f_s_n_a_m_e  is  NULL  or a pointer to a location outside the calling
+              process’s accessible address space.
+
+       EEIINNVVAALL _f_l_a_g_s had an invalid flag set.
+
+       EEMMFFIILLEE The calling process has too many open files to create more.
+
+       EENNFFIILLEE The system has too many open files to create more.
+
+       EENNOODDEEVV The filesystem named by _f_s_n_a_m_e is not supported by the kernel.
+
+       EENNOOMMEEMM The kernel could not allocate sufficient memory to complete  the
+              operation.
+
+       EEPPEERRMM  The calling process does not have the required CCAAPP__SSYYSS__AADDMMIINN ca‐
+              pability.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 5.2.  glibc 2.36.
+
+BBUUGGSS
+   MMeessssaaggee rreettrriieevvaall iinntteerrffaaccee aanndd EEMMSSGGSSIIZZEE
+       As  described  in  the  "Message retrieval interface" subsection above,
+       calling rreeaadd(2) with too small a buffer to  contain  the  next  pending
+       message  in  the message queue for the filesystem configuration context
+       will cause rreeaadd(2) to return -1 and set eerrrrnnoo(3) to EEMMSSGGSSIIZZEE.
+
+       However, this failed operation still consumes the message from the mes‐
+       sage queue.  This effectively discards the message silently, as no data
+       is copied into the rreeaadd(2) buffer.
+
+       Programs should take care to ensure that their buffers are sufficiently
+       large to contain any reasonable  message  string,  in  order  to  avoid
+       silently losing valuable diagnostic information.
+
+EEXXAAMMPPLLEESS
+       To  illustrate  the workflow for creating a new mount, the following is
+       an example of how to mount an eexxtt44(5) filesystem  stored  on  _/_d_e_v_/_s_d_b_1
+       onto _/_m_n_t.
+
+           int fsfd, mntfd;
+
+           fsfd = fsopen("ext4", FSOPEN_CLOEXEC);
+           fsconfig(fsfd, FSCONFIG_SET_FLAG, "ro", NULL, 0);
+           fsconfig(fsfd, FSCONFIG_SET_PATH, "source", "/dev/sdb1", AT_FDCWD);
+           fsconfig(fsfd, FSCONFIG_SET_FLAG, "noatime", NULL, 0);
+           fsconfig(fsfd, FSCONFIG_SET_FLAG, "acl", NULL, 0);
+           fsconfig(fsfd, FSCONFIG_SET_FLAG, "user_xattr", NULL, 0);
+           fsconfig(fsfd, FSCONFIG_SET_FLAG, "iversion", NULL, 0)
+           fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+           mntfd = fsmount(fsfd, FSMOUNT_CLOEXEC, MOUNT_ATTR_RELATIME);
+           move_mount(mntfd, "", AT_FDCWD, "/mnt", MOVE_MOUNT_F_EMPTY_PATH);
+
+       First,  an  ext4  configuration  context is created and attached to the
+       file descriptor _f_s_f_d.  Then, a series of parameters (such as the source
+       of the filesystem) are provided  using  ffssccoonnffiigg(2),  followed  by  the
+       filesystem instance being created with FFSSCCOONNFFIIGG__CCMMDD__CCRREEAATTEE.  ffssmmoouunntt(2)
+       is then used to create a new mount object attached to the file descrip‐
+       tor  _m_n_t_f_d,  which  is  then attached to the intended mount point using
+       mmoovvee__mmoouunntt(2).
+
+       The above procedure is functionally equivalent to the  following  mount
+       operation using mmoouunntt(2):
+
+           mount("/dev/sdb1", "/mnt", "ext4", MS_RELATIME,
+                 "ro,noatime,acl,user_xattr,iversion");
+
+       And here’s an example of creating a mount object of an NFS server share
+       and setting a Smack security module label.  However, instead of attach‐
+       ing  it to a mount point, the program uses the mount object directly to
+       open a file from the NFS share.
+
+           int fsfd, mntfd, fd;
+
+           fsfd = fsopen("nfs", 0);
+           fsconfig(fsfd, FSCONFIG_SET_STRING, "source", "example.com/pub", 0);
+           fsconfig(fsfd, FSCONFIG_SET_STRING, "nfsvers", "3", 0);
+           fsconfig(fsfd, FSCONFIG_SET_STRING, "rsize", "65536", 0);
+           fsconfig(fsfd, FSCONFIG_SET_STRING, "wsize", "65536", 0);
+           fsconfig(fsfd, FSCONFIG_SET_STRING, "smackfsdef", "foolabel", 0);
+           fsconfig(fsfd, FSCONFIG_SET_FLAG, "rdma", NULL, 0);
+           fsconfig(fsfd, FSCONFIG_CMD_CREATE, NULL, NULL, 0);
+           mntfd = fsmount(fsfd, 0, MOUNT_ATTR_NODEV);
+           fd = openat(mntfd, "src/linux‐5.2.tar.xz", O_RDONLY);
+
+       Unlike the previous example, this operation has no  trivial  equivalent
+       with  mmoouunntt(2), as it was not previously possible to create a mount ob‐
+       ject that is not attached to any mount point.
+
+SSEEEE AALLSSOO
+       ffssccoonnffiigg(2),   ffssmmoouunntt(2),   ffssppiicckk(2),   mmoouunntt(2),   mmoouunntt__sseettaattttrr(2),
+       mmoovvee__mmoouunntt(2), ooppeenn__ttrreeee(2), mmoouunntt__nnaammeessppaacceess(7)
+
+Linux man‐pages (unreleased)      2025‐10‐01                         _f_s_o_p_e_n(2)

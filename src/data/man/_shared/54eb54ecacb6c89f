@@ -1,0 +1,156 @@
+_m_a_k_e_c_o_n_t_e_x_t(3)             Library Functions Manual             _m_a_k_e_c_o_n_t_e_x_t(3)
+
+NNAAMMEE
+       makecontext, swapcontext - manipulate user context
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<uuccoonntteexxtt..hh>>
+
+       vvooiidd mmaakkeeccoonntteexxtt((uuccoonntteexxtt__tt **_u_c_p,, ttyyppeeooff((vvooiidd ((iinntt _a_r_g_0,, ......)))) **_f_u_n_c,,
+                        iinntt _a_r_g_c,, ......));;
+       iinntt sswwaappccoonntteexxtt((uuccoonntteexxtt__tt **rreessttrriicctt _o_u_c_p,,
+                        ccoonnsstt uuccoonntteexxtt__tt **rreessttrriicctt _u_c_p));;
+
+DDEESSCCRRIIPPTTIIOONN
+       In a System V‐like environment, one has the type _u_c_o_n_t_e_x_t___t (defined in
+       _<_u_c_o_n_t_e_x_t_._h_>  and  described  in  ggeettccoonntteexxtt(3)) and the four functions
+       ggeettccoonntteexxtt(3), sseettccoonntteexxtt(3), mmaakkeeccoonntteexxtt(), and sswwaappccoonntteexxtt() that al‐
+       low user‐level context switching between multiple  threads  of  control
+       within a process.
+
+       The  mmaakkeeccoonntteexxtt()  function  modifies  the  context  pointed to by _u_c_p
+       (which was obtained from a call  to  ggeettccoonntteexxtt(3)).   Before  invoking
+       mmaakkeeccoonntteexxtt(),  the  caller  must allocate a new stack for this context
+       and assign its address to _u_c_p_-_>_u_c___s_t_a_c_k, and define a successor context
+       and assign its address to _u_c_p_-_>_u_c___l_i_n_k.
+
+       When this context is later activated (using sseettccoonntteexxtt(3)  or  sswwaappccoonn‐‐
+       tteexxtt())  the  function _f_u_n_c is called, and passed the series of integer
+       (_i_n_t) arguments that follow _a_r_g_c; the caller must specify the number of
+       these arguments in _a_r_g_c.  When this  function  returns,  the  successor
+       context  is  activated.   If the successor context pointer is NULL, the
+       thread exits.
+
+       The sswwaappccoonntteexxtt() function saves the current context in  the  structure
+       pointed to by _o_u_c_p, and then activates the context pointed to by _u_c_p.
+
+RREETTUURRNN VVAALLUUEE
+       When  successful,  sswwaappccoonntteexxtt()  does  not return.  (But we may return
+       later, in case _o_u_c_p is activated, in which case it looks like  sswwaappccoonn‐‐
+       tteexxtt()  returns  0.)  On error, sswwaappccoonntteexxtt() returns -1 and sets _e_r_r_n_o
+       to indicate the error.
+
+EERRRROORRSS
+       EENNOOMMEEMM Insufficient stack space left.
+
+AATTTTRRIIBBUUTTEESS
+       For an explanation of the terms  used  in  this  section,  see  aattttrriibb‐‐
+       uutteess(7).  allbox; lb lb lbx l l l.  Interface Attribute Value T{
+       mmaakkeeccoonntteexxtt() T}   Thread safety  T{ MT‐Safe race:ucp T} T{
+       sswwaappccoonntteexxtt() T}   Thread safety  T{ MT‐Safe race:oucp race:ucp T}
+
+SSTTAANNDDAARRDDSS
+       None.
+
+HHIISSTTOORRYY
+       glibc 2.1.  SUSv2, POSIX.1‐2001.  Removed in POSIX.1‐2008, citing
+       portability issues, and recommending that applications be rewritten to
+       use POSIX threads instead.
+
+NNOOTTEESS
+       The interpretation of _u_c_p_-_>_u_c___s_t_a_c_k is just as in ssiiggaallttssttaacckk(2),
+       namely, this struct contains the start and length of a memory area to
+       be used as the stack, regardless of the direction of growth of the
+       stack.  Thus, it is not necessary for the user program to worry about
+       this direction.
+
+       On architectures where _i_n_t and pointer types are the same size (e.g.,
+       x86‐32, where both types are 32 bits), you may be able to get away with
+       passing pointers as arguments to mmaakkeeccoonntteexxtt() following _a_r_g_c.
+       However, doing this is not guaranteed to be portable, is undefined
+       according to the standards, and won’t work on architectures where
+       pointers are larger than _i_n_ts.  Nevertheless, starting with glibc 2.8,
+       glibc makes some changes to mmaakkeeccoonntteexxtt(), to permit this on some
+       64‐bit architectures (e.g., x86‐64).
+
+EEXXAAMMPPLLEESS
+       The example program below demonstrates the use of ggeettccoonntteexxtt(3),
+       mmaakkeeccoonntteexxtt(), and sswwaappccoonntteexxtt().  Running the program produces the
+       following output:
+
+           $ ..//aa..oouutt
+           main: swapcontext(&uctx_main, &uctx_func2)
+           func2: started
+           func2: swapcontext(&uctx_func2, &uctx_func1)
+           func1: started
+           func1: swapcontext(&uctx_func1, &uctx_func2)
+           func2: returning
+           func1: returning
+           main: exiting
+
+   PPrrooggrraamm ssoouurrccee
+
+       #include <err.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <ucontext.h>
+
+       static ucontext_t uctx_main, uctx_func1, uctx_func2;
+
+       static void
+       func1(void)
+       {
+           printf("%s: started\n", __func__);
+           printf("%s: swapcontext(&uctx_func1, &uctx_func2)\n", __func__);
+           if (swapcontext(&uctx_func1, &uctx_func2) == -1)
+               err(EXIT_FAILURE, "swapcontext");
+           printf("%s: returning\n", __func__);
+       }
+
+       static void
+       func2(void)
+       {
+           printf("%s: started\n", __func__);
+           printf("%s: swapcontext(&uctx_func2, &uctx_func1)\n", __func__);
+           if (swapcontext(&uctx_func2, &uctx_func1) == -1)
+               err(EXIT_FAILURE, "swapcontext");
+           printf("%s: returning\n", __func__);
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           char func1_stack[16384];
+           char func2_stack[16384];
+
+           if (getcontext(&uctx_func1) == -1)
+               err(EXIT_FAILURE, "getcontext");
+           uctx_func1.uc_stack.ss_sp = func1_stack;
+           uctx_func1.uc_stack.ss_size = sizeof(func1_stack);
+           uctx_func1.uc_link = &uctx_main;
+           makecontext(&uctx_func1, func1, 0);
+
+           if (getcontext(&uctx_func2) == -1)
+               err(EXIT_FAILURE, "getcontext");
+           uctx_func2.uc_stack.ss_sp = func2_stack;
+           uctx_func2.uc_stack.ss_size = sizeof(func2_stack);
+           /* Successor context is f1(), unless argc > 1 */
+           uctx_func2.uc_link = (argc > 1) ? NULL : &uctx_func1;
+           makecontext(&uctx_func2, func2, 0);
+
+           printf("%s: swapcontext(&uctx_main, &uctx_func2)\n", __func__);
+           if (swapcontext(&uctx_main, &uctx_func2) == -1)
+               err(EXIT_FAILURE, "swapcontext");
+
+           printf("%s: exiting\n", __func__);
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       ssiiggaaccttiioonn(2), ssiiggaallttssttaacckk(2), ssiiggpprrooccmmaasskk(2), ggeettccoonntteexxtt(3),
+       ssiiggsseettjjmmpp(3)
+
+Linux man‐pages (unreleased)      2025‐08‐20                    _m_a_k_e_c_o_n_t_e_x_t(3)

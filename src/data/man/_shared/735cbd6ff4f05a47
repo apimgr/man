@@ -1,0 +1,142 @@
+LOADER_LUA(8)             BSD System Manager's Manual            LOADER_LUA(8)
+
+NNAAMMEE
+     llooaaddeerr__lluuaa — kernel bootstrapping final stage
+
+DDEESSCCRRIIPPTTIIOONN
+     The program called llooaaddeerr__lluuaa is the final stage of FreeBSD's kernel
+     bootstrapping process.  On IA32 (i386) architectures, it is a _B_T_X client.
+     It is linked statically to libsa(3) and usually located in the directory
+     _/_b_o_o_t.
+
+     It provides a scripting language that can be used to automate tasks, do
+     pre-configuration or assist in recovery procedures.  This scripting lan‐
+     guage is roughly divided in two main components.  The smaller one is a
+     set of commands designed for direct use by the casual user, called
+     "builtin commands" for historical reasons.  The main drive behind these
+     commands is user-friendliness.  The bigger component is the Lua inter‐
+     preter.
+
+     During initialization, llooaaddeerr__lluuaa probes for a console and sets the
+     _c_o_n_s_o_l_e variable, or sets it to serial console (“comconsole”) if the pre‐
+     vious boot stage used that.  If multiple consoles are selected, they are
+     listed separated by spaces.  Then, devices are probed, _c_u_r_r_d_e_v and
+     _l_o_a_d_d_e_v are set, and _L_I_N_E_S is set to 24.  Next, Lua is initialized, and
+     _/_b_o_o_t_/_l_u_a_/_l_o_a_d_e_r_._l_u_a is processed if it exists.  After that,
+     _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f is processed if available.
+
+     At this point, if an aauuttoobboooott has not been attempted, and if
+     _a_u_t_o_b_o_o_t___d_e_l_a_y is not set to “NO” (case insensitive), then an aauuttoobboooott is
+     attempted.  If the system gets past this point, _p_r_o_m_p_t is set and
+     llooaaddeerr__lluuaa enters interactive mode.  Please note that, historically, even
+     when _a_u_t_o_b_o_o_t___d_e_l_a_y is set to “0”, the user can interrupt the autoboot
+     process by pressing a key on the console while the kernel and modules are
+     being loaded.  To prevent this set _a_u_t_o_b_o_o_t___d_e_l_a_y to “-1”.  In this case
+     llooaaddeerr__lluuaa enters interactive mode only if aauuttoobboooott has failed.
+
+BBUUIILLTTIINN CCOOMMMMAANNDDSS
+     In llooaaddeerr__lluuaa, builtin commands take parameters from the command line.
+     Presently, the only way to call them from a script is by using _e_v_a_l_u_a_t_e
+     on a string.  If an error condition occurs, an exception is generated,
+     which can be intercepted using Lua exception handling.  If not inter‐
+     cepted, an error message is displayed and the interpreter's state is re‐
+     set, emptying the stack and restoring interpreting mode.
+
+     The commands are described in the loader_simp(8) “BUILTIN COMMANDS” sec‐
+     tion.
+
+   BBUUIILLTTIINN EENNVVIIRROONNMMEENNTT VVAARRIIAABBLLEESS
+     The environment variables common to all interpreters are described in the
+     loader_simp(8) “BUILTIN ENVIRONMENT VARIABLES” section.
+
+   BBUUIILLTTIINN PPAARRSSEERR
+     When a builtin command is executed, the rest of the line is taken as ar‐
+     guments, and it is processed by a special parser which is not used for
+     regular Lua commands.
+
+SSEECCUURRIITTYY
+     Access to the llooaaddeerr__lluuaa command line provides several ways of compromis‐
+     ing system security, including, but not limited to:
+
+     ••   Booting from removable storage, by setting the _c_u_r_r_d_e_v or _l_o_a_d_d_e_v
+         variables
+
+     ••   Executing a binary of choice, by setting the _i_n_i_t___p_a_t_h or _i_n_i_t___s_c_r_i_p_t
+         variables
+
+     ••   Overriding ACPI DSDT to inject arbitrary code into the ACPI subsystem
+
+     One can prevent unauthorized access to the llooaaddeerr__lluuaa command line by
+     setting the _p_a_s_s_w_o_r_d, or setting _a_u_t_o_b_o_o_t___d_e_l_a_y to -1.  See
+     loader.conf(5) for details.  In order for this to be effective, one
+     should also configure the firmware (BIOS or UEFI) to prevent booting from
+     unauthorized devices.
+
+MMDD
+     Memory disk (MD) can be used when the llooaaddeerr__lluuaa was compiled with
+     _M_D___I_M_A_G_E___S_I_Z_E.  The size of the memory disk is determined by
+     _M_D___I_M_A_G_E___S_I_Z_E.  If MD available, a file system can be embedded into the
+     llooaaddeerr__lluuaa with _/_s_y_s_/_t_o_o_l_s_/_e_m_b_e_d___m_f_s_._s_h.  Then, MD is probed and set to
+     _c_u_r_r_d_e_v during initialization.
+
+     Currently, MD is only supported in loader.efi(8).
+
+FFIILLEESS
+     /boot/loader                    llooaaddeerr__lluuaa itself.
+     /boot/defaults/loader.conf
+     /boot/lua/loader.lua            Loader init
+     /boot/loader.conf
+     /boot/loader.conf.local         llooaaddeerr__lluuaa configuration files, as de‐
+                                     scribed in loader.conf(5).
+
+EEXXAAMMPPLLEESS
+     Boot in single user mode:
+
+           boot -s
+
+     Load the kernel, a splash screen, and then autoboot in five seconds.  No‐
+     tice that a kernel must be loaded before any other llooaadd command is at‐
+     tempted.
+
+           load kernel
+           load splash_bmp
+           load -t splash_image_data /boot/chuckrulez.bmp
+           autoboot 5
+
+     Set the disk unit of the root device to 2, and then boot.  This would be
+     needed in a system with two IDE disks, with the second IDE disk hardwired
+     to ada2 instead of ada1.
+
+           set root_disk_unit=2
+           boot /boot/kernel/kernel
+
+     Set the default device used for loading a kernel from a ZFS filesystem:
+
+           set currdev=zfs:tank/ROOT/knowngood:
+
+EERRRROORRSS
+     The following values are thrown by llooaaddeerr__lluuaa:
+
+           100    Any type of error in the processing of a builtin.
+
+           -1     AAbboorrtt executed.
+
+           -2     AAbboorrtt"" executed.
+
+           -56    QQuuiitt executed.
+
+           -256   Out of interpreting text.
+
+           -257   Need more text to succeed -- will finish on next run.
+
+           -258   BByyee executed.
+
+           -259   Unspecified error.
+
+SSEEEE AALLSSOO
+     libsa(3), loader.conf(5), tuning(7), boot(8), btxld(8)
+
+HHIISSTTOORRYY
+     The llooaaddeerr__lluuaa first appeared in FreeBSD 12.0.
+
+BSD                           September 29, 2021                           BSD

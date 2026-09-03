@@ -1,0 +1,105 @@
+SYSCTL_ADD_OID(9)        BSD Kernel Developer's Manual       SYSCTL_ADD_OID(9)
+
+NNAAMMEE
+     ssyyssccttll__aadddd__ooiidd, ssyyssccttll__mmoovvee__ooiidd, ssyyssccttll__rreemmoovvee__ooiidd, ssyyssccttll__rreemmoovvee__nnaammee —
+     runtime sysctl tree manipulation
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssyyssccttll..hh>>
+
+     _s_t_r_u_c_t _s_y_s_c_t_l___o_i_d _*
+     ssyyssccttll__aadddd__ooiidd(_s_t_r_u_c_t _s_y_s_c_t_l___c_t_x___l_i_s_t _*_c_t_x,
+         _s_t_r_u_c_t _s_y_s_c_t_l___o_i_d___l_i_s_t _*_p_a_r_e_n_t, _i_n_t _n_u_m_b_e_r, _c_o_n_s_t _c_h_a_r _*_n_a_m_e,
+         _i_n_t _k_i_n_d, _v_o_i_d _*_a_r_g_1, _i_n_t_m_a_x___t _a_r_g_2,
+         _i_n_t _(_*_h_a_n_d_l_e_r_) _(_S_Y_S_C_T_L___H_A_N_D_L_E_R___A_R_G_S_), _c_o_n_s_t _c_h_a_r _*_f_o_r_m_a_t,
+         _c_o_n_s_t _c_h_a_r _*_d_e_s_c_r, _c_o_n_s_t _c_h_a_r _*_l_a_b_e_l);
+
+     _i_n_t
+     ssyyssccttll__mmoovvee__ooiidd(_s_t_r_u_c_t _s_y_s_c_t_l___o_i_d _*_o_i_d_p, _s_t_r_u_c_t _s_y_s_c_t_l___o_i_d___l_i_s_t _*_p_a_r_e_n_t);
+
+     _i_n_t
+     ssyyssccttll__rreemmoovvee__ooiidd(_s_t_r_u_c_t _s_y_s_c_t_l___o_i_d _*_o_i_d_p, _i_n_t _d_e_l, _i_n_t _r_e_c_u_r_s_e);
+
+     _i_n_t
+     ssyyssccttll__rreemmoovvee__nnaammee(_s_t_r_u_c_t _s_y_s_c_t_l___o_i_d _*_o_i_d_p, _c_o_n_s_t _c_h_a_r _*_n_a_m_e, _i_n_t _d_e_l,
+         _i_n_t _r_e_c_u_r_s_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     These functions provide the interface for creating and deleting sysctl
+     OIDs at runtime for example during the lifetime of a module.  The wrapper
+     macros defined by sysctl(9) are recommended when creating new OIDs.
+     ssyyssccttll__aadddd__ooiidd() should not be called directly from the code.
+
+     Dynamic OIDs of type CTLTYPE_NODE are reusable so that several code sec‐
+     tions can create and delete them, but in reality they are allocated and
+     freed based on their reference count.  As a consequence, it is possible
+     for two or more code sections to create partially overlapping trees that
+     they both can use.  It is not possible to create overlapping leaves, nor
+     to create different child types with the same name and parent.
+
+     The ssyyssccttll__aadddd__ooiidd() function creates a raw OID of any type and connects
+     it to its parent node, if any.  If the OID is successfully created, the
+     function returns a pointer to it else it returns NULL.  Many of the argu‐
+     ments for ssyyssccttll__aadddd__ooiidd() are common to the wrapper macros defined by
+     sysctl(9).
+
+     The ssyyssccttll__mmoovvee__ooiidd() function reparents an existing OID.  The OID is as‐
+     signed a new number as if it had been created with _n_u_m_b_e_r set to
+     OID_AUTO.
+
+     The ssyyssccttll__rreemmoovvee__ooiidd() function removes a dynamically created OID from
+     the tree and optionally freeing its resources.  It takes the following
+     arguments:
+
+     _o_i_d_p     A pointer to the dynamic OID to be removed.  If the OID is not
+              dynamic, or the pointer is NULL, the function returns EINVAL.
+
+     _d_e_l      If non-zero, ssyyssccttll__rreemmoovvee__ooiidd() will try to free the OID's re‐
+              sources when the reference count of the OID becomes zero.  How‐
+              ever, if _d_e_l is set to 0, the routine will only deregister the
+              OID from the tree, without freeing its resources.  This behav‐
+              iour is useful when the caller expects to rollback (possibly
+              partially failed) deletion of many OIDs later.
+
+     _r_e_c_u_r_s_e  If non-zero, attempt to remove the node and all its children.
+              If _r_e_c_u_r_s_e is set to 0, any attempt to remove a node that con‐
+              tains any children will result in a ENOTEMPTY error.  _W_A_R_N_I_N_G:
+              _u_s_e _r_e_c_u_r_s_i_v_e _d_e_l_e_t_i_o_n _w_i_t_h _e_x_t_r_e_m_e _c_a_u_t_i_o_n!  Normally it should
+              not be needed if contexts are used.  Contexts take care of
+              tracking inter-dependencies between users of the tree.  However,
+              in some extreme cases it might be necessary to remove part of
+              the subtree no matter how it was created, in order to free some
+              other resources.  Be aware, though, that this may result in a
+              system panic(9) if other code sections continue to use removed
+              subtrees.
+
+     The ssyyssccttll__rreemmoovvee__nnaammee() function looks up the child node matching the
+     _n_a_m_e argument and then invokes the ssyyssccttll__rreemmoovvee__ooiidd() function on that
+     node, passing along the _d_e_l and _r_e_c_u_r_s_e arguments.  If a node having the
+     specified name does not exist an error code of ENOENT is returned.  Else
+     the error code from ssyyssccttll__rreemmoovvee__ooiidd() is returned.
+
+     In most cases the programmer should use contexts, as described in
+     sysctl_ctx_init(9), to keep track of created OIDs, and to delete them
+     later in orderly fashion.
+
+SSEEEE AALLSSOO
+     sysctl(8), sysctl(9), sysctl_ctx_free(9), sysctl_ctx_init(9)
+
+HHIISSTTOORRYY
+     These functions first appeared in FreeBSD 4.2.
+
+AAUUTTHHOORRSS
+     Andrzej Bialecki <_a_b_i_a_l_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     Sharing nodes between many code sections causes interdependencies that
+     sometimes may lock the resources.  For example, if module A hooks up a
+     subtree to an OID created by module B, module B will be unable to delete
+     that OID.  These issues are handled properly by sysctl contexts.
+
+     Many operations on the tree involve traversing linked lists.  For this
+     reason, OID creation and removal is relatively costly.
+
+BSD                            December 13, 2016                           BSD

@@ -1,0 +1,217 @@
+_P_R_O_X_Y_M_A_P(8)                 System Manager’s Manual                _P_R_O_X_Y_M_A_P(8)
+
+NNAAMMEE
+       proxymap - Postfix lookup table proxy server
+
+SSYYNNOOPPSSIISS
+       pprrooxxyymmaapp [generic Postfix daemon options]
+
+DDEESSCCRRIIPPTTIIOONN
+       The  pprrooxxyymmaapp(8)  server  provides read-only or read-write table lookup
+       service to Postfix processes. These services are implemented with  dis‐
+       tinct service names: pprrooxxyymmaapp and pprrooxxyywwrriittee, respectively. The purpose
+       of these services is:
+
+       •      To  overcome  chroot  restrictions. For example, a chrooted SMTP
+              server needs access to the system passwd file in order to reject
+              mail for non-existent local addresses, but it is  not  practical
+              to  maintain  a copy of the passwd file in the chroot jail.  The
+              solution:
+
+              local_recipient_maps =
+                  proxy:unix:passwd.byname $alias_maps
+
+       •      To consolidate the number of open lookup tables by  sharing  one
+              open  table  among multiple processes. For example, making mysql
+              connections from every Postfix daemon process  results  in  "too
+              many connections" errors. The solution:
+
+              virtual_alias_maps =
+                  proxy:mysql:/etc/postfix/virtual_alias.cf
+
+              The  total  number  of  connections  is limited by the number of
+              proxymap server processes.
+
+       •      To provide single-updater functionality for lookup  tables  that
+              do  not  reliably  support multiple writers (i.e. all file-based
+              tables).
+
+       The pprrooxxyymmaapp(8) server implements the following requests:
+
+       ooppeenn _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e _f_l_a_g_s
+              Open the table with type _m_a_p_t_y_p_e and name _m_a_p_n_a_m_e, as controlled
+              by _f_l_a_g_s. The reply includes the  _m_a_p_t_y_p_e  dependent  flags  (to
+              distinguish  a  fixed string table from a regular expression ta‐
+              ble).
+
+       llooookkuupp _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e _f_l_a_g_s _k_e_y
+              Look up the data stored under the requested key.  The  reply  is
+              the  request completion status code and the lookup result value.
+              The _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e and _f_l_a_g_s are the same as with the ooppeenn  re‐
+              quest.
+
+       uuppddaattee _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e _f_l_a_g_s _k_e_y _v_a_l_u_e
+              Update  the  data  stored under the requested key.  The reply is
+              the request completion status  code.   The  _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e  and
+              _f_l_a_g_s are the same as with the ooppeenn request.
+
+              To  implement  single-updater maps, specify a process limit of 1
+              in the master.cf file entry for the pprrooxxyywwrriittee service.
+
+              This request is supported in Postfix 2.5 and later.
+
+       ddeelleettee _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e _f_l_a_g_s _k_e_y
+              Delete the data stored under the requested key.   The  reply  is
+              the  request  completion  status  code.  The _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e and
+              _f_l_a_g_s are the same as with the ooppeenn request.
+
+              This request is supported in Postfix 2.5 and later.
+
+       sseeqquueennccee _m_a_p_t_y_p_e_:_m_a_p_n_a_m_e _f_l_a_g_s _f_u_n_c_t_i_o_n
+              Iterate over the specified database.  The  _f_u_n_c_t_i_o_n  is  one  of
+              DICT_SEQ_FUN_FIRST  or  DICT_SEQ_FUN_NEXT.  The reply is the re‐
+              quest completion status code and a lookup key and result  value,
+              if found.
+
+              This request is supported in Postfix 2.9 and later.
+
+       The request completion status is one of OK, RETRY, NOKEY (lookup failed
+       because  the  key  was not found), BAD (malformed request) or DENY (the
+       table is not approved for proxy read or update access).
+
+       There is no cclloossee command, nor are  tables  implicitly  closed  when  a
+       client  disconnects.  The  purpose  is  to  share tables among multiple
+       client processes.
+
+SSEERRVVEERR PPRROOCCEESSSS MMAANNAAGGEEMMEENNTT
+       pprrooxxyymmaapp(8) servers run under control by the Postfix mmaasstteerr(8)  server.
+       Each  server  can  handle  multiple simultaneous connections.  When all
+       servers are busy while a client connects, the mmaasstteerr(8) creates  a  new
+       pprrooxxyymmaapp(8)  server process, provided that the process limit is not ex‐
+       ceeded.  Each server terminates after serving at least $$mmaaxx__uussee clients
+       or after $$mmaaxx__iiddllee seconds of idle time.
+
+SSEECCUURRIITTYY
+       The pprrooxxyymmaapp(8) server opens only tables  that  are  approved  via  the
+       pprrooxxyy__rreeaadd__mmaappss  or pprrooxxyy__wwrriittee__mmaappss configuration parameters, does not
+       talk to users, and can run at fixed low  privilege,  chrooted  or  not.
+       However,  running  the proxymap server chrooted severely limits usabil‐
+       ity, because it can open only chrooted tables.
+
+       The pprrooxxyymmaapp(8) server is not a trusted daemon process, and must not be
+       used to look up sensitive information such as UNIX user or  group  IDs,
+       mailbox file/directory names or external commands.
+
+       In  Postfix  version  2.2 and later, the proxymap client recognizes re‐
+       quests to access a table for security-sensitive purposes, and opens the
+       table directly. This allows the same main.cf setting to be used by sen‐
+       sitive and non-sensitive processes.
+
+       Postfix-writable data files should be stored under a  dedicated  direc‐
+       tory  that  is  writable  only  by the Postfix mail system, such as the
+       Postfix-owned ddaattaa__ddiirreeccttoorryy.
+
+       In particular, Postfix-writable files should never exist in  root-owned
+       directories.  That  would  open  up  a particular type of security hole
+       where ownership of a file or directory does not match the  provider  of
+       its content.
+
+DDIIAAGGNNOOSSTTIICCSS
+       Problems and transactions are logged to ssyyssllooggdd(8) or ppoossttllooggdd(8).
+
+BBUUGGSS
+       The  pprrooxxyymmaapp(8)  server provides service to multiple clients, and must
+       therefore not be used for tables that have high-latency lookups.
+
+       The pprrooxxyymmaapp(8) read-write service does not explicitly close lookup ta‐
+       bles (even if it did, this could not be relied on, because the  process
+       may  be  terminated  between  table  updates).   The read-write service
+       should therefore not be used with tables that leave persistent  storage
+       in  an  inconsistent  state  between updates (for example, CDB). Tables
+       that support "sync on update" should be safe (for example, Berkeley DB)
+       as should tables that are implemented by a real DBMS.
+
+CCOONNFFIIGGUURRAATTIIOONN PPAARRAAMMEETTEERRSS
+       On busy mail systems a long time may pass before  pprrooxxyymmaapp(8)  relevant
+       changes  to  mmaaiinn..ccff are picked up. Use the command "ppoossttffiixx rreellooaadd" to
+       speed up a change.
+
+       The text below provides only a parameter summary. See  ppoossttccoonnff(5)  for
+       more details including examples.
+
+       ccoonnffiigg__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The  default  location of the Postfix main.cf and master.cf con‐
+              figuration files.
+
+       ddaattaa__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The directory with Postfix-writable  data  files  (for  example:
+              caches, pseudo-random numbers).
+
+       ddaaeemmoonn__ttiimmeeoouutt ((1188000000ss))
+              How  much time a Postfix daemon process may take to handle a re‐
+              quest before it is terminated by a built-in watchdog timer.
+
+       iippcc__ttiimmeeoouutt ((33660000ss))
+              The time limit for sending or receiving information over an  in‐
+              ternal communication channel.
+
+       mmaaxx__iiddllee ((110000ss))
+              The  maximum  amount of time that an idle Postfix daemon process
+              waits for an incoming connection before terminating voluntarily.
+
+       mmaaxx__uussee ((110000))
+              The maximal number of incoming connections that a Postfix daemon
+              process will service before terminating voluntarily.
+
+       pprroocceessss__iidd ((rreeaadd--oonnllyy))
+              The process ID of a Postfix command or daemon process.
+
+       pprroocceessss__nnaammee ((rreeaadd--oonnllyy))
+              The process name of a Postfix command or daemon process.
+
+       pprrooxxyy__rreeaadd__mmaappss ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The lookup tables that the pprrooxxyymmaapp(8) server is allowed to  ac‐
+              cess for the read-only service.
+
+       Available in Postfix 2.5 and later:
+
+       ddaattaa__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The  directory  with  Postfix-writable  data files (for example:
+              caches, pseudo-random numbers).
+
+       pprrooxxyy__wwrriittee__mmaappss ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The lookup tables that the pprrooxxyymmaapp(8) server is allowed to  ac‐
+              cess for the read-write service.
+
+       Available in Postfix 3.3 and later:
+
+       sseerrvviiccee__nnaammee ((rreeaadd--oonnllyy))
+              The master.cf service name of a Postfix daemon process.
+
+SSEEEE AALLSSOO
+       postconf(5), configuration parameters
+       master(5), generic daemon options
+
+RREEAADDMMEE FFIILLEESS
+       Use  "ppoossttccoonnff rreeaaddmmee__ddiirreeccttoorryy" or "ppoossttccoonnff hhttmmll__ddiirreeccttoorryy" to locate
+       this information.
+       DATABASE_README, Postfix lookup table overview
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+HHIISSTTOORRYY
+       The proxymap service was introduced with Postfix 2.0.
+
+AAUUTTHHOORR((SS))
+       Wietse Venema
+       IBM T.J. Watson Research
+       P.O. Box 704
+       Yorktown Heights, NY 10598, USA
+
+       Wietse Venema
+       Google, Inc.
+       111 8th Avenue
+       New York, NY 10011, USA
+
+                                                                   _P_R_O_X_Y_M_A_P(8)

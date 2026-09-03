@@ -1,0 +1,131 @@
+MAC_LOMAC(4)             BSD Kernel Interfaces Manual             MAC_LOMAC(4)
+
+NNAAMMEE
+     mmaacc__lloommaacc — Low-watermark Mandatory Access Control data integrity policy
+
+SSYYNNOOPPSSIISS
+     To compile LOMAC into your kernel, place the following lines in your ker‐
+     nel configuration file:
+
+           ooppttiioonnss MMAACC
+           ooppttiioonnss MMAACC__LLOOMMAACC
+
+     Alternately, to load the LOMAC module at boot time, place the following
+     line in your kernel configuration file:
+
+           ooppttiioonnss MMAACC
+
+     and in loader.conf(5):
+
+           mac_lomac_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmaacc__lloommaacc policy module implements the LOMAC integrity model, which
+     protects the integrity of system objects and subjects by means of an in‐
+     formation flow policy coupled with the subject demotion via floating la‐
+     bels.  In LOMAC, all system subjects and objects are assigned integrity
+     labels, made up of one or more hierarchical grades, depending on their
+     types.  Together, these label elements permit all labels to be placed in
+     a partial order, with information flow protections and demotion decisions
+     based on a dominance operator describing the order.  The hierarchal grade
+     field or fields are expressed as a value between 0 and 65535, with higher
+     values reflecting higher integrity.
+
+     Three special label component values exist:
+
+           LLaabbeell    CCoommppaarriissoonn
+           low      dominated by all other labels
+           equal    equal to all other labels
+           high     dominates all other labels
+
+     The “high” label is assigned to system objects which affect the integrity
+     of the system as a whole.  The “equal” label may be used to indicate that
+     a particular subject or object is exempt from the LOMAC protections.  For
+     example, a label of “lomac/equal(equal-equal)” might be used on a subject
+     which is to be used to administratively relabel anything on the system.
+
+     Almost all system objects are tagged with a single, active label element,
+     reflecting the integrity of the object, or integrity of the data con‐
+     tained in the object.  File system objects may contain an additional aux‐
+     iliary label which determines the inherited integrity level for new files
+     created in a directory or the alternate label assumed by the subject upon
+     execution of an executable.  In general, objects labels are represented
+     in the following form:
+
+           lomac/_g_r_a_d_e[_a_u_x_g_r_a_d_e]
+
+     For example:
+
+           lomac/10[2]
+           lomac/low
+
+     Subject labels consist of three label elements: a single (active) label,
+     as well as a range of available labels.  This range is represented using
+     two ordered LOMAC label elements, and when set on a process, permits the
+     process to change its active label to any label of greater or equal in‐
+     tegrity to the low end of the range, and lesser or equal integrity to the
+     high end of the range.  In general, subject labels are represented in the
+     following form:
+
+           lomac/_s_i_n_g_l_e_g_r_a_d_e(_l_o_g_r_a_d_e-_h_i_g_r_a_d_e)
+
+     Modification of objects is restricted to access via the following compar‐
+     ison:
+
+           _s_u_b_j_e_c_t::_h_i_g_r_a_d_e ≥ _t_a_r_g_e_t_-_o_b_j_e_c_t::_g_r_a_d_e
+
+     Modification of subjects is the same, as the target subject's single
+     grade is the only element taken into comparison.
+
+     Demotion of a subject occurs when the following comparison is true:
+
+           _s_u_b_j_e_c_t::_s_i_n_g_l_e_g_r_a_d_e > _o_b_j_e_c_t::_g_r_a_d_e
+
+     When demotion occurs, the subject's _s_i_n_g_l_e_g_r_a_d_e and _h_i_g_r_a_d_e are reduced
+     to the object's grade, as well as the _l_o_g_r_a_d_e if necessary.  When the de‐
+     motion occurs, in addition to the permission of the subject being re‐
+     duced, shared mmap(2) objects which it has opened in its memory space may
+     be revoked according to the following sysctl(3) variables:
+
+     ••   _s_e_c_u_r_i_t_y_._m_a_c_._l_o_m_a_c_._r_e_v_o_c_a_t_i_o_n___e_n_a_b_l_e_d
+     ••   _s_e_c_u_r_i_t_y_._m_a_c_._e_n_f_o_r_c_e___v_m
+     ••   _s_e_c_u_r_i_t_y_._m_a_c_._m_m_a_p___r_e_v_o_c_a_t_i_o_n
+     ••   _s_e_c_u_r_i_t_y_._m_a_c_._m_m_a_p___r_e_v_o_c_a_t_i_o_n___v_i_a___c_o_w
+
+     Upon execution of a file, if the executable has an auxiliary label, and
+     that label is within the current range of _l_o_g_r_a_d_e-_h_i_g_r_a_d_e, it will be as‐
+     sumed by the subject immediately.  After this, demotion is performed just
+     as with any other read operation, with the executable as the target.
+     Through the use of auxiliary labels, programs may be initially executed
+     at a lower effective integrity level, while retaining the ability to
+     raise it again.
+
+     These rules prevent subjects of lower integrity from influencing the be‐
+     havior of higher integrity subjects by preventing the flow of informa‐
+     tion, and hence control, from allowing low integrity subjects to modify
+     either a high integrity object or high integrity subjects acting on those
+     objects.  LOMAC integrity policies may be appropriate in a number of en‐
+     vironments, both from the perspective of preventing corruption of the op‐
+     erating system, and corruption of user data if marked as higher integrity
+     than the attacker.
+
+     The LOMAC security model is quite similar to that of mac_biba(4) and
+     mac_mls(4) in various ways.  More background information on this can be
+     found in their respective man pages.
+
+SSEEEE AALLSSOO
+     mmap(2), sysctl(3), mac(4), mac_biba(4), mac_bsdextended(4), mac_ddb(4),
+     mac_ifoff(4), mac_mls(4), mac_none(4), mac_partition(4), mac_portacl(4),
+     mac_seeotheruids(4), mac_test(4), mac(9)
+
+HHIISSTTOORRYY
+     The mmaacc__lloommaacc policy module first appeared in FreeBSD 5.0 and was devel‐
+     oped by the TrustedBSD Project.
+
+AAUUTTHHOORRSS
+     This software was contributed to the FreeBSD Project by Network Asso‐
+     ciates Labs, the Security Research Division of Network Associates Inc.
+     under DARPA/SPAWAR contract N66001-01-C-8035 (“CBOSS”), as part of the
+     DARPA CHATS research program.
+
+BSD                            February 25, 2012                           BSD

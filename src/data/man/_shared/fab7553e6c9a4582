@@ -1,0 +1,1449 @@
+_s_e_c_c_o_m_p___u_n_o_t_i_f_y(2)            System Calls Manual           _s_e_c_c_o_m_p___u_n_o_t_i_f_y(2)
+
+NNAAMMEE
+       seccomp_unotify - Seccomp user‐space notification mechanism
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<lliinnuuxx//sseeccccoommpp..hh>>
+       ##iinncclluuddee <<lliinnuuxx//ffiilltteerr..hh>>
+       ##iinncclluuddee <<lliinnuuxx//aauuddiitt..hh>>
+
+       iinntt sseeccccoommpp((uunnssiiggnneedd iinntt _o_p_e_r_a_t_i_o_n,, uunnssiiggnneedd iinntt _f_l_a_g_s,, vvooiidd **_a_r_g_s));;
+
+       ##iinncclluuddee <<ssyyss//iiooccttll..hh>>
+
+       iinntt iiooccttll((iinntt _f_d,, SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV,,
+                 ssttrruucctt sseeccccoommpp__nnoottiiff **_r_e_q));;
+       iinntt iiooccttll((iinntt _f_d,, SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD,,
+                 ssttrruucctt sseeccccoommpp__nnoottiiff__rreesspp **_r_e_s_p));;
+       iinntt iiooccttll((iinntt _f_d,, SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD,, ____uu6644 **_i_d));;
+       iinntt iiooccttll((iinntt _f_d,, SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD,,
+                 ssttrruucctt sseeccccoommpp__nnoottiiff__aaddddffdd **_a_d_d_f_d));;
+
+DDEESSCCRRIIPPTTIIOONN
+       This  page  describes the user‐space notification mechanism provided by
+       the Secure Computing (seccomp) facility.  As well as  the  use  of  the
+       SSEECCCCOOMMPP__FFIILLTTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR  flag,  the SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF ac‐
+       tion value, and the SSEECCCCOOMMPP__GGEETT__NNOOTTIIFF__SSIIZZEESS operation described in sseecc‐‐
+       ccoommpp(2), this mechanism  involves  the  use  of  a  number  of  related
+       iiooccttll(2) operations (described below).
+
+   OOvveerrvviieeww
+       In  conventional  usage  of a seccomp filter, the decision about how to
+       treat a system call is made by the filter  itself.   By  contrast,  the
+       user‐space notification mechanism allows the seccomp filter to delegate
+       the  handling  of  the system call to another user‐space process.  Note
+       that this mechanism is explicitly nnoott intended as a method implementing
+       security policy; see NOTES.
+
+       In the discussion that follows, the thread(s) on which the seccomp fil‐
+       ter is installed is (are) referred to as the _t_a_r_g_e_t,  and  the  process
+       that  is  notified by the user‐space notification mechanism is referred
+       to as the _s_u_p_e_r_v_i_s_o_r.
+
+       A suitably privileged supervisor can use  the  user‐space  notification
+       mechanism to perform actions on behalf of the target.  The advantage of
+       the  user‐space notification mechanism is that the supervisor will usu‐
+       ally be able to retrieve information about the target and the performed
+       system call that the seccomp filter itself cannot.  (A  seccomp  filter
+       is limited in the information it can obtain and the actions that it can
+       perform because it is running on a virtual machine inside the kernel.)
+
+       An  overview of the steps performed by the target and the supervisor is
+       as follows:
+
+       (1)  The target establishes a seccomp filter in the usual  manner,  but
+            with two differences:
+
+            •  The  sseeccccoommpp(2)  _f_l_a_g_s  argument includes the flag SSEECCCCOOMMPP__FFIILL‐‐
+               TTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR.  Consequently, the return value  of  the
+               (successful) sseeccccoommpp(2) call is a new "listening" file descrip‐
+               tor  that can be used to receive notifications.  Only one "lis‐
+               tening" seccomp filter can be installed for a thread.
+
+            •  In cases where it is appropriate, the  seccomp  filter  returns
+               the  action  value  SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF.   This return value
+               will trigger a notification event.
+
+       (2)  In order that the supervisor can obtain  notifications  using  the
+            listening  file  descriptor, (a duplicate of) that file descriptor
+            must be passed from the target to  the  supervisor.   One  way  in
+            which  this could be done is by passing the file descriptor over a
+            UNIX domain socket connection between the target and the  supervi‐
+            sor  (using  the  SSCCMM__RRIIGGHHTTSS  ancillary  message type described in
+            uunniixx(7)).   Another  way  to  do  this  is  through  the  use   of
+            ppiiddffdd__ggeettffdd(2).
+
+       (3)  The  supervisor  will receive notification events on the listening
+            file descriptor.  These events are returned as structures of  type
+            _s_e_c_c_o_m_p___n_o_t_i_f.   Because  this  structure  and its size may evolve
+            over kernel versions, the supervisor must first determine the size
+            of this structure using the sseeccccoommpp(2) SSEECCCCOOMMPP__GGEETT__NNOOTTIIFF__SSIIZZEESS op‐
+            eration, which returns a structure  of  type  _s_e_c_c_o_m_p___n_o_t_i_f___s_i_z_e_s.
+            The supervisor allocates a buffer of size _s_e_c_c_o_m_p___n_o_t_i_f___s_i_z_e_s_._s_e_c_‐
+            _c_o_m_p___n_o_t_i_f  bytes to receive notification events.  In addition,the
+            supervisor  allocates   another   buffer   of   size   _s_e_c_c_o_m_p___n_o_‐
+            _t_i_f___s_i_z_e_s_._s_e_c_c_o_m_p___n_o_t_i_f___r_e_s_p bytes for the response (a _s_t_r_u_c_t _s_e_c_‐
+            _c_o_m_p___n_o_t_i_f___r_e_s_p structure) that it will provide to the kernel (and
+            thus the target).
+
+       (4)  The target then performs its workload, which includes system calls
+            that  will  be  controlled by the seccomp filter.  Whenever one of
+            these  system  calls  causes  the  filter  to  return   the   SSEECC‐‐
+            CCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF  action  value, the kernel does _n_o_t (yet) exe‐
+            cute the system call; instead, execution of  the  target  is  tem‐
+            porarily  blocked  inside the kernel (in a sleep state that is in‐
+            terruptible by signals) and a notification event is  generated  on
+            the listening file descriptor.
+
+       (5)  The  supervisor  can now repeatedly monitor the listening file de‐
+            scriptor for SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF‐triggered events.  To do this,
+            the supervisor uses the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV  iiooccttll(2)  opera‐
+            tion  to  read information about a notification event; this opera‐
+            tion blocks until an event is available.  The operation returns  a
+            _s_e_c_c_o_m_p___n_o_t_i_f  structure  containing  information about the system
+            call that is being attempted by  the  target.   (As  described  in
+            NOTES,  the  file descriptor can also be monitored with sseelleecctt(2),
+            ppoollll(2), or eeppoollll(7).)
+
+       (6)  The _s_e_c_c_o_m_p___n_o_t_i_f  structure  returned  by  the  SSEECCCCOOMMPP__IIOOCCTTLL__NNOO‐‐
+            TTIIFF__RREECCVV  operation  includes the same information (a _s_e_c_c_o_m_p___d_a_t_a
+            structure) that was passed to the seccomp filter.   This  informa‐
+            tion  allows the supervisor to discover the system call number and
+            the arguments for the target’s system call.  In addition, the  no‐
+            tification  event contains the ID of the thread that triggered the
+            notification and a unique cookie value that is used in  subsequent
+            SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD  and  SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD opera‐
+            tions.
+
+            The information in the notification can be used  to  discover  the
+            values  of  pointer arguments for the target’s system call.  (This
+            is something that can’t be done from  within  a  seccomp  filter.)
+            One  way in which the supervisor can do this is to open the corre‐
+            sponding _/_p_r_o_c_/tid_/_m_e_m file (see pprroocc(5)) and read bytes from  the
+            location  that  corresponds  to one of the pointer arguments whose
+            value is supplied in the notification event.  (The supervisor must
+            be careful to avoid a race condition that  can  occur  when  doing
+            this;  see  the  description  of  the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD
+            iiooccttll(2) operation below.)  In addition, the supervisor can access
+            other system information that is visible in user space  but  which
+            is not accessible from a seccomp filter.
+
+       (7)  Having obtained information as per the previous step, the supervi‐
+            sor  may  then choose to perform an action in response to the tar‐
+            get’s system call (which, as noted above, is not executed when the
+            seccomp filter returns the SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF action value).
+
+            One example use case here relates to containers.  The  target  may
+            be  located  inside  a container where it does not have sufficient
+            capabilities to mount a filesystem in the container’s mount  name‐
+            space.   However,  the supervisor may be a more privileged process
+            that does have sufficient capabilities to perform the mount opera‐
+            tion.
+
+       (8)  The supervisor then sends a response to the notification.  The in‐
+            formation in this response is used by the kernel  to  construct  a
+            return value for the target’s system call and provide a value that
+            will be assigned to the _e_r_r_n_o variable of the target.
+
+            The  response  is sent using the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD iiooccttll(2)
+            operation, which is used to transmit a  _s_e_c_c_o_m_p___n_o_t_i_f___r_e_s_p  struc‐
+            ture  to  the kernel.  This structure includes a cookie value that
+            the supervisor obtained in the _s_e_c_c_o_m_p___n_o_t_i_f structure returned by
+            the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV operation.  This cookie value  allows
+            the kernel to associate the response with the target.  This struc‐
+            ture must include the cookie value that the supervisor obtained in
+            the  _s_e_c_c_o_m_p___n_o_t_i_f  structure  returned  by  the SSEECCCCOOMMPP__IIOOCCTTLL__NNOO‐‐
+            TTIIFF__RREECCVV operation; the cookie allows the kernel to associate  the
+            response with the target.
+
+       (9)  Once the notification has been sent, the system call in the target
+            thread  unblocks,  returning  the information that was provided by
+            the supervisor in the notification response.
+
+       As a variation on the last two steps, the supervisor  can  send  a  re‐
+       sponse that tells the kernel that it should execute the target thread’s
+       system  call;  see  the discussion of SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE,
+       below.
+
+IIOOCCTTLL OOPPEERRAATTIIOONNSS
+       The following iiooccttll(2) operations are supported by  the  seccomp  user‐
+       space  notification file descriptor.  For each of these operations, the
+       first (file descriptor) argument of iiooccttll(2) is the listening file  de‐
+       scriptor  returned  by  a  call  to  sseeccccoommpp(2)  with  the SSEECCCCOOMMPP__FFIILL‐‐
+       TTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR flag.
+
+   SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV
+       The SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV operation (available since Linux  5.0)  is
+       used  to  obtain  a user‐space notification event.  If no such event is
+       currently pending, the operation blocks until  an  event  occurs.   The
+       third  iiooccttll(2)  argument  is a pointer to a structure of the following
+       form which contains information about the event.  This  structure  must
+       be zeroed out before the call.
+
+           struct seccomp_notif {
+               __u64  id;              /* Cookie */
+               __u32  pid;             /* TID of target thread */
+               __u32  flags;           /* Currently unused (0) */
+               struct seccomp_data data;   /* See seccomp(2) */
+           };
+
+       The fields in this structure are as follows:
+
+       _i_d     This  is  a  cookie  for  the notification.  Each such cookie is
+              guaranteed to be unique for the corresponding seccomp filter.
+
+              •  The cookie can be used with the  SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD
+                 iiooccttll(2) operation described below.
+
+              •  When returning a notification response to the kernel, the su‐
+                 pervisor  must  include  the  cookie value in the _s_e_c_c_o_m_p___n_o_‐
+                 _t_i_f___r_e_s_p structure that is specified as the argument  of  the
+                 SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD operation.
+
+       _p_i_d    This  is  the  thread ID of the target thread that triggered the
+              notification event.
+
+       _f_l_a_g_s  This is a bit mask of flags providing further information on the
+              event.  In the current  implementation,  this  field  is  always
+              zero.
+
+       _d_a_t_a   This  is  a  _s_e_c_c_o_m_p___d_a_t_a structure containing information about
+              the system call that triggered the notification.   This  is  the
+              same  structure  that is passed to the seccomp filter.  See sseecc‐‐
+              ccoommpp(2) for details of this structure.
+
+       On success, this operation returns 0; on failure, -1 is  returned,  and
+       _e_r_r_n_o  is  set to indicate the error.  This operation can fail with the
+       following errors:
+
+       EEIINNVVAALL (since Linux 5.5)
+              The _s_e_c_c_o_m_p___n_o_t_i_f structure that was passed  to  the  call  con‐
+              tained nonzero fields.
+
+       EENNOOEENNTT The target thread was killed by a signal as the notification in‐
+              formation  was being generated, or the target’s (blocked) system
+              call was interrupted by a signal handler.
+
+   SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD
+       The SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD operation (available since Linux  5.0)
+       is  used  to  check  that a notification ID returned by an earlier SSEECC‐‐
+       CCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV operation is still valid (i.e., that  the  target
+       still  exists  and  its  system call is still blocked waiting for a re‐
+       sponse).
+
+       The third iiooccttll(2) argument is a pointer to the cookie (_i_d) returned by
+       the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV operation.
+
+       This operation is necessary to avoid race  conditions  that  can  occur
+       when  the _p_i_d returned by the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV operation termi‐
+       nates, and that process ID is reused by another process.  An example of
+       this kind of race is the following
+
+       (1)  A notification is generated on the listening file descriptor.  The
+            returned _s_e_c_c_o_m_p___n_o_t_i_f contains the TID of the target  thread  (in
+            the _p_i_d field of the structure).
+
+       (2)  The target terminates.
+
+       (3)  Another  thread or process is created on the system that by chance
+            reuses the TID that was freed when the target terminated.
+
+       (4)  The supervisor ooppeenn(2)s the _/_p_r_o_c_/tid_/_m_e_m file  for  the  TID  ob‐
+            tained  in step 1, with the intention of (say) inspecting the mem‐
+            ory location(s) that containing the argument(s) of the system call
+            that triggered the notification in step 1.
+
+       In the above scenario, the risk is that the supervisor may try  to  ac‐
+       cess  the  memory of a process other than the target.  This race can be
+       avoided by following the  call  to  ooppeenn(2)  with  a  SSEECCCCOOMMPP__IIOOCCTTLL__NNOO‐‐
+       TTIIFF__IIDD__VVAALLIIDD  operation  to  verify that the process that generated the
+       notification is still alive.  (Note that if the target terminates after
+       the latter step, a subsequent rreeaadd(2) from the file descriptor may  re‐
+       turn 0, indicating end of file.)
+
+       See  NOTES  for  a  discussion  of  other cases where SSEECCCCOOMMPP__IIOOCCTTLL__NNOO‐‐
+       TTIIFF__IIDD__VVAALLIIDD checks must be performed.
+
+       On success (i.e., the notification ID is still valid),  this  operation
+       returns  0.  On failure (i.e., the notification ID is no longer valid),
+       -1 is returned, and _e_r_r_n_o is set to EENNOOEENNTT.
+
+   SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD
+       The SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD operation (available since Linux  5.0)  is
+       used  to  send  a  notification response back to the kernel.  The third
+       iiooccttll(2) argument of this structure is a pointer to a structure of  the
+       following form:
+
+           struct seccomp_notif_resp {
+               __u64 id;           /* Cookie value */
+               __s64 val;          /* Success return value */
+               __s32 error;        /* 0 (success) or negative error number */
+               __u32 flags;        /* See below */
+           };
+
+       The fields of this structure are as follows:
+
+       _i_d     This  is  the  cookie  value  that  was  obtained using the SSEECC‐‐
+              CCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV operation.  This cookie value  allows  the
+              kernel to correctly associate this response with the system call
+              that triggered the user‐space notification.
+
+       _v_a_l    This is the value that will be used for a spoofed success return
+              for the target’s system call; see below.
+
+       _e_r_r_o_r  This  is the value that will be used as the error number (_e_r_r_n_o)
+              for a spoofed error return for the target’s system call; see be‐
+              low.
+
+       _f_l_a_g_s  This is a bit mask that includes zero or more of  the  following
+              flags:
+
+              SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE (since Linux 5.5)
+                     Tell the kernel to execute the target’s system call.
+
+       Two kinds of response are possible:
+
+       •  A  response  to the kernel telling it to execute the target’s system
+          call.  In this  case,  the  _f_l_a_g_s  field  includes  SSEECCCCOOMMPP__UUSSEERR__NNOO‐‐
+          TTIIFF__FFLLAAGG__CCOONNTTIINNUUEE and the _e_r_r_o_r and _v_a_l fields must be zero.
+
+          This  kind  of  response can be useful in cases where the supervisor
+          needs to do deeper analysis of the target’s system call than is pos‐
+          sible from a seccomp filter (e.g., examining the values  of  pointer
+          arguments),  and,  having  decided that the system call does not re‐
+          quire emulation by the supervisor, the supervisor wants  the  system
+          call to be executed normally in the target.
+
+          The  SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE  flag should be used with cau‐
+          tion; see NOTES.
+
+       •  A spoofed return value for the target’s system call.  In this  case,
+          the  kernel does not execute the target’s system call, instead caus‐
+          ing the system call to return a spoofed value as specified by fields
+          of the _s_e_c_c_o_m_p___n_o_t_i_f___r_e_s_p structure.  The supervisor should set  the
+          fields of this structure as follows:
+
+          •  _f_l_a_g_s does not contain SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE.
+
+          •  _e_r_r_o_r  is  set either to 0 for a spoofed "success" return or to a
+             negative error number for a spoofed  "failure"  return.   In  the
+             former case, the kernel causes the target’s system call to return
+             the  value  specified  in the _v_a_l field.  In the latter case, the
+             kernel causes the target’s system call to return -1, and _e_r_r_n_o is
+             assigned the negated _e_r_r_o_r value.
+
+          •  _v_a_l is set to a value that will be used as the return value for a
+             spoofed "success" return for the target’s system call.  The value
+             in this field is ignored if the _e_r_r_o_r field  contains  a  nonzero
+             value.
+
+       On  success,  this operation returns 0; on failure, -1 is returned, and
+       _e_r_r_n_o is set to indicate the error.  This operation can fail  with  the
+       following errors:
+
+       EEIINNPPRROOGGRREESSSS
+              A response to this notification has already been sent.
+
+       EEIINNVVAALL An invalid value was specified in the _f_l_a_g_s _f_i_e_l_d_.
+
+       EEIINNVVAALL The  _f_l_a_g_s field contained SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE, and
+              the _e_r_r_o_r or _v_a_l field was not zero.
+
+       EENNOOEENNTT The blocked system call in the target has been interrupted by  a
+              signal handler or the target has terminated.
+
+   SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD
+       The SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD operation (available since Linux 5.9) al‐
+       lows the supervisor to install a file descriptor into the target’s file
+       descriptor  table.   Much like the use of SSCCMM__RRIIGGHHTTSS messages described
+       in uunniixx(7), this operation is semantically equivalent to duplicating  a
+       file  descriptor  from  the supervisor’s file descriptor table into the
+       target’s file descriptor table.
+
+       The SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD operation permits the supervisor to  emu‐
+       late  a target system call (such as ssoocckkeett(2) or ooppeennaatt(2)) that gener‐
+       ates a file descriptor.  The supervisor can  perform  the  system  call
+       that  generates  the file descriptor (and associated open file descrip‐
+       tion) and then use this operation to allocate a  file  descriptor  that
+       refers to the same open file description in the target.  (For an expla‐
+       nation of open file descriptions, see ooppeenn(2).)
+
+       Once  this  operation  has been performed, the supervisor can close its
+       copy of the file descriptor.
+
+       In the target, the received file descriptor  is  subject  to  the  same
+       Linux  Security Module (LSM) checks as are applied to a file descriptor
+       that is received in an SSCCMM__RRIIGGHHTTSS ancillary message.  If the  file  de‐
+       scriptor  refers  to a socket, it inherits the cgroup version 1 network
+       controller settings (_c_l_a_s_s_i_d and _n_e_t_p_r_i_o_i_d_x) of the target.
+
+       The third iiooccttll(2) argument is a pointer to a structure of the  follow‐
+       ing form:
+
+           struct seccomp_notif_addfd {
+               __u64 id;           /* Cookie value */
+               __u32 flags;        /* Flags */
+               __u32 srcfd;        /* Local file descriptor number */
+               __u32 newfd;        /* 0 or desired file descriptor
+                                      number in target */
+               __u32 newfd_flags;  /* Flags to set on target file
+                                      descriptor */
+           };
+
+       The fields in this structure are as follows:
+
+       _i_d     This  field  should be set to the notification ID (cookie value)
+              that was obtained via SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV.
+
+       _f_l_a_g_s  This field is a bit mask of flags that modify  the  behavior  of
+              the operation.  Currently, only one flag is supported:
+
+              SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEETTFFDD
+                     When  allocating  the  file descriptor in the target, use
+                     the file descriptor number specified in the _n_e_w_f_d field.
+
+              SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEENNDD (since Linux 5.14)
+                     Perform the equivalent of SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD  plus
+                     SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD as an atomic operation.  On suc‐
+                     cessful  invocation, the target process’s _e_r_r_n_o will be 0
+                     and the return value will be the file  descriptor  number
+                     that was allocated in the target.  If allocating the file
+                     descriptor  in the target fails, the target’s system call
+                     continues to be blocked until a  successful  response  is
+                     sent.
+
+       _s_r_c_f_d  This field should be set to the number of the file descriptor in
+              the supervisor that is to be duplicated.
+
+       _n_e_w_f_d  This  field determines which file descriptor number is allocated
+              in the target.  If the  SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEETTFFDD  flag  is  set,
+              then this field specifies which file descriptor number should be
+              allocated.   If  this  file descriptor number is already open in
+              the target, it is atomically closed and reused.  If the descrip‐
+              tor duplication fails due to an LSM check, or if _s_r_c_f_d is not  a
+              valid  file  descriptor,  the  file descriptor _n_e_w_f_d will not be
+              closed in the target process.
+
+              If the SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEETTFFDD flag it not set, then this field
+              must be 0, and the kernel allocates the lowest unused  file  de‐
+              scriptor number in the target.
+
+       _n_e_w_f_d___f_l_a_g_s
+              This  field is a bit mask specifying flags that should be set on
+              the file descriptor that is  received  in  the  target  process.
+              Currently, only the following flag is implemented:
+
+              OO__CCLLOOEEXXEECC
+                     Set  the close‐on‐exec flag on the received file descrip‐
+                     tor.
+
+       On success, this iiooccttll(2) call returns the number of the file  descrip‐
+       tor  that was allocated in the target.  Assuming that the emulated sys‐
+       tem call is one that returns a file descriptor as its  function  result
+       (e.g.,  ssoocckkeett(2)),  this  value  can  be  used  as  the  return  value
+       (_r_e_s_p_._v_a_l) that is supplied in the response that is  subsequently  sent
+       with the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD operation.
+
+       On error, -1 is returned and _e_r_r_n_o is set to indicate the error.
+
+       This operation can fail with the following errors:
+
+       EEBBAADDFF  Allocating  the  file  descriptor  in the target would cause the
+              target’s RRLLIIMMIITT__NNOOFFIILLEE limit to be exceeded (see ggeettrrlliimmiitt(2)).
+
+       EEBBUUSSYY  If the flag SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD is used, this means the op‐
+              eration can’t proceed until other SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD  re‐
+              quests are processed.
+
+       EEIINNPPRROOGGRREESSSS
+              The user‐space notification specified in the _i_d field exists but
+              has  not yet been fetched (by a SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV) or has
+              already been responded to (by a SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD).
+
+       EEIINNVVAALL An invalid flag was specified in the _f_l_a_g_s or _n_e_w_f_d___f_l_a_g_s field,
+              or the _n_e_w_f_d field is nonzero and  the  SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEETTFFDD
+              flag was not specified in the _f_l_a_g_s field.
+
+       EEMMFFIILLEE The  file descriptor number specified in _n_e_w_f_d exceeds the limit
+              specified in _/_p_r_o_c_/_s_y_s_/_f_s_/_n_r___o_p_e_n.
+
+       EENNOOEENNTT The blocked system call in the target has been interrupted by  a
+              signal handler or the target has terminated.
+
+       Here  is  some  sample code (with error handling omitted) that uses the
+       SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEETTFFDD operation (here, to emulate  a  call  to  ooppee‐‐
+       nnaatt(2)):
+
+           int fd, removeFd;
+
+           fd = openat(req->data.args[0], path, req->data.args[2],
+                           req->data.args[3]);
+
+           struct seccomp_notif_addfd addfd;
+           addfd.id = req->id;  /* Cookie from SECCOMP_IOCTL_NOTIF_RECV */
+           addfd.srcfd = fd;
+           addfd.newfd = 0;
+           addfd.flags = 0;
+           addfd.newfd_flags = O_CLOEXEC;
+
+           targetFd = ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_ADDFD, &addfd);
+
+           close(fd);          /* No longer needed in supervisor */
+
+           struct seccomp_notif_resp *resp;
+               /* Code to allocate ’resp’ omitted */
+           resp->id = req->id;
+           resp->error = 0;        /* "Success" */
+           resp->val = targetFd;
+           resp->flags = 0;
+           ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp);
+
+NNOOTTEESS
+       One  example  use  case for the user‐space notification mechanism is to
+       allow a container manager (a process which is  typically  running  with
+       more  privilege than the processes inside the container) to mount block
+       devices or create device nodes for the container.  The mount  use  case
+       provides  an  example  of  where  the  SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE
+       iiooccttll(2) operation is useful.  Upon receiving a  notification  for  the
+       mmoouunntt(2) system call, the container manager (the "supervisor") can dis‐
+       tinguish a request to mount a block filesystem (which would not be pos‐
+       sible  for a "target" process inside the container) and mount that file
+       system.  If, on the other hand, the container manager detects that  the
+       operation could be performed by the process inside the container (e.g.,
+       a  mount  of  a ttmmppffss(5) filesystem), it can notify the kernel that the
+       target process’s mmoouunntt(2) system call can continue.
+
+   sseelleecctt(())//ppoollll(())//eeppoollll sseemmaannttiiccss
+       The file descriptor returned when sseeccccoommpp(2) is employed with the  SSEECC‐‐
+       CCOOMMPP__FFIILLTTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR  flag  can  be  monitored  using ppoollll(2),
+       eeppoollll(7), and sseelleecctt(2).  These interfaces indicate that the  file  de‐
+       scriptor is ready as follows:
+
+       •  When  a  notification is pending, these interfaces indicate that the
+          file descriptor is readable.  Following such an indication, a subse‐
+          quent SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV iiooccttll(2) will  not  block,  returning
+          either information about a notification or else failing with the er‐
+          ror  EEIINNTTRR  if  the target has been killed by a signal or its system
+          call has been interrupted by a signal handler.
+
+       •  After  the  notification  has  been  received  (i.e.,  by  the  SSEECC‐‐
+          CCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV iiooccttll(2) operation), these interfaces indicate
+          that  the  file  descriptor is writable, meaning that a notification
+          response can be sent using the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD iiooccttll(2) op‐
+          eration.
+
+       •  After the last thread using  the  filter  has  terminated  and  been
+          reaped  using wwaaiittppiidd(2) (or similar), the file descriptor indicates
+          an end‐of‐file condition (readable in sseelleecctt(2); PPOOLLLLHHUUPP/EEPPOOLLLLHHUUPP in
+          ppoollll(2)/ eeppoollll__wwaaiitt(2)).
+
+   DDeessiiggnn ggooaallss;; uussee ooff SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE
+       The intent of the user‐space notification feature is  to  allow  system
+       calls  to  be  performed  on behalf of the target.  The target’s system
+       call should either be handled by the supervisor or allowed to  continue
+       normally  in  the  kernel (where standard security policies will be ap‐
+       plied).
+
+       NNoottee wweellll: this mechanism must not be used to make security policy  de‐
+       cisions about the system call, which would be inherently race‐prone for
+       reasons described next.
+
+       The  SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE  flag  must be used with caution.
+       If set by the supervisor, the target’s system call will continue.  How‐
+       ever, there is a time‐of‐check, time‐of‐use race  here,  since  an  at‐
+       tacker  could  exploit the interval of time where the target is blocked
+       waiting on the "continue" response to do things such as  rewriting  the
+       system call arguments.
+
+       Note  furthermore that a user‐space notifier can be bypassed if the ex‐
+       isting filters allow the use of sseeccccoommpp(2) or  pprrccttll(2)  to  install  a
+       filter  that returns an action value with a higher precedence than SSEECC‐‐
+       CCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF (see sseeccccoommpp(2)).
+
+       It should thus be absolutely clear that the seccomp user‐space  notifi‐
+       cation  mechanism  ccaann  nnoott be used to implement a security policy!  It
+       should only ever be used in scenarios where a more  privileged  process
+       supervises the system calls of a lesser privileged target to get around
+       kernel‐enforced  security  restrictions  when the supervisor deems this
+       safe.  In other words, in order to continue a system call, the supervi‐
+       sor should be sure that another security mechanism or the kernel itself
+       will sufficiently block the system call if its arguments are  rewritten
+       to something unsafe.
+
+   CCaavveeaattss rreeggaarrddiinngg tthhee uussee ooff
+       _/_p_r_o_c_/tid_/_m_e_m  The  discussion  above  noted  the  need to use the SSEECC‐‐
+       CCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD iiooccttll(2) when opening the _/_p_r_o_c_/tid_/_m_e_m  file
+       of  the  target to avoid the possibility of accessing the memory of the
+       wrong process in the event that the target terminates and its ID is re‐
+       cycled by  another  (unrelated)  thread.   However,  the  use  of  this
+       iiooccttll(2)  operation is also necessary in other situations, as explained
+       in the following paragraphs.
+
+       Consider the following scenario, where the supervisor tries to read the
+       pathname argument of a target’s blocked mmoouunntt(2) system call:
+
+       (1)  From one of its functions (_f_u_n_c_(_)),  the  target  calls  mmoouunntt(2),
+            which  triggers a user‐space notification and causes the target to
+            block.
+
+       (2)  The supervisor receives the notification, opens _/_p_r_o_c_/tid_/_m_e_m, and
+            (successfully) performs the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD check.
+
+       (3)  The target receives a signal, which causes the mmoouunntt(2) to abort.
+
+       (4)  The signal handler executes in the target, and returns.
+
+       (5)  Upon return from the handler, the execution of _f_u_n_c_(_) resumes, and
+            it returns (and perhaps other functions  are  called,  overwriting
+            the memory that had been used for the stack frame of _f_u_n_c_(_)).
+
+       (6)  Using  the  address  provided in the notification information, the
+            supervisor reads from the target’s memory location  that  used  to
+            contain the pathname.
+
+       (7)  The  supervisor  now  calls mmoouunntt(2) with some arbitrary bytes ob‐
+            tained in the previous step.
+
+       The conclusion from the above scenario  is  this:  since  the  target’s
+       blocked  system call may be interrupted by a signal handler, the super‐
+       visor must be written to expect that the target may abandon its  system
+       call at aannyy time; in such an event, any information that the supervisor
+       obtained from the target’s memory must be considered invalid.
+
+       To  prevent such scenarios, every read from the target’s memory must be
+       separated from use of the bytes  so  obtained  by  a  SSEECCCCOOMMPP__IIOOCCTTLL__NNOO‐‐
+       TTIIFF__IIDD__VVAALLIIDD  check.   In  the above example, the check would be placed
+       between the two final steps.  An example of such a check  is  shown  in
+       EXAMPLES.
+
+       Following on from the above, it should be clear that a write by the su‐
+       pervisor into the target’s memory can nneevveerr be considered safe.
+
+   CCaavveeaattss rreeggaarrddiinngg bblloocckkiinngg ssyysstteemm ccaallllss
+       Suppose  that  the  target  performs  a blocking system call (e.g., aacc‐‐
+       cceepptt(2)) that the supervisor should handle.  The supervisor might  then
+       in turn execute the same blocking system call.
+
+       In  this  scenario, it is important to note that if the target’s system
+       call is now interrupted by a signal, the supervisor is _n_o_t informed  of
+       this.   If the supervisor does not take suitable steps to actively dis‐
+       cover that the target’s system call has been canceled,  various  diffi‐
+       culties  can  occur.   Taking  the example of aacccceepptt(2), the supervisor
+       might remain blocked in its aacccceepptt(2) holding a port  number  that  the
+       target  (which,  after  the interruption by the signal handler, perhaps
+       closed its listening socket) might expect to be  able  to  reuse  in  a
+       bbiinndd(2) call.
+
+       Therefore,  when  the  supervisor  wishes  to emulate a blocking system
+       call, it must do so in such a way that it gets informed if the target’s
+       system call is interrupted by a signal handler.  For  example,  if  the
+       supervisor itself executes the same blocking system call, then it could
+       employ a separate thread that uses the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__IIDD__VVAALLIIDD op‐
+       eration  to  check  if  the target is still blocked in its system call.
+       Alternatively, in the  aacccceepptt(2)  example,  the  supervisor  might  use
+       ppoollll(2) to monitor both the notification file descriptor (so as to dis‐
+       cover  when  the  target’s aacccceepptt(2) call has been interrupted) and the
+       listening file descriptor (so as to know when a  connection  is  avail‐
+       able).
+
+       If  the  target’s  system call is interrupted, the supervisor must take
+       care to release resources (e.g., file descriptors) that it acquired  on
+       behalf of the target.
+
+   IInntteerraaccttiioonn wwiitthh SSAA__RREESSTTAARRTT ssiiggnnaall hhaannddlleerrss
+       Consider the following scenario:
+
+       (1)  The  target process has used ssiiggaaccttiioonn(2) to install a signal han‐
+            dler with the SSAA__RREESSTTAARRTT flag.
+
+       (2)  The target has made a system call that triggered a  seccomp  user‐
+            space  notification  and the target is currently blocked until the
+            supervisor sends a notification response.
+
+       (3)  A signal is delivered to the target and the signal handler is exe‐
+            cuted.
+
+       (4)  When (if) the supervisor attempts to send a notification response,
+            the SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__SSEENNDD iiooccttll(2)) operation  will  fail  with
+            the EENNOOEENNTT error.
+
+       In  this  scenario,  the  kernel will restart the target’s system call.
+       Consequently, the supervisor will receive another user‐space  notifica‐
+       tion.  Thus, depending on how many times the blocked system call is in‐
+       terrupted  by a signal handler, the supervisor may receive multiple no‐
+       tifications for the same instance of a system call in the target.
+
+       One oddity is that system call restarting as described in this scenario
+       will occur even for the blocking system calls listed in ssiiggnnaall(7)  that
+       would nneevveerr normally be restarted by the SSAA__RREESSTTAARRTT flag.
+
+       Furthermore, if the supervisor response is a file descriptor added with
+       SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__AADDDDFFDD, then the flag SSEECCCCOOMMPP__AADDDDFFDD__FFLLAAGG__SSEENNDD can be
+       used  to atomically add the file descriptor and return that value, mak‐
+       ing sure no file descriptors are inadvertently leaked into the target.
+
+BBUUGGSS
+       If a SSEECCCCOOMMPP__IIOOCCTTLL__NNOOTTIIFF__RREECCVV iiooccttll(2) operation is performed after the
+       target terminates, then the iiooccttll(2) call simply  blocks  (rather  than
+       returning an error to indicate that the target no longer exists).
+
+EEXXAAMMPPLLEESS
+       The  (somewhat  contrived)  program shown below demonstrates the use of
+       the interfaces described in this page.  The  program  creates  a  child
+       process  that  serves  as  the "target" process.  The child process in‐
+       stalls a seccomp filter that returns the SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF  action
+       value  if  a  call  is  made to mmkkddiirr(2).  The child process then calls
+       mmkkddiirr(2) once for each of the supplied command‐line arguments, and  re‐
+       ports the result returned by the call.  After processing all arguments,
+       the child process terminates.
+
+       The  parent process acts as the supervisor, listening for the notifica‐
+       tions that are generated when the target process calls mmkkddiirr(2).   When
+       such  a  notification occurs, the supervisor examines the memory of the
+       target process (using _/_p_r_o_c_/pid_/_m_e_m) to discover the pathname  argument
+       that was supplied to the mmkkddiirr(2) call, and performs one of the follow‐
+       ing actions:
+
+       •  If  the pathname begins with the prefix "/tmp/", then the supervisor
+          attempts to create the specified directory, and then spoofs a return
+          for the target process based on the return value of the supervisor’s
+          mmkkddiirr(2) call.  In the event that that call  succeeds,  the  spoofed
+          success return value is the length of the pathname.
+
+       •  If  the pathname begins with "./" (i.e., it is a relative pathname),
+          the supervisor sends a SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE response  to
+          the  kernel  to  say  that  the  kernel  should  execute  the target
+          process’s mmkkddiirr(2) call.
+
+       •  If the pathname begins with some other prefix, the supervisor spoofs
+          an error return for the target process, so that the target process’s
+          mmkkddiirr(2) call appears to fail with the error EEOOPPNNOOTTSSUUPPPP  ("Operation
+          not supported").  Additionally, if the specified pathname is exactly
+          "/bye", then the supervisor terminates.
+
+       This program can be used to demonstrate various aspects of the behavior
+       of  the  seccomp  user‐space  notification mechanism.  To help aid such
+       demonstrations, the program logs various messages to show the operation
+       of the target process (lines prefixed "T:")  and  the  supervisor  (in‐
+       dented lines prefixed "S:").
+
+       In  the  following example, the target attempts to create the directory
+       _/_t_m_p_/_x.  Upon receiving the notification, the  supervisor  creates  the
+       directory on the target’s behalf, and spoofs a success return to be re‐
+       ceived by the target process’s mmkkddiirr(2) call.
+
+           $ ..//sseeccccoommpp__uunnoottiiffyy //ttmmpp//xx;
+           T: PID = 23168
+
+           T: about to mkdir("/tmp/x")
+                   S: got notification (ID 0x17445c4a0f4e0e3c) for PID 23168
+                   S: executing: mkdir("/tmp/x", 0700)
+                   S: success! spoofed return = 6
+                   S: sending response (flags = 0; val = 6; error = 0)
+           T: SUCCESS: mkdir(2) returned 6
+
+           T: terminating
+                   S: target has terminated; bye
+
+       In  the  above  output,  note that the spoofed return value seen by the
+       target process is 6 (the length of the pathname _/_t_m_p_/_x), whereas a nor‐
+       mal mmkkddiirr(2) call returns 0 on success.
+
+       In the next example, the target attempts to create  a  directory  using
+       the relative pathname _._/_s_u_b.  Since this pathname starts with "./", the
+       supervisor  sends  a  SSEECCCCOOMMPP__UUSSEERR__NNOOTTIIFF__FFLLAAGG__CCOONNTTIINNUUEE  response to the
+       kernel,  and  the  kernel  then  (successfully)  executes  the   target
+       process’s mmkkddiirr(2) call.
+
+           $ ..//sseeccccoommpp__uunnoottiiffyy ..//ssuubb;
+           T: PID = 23204
+
+           T: about to mkdir("./sub")
+                   S: got notification (ID 0xddb16abe25b4c12) for PID 23204
+                   S: target can execute system call
+                   S: sending response (flags = 0x1; val = 0; error = 0)
+           T: SUCCESS: mkdir(2) returned 0
+
+           T: terminating
+                   S: target has terminated; bye
+
+       If  the  target  process attempts to create a directory with a pathname
+       that doesn’t start with "." and doesn’t begin with the prefix  "/tmp/",
+       then  the supervisor spoofs an error return (EEOOPPNNOOTTSSUUPPPP, "Operation not
+       supported") for the target’s mmkkddiirr(2) call (which is not executed):
+
+           $ ..//sseeccccoommpp__uunnoottiiffyy //xxxxxx;
+           T: PID = 23178
+
+           T: about to mkdir("/xxx")
+                   S: got notification (ID 0xe7dc095d1c524e80) for PID 23178
+                   S: spoofing error response (Operation not supported)
+                   S: sending response (flags = 0; val = 0; error = -95)
+           T: ERROR: mkdir(2): Operation not supported
+
+           T: terminating
+                   S: target has terminated; bye
+
+       In the next example, the target process attempts to create a  directory
+       with  the  pathname //ttmmpp//nnoossuucchhddiirr//bb.  Upon receiving the notification,
+       the supervisor attempts to create that directory, but the mmkkddiirr(2) call
+       fails because the directory  //ttmmpp//nnoossuucchhddiirr  does  not  exist.   Conse‐
+       quently,  the  supervisor  spoofs an error return that passes the error
+       that it received back to the target process’s mmkkddiirr(2) call.
+
+           $ ..//sseeccccoommpp__uunnoottiiffyy //ttmmpp//nnoossuucchhddiirr//bb;
+           T: PID = 23199
+
+           T: about to mkdir("/tmp/nosuchdir/b")
+                   S: got notification (ID 0x8744454293506046) for PID 23199
+                   S: executing: mkdir("/tmp/nosuchdir/b", 0700)
+                   S: failure! (errno = 2; No such file or directory)
+                   S: sending response (flags = 0; val = 0; error = -2)
+           T: ERROR: mkdir(2): No such file or directory
+
+           T: terminating
+                   S: target has terminated; bye
+
+       If the supervisor receives a notification and sees that the argument of
+       the target’s mmkkddiirr(2) is the string "/bye", then (as well  as  spoofing
+       an EEOOPPNNOOTTSSUUPPPP error), the supervisor terminates.  If the target process
+       subsequently executes another mmkkddiirr(2) that triggers its seccomp filter
+       to  return  the  SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF  action  value, then the kernel
+       causes the target process’s system call to fail with the  error  EENNOOSSYYSS
+       ("Function  not  implemented").   This is demonstrated by the following
+       example:
+
+           $ ..//sseeccccoommpp__uunnoottiiffyy //bbyyee //ttmmpp//yy;
+           T: PID = 23185
+
+           T: about to mkdir("/bye")
+                   S: got notification (ID 0xa81236b1d2f7b0f4) for PID 23185
+                   S: spoofing error response (Operation not supported)
+                   S: sending response (flags = 0; val = 0; error = -95)
+                   S: terminating **********
+           T: ERROR: mkdir(2): Operation not supported
+
+           T: about to mkdir("/tmp/y")
+           T: ERROR: mkdir(2): Function not implemented
+
+           T: terminating
+
+   PPrrooggrraamm ssoouurrccee
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <errno.h>
+       #include <fcntl.h>
+       #include <limits.h>
+       #include <linux/audit.h>
+       #include <linux/filter.h>
+       #include <linux/seccomp.h>
+       #include <signal.h>
+       #include <stdbool.h>
+       #include <stddef.h>
+       #include <stdint.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <string.h>
+       #include <sys/ioctl.h>
+       #include <sys/prctl.h>
+       #include <sys/socket.h>
+       #include <sys/stat.h>
+       #include <sys/syscall.h>
+       #include <sys/types.h>
+       #include <sys/un.h>
+       #include <unistd.h>
+
+       #define NITEMS(arr)  (sizeof(arr) / sizeof((arr)[0]))
+
+       /* Send the file descriptor 'fd' over the connected UNIX domain socket
+          'sockfd'.  Returns 0 on success, or -1 on error.  */
+
+       static int
+       sendfd(int sockfd, int fd)
+       {
+           int             data;
+           struct iovec    iov;
+           struct msghdr   msgh;
+           struct cmsghdr  *cmsgp;
+
+           /* Allocate a char array of suitable size to hold the ancillary data.
+              However, since this buffer is in reality a 'struct cmsghdr', use a
+              union to ensure that it is suitably aligned.  */
+           union {
+               char   buf[CMSG_SPACE(sizeof(int))];
+                               /* Space large enough to hold an 'int' */
+               struct cmsghdr align;
+           } controlMsg;
+
+           /* The 'msg_name' field can be used to specify the address of the
+              destination socket when sending a datagram.  However, we do not
+              need to use this field because 'sockfd' is a connected socket.  */
+
+           msgh.msg_name = NULL;
+           msgh.msg_namelen = 0;
+
+           /* On Linux, we must transmit at least one byte of real data in
+              order to send ancillary data.  We transmit an arbitrary integer
+              whose value is ignored by recvfd().  */
+
+           msgh.msg_iov = &iov;
+           msgh.msg_iovlen = 1;
+           iov.iov_base = &data;
+           iov.iov_len = sizeof(int);
+           data = 12345;
+
+           /* Set 'msghdr' fields that describe ancillary data */
+
+           msgh.msg_control = controlMsg.buf;
+           msgh.msg_controllen = sizeof(controlMsg.buf);
+
+           /* Set up ancillary data describing file descriptor to send */
+
+           cmsgp = CMSG_FIRSTHDR(&msgh);
+           cmsgp->cmsg_level = SOL_SOCKET;
+           cmsgp->cmsg_type = SCM_RIGHTS;
+           cmsgp->cmsg_len = CMSG_LEN(sizeof(int));
+           memcpy(CMSG_DATA(cmsgp), &fd, sizeof(int));
+
+           /* Send real plus ancillary data */
+
+           if (sendmsg(sockfd, &msgh, 0) == -1)
+               return -1;
+
+           return 0;
+       }
+
+       /* Receive a file descriptor on a connected UNIX domain socket.  Returns
+          the received file descriptor on success, or -1 on error.  */
+
+       static int
+       recvfd(int sockfd)
+       {
+           int            data, fd;
+           ssize_t        nr;
+           struct iovec   iov;
+           struct msghdr  msgh;
+
+           /* Allocate a char buffer for the ancillary data.  See the comments
+              in sendfd() */
+           union {
+               char   buf[CMSG_SPACE(sizeof(int))];
+               struct cmsghdr align;
+           } controlMsg;
+           struct cmsghdr *cmsgp;
+
+           /* The 'msg_name' field can be used to obtain the address of the
+              sending socket.  However, we do not need this information.  */
+
+           msgh.msg_name = NULL;
+           msgh.msg_namelen = 0;
+
+           /* Specify buffer for receiving real data */
+
+           msgh.msg_iov = &iov;
+           msgh.msg_iovlen = 1;
+           iov.iov_base = &data;       /* Real data is an 'int' */
+           iov.iov_len = sizeof(int);
+
+           /* Set 'msghdr' fields that describe ancillary data */
+
+           msgh.msg_control = controlMsg.buf;
+           msgh.msg_controllen = sizeof(controlMsg.buf);
+
+           /* Receive real plus ancillary data; real data is ignored */
+
+           nr = recvmsg(sockfd, &msgh, 0);
+           if (nr == -1)
+               return -1;
+
+           cmsgp = CMSG_FIRSTHDR(&msgh);
+
+           /* Check the validity of the 'cmsghdr' */
+
+           if (cmsgp == NULL
+               || cmsgp->cmsg_len != CMSG_LEN(sizeof(int))
+               || cmsgp->cmsg_level != SOL_SOCKET
+               || cmsgp->cmsg_type != SCM_RIGHTS)
+           {
+               errno = EINVAL;
+               return -1;
+           }
+
+           /* Return the received file descriptor to our caller */
+
+           memcpy(&fd, CMSG_DATA(cmsgp), sizeof(int));
+           return fd;
+       }
+
+       static void
+       sigchldHandler(int sig)
+       {
+           char msg[] = "\tS: target has terminated; bye\n";
+
+           write(STDOUT_FILENO, msg, sizeof(msg) - 1);
+           _exit(EXIT_SUCCESS);
+       }
+
+       static int
+       seccomp(unsigned int operation, unsigned int flags, void *args)
+       {
+           return syscall(SYS_seccomp, operation, flags, args);
+       }
+
+       /* The following is the x86-64-specific BPF boilerplate code for checking
+          that the BPF program is running on the right architecture + ABI.  At
+          completion of these instructions, the accumulator contains the system
+          call number.  */
+
+       /* For the x32 ABI, all system call numbers have bit 30 set */
+
+       #define X32_SYSCALL_BIT         0x40000000
+
+       #define X86_64_CHECK_ARCH_AND_LOAD_SYSCALL_NR \
+               BPF_STMT(BPF_LD | BPF_W | BPF_ABS, \
+                        (offsetof(struct seccomp_data, arch))), \
+               BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 0, 2), \
+               BPF_STMT(BPF_LD | BPF_W | BPF_ABS, \
+                        (offsetof(struct seccomp_data, nr))), \
+               BPF_JUMP(BPF_JMP | BPF_JGE | BPF_K, X32_SYSCALL_BIT, 0, 1), \
+               BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS)
+
+       /* installNotifyFilter() installs a seccomp filter that generates
+          user-space notifications (SECCOMP_RET_USER_NOTIF) when the process
+          calls mkdir(2); the filter allows all other system calls.
+
+          The function return value is a file descriptor from which the
+          user-space notifications can be fetched.  */
+
+       static int
+       installNotifyFilter(void)
+       {
+           int notifyFd;
+
+           struct sock_filter filter[] = {
+               X86_64_CHECK_ARCH_AND_LOAD_SYSCALL_NR,
+
+               /* mkdir() triggers notification to user-space supervisor */
+
+               BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_mkdir, 0, 1),
+               BPF_STMT(BPF_RET + BPF_K, SECCOMP_RET_USER_NOTIF),
+
+               /* Every other system call is allowed */
+
+               BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+           };
+
+           struct sock_fprog prog = {
+               .len = NITEMS(filter),
+               .filter = filter,
+           };
+
+           /* Install the filter with the SECCOMP_FILTER_FLAG_NEW_LISTENER flag;
+              as a result, seccomp() returns a notification file descriptor.  */
+
+           notifyFd = seccomp(SECCOMP_SET_MODE_FILTER,
+                              SECCOMP_FILTER_FLAG_NEW_LISTENER, &prog);
+           if (notifyFd == -1)
+               err(EXIT_FAILURE, "seccomp-install-notify-filter");
+
+           return notifyFd;
+       }
+
+       /* Close a pair of sockets created by socketpair() */
+
+       static void
+       closeSocketPair(int sockPair[2])
+       {
+           if (close(sockPair[0]) == -1)
+               err(EXIT_FAILURE, "closeSocketPair-close-0");
+           if (close(sockPair[1]) == -1)
+               err(EXIT_FAILURE, "closeSocketPair-close-1");
+       }
+
+       /* Implementation of the target process.  Create a child process that:
+
+          (1) installs a seccomp filter with the
+              SECCOMP_FILTER_FLAG_NEW_LISTENER flag;
+          (2) writes the seccomp notification file descriptor returned from
+              the previous step onto the UNIX domain socket, 'sockPair[0]';
+          (3) calls mkdir(2) for each element of 'argv'.
+
+          The function return value in the parent is the PID of the child
+          process; the child does not return from this function.  */
+
+       static pid_t
+       targetProcess(int sockPair[2], char *argv[])
+       {
+           int    notifyFd, s;
+           pid_t  targetPid;
+
+           targetPid = fork();
+
+           if (targetPid == -1)
+               err(EXIT_FAILURE, "fork");
+
+           if (targetPid > 0)          /* In parent, return PID of child */
+               return targetPid;
+
+           /* Child falls through to here */
+
+           printf("T: PID = %ld\n", (long) getpid());
+
+           /* Install seccomp filter(s) */
+
+           if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
+               err(EXIT_FAILURE, "prctl");
+
+           notifyFd = installNotifyFilter();
+
+           /* Pass the notification file descriptor to the tracing process over
+              a UNIX domain socket */
+
+           if (sendfd(sockPair[0], notifyFd) == -1)
+               err(EXIT_FAILURE, "sendfd");
+
+           /* Notification and socket FDs are no longer needed in target */
+
+           if (close(notifyFd) == -1)
+               err(EXIT_FAILURE, "close-target-notify-fd");
+
+           closeSocketPair(sockPair);
+
+           /* Perform a mkdir() call for each of the command-line arguments */
+
+           for (char **ap = argv; *ap != NULL; ap++) {
+               printf("\nT: about to mkdir(\"%s\")\n", *ap);
+
+               s = mkdir(*ap, 0700);
+               if (s == -1)
+                   perror("T: ERROR: mkdir(2)");
+               else
+                   printf("T: SUCCESS: mkdir(2) returned %d\n", s);
+           }
+
+           printf("\nT: terminating\n");
+           exit(EXIT_SUCCESS);
+       }
+
+       /* Check that the notification ID provided by a SECCOMP_IOCTL_NOTIF_RECV
+          operation is still valid.  It will no longer be valid if the target
+          process has terminated or is no longer blocked in the system call that
+          generated the notification (because it was interrupted by a signal).
+
+          This operation can be used when doing such things as accessing
+          /proc/PID files in the target process in order to avoid TOCTOU race
+          conditions where the PID that is returned by SECCOMP_IOCTL_NOTIF_RECV
+          terminates and is reused by another process.  */
+
+       static bool
+       cookieIsValid(int notifyFd, uint64_t id)
+       {
+           return ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_ID_VALID, &id) == 0;
+       }
+
+       /* Access the memory of the target process in order to fetch the
+          pathname referred to by the system call argument 'argNum' in
+          'req->data.args[]'.  The pathname is returned in 'path',
+          a buffer of 'size' bytes allocated by the caller.
+
+          Returns true if the pathname is successfully fetched, and false
+          otherwise.  For possible causes of failure, see the comments below.  */
+
+       static bool
+       getTargetPathname(struct seccomp_notif *req, int notifyFd,
+                         int argNum, char *path, size_t size)
+       {
+           int      procMemFd;
+           char     procMemPath[PATH_MAX];
+           ssize_t  nread;
+
+           snprintf(procMemPath, sizeof(procMemPath), "/proc/%d/mem", req->pid);
+
+           procMemFd = open(procMemPath, O_RDONLY | O_CLOEXEC);
+           if (procMemFd == -1)
+               return false;
+
+           /* Check that the process whose info we are accessing is still alive
+              and blocked in the system call that caused the notification.
+              If the SECCOMP_IOCTL_NOTIF_ID_VALID operation (performed in
+              cookieIsValid()) succeeded, we know that the /proc/PID/mem file
+              descriptor that we opened corresponded to the process for which we
+              received a notification.  If that process subsequently terminates,
+              then read() on that file descriptor will return 0 (EOF).  */
+
+           if (!cookieIsValid(notifyFd, req->id)) {
+               close(procMemFd);
+               return false;
+           }
+
+           /* Read bytes at the location containing the pathname argument */
+
+           nread = pread(procMemFd, path, size, req->data.args[argNum]);
+
+           close(procMemFd);
+
+           if (nread <= 0)
+               return false;
+
+           /* Once again check that the notification ID is still valid.  The
+              case we are particularly concerned about here is that just
+              before we fetched the pathname, the target's blocked system
+              call was interrupted by a signal handler, and after the handler
+              returned, the target carried on execution (past the interrupted
+              system call).  In that case, we have no guarantees about what we
+              are reading, since the target's memory may have been arbitrarily
+              changed by subsequent operations.  */
+
+           if (!cookieIsValid(notifyFd, req->id)) {
+               perror("\tS: notification ID check failed!!!");
+               return false;
+           }
+
+           /* Even if the target's system call was not interrupted by a signal,
+              we have no guarantees about what was in the memory of the target
+              process.  (The memory may have been modified by another thread, or
+              even by an external attacking process.) We therefore treat the
+              buffer returned by pread() as untrusted input.  The buffer should
+              contain a terminating null byte; if not, then we will trigger an
+              error for the target process.  */
+
+           if (strnlen(path, nread) < nread)
+               return true;
+
+           return false;
+       }
+
+       /* Allocate buffers for the seccomp user-space notification request and
+          response structures.  It is the caller's responsibility to free the
+          buffers returned via 'req' and 'resp'.  */
+
+       static void
+       allocSeccompNotifBuffers(struct seccomp_notif **req,
+                                struct seccomp_notif_resp **resp,
+                                struct seccomp_notif_sizes *sizes)
+       {
+           size_t  resp_size;
+
+           /* Discover the sizes of the structures that are used to receive
+              notifications and send notification responses, and allocate
+              buffers of those sizes.  */
+
+           if (seccomp(SECCOMP_GET_NOTIF_SIZES, 0, sizes) == -1)
+               err(EXIT_FAILURE, "seccomp-SECCOMP_GET_NOTIF_SIZES");
+
+           *req = malloc(sizes->seccomp_notif);
+           if (*req == NULL)
+               err(EXIT_FAILURE, "malloc-seccomp_notif");
+
+           /* When allocating the response buffer, we must allow for the fact
+              that the user-space binary may have been built with user-space
+              headers where 'struct seccomp_notif_resp' is bigger than the
+              response buffer expected by the (older) kernel.  Therefore, we
+              allocate a buffer that is the maximum of the two sizes.  This
+              ensures that if the supervisor places bytes into the response
+              structure that are past the response size that the kernel expects,
+              then the supervisor is not touching an invalid memory location.  */
+
+           resp_size = sizes->seccomp_notif_resp;
+           if (sizeof(struct seccomp_notif_resp) > resp_size)
+               resp_size = sizeof(struct seccomp_notif_resp);
+
+           *resp = malloc(resp_size);
+           if (*resp == NULL)
+               err(EXIT_FAILURE, "malloc-seccomp_notif_resp");
+
+       }
+
+       /* Handle notifications that arrive via the SECCOMP_RET_USER_NOTIF file
+          descriptor, 'notifyFd'.  */
+
+       static void
+       handleNotifications(int notifyFd)
+       {
+           bool                        pathOK;
+           char                        path[PATH_MAX];
+           struct seccomp_notif        *req;
+           struct seccomp_notif_resp   *resp;
+           struct seccomp_notif_sizes  sizes;
+
+           allocSeccompNotifBuffers(&req, &resp, &sizes);
+
+           /* Loop handling notifications */
+
+           for (;;) {
+
+               /* Wait for next notification, returning info in '*req' */
+
+               memset(req, 0, sizes.seccomp_notif);
+               if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_RECV, req) == -1) {
+                   if (errno == EINTR)
+                       continue;
+                   err(EXIT_FAILURE, "\tS: ioctl-SECCOMP_IOCTL_NOTIF_RECV");
+               }
+
+               printf("\tS: got notification (ID %#llx) for PID %d\n",
+                      req->id, req->pid);
+
+               /* The only system call that can generate a notification event
+                  is mkdir(2).  Nevertheless, we check that the notified system
+                  call is indeed mkdir() as kind of future-proofing of this
+                  code in case the seccomp filter is later modified to
+                  generate notifications for other system calls.  */
+
+               if (req->data.nr != SYS_mkdir) {
+                   printf("\tS: notification contained unexpected "
+                          "system call number; bye!!!\n");
+                   exit(EXIT_FAILURE);
+               }
+
+               pathOK = getTargetPathname(req, notifyFd, 0, path, sizeof(path));
+
+               /* Prepopulate some fields of the response */
+
+               resp->id = req->id;     /* Response includes notification ID */
+               resp->flags = 0;
+               resp->val = 0;
+
+               /* If getTargetPathname() failed, trigger an EINVAL error
+                  response (sending this response may yield an error if the
+                  failure occurred because the notification ID was no longer
+                  valid); if the directory is in /tmp, then create it on behalf
+                  of the supervisor; if the pathname starts with '.', tell the
+                  kernel to let the target process execute the mkdir();
+                  otherwise, give an error for a directory pathname in any other
+                  location.  */
+
+               if (!pathOK) {
+                   resp->error = -EINVAL;
+                   printf("\tS: spoofing error for invalid pathname (%s)\n",
+                          strerror(-resp->error));
+               } else if (strncmp(path, "/tmp/", strlen("/tmp/")) == 0) {
+                   printf("\tS: executing: mkdir(\"%s\", %#llo)\n",
+                          path, req->data.args[1]);
+
+                   if (mkdir(path, req->data.args[1]) == 0) {
+                       resp->error = 0;            /* "Success" */
+                       resp->val = strlen(path);   /* Used as return value of
+                                                      mkdir() in target */
+                       printf("\tS: success! spoofed return = %lld\n",
+                              resp->val);
+                   } else {
+
+                       /* If mkdir() failed in the supervisor, pass the error
+                          back to the target */
+
+                       resp->error = -errno;
+                       printf("\tS: failure! (errno = %d; %s)\n", errno,
+                              strerror(errno));
+                   }
+               } else if (strncmp(path, "./", strlen("./")) == 0) {
+                   resp->error = resp->val = 0;
+                   resp->flags = SECCOMP_USER_NOTIF_FLAG_CONTINUE;
+                   printf("\tS: target can execute system call\n");
+               } else {
+                   resp->error = -EOPNOTSUPP;
+                   printf("\tS: spoofing error response (%s)\n",
+                          strerror(-resp->error));
+               }
+
+               /* Send a response to the notification */
+
+               printf("\tS: sending response "
+                      "(flags = %#x; val = %lld; error = %d)\n",
+                      resp->flags, resp->val, resp->error);
+
+               if (ioctl(notifyFd, SECCOMP_IOCTL_NOTIF_SEND, resp) == -1) {
+                   if (errno == ENOENT)
+                       printf("\tS: response failed with ENOENT; "
+                              "perhaps target process's syscall was "
+                              "interrupted by a signal?\n");
+                   else
+                       perror("ioctl-SECCOMP_IOCTL_NOTIF_SEND");
+               }
+
+               /* If the pathname is just "/bye", then the supervisor breaks out
+                  of the loop and terminates.  This allows us to see what happens
+                  if the target process makes further calls to mkdir(2).  */
+
+               if (strcmp(path, "/bye") == 0)
+                   break;
+           }
+
+           free(req);
+           free(resp);
+           printf("\tS: terminating **********\n");
+           exit(EXIT_FAILURE);
+       }
+
+       /* Implementation of the supervisor process:
+
+          (1) obtains the notification file descriptor from 'sockPair[1]'
+          (2) handles notifications that arrive on that file descriptor.  */
+
+       static void
+       supervisor(int sockPair[2])
+       {
+           int notifyFd;
+
+           notifyFd = recvfd(sockPair[1]);
+
+           if (notifyFd == -1)
+               err(EXIT_FAILURE, "recvfd");
+
+           closeSocketPair(sockPair);  /* We no longer need the socket pair */
+
+           handleNotifications(notifyFd);
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           int               sockPair[2];
+           struct sigaction  sa;
+
+           setbuf(stdout, NULL);
+
+           if (argc < 2) {
+               fprintf(stderr, "At least one pathname argument is required\n");
+               exit(EXIT_FAILURE);
+           }
+
+           /* Create a UNIX domain socket that is used to pass the seccomp
+              notification file descriptor from the target process to the
+              supervisor process.  */
+
+           if (socketpair(AF_UNIX, SOCK_STREAM, 0, sockPair) == -1)
+               err(EXIT_FAILURE, "socketpair");
+
+           /* Create a child process--the "target"--that installs seccomp
+              filtering.  The target process writes the seccomp notification
+              file descriptor onto 'sockPair[0]' and then calls mkdir(2) for
+              each directory in the command-line arguments.  */
+
+           (void) targetProcess(sockPair, &argv[optind]);
+
+           /* Catch SIGCHLD when the target terminates, so that the
+              supervisor can also terminate.  */
+
+           sa.sa_handler = sigchldHandler;
+           sa.sa_flags = 0;
+           sigemptyset(&sa.sa_mask);
+           if (sigaction(SIGCHLD, &sa, NULL) == -1)
+               err(EXIT_FAILURE, "sigaction");
+
+           supervisor(sockPair);
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       iiooccttll(2), ppiiddffdd__ggeettffdd(2), ppiiddffdd__ooppeenn(2), sseeccccoommpp(2)
+
+       A further example program can be found in the kernel source  file  _s_a_m_‐
+       _p_l_e_s_/_s_e_c_c_o_m_p_/_u_s_e_r_‐_t_r_a_p_._c.
+
+Linux man‐pages (unreleased)      2025‐09‐21                _s_e_c_c_o_m_p___u_n_o_t_i_f_y(2)

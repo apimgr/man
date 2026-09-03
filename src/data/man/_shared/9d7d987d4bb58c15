@@ -1,0 +1,218 @@
+_M_E_M_C_A_C_H_E___T_A_B_L_E(5)             File Formats Manual            _M_E_M_C_A_C_H_E___T_A_B_L_E(5)
+
+NNAAMMEE
+       memcache_table - Postfix memcache client configuration
+
+SSYYNNOOPPSSIISS
+       ppoossttmmaapp --qq ""_s_t_r_i_n_g"" mmeemmccaacchhee:://eettcc//ppoossttffiixx//_f_i_l_e_n_a_m_e
+
+       ppoossttmmaapp --qq -- mmeemmccaacchhee:://eettcc//ppoossttffiixx//_f_i_l_e_n_a_m_e <<_i_n_p_u_t_f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+       The  Postfix  mail system uses optional tables for address rewriting or
+       mail routing. These tables are usually in ddbbmm or ddbb format.
+
+       Alternatively, lookup tables can be specified  as  memcache  instances.
+       To  use memcache lookups, define a memcache source as a lookup table in
+       main.cf, for example:
+
+           virtual_alias_maps = memcache:/etc/postfix/memcache-aliases.cf
+
+       The file /etc/postfix/memcache-aliases.cf has the same  format  as  the
+       Postfix main.cf file, and specifies the parameters described below.
+
+       The Postfix memcache client supports the lookup, update, delete and se‐
+       quence  (first/next)  operations.  The  sequence  operation  requires a
+       backup database that supports the operation.
+
+MMEEMMCCAACCHHEE MMAAIINN PPAARRAAMMEETTEERRSS
+       mmeemmccaacchhee ((ddeeffaauulltt:: iinneett::llooccaallhhoosstt::1111221111))
+              The memcache server (note: singular) that Postfix  will  try  to
+              connect  to.   For  a  TCP  server specify "inet:" followed by a
+              hostname or address, ":", and a port name or number.  Specify an
+              IPv6 address inside "[]".   For  a  UNIX-domain  server  specify
+              "unix:" followed by the socket pathname. Examples:
+
+                  memcache = inet:memcache.example.com:11211
+                  memcache = inet:127.0.0.1:11211
+                  memcache = inet:[fc00:8d00:189::3]:11211
+                  memcache = unix:/path/to/socket
+
+              NOTE:  to  access  a  UNIX-domain  socket  with  the proxymap(8)
+              server, the socket must be accessible by the unprivileged  post‐
+              fix user.
+
+       bbaacckkuupp ((ddeeffaauulltt:: uunnddeeffiinneedd))
+              An optional Postfix database that provides persistent backup for
+              the  memcache  database. The Postfix memcache client will update
+              the memcache database whenever it looks up or  changes  informa‐
+              tion  in the persistent database. Specify a Postfix "type:table"
+              database. Examples:
+
+                  # Non-shared postscreen cache.
+                  backup = btree:/var/lib/postfix/postscreen_cache_map
+
+                  # Shared postscreen cache for processes on the same host.
+                  backup = proxy:btree:/var/lib/postfix/postscreen_cache_map
+
+              Access to remote proxymap servers is under development.
+
+              NOTE 1: When sharing a  persistent  ppoossttssccrreeeenn(8)  or  vveerriiffyy(8)
+              cache,  disable automatic cache cleanup (set *_cache_cleanup_in‐
+              terval = 0) except with one Postfix instance that  will  be  re‐
+              sponsible for cache cleanup.
+
+              NOTE  2:  When multiple tables share the same memcache database,
+              each table should use the  kkeeyy__ffoorrmmaatt  feature  (see  below)  to
+              prepend its own unique string to the lookup key.  Otherwise, au‐
+              tomatic ppoossttssccrreeeenn(8) or vveerriiffyy(8) cache cleanup may not work.
+
+              NOTE  3:  When  the  backup  database  is accessed with "proxy:"
+              lookups, the full backup database name (including  the  "proxy:"
+              prefix)   must   be   specified   in   the   proxymap   server’s
+              proxy_read_maps  or  proxy_write_maps  setting   (depending   on
+              whether the access is read-only or read-write).
+
+       ffllaaggss ((ddeeffaauulltt:: 00))
+              Optional  flags  that should be stored along with a memcache up‐
+              date. The flags are ignored when looking up information.
+
+       ttttll ((ddeeffaauulltt:: 33660000))
+              The expiration time in seconds of memcache updates.
+
+              NOTE 1: When using a memcache table  as  ppoossttssccrreeeenn(8)  or  vveerr‐‐
+              iiffyy(8)   cache   without   persistent  backup,  specify  a  zero
+              *_cache_cleanup_interval value with all Postfix  instances  that
+              use  the  memcache,  and specify the largest ppoossttssccrreeeenn(8) *_ttl
+              value or vveerriiffyy(8) *_expire_time value as the  memcache  table’s
+              ttttll value.
+
+              NOTE  2:  According  to memcache protocol documentation, a value
+              greater than 30 days (2592000 seconds) specifies  absolute  UNIX
+              time. Smaller values are relative to the time of the update.
+
+MMEEMMCCAACCHHEE KKEEYY PPAARRAAMMEETTEERRSS
+       kkeeyy__ffoorrmmaatt ((ddeeffaauulltt:: %%ss))
+              Format  of  the lookup and update keys that the Postfix memcache
+              client sends to the memcache server.  By default, these are  the
+              same  as the lookup and update keys that the memcache client re‐
+              ceives from Postfix applications.
+
+              NOTE 1: The kkeeyy__ffoorrmmaatt feature is not used for  bbaacckkuupp  database
+              requests.
+
+              NOTE  2:  When multiple tables share the same memcache database,
+              each table should prepend its own unique string  to  the  lookup
+              key.   Otherwise,  automatic  ppoossttssccrreeeenn(8)  or  vveerriiffyy(8) cache
+              cleanup may not work.
+
+              Examples:
+
+                  key_format = aliases:%s
+                  key_format = verify:%s
+                  key_format = postscreen:%s
+
+              The kkeeyy__ffoorrmmaatt parameter supports the following ’%’ expansions:
+
+              %%%%     This is replaced by a literal ’%’ character.
+
+              %%ss     This is replaced by the memcache client input key.
+
+              %%uu     When the input key is an address of the form user@domain,
+                     %%uu is replaced by the SQL quoted local part  of  the  ad‐
+                     dress.   Otherwise,  %%uu  is replaced by the entire search
+                     string.  If the localpart is empty, a lookup is  silently
+                     suppressed  and  returns no results (an update is skipped
+                     with a warning).
+
+              %%dd     When the input key is an address of the form user@domain,
+                     %%dd is replaced by the domain part of the address.  Other‐
+                     wise, a lookup is silently suppressed and returns no  re‐
+                     sults (an update is skipped with a warning).
+
+              %%[[SSUUDD]] The upper-case equivalents of the above expansions behave
+                     in   the   kkeeyy__ffoorrmmaatt   parameter  identically  to  their
+                     lower-case counter-parts.
+
+              %%[[11--99]] The patterns %1, %2, ... %9 are replaced  by  the  corre‐
+                     sponding  most  significant  component of the input key’s
+                     domain. If the input key is  _u_s_e_r_@_m_a_i_l_._e_x_a_m_p_l_e_._c_o_m,  then
+                     %1 is ccoomm, %2 is eexxaammppllee and %3 is mmaaiill. If the input key
+                     is  unqualified or does not have enough domain components
+                     to satisfy  all  the  specified  patterns,  a  lookup  is
+                     silently  suppressed and returns no results (an update is
+                     skipped with a warning).
+
+       ddoommaaiinn ((ddeeffaauulltt:: nnoo ddoommaaiinn lliisstt))
+              This feature can  significantly  reduce  database  server  load.
+              Specify  a list of domain names, paths to files, or "type:table"
+              databases.  When specified, only  fully  qualified  search  keys
+              with  a *non-empty* localpart and a matching domain are eligible
+              for lookup or update: bare ’user’ lookups, bare  domain  lookups
+              and  "@domain" lookups are silently skipped (updates are skipped
+              with a warning).  Example:
+
+                  domain = example.com, hash:/etc/postfix/searchdomains
+
+MMEEMMCCAACCHHEE EERRRROORR CCOONNTTRROOLLSS
+       ddaattaa__ssiizzee__lliimmiitt ((ddeeffaauulltt:: 1100224400))
+              The maximal memcache reply data length in bytes.
+
+       lliinnee__ssiizzee__lliimmiitt ((ddeeffaauulltt:: 11002244))
+              The maximal memcache reply line length in bytes.
+
+       mmaaxx__ttrryy ((ddeeffaauulltt:: 22))
+              The number of times to try a memcache command before giving  up.
+              The  memcache  client does not retry a command when the memcache
+              server accepts no connection.
+
+       rreettrryy__ppaauussee ((ddeeffaauulltt:: 11))
+              The time in seconds before retrying a failed memcache command.
+
+       ttiimmeeoouutt ((ddeeffaauulltt:: 22))
+              The time limit for sending a memcache command and for  receiving
+              a memcache reply.
+
+BBUUGGSS
+       The  Postfix  memcache client cannot be used for security-sensitive ta‐
+       bles such as aalliiaass__mmaappss (these may contain "_|_c_o_m_m_a_n_d  and  "_/_f_i_l_e_/_n_a_m_e"
+       destinations),  or vviirrttuuaall__uuiidd__mmaappss, vviirrttuuaall__ggiidd__mmaappss and vviirrttuuaall__mmaaiill‐‐
+       bbooxx__mmaappss (these specify UNIX process privileges or "_/_f_i_l_e_/_n_a_m_e"  desti‐
+       nations).   In  a typical deployment a memcache database is writable by
+       any process that can talk to the memcache server;  in  contrast,  secu‐
+       rity-sensitive  tables must never be writable by the unprivileged Post‐
+       fix user.
+
+       The Postfix memcache client requires additional configuration when used
+       as ppoossttssccrreeeenn(8) or vveerriiffyy(8) cache.  For details see  the  bbaacckkuupp  and
+       ttttll  parameter  discussions  in  the  MEMCACHE  MAIN PARAMETERS section
+       above.
+
+SSEEEE AALLSSOO
+       postmap(1), Postfix lookup table manager
+       postconf(5), configuration parameters
+
+RREEAADDMMEE FFIILLEESS
+       Use "ppoossttccoonnff rreeaaddmmee__ddiirreeccttoorryy" or "ppoossttccoonnff hhttmmll__ddiirreeccttoorryy" to  locate
+       this information.
+       DATABASE_README, Postfix lookup table overview
+       MEMCACHE_README, Postfix memcache client guide
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+HHIISSTTOORRYY
+       Memcache support was introduced with Postfix version 2.9.
+
+AAUUTTHHOORR((SS))
+       Wietse Venema
+       IBM T.J. Watson Research
+       P.O. Box 704
+       Yorktown Heights, NY 10598, USA
+
+       Wietse Venema
+       Google, Inc.
+       111 8th Avenue
+       New York, NY 10011, USA
+
+                                                             _M_E_M_C_A_C_H_E___T_A_B_L_E(5)

@@ -1,0 +1,134 @@
+_m_e_m_f_d___s_e_c_r_e_t(2)               System Calls Manual              _m_e_m_f_d___s_e_c_r_e_t(2)
+
+NNAAMMEE
+       memfd_secret - create an anonymous RAM‐based file to access secret mem‐
+       ory regions
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__mmeemmffdd__sseeccrreett,, uunnssiiggnneedd iinntt _f_l_a_g_s));;
+
+       _N_o_t_e:  glibc  provides no wrapper for mmeemmffdd__sseeccrreett(), necessitating the
+       use of ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       mmeemmffdd__sseeccrreett() creates an anonymous RAM‐based file and returns  a  file
+       descriptor  that  refers  to it.  The file provides a way to create and
+       access memory regions with stronger  protection  than  usual  RAM‐based
+       files  and  anonymous memory mappings.  Once all open references to the
+       file are closed, it is automatically released.  The initial size of the
+       file is set to 0.  Following the call, the file size should be set  us‐
+       ing ffttrruunnccaattee(2).
+
+       The memory areas backing the file created with mmeemmffdd__sseeccrreett(2) are vis‐
+       ible  only  to  the  processes that have access to the file descriptor.
+       The memory region is removed from the kernel page tables and  only  the
+       page tables of the processes holding the file descriptor map the corre‐
+       sponding  physical memory.  (Thus, the pages in the region can’t be ac‐
+       cessed by the kernel itself, so that, for example, pointers to the  re‐
+       gion can’t be passed to system calls.)
+
+       The following values may be bitwise ORed in _f_l_a_g_s to control the behav‐
+       ior of mmeemmffdd__sseeccrreett():
+
+       FFDD__CCLLOOEEXXEECC
+              Set  the  close‐on‐exec  flag  on the new file descriptor, which
+              causes the region to be removed from the process  on  eexxeeccvvee(2).
+              See the description of the OO__CCLLOOEEXXEECC flag in ooppeenn(2)
+
+       As  its return value, mmeemmffdd__sseeccrreett() returns a new file descriptor that
+       refers to an anonymous file.  This file descriptor is opened  for  both
+       reading  and  writing  (OO__RRDDWWRR) and OO__LLAARRGGEEFFIILLEE is set for the file de‐
+       scriptor.
+
+       With respect to ffoorrkk(2) and eexxeeccvvee(2), the usual  semantics  apply  for
+       the  file descriptor created by mmeemmffdd__sseeccrreett().  A copy of the file de‐
+       scriptor is inherited by the child produced by ffoorrkk(2)  and  refers  to
+       the  same file.  The file descriptor is preserved across eexxeeccvvee(2), un‐
+       less the close‐on‐exec flag has been set.
+
+       The memory region is locked  into  memory  in  the  same  way  as  with
+       mmlloocckk(2),  so  that it will never be written into swap, and hibernation
+       is inhibited for as long  as  any  mmeemmffdd__sseeccrreett()  descriptions  exist.
+       However  the  implementation of mmeemmffdd__sseeccrreett() will not try to populate
+       the whole range during the mmmmaapp(2) call that attaches the  region  into
+       the process’s address space; instead, the pages are only actually allo‐
+       cated  as they are faulted in.  The amount of memory allowed for memory
+       mappings of the file descriptor obeys the same rules  as  mmlloocckk(2)  and
+       cannot exceed RRLLIIMMIITT__MMEEMMLLOOCCKK.
+
+RREETTUURRNN VVAALLUUEE
+       On success, mmeemmffdd__sseeccrreett() returns a new file descriptor.  On error, -1
+       is returned and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEIINNVVAALL _f_l_a_g_s included unknown bits.
+
+       EEMMFFIILLEE The per‐process limit on the number of open file descriptors has
+              been reached.
+
+       EEMMFFIILLEE The system‐wide limit on the total number of open files has been
+              reached.
+
+       EENNOOMMEEMM There was insufficient memory to create a new anonymous file.
+
+       EENNOOSSYYSS mmeemmffdd__sseeccrreett()  is  not implemented on this architecture, or has
+              not been enabled on the kernel command‐line  with  sseeccrreettmmeemm__eenn‐‐
+              aabbllee=1.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 5.14.
+
+       Before  Linux  6.5,  mmeemmffdd__sseeccrreett()  was  disabled  by default and only
+       available if the system administrator turned it on using "secretmem.en‐
+       able=y" kernel parameter.
+
+NNOOTTEESS
+       The mmeemmffdd__sseeccrreett() system  call  is  designed  to  allow  a  user‐space
+       process  to  create  a  range of memory that is inaccessible to anybody
+       else ‐ kernel included.  There is no 100% guarantee that  kernel  won’t
+       be able to access memory ranges backed by mmeemmffdd__sseeccrreett() in any circum‐
+       stances,  but  nevertheless,  it is much harder to exfiltrate data from
+       these regions.
+
+       mmeemmffdd__sseeccrreett() provides the following protections:
+
+       •  Enhanced protection (in conjunction with all the other in‐kernel at‐
+          tack prevention systems) against ROP attacks.  Absence  of  any  in‐
+          kernel primitive for accessing memory backed by mmeemmffdd__sseeccrreett() means
+          that  one‐gadget ROP attack can’t work to perform data exfiltration.
+          The attacker would need to find enough ROP  gadgets  to  reconstruct
+          the missing page table entries, which significantly increases diffi‐
+          culty of the attack, especially when other protections like the ker‐
+          nel  stack  size limit and address space layout randomization are in
+          place.
+
+       •  Prevent cross‐process user‐space memory exposures.   Once  a  region
+          for a mmeemmffdd__sseeccrreett() memory mapping is allocated, the user can’t ac‐
+          cidentally pass it into the kernel to be transmitted somewhere.  The
+          memory  pages  in  this region cannot be accessed via the direct map
+          and they are disallowed in get_user_pages.
+
+       •  Harden against exploited kernel flaws.  In order  to  access  memory
+          areas  backed  by mmeemmffdd__sseeccrreett(), a kernel‐side attack would need to
+          either walk the page tables and create new  ones,  or  spawn  a  new
+          privileged  user‐space process to perform secrets exfiltration using
+          ppttrraaccee(2).
+
+       To prevent potential data leaks of memory regions backed  by  mmeemmffdd__ssee‐‐
+       ccrreett()  from  a  hybernation image, hybernation is prevented when there
+       are active mmeemmffdd__sseeccrreett() users.
+
+SSEEEE AALLSSOO
+       ffccnnttll(2),  ffttrruunnccaattee(2),  mmlloocckk(2),  mmeemmffdd__ccrreeaattee(2),  mmmmaapp(2),   sseettrr‐‐
+       lliimmiitt(2)
+
+Linux man‐pages (unreleased)      2025‐05‐17                   _m_e_m_f_d___s_e_c_r_e_t(2)

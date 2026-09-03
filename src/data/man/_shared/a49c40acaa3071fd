@@ -1,0 +1,128 @@
+_E_V_P___K_D_F_‐_H_K_D_F(7)                     OpenSSL                    _E_V_P___K_D_F_‐_H_K_D_F(7)
+
+NNAAMMEE
+       EVP_KDF-HKDF - The HKDF EVP_KDF implementation
+
+DDEESSCCRRIIPPTTIIOONN
+       Support for computing the HHKKDDFF KDF through the EEVVPP__KKDDFF API.
+
+       The EVP_KDF-HKDF algorithm implements the HKDF key derivation function.
+       HKDF follows the "extract‐then‐expand" paradigm, where the KDF
+       logically consists of two modules. The first stage takes the input
+       keying material and "extracts" from it a fixed‐length pseudorandom key
+       K. The second stage "expands" the key K into several additional
+       pseudorandom keys (the output of the KDF).
+
+   IIddeennttiittyy
+       "HKDF" is the name for this implementation; it can be used with the
+       EEVVPP__KKDDFF__ffeettcchh(()) function.
+
+   SSuuppppoorrtteedd ppaarraammeetteerrss
+       The supported parameters are:
+
+       "properties" (OOSSSSLL__KKDDFF__PPAARRAAMM__PPRROOPPEERRTTIIEESS) <UTF8 string>
+       "digest" (OOSSSSLL__KKDDFF__PPAARRAAMM__DDIIGGEESSTT) <UTF8 string>
+       "key" (OOSSSSLL__KKDDFF__PPAARRAAMM__KKEEYY) <octet string>
+       "salt" (OOSSSSLL__KKDDFF__PPAARRAAMM__SSAALLTT) <octet string>
+           These parameters work as described in "PARAMETERS" in EEVVPP__KKDDFF(3).
+
+       "info" (OOSSSSLL__KKDDFF__PPAARRAAMM__IINNFFOO) <octet string>
+           This parameter sets the info value.  The length of the context info
+           buffer  cannot  exceed  1024 bytes; this should be more than enough
+           for any normal use of HKDF.
+
+       "mode" (OOSSSSLL__KKDDFF__PPAARRAAMM__MMOODDEE) <UTF8 string> or <integer>
+           This parameter sets the mode for the  HKDF  operation.   There  are
+           three modes that are currently defined:
+
+           "EXTRACT_AND_EXPAND" or EEVVPP__KKDDFF__HHKKDDFF__MMOODDEE__EEXXTTRRAACCTT__AANNDD__EEXXPPAANNDD
+               This  is  the  default  mode.   Calling EEVVPP__KKDDFF__ddeerriivvee(3) on an
+               EVP_KDF_CTX set up for HKDF will perform an extract followed by
+               an expand operation in one go.  The derived key  returned  will
+               be  the  result  after  the  expand operation. The intermediate
+               fixed‐length pseudorandom key K is not returned.
+
+               In this mode the digest, key, salt and info values must be  set
+               before a key is derived otherwise an error will occur.
+
+           "EXTRACT_ONLY" or EEVVPP__KKDDFF__HHKKDDFF__MMOODDEE__EEXXTTRRAACCTT__OONNLLYY
+               In  this  mode  calling EEVVPP__KKDDFF__ddeerriivvee(3) will just perform the
+               extract operation. The value returned will be the  intermediate
+               fixed‐length  pseudorandom  key  K.   The _k_e_y_l_e_n parameter must
+               match the size  of  K,  which  can  be  looked  up  by  calling
+               EEVVPP__KKDDFF__CCTTXX__ggeett__kkddff__ssiizzee(()) after setting the mode and digest.
+
+               The  digest,  key  and  salt values must be set before a key is
+               derived otherwise an error will occur.
+
+           "EXPAND_ONLY" or EEVVPP__KKDDFF__HHKKDDFF__MMOODDEE__EEXXPPAANNDD__OONNLLYY
+               In this mode calling EEVVPP__KKDDFF__ddeerriivvee(3) will  just  perform  the
+               expand   operation.   The  input  key  should  be  set  to  the
+               intermediate fixed‐length pseudorandom key K  returned  from  a
+               previous extract operation.
+
+               The  digest,  key  and  info values must be set before a key is
+               derived otherwise an error will occur.
+
+NNOOTTEESS
+       A context for HKDF can be obtained by calling:
+
+        EVP_KDF *kdf = EVP_KDF_fetch(NULL, "HKDF", NULL);
+        EVP_KDF_CTX *kctx = EVP_KDF_CTX_new(kdf);
+
+       The output length of an HKDF expand  operation  is  specified  via  the
+       _k_e_y_l_e_n   parameter  to  the  EEVVPP__KKDDFF__ddeerriivvee(3)  function.   When  using
+       EVP_KDF_HKDF_MODE_EXTRACT_ONLY the _k_e_y_l_e_n parameter must equal the size
+       of the intermediate fixed‐length pseudorandom key  otherwise  an  error
+       will  occur.   For that mode, the fixed output size can be looked up by
+       calling EEVVPP__KKDDFF__CCTTXX__ggeett__kkddff__ssiizzee(()) after setting the mode and digest on
+       the EEVVPP__KKDDFF__CCTTXX.
+
+EEXXAAMMPPLLEESS
+       This example derives  10  bytes  using  SHA-256  with  the  secret  key
+       "secret", salt value "salt" and info value "label":
+
+        EVP_KDF *kdf;
+        EVP_KDF_CTX *kctx;
+        unsigned char out[10];
+        OSSL_PARAM params[5], *p = params;
+
+        kdf = EVP_KDF_fetch(NULL, "HKDF", NULL);
+        kctx = EVP_KDF_CTX_new(kdf);
+        EVP_KDF_free(kdf);
+
+        *p++ = OSSL_PARAM_construct_utf8_string(OSSL_KDF_PARAM_DIGEST,
+                                                SN_sha256, strlen(SN_sha256));
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_KEY,
+                                                 "secret", (size_t)6);
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_INFO,
+                                                 "label", (size_t)5);
+        *p++ = OSSL_PARAM_construct_octet_string(OSSL_KDF_PARAM_SALT,
+                                                 "salt", (size_t)4);
+        *p = OSSL_PARAM_construct_end();
+        if (EVP_KDF_derive(kctx, out, sizeof(out), params) <= 0) {
+            error("EVP_KDF_derive");
+        }
+
+        EVP_KDF_CTX_free(kctx);
+
+CCOONNFFOORRMMIINNGG TTOO
+       RFC 5869
+
+SSEEEE AALLSSOO
+       EEVVPP__KKDDFF(3),           EEVVPP__KKDDFF__CCTTXX__nneeww(3),          EEVVPP__KKDDFF__CCTTXX__ffrreeee(3),
+       EEVVPP__KKDDFF__CCTTXX__ggeett__kkddff__ssiizzee(3),                 EEVVPP__KKDDFF__CCTTXX__sseett__ppaarraammss(3),
+       EEVVPP__KKDDFF__ddeerriivvee(3), "PARAMETERS" in EEVVPP__KKDDFF(3), EEVVPP__KKDDFF--TTLLSS1133__KKDDFF(7)
+
+HHIISSTTOORRYY
+       This functionality was added in OpenSSL 3.0.
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2016-2021 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in    the   file   LICENSE   in   the   source   distribution   or   at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐07                   _E_V_P___K_D_F_‐_H_K_D_F(7)

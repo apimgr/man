@@ -1,0 +1,125 @@
+KERN_TESTFRWK(9)         BSD Kernel Developer's Manual        KERN_TESTFRWK(9)
+
+NNAAMMEE
+     kkeerrnn__tteessttffrrwwkk — A kernel testing framework
+
+SSYYNNOOPPSSIISS
+     kldload kern_testfrwk
+
+DDEESSCCRRIIPPTTIIOONN
+     So what is this sys/tests directory in the kernel all about?
+
+     Have you ever wanted to test a part of the FreeBSD kernel in some way and
+     you had no real way from user-land to make what you want to occur happen?
+     Say an error path or situation where locking occurs in a particular man‐
+     ner that happens only once in a blue moon?
+
+     If so, then the kernel test framework is just what you are looking for.
+     It is designed to help you create the situation you want.
+
+     There are two components to the system: the test framework and your test.
+     This document will describe both components and use the test submitted
+     with the initial commit of this code to discuss the test
+     (callout_test(4)).  All of the tests become kernel loadable modules.  The
+     test you write should have a dependency on the test framework.  That way
+     it will be loaded automatically with your test.  For example, you can see
+     how to do this in the bottom of callout_test.c in
+     _s_y_s_/_t_e_s_t_s_/_c_a_l_l_o_u_t___t_e_s_t_/_c_a_l_l_o_u_t___t_e_s_t_._c.
+
+     The framework itself is in _s_y_s_/_t_e_s_t_s_/_f_r_a_m_e_w_o_r_k_/_k_e_r_n___t_e_s_t_f_r_w_k_._c.  Its job
+     is to manage the tests that are loaded.  (More than one can be loaded.)
+     The idea is pretty simple; you load the test framework and then load your
+     test.
+
+     When your test loads, you register your tests with the kernel test frame‐
+     work.  You do that through a call to kkeerrnn__tteessttffrraammeewwoorrkk__rreeggiisstteerr().  Usu‐
+     ally this is done at the module load event as shown below:
+
+                   switch (type) {
+                   case MOD_LOAD:
+                           err = kern_testframework_register("callout_test",
+                               run_callout_test);
+
+     Here the test is "callout_test" and it is registered to run the function
+     rruunn__ccaalllloouutt__tteesstt() passing it a _s_t_r_u_c_t _k_e_r_n___t_e_s_t _*_p_t_r.  The _k_e_r_n___t_e_s_t
+     structure is defined in _k_e_r_n___t_e_s_t_f_r_w_k_._h.
+
+           struct kern_test {
+                   char name[TEST_NAME_LEN];
+                   int num_threads;  /* Fill in how many threads you want */
+                   int tot_threads_running;       /* Private to framework */
+                   uint8_t test_options[TEST_OPTION_SPACE];
+           };
+
+     The user sends this structure down via a sysctl to start your test.  He
+     or she places the same name you registered ("callout_test" in our exam‐
+     ple) in the _n_a_m_e field.  The user can also set the number of threads to
+     run with _n_u_m___t_h_r_e_a_d_s.
+
+     The framework will start the requested number of kernel threads, all run‐
+     ning your test at the same time.  The user does not specify anything in
+     _t_o_t___t_h_r_e_a_d_s___r_u_n_n_i_n_g; it is private to the framework.  As the framework
+     calls each of your tests, it will set the _t_o_t___t_h_r_e_a_d_s___r_u_n_n_i_n_g to the in‐
+     dex of the thread that your call is made from.  For example, if the user
+     sets _n_u_m___t_h_r_e_a_d_s to 2, then the function rruunn__ccaalllloouutt__tteesstt() will be
+     called once with _t_o_t___t_h_r_e_a_d_s___r_u_n_n_i_n_g to 0, and a second time with
+     _t_o_t___t_h_r_e_a_d_s___r_u_n_n_i_n_g set to 1.
+
+     The _t_e_s_t___o_p_t_i_o_n_s field is a test-specific set of information that is an
+     opaque blob.  It is passed in from user space and has a maximum size of
+     256 bytes.  You can pass arbitrary test input in the space.  In the case
+     of callout_test we reshape that to:
+
+           struct callout_test {
+                   int number_of_callouts;
+                   int test_number;
+           };
+
+     So the first lines of rruunn__ccaalllloouutt__tteesstt() does the following to get at the
+     user specific data:
+
+                   struct callout_test *u;
+                   size_t sz;
+                   int i;
+                   struct callout_run *rn;
+                   int index = test->tot_threads_running;
+
+                   u = (struct callout_test *)test->test_options;
+
+     That way it can access: _u_-_>_t_e_s_t___n_u_m_b_e_r (there are two types of tests pro‐
+     vided with this test) and _u_-_>_n_u_m_b_e_r___o_f___c_a_l_l_o_u_t_s (how many simultaneous
+     callouts to run).
+
+     Your test can do anything with these bytes.  So the callout_test in ques‐
+     tion wants to create a situation where multiple callouts are all run,
+     that is the _n_u_m_b_e_r___o_f___c_a_l_l_o_u_t_s, and it tries to cancel the callout with
+     the new ccaalllloouutt__aassyynncc__ddrraaiinn().  The threads do this by acquiring the lock
+     in question, and then starting each of the callouts.  It waits for the
+     callouts to all go off (the executor spins waits).  This forces the situ‐
+     ation that the callouts have expired and are all waiting on the lock that
+     the executor holds.  After the callouts are all blocked, the executor
+     calls ccaalllloouutt__aassyynncc__ddrraaiinn() on each callout and releases the lock.
+
+     After all the callouts are done, a total status is printed showing the
+     results via printf(9).  The human tester can run dmesg(8) to see the re‐
+     sults.  In this case it is expected that if you are running test 0, all
+     the callouts expire on the same CPU so only one callout_drain function
+     would have been called.  the number of zero_returns should match the num‐
+     ber of callout_drains that were called, i.e., 1.  The one_returns should
+     be the remainder of the callouts.  If the test number was 1, the callouts
+     were spread across all CPUs.  The number of zero_returns will again match
+     the number of drain calls made which matches the number of CPUs that were
+     put in use.
+
+     More than one thread can be used with this test, though in the example
+     case it is probably not necessary.
+
+     You should not need to change the framework.  Just add tests and register
+     them after loading.
+
+AAUUTTHHOORRSS
+     The kernel test framework was written by Randall Stewart
+     <_r_r_s_@_F_r_e_e_B_S_D_._o_r_g> with help from
+     John Mark Gurney <_j_m_g_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            November 12, 2015                           BSD

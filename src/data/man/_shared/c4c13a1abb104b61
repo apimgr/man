@@ -1,0 +1,125 @@
+NG_VJC(4)                BSD Kernel Interfaces Manual                NG_VJC(4)
+
+NNAAMMEE
+     nngg__vvjjcc — Van Jacobson compression netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn__ssyyssttmm..hh>>
+     ##iinncclluuddee <<nneettiinneett//iipp..hh>>
+     ##iinncclluuddee <<nneett//ssllccoommpprreessss..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__vvjjcc..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The vvjjcc node type performs Van Jacobson compression, which is used over
+     PPP, SLIP, and other point-to-point IP connections to compress TCP packet
+     headers.  The ip hook represents the uncompressed side of the node, while
+     the vjcomp, vjuncomp, and vjip hooks represent the compressed side of the
+     node.  Packets received on the ip will be compressed or passed through as
+     appropriate.  Packets received on the other three hooks will be uncom‐
+     pressed as appropriate.  This node also supports “always pass through”
+     mode in either direction.
+
+     Van Jacobson compression only applies to TCP packets.  Only “normal”
+     (i.e., common case) TCP packets are actually compressed.  These are out‐
+     put on the vjcomp hook.  Other TCP packets are run through the state ma‐
+     chine but not compressed; these appear on the vjuncomp hook.  Other non-
+     TCP IP packets are forwarded unchanged to vjip.
+
+     When connecting to a ng_ppp(4) node, the ip, vjuncomp, vjcomp, and vjip
+     hooks should be connected to the ng_ppp(4) node's vjc_ip, vjc_vjcomp,
+     vjc_vjuncomp, and vjc_ip hooks, respectively.
+
+HHOOOOKKSS
+     This node type supports the following hooks:
+
+     _i_p        Upstream (uncompressed) IP packets.
+
+     _v_j_c_o_m_p    Downstream compressed TCP packets.
+
+     _v_j_u_n_c_o_m_p  Downstream uncompressed TCP packets.
+
+     _v_j_i_p      Downstream uncompressed IP packets.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_VJC_SET_CONFIG (sseettccoonnffiigg)
+          This command resets the compression state and configures it accord‐
+          ing to the supplied struct ngm_vjc_config argument.  This structure
+          contains the following fields:
+
+              struct ngm_vjc_config {
+                u_char   enableComp;    /* Enable compression */
+                u_char   enableDecomp;  /* Enable decompression */
+                u_char   maxChannel;    /* Number of outgoing channels - 1 */
+                u_char   compressCID;   /* OK to compress outgoing CID's */
+              };
+
+          When enableComp is set to zero, all packets received on the ip hook
+          are forwarded unchanged out the vjip hook.  Similarly, when
+          enableDecomp is set to zero, all packets received on the vjip hook
+          are forwarded unchanged out the ip hook, and packets are not ac‐
+          cepted on the vjcomp and vjuncomp hooks.  When a node is first cre‐
+          ated, both compression and decompression are disabled and the node
+          is therefore operating in bi-directional “pass through” mode.
+
+          When enabling compression, maxChannel should be set to the number of
+          outgoing compression channels minus one, and is a value between 3
+          and 15, inclusive.  The compressCID field indicates whether it is OK
+          to compress the CID header field for outgoing compressed TCP pack‐
+          ets.  This value should be zero unless either (a) it is not possible
+          for an outgoing frame to be lost, or (b) lost frames can be reliably
+          detected and immediately reported to the peer's decompression engine
+          (see NGM_VJC_RECV_ERROR below).
+
+     NGM_VJC_GET_STATE (ggeettssttaattee)
+          This command returns the node's current state described by the
+          struct slcompress structure, which is defined in <_n_e_t_/_s_l_c_o_m_p_r_e_s_s_._h>.
+
+     NGM_VJC_CLR_STATS (ccllrrssttaattss)
+          Clears the node statistics counters.  Statistics are also cleared
+          whenever the enableComp or enableDecomp fields are changed from zero
+          to one by a NGM_VJC_SET_CONFIG control message.
+
+     NGM_VJC_RECV_ERROR (rreeccvveerrrroorr)
+          When the peer has CID header field compression enabled, this message
+          must be sent to the local vvjjcc node immediately after detecting that
+          a received frame has been lost, due to a bad checksum or for any
+          other reason.  Failing to do this can result in corrupted TCP stream
+          data.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_iface(4), ng_ppp(4), ngctl(8)
+
+     V. Jacobson, _C_o_m_p_r_e_s_s_i_n_g _T_C_P_/_I_P _H_e_a_d_e_r_s, RFC 1144.
+
+     G. McGregor, _T_h_e _P_P_P _I_n_t_e_r_n_e_t _C_o_n_t_r_o_l _P_r_o_t_o_c_o_l _(_I_P_C_P_), RFC 1332.
+
+HHIISSTTOORRYY
+     The nngg__vvjjcc node type was implemented in FreeBSD 4.0.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     As the initialization routine in the kernel implementation of Van Jacob‐
+     son compression initializes both compression and decompression at once,
+     this node does not allow compression and decompression to be enabled in
+     separate operations.  In order to enable one when the other is already
+     enabled, first both must be disabled, then both enabled.  This of course
+     resets the node state.  This restriction may be lifted in a later ver‐
+     sion.
+
+     When built as a loadable kernel module, this module includes the file
+     _n_e_t_/_s_l_c_o_m_p_r_e_s_s_._c.  Although loading the module should fail if
+     _n_e_t_/_s_l_c_o_m_p_r_e_s_s_._c already exists in the kernel, currently it does not, and
+     the duplicate copies of the file do not interfere.  However, this may
+     change in the future.
+
+BSD                            January 19, 1999                            BSD

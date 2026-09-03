@@ -1,0 +1,765 @@
+PF(4)                    BSD Kernel Interfaces Manual                    PF(4)
+
+NNAAMMEE
+     ppff — packet filter
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ppff
+
+DDEESSCCRRIIPPTTIIOONN
+     Packet filtering takes place in the kernel.  A pseudo-device, _/_d_e_v_/_p_f,
+     allows userland processes to control the behavior of the packet filter
+     through an ioctl(2) interface.  There are commands to enable and disable
+     the filter, load rulesets, add and remove individual rules or state table
+     entries, and retrieve statistics.  The most commonly used functions are
+     covered by pfctl(8).
+
+     Operations loading or reading a ruleset that involve more than a single
+     ioctl(2) call require a so-called ttiicckkeett, which allows ppff to deal with
+     concurrent operations.  For certain ioctl(2) commands (currently
+     DIOCGETRULES) the number of tickets a program can get is limited.  The
+     programs must explicitly release their tickets using the DIOCXEND command
+     to avoid hitting the limit.  All tickets which are not freed by DIOCXEND
+     are released when the program closes _/_d_e_v_/_p_f.
+
+     Fields of ioctl(2) parameter structures that refer to packet data (like
+     addresses and ports) are generally expected in network byte-order.
+
+     Rules and address tables are contained in so-called _a_n_c_h_o_r_s.  When ser‐
+     vicing an ioctl(2) request, if the anchor field of the argument structure
+     is empty, the kernel will use the default anchor (i.e., the main ruleset)
+     in operations.  Anchors are specified by name and may be nested, with
+     components separated by ‘/’ characters, similar to how file system hier‐
+     archies are laid out.  The final component of the anchor path is the an‐
+     chor under which operations will be performed.  Anchor names with charac‐
+     ters after the terminating null byte are considered invalid; if used in
+     an ioctl, EINVAL will be returned.
+
+IIOOCCTTLL IINNTTEERRFFAACCEE
+     ppff supports the following ioctl(2) commands, available through
+     <_n_e_t_/_p_f_v_a_r_._h>:
+
+     DIOCSTART
+             Start the packet filter.
+
+     DIOCSTOP
+             Stop the packet filter.
+
+     DIOCADDRULE _s_t_r_u_c_t _p_f_i_o_c___r_u_l_e _*_p_r
+
+             struct pfioc_rule {
+                     u_int32_t       action;
+                     u_int32_t       ticket;
+                     u_int32_t       nr;
+                     char            anchor[PATH_MAX];
+                     char            anchor_call[PATH_MAX];
+                     struct pf_rule  rule;
+             };
+
+             Add _r_u_l_e at the end of the inactive ruleset.  This call requires
+             a _t_i_c_k_e_t obtained through a preceding DIOCXBEGIN call.  The op‐
+             tional _a_n_c_h_o_r name indicates the anchor in which to append the
+             rule.  _n_r and _a_c_t_i_o_n are ignored.
+
+     DIOCADDQUEUE _s_t_r_u_c_t _p_f_i_o_c___q_u_e_u_e _*_q
+             Add a queue.
+
+             struct pfioc_queue {
+                     u_int32_t               ticket;
+                     u_int                   nr;
+                     struct pf_queuespec     queue;
+             };
+
+     DIOCGETRULES _s_t_r_u_c_t _p_f_i_o_c___r_u_l_e _*_p_r
+             Get a _t_i_c_k_e_t for subsequent DIOCGETRULE calls and the number _n_r
+             of rules in the active ruleset.  The ticket should be released by
+             the DIOCXEND command.
+
+     DIOCGETRULE _s_t_r_u_c_t _p_f_i_o_c___r_u_l_e _*_p_r
+             Get a _r_u_l_e by its number _n_r using the _t_i_c_k_e_t obtained through a
+             preceding DIOCGETRULES call.  If _a_c_t_i_o_n is set to
+             PF_GET_CLR_CNTR, the per-rule statistics on the requested rule
+             are cleared.
+
+     DIOCGETQUEUES _s_t_r_u_c_t _p_f_i_o_c___q_u_e_u_e _*_p_q
+             Get a _t_i_c_k_e_t for subsequent DIOCGETQUEUE calls and the number _n_r
+             of queues in the active list.
+
+     DIOCGETQUEUE _s_t_r_u_c_t _p_f_i_o_c___q_u_e_u_e _*_p_q
+             Get the queueing discipline by its number _n_r using the _t_i_c_k_e_t ob‐
+             tained through a preceding DIOCGETQUEUES call.
+
+     DIOCGETQSTATS _s_t_r_u_c_t _p_f_i_o_c___q_s_t_a_t_s _*_p_q
+             Get the statistics on a queue.
+
+             struct pfioc_qstats {
+                     u_int32_t                ticket;
+                     u_int32_t                nr;
+                     struct pf_queuespec      queue;
+                     void                    *buf;
+                     int                      nbytes;
+             };
+
+             This call fills in a pointer to the buffer of statistics _b_u_f, of
+             length _n_b_y_t_e_s, for the queue specified by _n_r.
+
+     DIOCGETRULESETS _s_t_r_u_c_t _p_f_i_o_c___r_u_l_e_s_e_t _*_p_r
+
+             struct pfioc_ruleset {
+                     u_int32_t        nr;
+                     char             path[PATH_MAX];
+                     char             name[PF_ANCHOR_NAME_SIZE];
+             };
+
+             Get the number _n_r of rulesets (i.e., anchors) directly attached
+             to the anchor named by _p_a_t_h for use in subsequent DIOCGETRULESET
+             calls.  Nested anchors, since they are not directly attached to
+             the given anchor, will not be included.  This ioctl returns
+             EINVAL if the given anchor does not exist.
+
+     DIOCGETRULESET _s_t_r_u_c_t _p_f_i_o_c___r_u_l_e_s_e_t _*_p_r
+             Get a ruleset (i.e., an anchor) _n_a_m_e by its number _n_r from the
+             given anchor _p_a_t_h, the maximum number of which can be obtained
+             from a preceding DIOCGETRULESETS call.  This ioctl returns EINVAL
+             if the given anchor does not exist or EBUSY if another process is
+             concurrently updating a ruleset.
+
+     DIOCADDSTATE _s_t_r_u_c_t _p_f_i_o_c___s_t_a_t_e _*_p_s
+             Add a state entry.
+
+             struct pfioc_state {
+                     struct pfsync_state     state;
+             };
+
+     DIOCGETSTATE _s_t_r_u_c_t _p_f_i_o_c___s_t_a_t_e _*_p_s
+             Extract the entry identified by the _i_d and _c_r_e_a_t_o_r_i_d fields of
+             the _s_t_a_t_e structure from the state table.
+
+     DIOCKILLSTATES _s_t_r_u_c_t _p_f_i_o_c___s_t_a_t_e___k_i_l_l _*_p_s_k
+             Remove matching entries from the state table.  This ioctl returns
+             the number of killed states in _p_s_k___k_i_l_l_e_d.
+
+             struct pfioc_state_kill {
+                     struct pf_state_cmp     psk_pfcmp;
+                     sa_family_t             psk_af;
+                     int                     psk_proto;
+                     struct pf_rule_addr     psk_src;
+                     struct pf_rule_addr     psk_dst;
+                     char                    psk_ifname[IFNAMSIZ];
+                     char                    psk_label[PF_RULE_LABEL_SIZE];
+                     u_int                   psk_killed;
+                     u_int16_t               psk_rdomain;
+             };
+
+     DIOCCLRSTATES _s_t_r_u_c_t _p_f_i_o_c___s_t_a_t_e___k_i_l_l _*_p_s_k
+             Clear all states.  It works like DIOCKILLSTATES, but ignores all
+             fields of the _p_f_i_o_c___s_t_a_t_e___k_i_l_l structure, except _p_s_k___i_f_n_a_m_e.
+
+     DIOCGETSTATUS _s_t_r_u_c_t _p_f___s_t_a_t_u_s _*_s
+             Get the internal packet filter statistics.
+
+             struct pf_status {
+                     u_int64_t       counters[PFRES_MAX];
+                     u_int64_t       lcounters[LCNT_MAX];    /* limit counters */
+                     u_int64_t       fcounters[FCNT_MAX];
+                     u_int64_t       scounters[SCNT_MAX];
+                     u_int64_t       pcounters[2][2][3];
+                     u_int64_t       bcounters[2][2];
+                     u_int64_t       stateid;
+                     u_int64_t       syncookies_inflight[2]; /* unACKed SYNcookies */
+                     time_t          since;
+                     u_int32_t       running;
+                     u_int32_t       states;
+                     u_int32_t       states_halfopen;
+                     u_int32_t       src_nodes;
+                     u_int32_t       debug;
+                     u_int32_t       hostid;
+                     u_int32_t       reass;                  /* reassembly */
+                     u_int8_t        syncookies_active;
+                     u_int8_t        syncookies_mode;        /* never/always/adaptive */
+                     u_int8_t        pad[2];
+                     char            ifname[IFNAMSIZ];
+                     u_int8_t        pf_chksum[PF_MD5_DIGEST_LENGTH];
+             };
+
+     DIOCCLRSTATUS
+             Clear the internal packet filter statistics.
+
+     DIOCNATLOOK _s_t_r_u_c_t _p_f_i_o_c___n_a_t_l_o_o_k _*_p_n_l
+             Look up a state table entry by source and destination addresses
+             and ports.
+
+             struct pfioc_natlook {
+                     struct pf_addr   saddr;
+                     struct pf_addr   daddr;
+                     struct pf_addr   rsaddr;
+                     struct pf_addr   rdaddr;
+                     u_int16_t        rdomain;
+                     u_int16_t        rrdomain;
+                     u_int16_t        sport;
+                     u_int16_t        dport;
+                     u_int16_t        rsport;
+                     u_int16_t        rdport;
+                     sa_family_t      af;
+                     u_int8_t         proto;
+                     u_int8_t         direction;
+             };
+
+             This was primarily used to support transparent proxies with rdr-
+             to rules.  New proxies should use divert-to rules instead.  These
+             do not require access to the privileged _/_d_e_v_/_p_f device and pre‐
+             serve the original destination address for getsockname(2).  For
+             SOCK_DGRAM sockets, the ip(4) socket options IP_RECVDSTADDR and
+             IP_RECVDSTPORT can be used to retrieve the destination address
+             and port.
+
+     DIOCSETDEBUG _u___i_n_t_3_2___t _*_l_e_v_e_l
+             Set the debug level.  See the syslog(3) man page for a list of
+             valid debug levels.
+
+     DIOCGETSTATES _s_t_r_u_c_t _p_f_i_o_c___s_t_a_t_e_s _*_p_s
+             Get state table entries.
+
+             struct pfioc_states {
+                     size_t  ps_len;
+                     union {
+                             caddr_t              psu_buf;
+                             struct pfsync_state *psu_states;
+                     } ps_u;
+             #define ps_buf          ps_u.psu_buf
+             #define ps_states       ps_u.psu_states
+             };
+
+             If _p_s___l_e_n is non-zero on entry, as many states as possible that
+             can fit into this size will be copied into the supplied buffer
+             _p_s___s_t_a_t_e_s.  On exit, _p_s___l_e_n is always set to the total size re‐
+             quired to hold all state table entries (i.e., it is set to
+             sizeof(struct pfsync_state) * nr).
+
+     DIOCCHANGERULE _s_t_r_u_c_t _p_f_i_o_c___r_u_l_e _*_p_c_r
+             Add or remove the _r_u_l_e in the ruleset specified by _r_u_l_e_._a_c_t_i_o_n.
+
+             The type of operation to be performed is indicated by _a_c_t_i_o_n,
+             which can be any of the following:
+
+             enum    { PF_CHANGE_NONE, PF_CHANGE_ADD_HEAD, PF_CHANGE_ADD_TAIL,
+                       PF_CHANGE_ADD_BEFORE, PF_CHANGE_ADD_AFTER,
+                       PF_CHANGE_REMOVE, PF_CHANGE_GET_TICKET };
+
+             _t_i_c_k_e_t must be set to the value obtained with
+             PF_CHANGE_GET_TICKET for all actions except PF_CHANGE_GET_TICKET.
+             _a_n_c_h_o_r indicates to which anchor the operation applies.  _n_r indi‐
+             cates the rule number against which PF_CHANGE_ADD_BEFORE,
+             PF_CHANGE_ADD_AFTER, or PF_CHANGE_REMOVE actions are applied.
+
+     DIOCSETTIMEOUT _s_t_r_u_c_t _p_f_i_o_c___t_m _*_p_t
+
+             struct pfioc_tm {
+                     int              timeout;
+                     int              seconds;
+             };
+
+             Set the state timeout of _t_i_m_e_o_u_t to _s_e_c_o_n_d_s.  The old value will
+             be placed into _s_e_c_o_n_d_s.  For possible values of _t_i_m_e_o_u_t, consult
+             the PFTM_* values in <_n_e_t_/_p_f_v_a_r_._h>.
+
+     DIOCGETTIMEOUT _s_t_r_u_c_t _p_f_i_o_c___t_m _*_p_t
+             Get the state timeout of _t_i_m_e_o_u_t.  The value will be placed into
+             the _s_e_c_o_n_d_s field.
+
+     DIOCSETLIMIT _s_t_r_u_c_t _p_f_i_o_c___l_i_m_i_t _*_p_l
+             Set the hard limits on the memory pools used by the packet fil‐
+             ter.
+
+             struct pfioc_limit {
+                     int             index;
+                     unsigned        limit;
+             };
+
+             enum    { PF_LIMIT_STATES, PF_LIMIT_SRC_NODES, PF_LIMIT_FRAGS,
+                       PF_LIMIT_TABLES, PF_LIMIT_TABLE_ENTRIES, PF_LIMIT_PKTDELAY_PKTS,
+                       PF_LIMIT_ANCHORS, PF_LIMIT_MAX };
+
+     DIOCGETLIMIT _s_t_r_u_c_t _p_f_i_o_c___l_i_m_i_t _*_p_l
+             Get the hard _l_i_m_i_t for the memory pool indicated by _i_n_d_e_x.
+
+     DIOCRCLRTABLES _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Clear all tables.  All the ioctls that manipulate radix tables
+             use the same structure described below.  For DIOCRCLRTABLES,
+             _p_f_r_i_o___n_d_e_l contains on exit the number of tables deleted.
+
+             struct pfioc_table {
+                     struct pfr_table         pfrio_table;
+                     void                    *pfrio_buffer;
+                     int                      pfrio_esize;
+                     int                      pfrio_size;
+                     int                      pfrio_size2;
+                     int                      pfrio_nadd;
+                     int                      pfrio_ndel;
+                     int                      pfrio_nchange;
+                     int                      pfrio_flags;
+                     u_int32_t                pfrio_ticket;
+             };
+             #define pfrio_exists    pfrio_nadd
+             #define pfrio_nzero     pfrio_nadd
+             #define pfrio_nmatch    pfrio_nadd
+             #define pfrio_naddr     pfrio_size2
+             #define pfrio_setflag   pfrio_size2
+             #define pfrio_clrflag   pfrio_nadd
+
+     DIOCRADDTABLES _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Create one or more tables.  On entry, _p_f_r_i_o___b_u_f_f_e_r must point to
+             an array of _s_t_r_u_c_t _p_f_r___t_a_b_l_e containing at least _p_f_r_i_o___s_i_z_e ele‐
+             ments.  _p_f_r_i_o___e_s_i_z_e must be the size of _s_t_r_u_c_t _p_f_r___t_a_b_l_e.  On
+             exit, _p_f_r_i_o___n_a_d_d contains the number of tables effectively cre‐
+             ated.
+
+             struct pfr_table {
+                     char            pfrt_anchor[PATH_MAX];
+                     char            pfrt_name[PF_TABLE_NAME_SIZE];
+                     u_int32_t       pfrt_flags;
+                     u_int8_t        pfrt_fback;
+             };
+
+     DIOCRDELTABLES _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Delete one or more tables.  On entry, _p_f_r_i_o___b_u_f_f_e_r must point to
+             an array of _s_t_r_u_c_t _p_f_r___t_a_b_l_e containing at least _p_f_r_i_o___s_i_z_e ele‐
+             ments.  _p_f_r_i_o___e_s_i_z_e must be the size of _s_t_r_u_c_t _p_f_r___t_a_b_l_e.  On
+             exit, _p_f_r_i_o___n_d_e_l contains the number of tables effectively
+             deleted.
+
+     DIOCRGETTABLES _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Get the list of all tables.  On entry, _p_f_r_i_o___b_u_f_f_e_r_[_p_f_r_i_o___s_i_z_e_]
+             contains a valid writeable buffer for _p_f_r___t_a_b_l_e structures.  On
+             exit, _p_f_r_i_o___s_i_z_e contains the number of tables written into the
+             buffer.  If the buffer is too small, the kernel does not store
+             anything but just returns the required buffer size, without er‐
+             ror.
+
+     DIOCRGETTSTATS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             This call is like DIOCRGETTABLES but is used to get an array of
+             _p_f_r___t_s_t_a_t_s structures.
+
+             struct pfr_tstats {
+                     struct pfr_table pfrts_t;
+                     u_int64_t        pfrts_packets
+                                          [PFR_DIR_MAX][PFR_OP_TABLE_MAX];
+                     u_int64_t        pfrts_bytes
+                                          [PFR_DIR_MAX][PFR_OP_TABLE_MAX];
+                     u_int64_t        pfrts_match;
+                     u_int64_t        pfrts_nomatch;
+                     time_t           pfrts_tzero;
+                     int              pfrts_cnt;
+                     int              pfrts_refcnt[PFR_REFCNT_MAX];
+             };
+             #define pfrts_name       pfrts_t.pfrt_name
+             #define pfrts_flags      pfrts_t.pfrt_flags
+
+     DIOCRCLRTSTATS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Clear the statistics of one or more tables.  On entry,
+             _p_f_r_i_o___b_u_f_f_e_r must point to an array of _s_t_r_u_c_t _p_f_r___t_a_b_l_e contain‐
+             ing at least _p_f_r_i_o___s_i_z_e elements.  _p_f_r_i_o___e_s_i_z_e must be the size
+             of _s_t_r_u_c_t _p_f_r___t_a_b_l_e.  On exit, _p_f_r_i_o___n_z_e_r_o contains the number of
+             tables effectively cleared.
+
+     DIOCRCLRADDRS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Clear all addresses in a table.  On entry, _p_f_r_i_o___t_a_b_l_e contains
+             the table to clear.  On exit, _p_f_r_i_o___n_d_e_l contains the number of
+             addresses removed.
+
+     DIOCRADDADDRS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Add one or more addresses to a table.  On entry, _p_f_r_i_o___t_a_b_l_e con‐
+             tains the table ID and _p_f_r_i_o___b_u_f_f_e_r must point to an array of
+             _s_t_r_u_c_t _p_f_r___a_d_d_r containing at least _p_f_r_i_o___s_i_z_e elements to add to
+             the table.  _p_f_r_i_o___e_s_i_z_e must be the size of _s_t_r_u_c_t _p_f_r___a_d_d_r.  On
+             exit, _p_f_r_i_o___n_a_d_d contains the number of addresses effectively
+             added.
+
+             struct pfr_addr {
+                     union {
+                             struct in_addr   _pfra_ip4addr;
+                             struct in6_addr  _pfra_ip6addr;
+                     }                pfra_u;
+                     char             pfra_ifname[IFNAMSIZ];
+                     u_int32_t        pfra_states;
+                     u_int16_t        pfra_weight;
+                     u_int8_t         pfra_af;
+                     u_int8_t         pfra_net;
+                     u_int8_t         pfra_not;
+                     u_int8_t         pfra_fback;
+                     u_int8_t         pfra_type;
+                     u_int8_t         pad[7];
+             };
+             #define pfra_ip4addr    pfra_u._pfra_ip4addr
+             #define pfra_ip6addr    pfra_u._pfra_ip6addr
+
+     DIOCRDELADDRS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Delete one or more addresses from a table.  On entry, _p_f_r_i_o___t_a_b_l_e
+             contains the table ID and _p_f_r_i_o___b_u_f_f_e_r must point to an array of
+             _s_t_r_u_c_t _p_f_r___a_d_d_r containing at least _p_f_r_i_o___s_i_z_e elements to delete
+             from the table.  _p_f_r_i_o___e_s_i_z_e must be the size of _s_t_r_u_c_t _p_f_r___a_d_d_r.
+             On exit, _p_f_r_i_o___n_d_e_l contains the number of addresses effectively
+             deleted.
+
+     DIOCRSETADDRS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Replace the content of a table by a new address list.  This is
+             the most complicated command, which uses all the structure mem‐
+             bers.
+
+             On entry, _p_f_r_i_o___t_a_b_l_e contains the table ID and _p_f_r_i_o___b_u_f_f_e_r must
+             point to an array of _s_t_r_u_c_t _p_f_r___a_d_d_r containing at least
+             _p_f_r_i_o___s_i_z_e elements which become the new contents of the table.
+             _p_f_r_i_o___e_s_i_z_e must be the size of _s_t_r_u_c_t _p_f_r___a_d_d_r.  Additionally,
+             if _p_f_r_i_o___s_i_z_e_2 is non-zero, _p_f_r_i_o___b_u_f_f_e_r_[_p_f_r_i_o___s_i_z_e_._._p_f_r_i_o___s_i_z_e_2_]
+             must be a writeable buffer, into which the kernel can copy the
+             addresses that have been deleted during the replace operation.
+             On exit, _p_f_r_i_o___n_d_e_l, _p_f_r_i_o___n_a_d_d, and _p_f_r_i_o___n_c_h_a_n_g_e contain the
+             number of addresses deleted, added, and changed by the kernel.
+             If _p_f_r_i_o___s_i_z_e_2 was set on entry, _p_f_r_i_o___s_i_z_e_2 will point to the
+             size of the buffer used, exactly like DIOCRGETADDRS.
+
+     DIOCRGETADDRS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Get all the addresses of a table.  On entry, _p_f_r_i_o___t_a_b_l_e contains
+             the table ID and _p_f_r_i_o___b_u_f_f_e_r_[_p_f_r_i_o___s_i_z_e_] contains a valid write‐
+             able buffer for _p_f_r___a_d_d_r structures.  On exit, _p_f_r_i_o___s_i_z_e con‐
+             tains the number of addresses written into the buffer.  If the
+             buffer was too small, the kernel does not store anything but just
+             returns the required buffer size, without returning an error.
+
+     DIOCRGETASTATS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             This call is like DIOCRGETADDRS but is used to get an array of
+             _p_f_r___a_s_t_a_t_s structures.
+
+             struct pfr_astats {
+                     struct pfr_addr  pfras_a;
+                     u_int64_t        pfras_packets
+                                          [PFR_DIR_MAX][PFR_OP_ADDR_MAX];
+                     u_int64_t        pfras_bytes
+                                          [PFR_DIR_MAX][PFR_OP_ADDR_MAX];
+                     time_t           pfras_tzero;
+             };
+
+     DIOCRCLRASTATS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Clear the statistics of one or more addresses.  On entry,
+             _p_f_r_i_o___t_a_b_l_e contains the table ID and _p_f_r_i_o___b_u_f_f_e_r must point to
+             an array of _s_t_r_u_c_t _p_f_r___a_d_d_r containing at least _p_f_r_i_o___s_i_z_e ele‐
+             ments to be cleared from the table.  _p_f_r_i_o___e_s_i_z_e must be the size
+             of _s_t_r_u_c_t _p_f_r___a_d_d_r.  On exit, _p_f_r_i_o___n_z_e_r_o contains the number of
+             addresses effectively cleared.
+
+     DIOCRTSTADDRS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Test if the given addresses match a table.  On entry, _p_f_r_i_o___t_a_b_l_e
+             contains the table ID and _p_f_r_i_o___b_u_f_f_e_r must point to an array of
+             _s_t_r_u_c_t _p_f_r___a_d_d_r containing at least _p_f_r_i_o___s_i_z_e elements, each of
+             which will be tested for a match in the table.  _p_f_r_i_o___e_s_i_z_e must
+             be the size of _s_t_r_u_c_t _p_f_r___a_d_d_r.  On exit, the kernel updates the
+             _p_f_r___a_d_d_r array by setting the _p_f_r_a___f_b_a_c_k member appropriately.
+
+     DIOCRSETTFLAGS _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Change the PFR_TFLAG_CONST or PFR_TFLAG_PERSIST flags of a table.
+             On entry, _p_f_r_i_o___b_u_f_f_e_r must point to an array of _s_t_r_u_c_t _p_f_r___t_a_b_l_e
+             containing at least _p_f_r_i_o___s_i_z_e elements.  _p_f_r_i_o___e_s_i_z_e must be the
+             size of _s_t_r_u_c_t _p_f_r___t_a_b_l_e.  _p_f_r_i_o___s_e_t_f_l_a_g must contain the flags
+             to add, while _p_f_r_i_o___c_l_r_f_l_a_g must contain the flags to remove.  On
+             exit, _p_f_r_i_o___n_c_h_a_n_g_e and _p_f_r_i_o___n_d_e_l contain the number of tables
+             altered or deleted by the kernel.  Yes, tables can be deleted if
+             one removes the PFR_TFLAG_PERSIST flag of an unreferenced table.
+
+     DIOCRINADEFINE _s_t_r_u_c_t _p_f_i_o_c___t_a_b_l_e _*_i_o
+             Defines a table in the inactive set.  On entry, _p_f_r_i_o___t_a_b_l_e con‐
+             tains the table ID and _p_f_r_i_o___b_u_f_f_e_r_[_p_f_r_i_o___s_i_z_e_] contains an array
+             of _p_f_r___a_d_d_r structures to put in the table.  A valid ticket must
+             also be supplied to _p_f_r_i_o___t_i_c_k_e_t.  On exit, _p_f_r_i_o___n_a_d_d contains 0
+             if the table was already defined in the inactive list or 1 if a
+             new table has been created.  _p_f_r_i_o___n_a_d_d_r contains the number of
+             addresses effectively put in the table.
+
+     DIOCXBEGIN _s_t_r_u_c_t _p_f_i_o_c___t_r_a_n_s _*_i_o
+
+             struct pfioc_trans {
+                     int              size;  /* number of elements */
+                     int              esize; /* size of each element in bytes */
+                     struct pfioc_trans_e {
+                             int             type;
+                             char            anchor[PATH_MAX];
+                             u_int32_t       ticket;
+                     }               *array;
+             };
+
+             Clear all the inactive rulesets specified in the _p_f_i_o_c___t_r_a_n_s___e
+             array.  For each ruleset, a ticket is returned for subsequent
+             "add rule" ioctls, as well as for the DIOCXCOMMIT and
+             DIOCXROLLBACK calls.
+
+             Ruleset types, identified by _t_y_p_e, can be one of the following:
+
+                PF_TRANS_RULESET  Filter rules.
+                PF_TRANS_TABLE    Address tables.
+
+     DIOCXCOMMIT _s_t_r_u_c_t _p_f_i_o_c___t_r_a_n_s _*_i_o
+             Atomically switch a vector of inactive rulesets to the active
+             rulesets.  This call is implemented as a standard two-phase com‐
+             mit, which will either fail for all rulesets or completely suc‐
+             ceed.  All tickets need to be valid.  This ioctl returns EBUSY if
+             another process is concurrently updating some of the same rule‐
+             sets.
+
+     DIOCXROLLBACK _s_t_r_u_c_t _p_f_i_o_c___t_r_a_n_s _*_i_o
+             Clean up the kernel by undoing all changes that have taken place
+             on the inactive rulesets since the last DIOCXBEGIN.
+             DIOCXROLLBACK will silently ignore rulesets for which the ticket
+             is invalid.
+
+     DIOCXEND _u___i_n_t_3_2___t _*_t_i_c_k_e_t
+             Release the ticket obtained by the DIOCGETRULES command.
+
+     DIOCSETHOSTID _u___i_n_t_3_2___t _*_h_o_s_t_i_d
+             Set the host ID, which is used by pfsync(4) to identify which
+             host created state table entries.
+
+     DIOCOSFPFLUSH
+             Flush the passive OS fingerprint table.
+
+     DIOCOSFPADD _s_t_r_u_c_t _p_f___o_s_f_p___i_o_c_t_l _*_i_o
+
+             struct pf_osfp_ioctl {
+                     struct pf_osfp_entry    fp_os;
+                     pf_tcpopts_t            fp_tcpopts;     /* packed TCP options */
+                     u_int16_t               fp_wsize;       /* TCP window size */
+                     u_int16_t               fp_psize;       /* ip->ip_len */
+                     u_int16_t               fp_mss;         /* TCP MSS */
+                     u_int16_t               fp_flags;
+                     u_int8_t                fp_optcnt;      /* TCP option count */
+                     u_int8_t                fp_wscale;      /* TCP window scaling */
+                     u_int8_t                fp_ttl;         /* IPv4 TTL */
+
+                     int                     fp_getnum;      /* DIOCOSFPGET number */
+             };
+
+             struct pf_osfp_entry {
+                     SLIST_ENTRY(pf_osfp_entry) fp_entry;
+                     pf_osfp_t               fp_os;
+                     int                     fp_enflags;
+             #define PF_OSFP_EXPANDED        0x001           /* expanded entry */
+             #define PF_OSFP_GENERIC         0x002           /* generic signature */
+             #define PF_OSFP_NODETAIL        0x004           /* no p0f details */
+             #define PF_OSFP_LEN     32
+                     u_char                  fp_class_nm[PF_OSFP_LEN];
+                     u_char                  fp_version_nm[PF_OSFP_LEN];
+                     u_char                  fp_subtype_nm[PF_OSFP_LEN];
+             };
+
+             Add a passive OS fingerprint to the table.  Set _f_p___o_s_._f_p___o_s to
+             the packed fingerprint, _f_p___o_s_._f_p___c_l_a_s_s___n_m to the name of the
+             class (Linux, Windows, etc), _f_p___o_s_._f_p___v_e_r_s_i_o_n___n_m to the name of
+             the version (NT, 95, 98), and _f_p___o_s_._f_p___s_u_b_t_y_p_e___n_m to the name of
+             the subtype or patchlevel.  The members _f_p___m_s_s, _f_p___w_s_i_z_e,
+             _f_p___p_s_i_z_e, _f_p___t_t_l, _f_p___o_p_t_c_n_t, and _f_p___w_s_c_a_l_e are set to the TCP
+             MSS, the TCP window size, the IP length, the IP TTL, the number
+             of TCP options, and the TCP window scaling constant of the TCP
+             SYN packet, respectively.
+
+             The _f_p___f_l_a_g_s member is filled according to the <_n_e_t_/_p_f_v_a_r_._h> in‐
+             clude file PF_OSFP_* defines.  The _f_p___t_c_p_o_p_t_s member contains
+             packed TCP options.  Each option uses PF_OSFP_TCPOPT_BITS bits in
+             the packed value.  Options include any of PF_OSFP_TCPOPT_NOP,
+             PF_OSFP_TCPOPT_SACK, PF_OSFP_TCPOPT_WSCALE, PF_OSFP_TCPOPT_MSS,
+             or PF_OSFP_TCPOPT_TS.
+
+             The _f_p___g_e_t_n_u_m member is not used with this ioctl.
+
+             The structure's slack space must be zeroed for correct operation;
+             memset(3) the whole structure to zero before filling and sending
+             to the kernel.
+
+     DIOCOSFPGET _s_t_r_u_c_t _p_f___o_s_f_p___i_o_c_t_l _*_i_o
+             Get the passive OS fingerprint number _f_p___g_e_t_n_u_m from the kernel's
+             fingerprint list.  The rest of the structure members will come
+             back filled.  Get the whole list by repeatedly incrementing the
+             _f_p___g_e_t_n_u_m number until the ioctl returns EBUSY.
+
+     DIOCGETSRCNODES _s_t_r_u_c_t _p_f_i_o_c___s_r_c___n_o_d_e_s _*_p_s_n
+
+             struct pfioc_src_nodes {
+                     size_t  psn_len;
+                     union {
+                             caddr_t         psu_buf;
+                             struct pf_src_node      *psu_src_nodes;
+                     } psn_u;
+             #define psn_buf         psn_u.psu_buf
+             #define psn_src_nodes   psn_u.psu_src_nodes
+             };
+
+             Get the list of source nodes kept by sticky addresses and source
+             tracking.  The ioctl must be called once with _p_s_n___l_e_n set to 0.
+             If the ioctl returns without error, _p_s_n___l_e_n will be set to the
+             size of the buffer required to hold all the _p_f___s_r_c___n_o_d_e struc‐
+             tures held in the table.  A buffer of this size should then be
+             allocated, and a pointer to this buffer placed in _p_s_n___b_u_f.  The
+             ioctl must then be called again to fill this buffer with the ac‐
+             tual source node data.  After that call, _p_s_n___l_e_n will be set to
+             the length of the buffer actually used.
+
+     DIOCCLRSRCNODES
+             Clear the tree of source tracking nodes.
+
+     DIOCIGETIFACES _s_t_r_u_c_t _p_f_i_o_c___i_f_a_c_e _*_i_o
+             Get the list of interfaces and interface groups known to ppff.  All
+             the ioctls that manipulate interfaces use the same structure de‐
+             scribed below:
+
+             struct pfioc_iface {
+                     char                     pfiio_name[IFNAMSIZ];
+                     void                    *pfiio_buffer;
+                     int                      pfiio_esize;
+                     int                      pfiio_size;
+                     int                      pfiio_nzero;
+                     int                      pfiio_flags;
+             };
+
+             If not empty, _p_f_i_i_o___n_a_m_e can be used to restrict the search to a
+             specific interface or group.  _p_f_i_i_o___b_u_f_f_e_r_[_p_f_i_i_o___s_i_z_e_] is the
+             user-supplied buffer for returning the data.  On entry,
+             _p_f_i_i_o___s_i_z_e contains the number of _p_f_i___k_i_f entries that can fit
+             into the buffer.  The kernel will replace this value by the real
+             number of entries it wants to return.  _p_f_i_i_o___e_s_i_z_e should be set
+             to sizeof(struct pfi_kif).
+
+             The data is returned in the _p_f_i___k_i_f structure described below:
+
+             struct pfi_kif {
+                     char                             pfik_name[IFNAMSIZ];
+                     RB_ENTRY(pfi_kif)                pfik_tree;
+                     u_int64_t                        pfik_packets[2][2][2];
+                     u_int64_t                        pfik_bytes[2][2][2];
+                     time_t                           pfik_tzero;
+                     int                              pfik_flags;
+                     int                              pfik_flags_new;
+                     void                            *pfik_ah_cookie;
+                     struct ifnet                    *pfik_ifp;
+                     struct ifg_group                *pfik_group;
+                     int                              pfik_states;
+                     int                              pfik_rules;
+                     int                              pfik_routes;
+                     int                              pfik_srcnodes;
+                     int                              pfik_flagrefs;
+                     TAILQ_HEAD(, pfi_dynaddr)        pfik_dynaddrs;
+             };
+
+     DIOCSETSTATUSIF _s_t_r_u_c_t _p_f_i_o_c___i_f_a_c_e _*_p_i
+             Specify the interface for which statistics are accumulated.
+
+     DIOCSETIFFLAG _s_t_r_u_c_t _p_f_i_o_c___i_f_a_c_e _*_i_o
+             Set the user settable flags (described above) of the ppff internal
+             interface description.  The filtering process is the same as for
+             DIOCIGETIFACES.
+
+             #define PFI_IFLAG_SKIP  0x0100  /* skip filtering on interface */
+
+     DIOCCLRIFFLAG _s_t_r_u_c_t _p_f_i_o_c___i_f_a_c_e _*_i_o
+             Works as DIOCSETIFFLAG above but clears the flags.
+
+     DIOCKILLSRCNODES _s_t_r_u_c_t _p_f_i_o_c___s_r_c___n_o_d_e___k_i_l_l _*_p_s_n_k
+             Explicitly remove source tracking nodes.
+
+             struct pfioc_src_node_kill {
+                     sa_family_t              psnk_af;
+                     struct pf_rule_addr      psnk_src;
+                     struct pf_rule_addr      psnk_dst;
+                     u_int                    psnk_killed;
+             };
+
+FFIILLEESS
+     /dev/pf  packet filtering device.
+
+EEXXAAMMPPLLEESS
+     The following example demonstrates how to use the DIOCGETLIMIT command to
+     show the hard limit of a memory pool used by the packet filter:
+
+     #include <sys/types.h>
+     #include <sys/socket.h>
+     #include <sys/ioctl.h>
+     #include <sys/fcntl.h>
+
+     #include <netinet/in.h>
+     #include <net/if.h>
+     #include <net/pfvar.h>
+
+     #include <err.h>
+     #include <limits.h>
+     #include <stdio.h>
+     #include <stdlib.h>
+     #include <string.h>
+
+     static const struct {
+             const char      *name;
+             int             index;
+     } pf_limits[] = {
+             { "states",             PF_LIMIT_STATES },
+             { "src-nodes",          PF_LIMIT_SRC_NODES },
+             { "frags",              PF_LIMIT_FRAGS },
+             { "tables",             PF_LIMIT_TABLES },
+             { "table-entries",      PF_LIMIT_TABLE_ENTRIES },
+             { "anchors",            PF_LIMIT_ANCHORS },
+             { NULL,                 0 }
+     };
+
+     void
+     usage(void)
+     {
+             int i;
+
+             fprintf(stderr, "usage: %s [", getprogname());
+             for (i = 0; pf_limits[i].name; i++)
+                     fprintf(stderr, "%s%s", (i > 0 ? "|" : ""), pf_limits[i].name);
+             fprintf(stderr, "]\n");
+             exit(1);
+     }
+
+     int
+     main(int argc, char *argv[])
+     {
+             struct pfioc_limit pl;
+             int i, dev;
+             int pool_index = -1;
+
+             if (argc != 2)
+                     usage();
+
+             for (i = 0; pf_limits[i].name; i++)
+                     if (strcmp(argv[1], pf_limits[i].name) == 0) {
+                             pool_index = pf_limits[i].index;
+                             break;
+                     }
+
+             if (pool_index == -1) {
+                     warnx("no such memory pool: %s", argv[1]);
+                     usage();
+             }
+
+             dev = open("/dev/pf", O_RDWR);
+             if (dev == -1)
+                     err(1, "open(\"/dev/pf\") failed");
+
+             memset(&pl, 0, sizeof(struct pfioc_limit));
+             pl.index = pool_index;
+
+             if (ioctl(dev, DIOCGETLIMIT, &pl) == -1)
+                     err(1, "DIOCGETLIMIT");
+
+             printf("The %s memory pool has ", pf_limits[i].name);
+             if (pl.limit == UINT_MAX)
+                     printf("unlimited entries.\n");
+             else
+                     printf("a hard limit of %u entries.\n", pl.limit);
+
+             return 0;
+     }
+
+SSEEEE AALLSSOO
+     ioctl(2), bridge(4), pflog(4), pflow(4), pfsync(4), pf.conf(5), pfctl(8)
+
+HHIISSTTOORRYY
+     The ppff packet filtering mechanism first appeared in OpenBSD 3.0.
+
+BSD                              July 5, 2023                              BSD

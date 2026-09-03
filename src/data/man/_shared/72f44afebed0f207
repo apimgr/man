@@ -1,0 +1,176 @@
+NSSWITCH.CONF(5)            BSD File Formats Manual           NSSWITCH.CONF(5)
+
+NNAAMMEE
+     nnsssswwiittcchh..ccoonnff — name-service switch configuration file
+
+DDEESSCCRRIIPPTTIIOONN
+     The nnsssswwiittcchh..ccoonnff file specifies how the nsdispatch(3) (name-service
+     switch dispatcher) routines in the C library should operate.
+
+     The configuration file controls how a process looks up various databases
+     containing information regarding hosts, users (passwords), groups, etc.
+     Each database comes from a source (such as local files, DNS, NIS , and
+     cache), and the order to look up the sources is specified in
+     nnsssswwiittcchh..ccoonnff.
+
+     Each entry in nnsssswwiittcchh..ccoonnff consists of a database name, and a space sep‐
+     arated list of sources.  Each source can have an optional trailing crite‐
+     rion that determines whether the next listed source is used, or the
+     search terminates at the current source.  Each criterion consists of one
+     or more status codes, and actions to take if that status code occurs.
+
+   SSoouurrcceess
+     The following sources are implemented as part of the base system:
+
+     SSoouurrccee  DDeessccrriippttiioonn
+     files   Local files, such as _/_e_t_c_/_h_o_s_t_s, and _/_e_t_c_/_p_a_s_s_w_d.
+     db      Local database.
+     dns     Internet Domain Name System.  “hosts” and ‘networks’ use IINN class
+             entries, all other databases use HHSS class (Hesiod) entries.
+     nis     NIS (formerly YP)
+     compat  support ‘+/-’ in the “passwd” and “group” databases.  If this is
+             present, it must be the only source for that entry.
+     cache   makes use of the nscd(8) daemon.
+
+     Additional sources might be provided by third party software.
+
+   DDaattaabbaasseess
+     The following databases are used by the following C library functions:
+
+     DDaattaabbaassee  UUsseedd bbyy
+     group     getgrent(3), getgrent_r(3), getgrgid_r(3), getgrnam_r(3),
+               setgrent(3), endgrent(3)
+     hosts     getaddrinfo(3), gethostbyaddr(3), gethostbyaddr_r(3),
+               gethostbyname(3), gethostbyname2(3), gethostbyname_r(3),
+               getipnodebyaddr(3), getipnodebyname(3)
+     networks  getnetbyaddr(3), getnetbyaddr_r(3), getnetbyname(3),
+               getnetbyname_r(3)
+     passwd    getpwent(3), getpwent_r(3), getpwnam_r(3), getpwuid_r(3),
+               setpwent(3), endpwent(3)
+     shells    getusershell(3)
+     services  getservent(3)
+     rpc       getrpcbyname(3), getrpcbynumber(3), getrpcent(3)
+     proto     getprotobyname(3), getprotobynumber(3), getprotoent(3)
+     netgroup  getnetgrent(3), getnetgrent_r(3), setnetgrent(3),
+               endnetgrent(3), innetgr(3)
+
+   SSttaattuuss ccooddeess
+     The following status codes are available:
+
+     SSttaattuuss    DDeessccrriippttiioonn
+     success   The requested entry was found.
+     notfound  The entry is not present at this source.
+     tryagain  The source is busy, and may respond to retries.
+     unavail   The source is not responding, or entry is corrupt.
+
+   AAccttiioonnss
+     For each of the status codes, one of two actions is possible:
+
+     AAccttiioonn    DDeessccrriippttiioonn
+     continue  Try the next source
+     return    Return with the current result
+
+   FFoorrmmaatt ooff ffiillee
+     A BNF description of the syntax of nnsssswwiittcchh..ccoonnff is:
+
+     <entry>      ::= <database> ":" [<source> [<criteria>]]*
+     <criteria>   ::= "[" <criterion>+ "]"
+     <criterion>  ::= <status> "=" <action>
+     <status>     ::= "success" | "notfound" | "unavail" | "tryagain"
+     <action>     ::= "return" | "continue"
+
+     Each entry starts on a new line in the file.  A ‘#’ delimits a comment to
+     end of line.  Blank lines are ignored.  A ‘\’ at the end of a line es‐
+     capes the newline, and causes the next line to be a continuation of the
+     current line.  All entries are case-insensitive.
+
+     The default criteria is to return on “success”, and continue on anything
+     else (i.e, [success=return notfound=continue unavail=continue
+     tryagain=continue]).
+
+   CCaacchhee
+     You can enable caching for the particular database by specifying “cache”
+     in the nnsssswwiittcchh..ccoonnff file.  It should come after “files”, but before re‐
+     mote sources like “nis”.  You should also enable caching for this data‐
+     base in nscd.conf(5).  If for a particular query “cache” source returns
+     success, then no further sources are queried.  On the other hand, if
+     there are no previously cached data, the query result will be placed into
+     the cache right after all other sources are processed.  Note that “cache”
+     requires the nscd(8) daemon to be running.
+
+   CCoommppaatt mmooddee:: ++//-- ssyynnttaaxx
+     In historical multi-source implementations, the ‘+’ and ‘-’ characters
+     are used to specify the importing of user password and group information
+     from NIS .  Although nnsssswwiittcchh..ccoonnff provides alternative methods of ac‐
+     cessing distributed sources such as NIS , specifying a sole source of
+     “compat” will provide the historical behaviour.
+
+     An alternative source for the information accessed via ‘+/-’ can be used
+     by specifying “passwd_compat: source”.  “source” in this case can be
+     ‘dns’, ‘nis’, or any other source except for ‘files’ and ‘compat’.
+
+   NNootteess
+     Historically, many of the databases had enumeration functions, often of
+     the form ggeettXXXXXXeenntt().  These made sense when the databases were in local
+     files, but do not make sense or have lesser relevance when there are pos‐
+     sibly multiple sources, each of an unknown size.  The interfaces are
+     still provided for compatibility, but the source may not be able to pro‐
+     vide complete entries, or duplicate entries may be retrieved if multiple
+     sources that contain similar information are specified.
+
+     To ensure compatibility with previous and current implementations, the
+     “compat” source must appear alone for a given database.
+
+   DDeeffaauulltt ssoouurrccee lliissttss
+     If, for any reason, nnsssswwiittcchh..ccoonnff does not exist, or it has missing or
+     corrupt entries, nsdispatch(3) will default to an entry of “files” for
+     the requested database.  Exceptions are:
+
+     DDaattaabbaassee         DDeeffaauulltt ssoouurrccee lliisstt
+     group            compat
+     group_compat     nis
+     hosts            files dns
+     passwd           compat
+     passwd_compat    nis
+     services         compat
+     services_compat  nis
+
+FFIILLEESS
+     /etc/nsswitch.conf  The file nnsssswwiittcchh..ccoonnff resides in _/_e_t_c.
+
+EEXXAAMMPPLLEESS
+     To lookup hosts in _/_e_t_c_/_h_o_s_t_s , then in cache, and then from the DNS, and
+     lookup user information from NIS then files, use:
+
+     hosts:   files cache dns
+     passwd:  nis [notfound=return] files
+     group:   nis [notfound=return] files
+
+     The criteria “[notfound=return]” sets a policy of "if the user is not‐
+     found in nis, do not try files."  This treats nis as the authoritative
+     source of information, except when the server is down.
+
+NNOOTTEESS
+     The nnsssswwiittcchh..ccoonnff file is parsed by each program only once.  Subsequent
+     changes will not be applied until the program is restarted.
+
+     If system got compiled with _W_I_T_H_O_U_T___N_I_S you have to remove ‘nis’ entries.
+
+     FreeBSD's Standard C Library (libc, -lc) provides stubs for compatibility
+     with NSS modules written for the GNU C Library nnsssswwiittcchh interface.  How‐
+     ever, these stubs only support the use of the “passwd” and “group” data‐
+     bases.
+
+SSEEEE AALLSSOO
+     nsdispatch(3), nscd.conf(5), resolv.conf(5), nscd(8), ypbind(8)
+
+HHIISSTTOORRYY
+     The nnsssswwiittcchh..ccoonnff file format first appeared in FreeBSD 5.0.  It was im‐
+     ported from the NetBSD Project, where it appeared first in NetBSD 1.4.
+
+AAUUTTHHOORRSS
+     Luke Mewburn <_l_u_k_e_m_@_n_e_t_b_s_d_._o_r_g> wrote this freely distributable name-ser‐
+     vice switch implementation, using ideas from the ULTRIX svc.conf(5) and
+     Solaris nsswitch.conf(4) manual pages.
+
+BSD                            September 6, 2020                           BSD

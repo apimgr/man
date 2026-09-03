@@ -1,0 +1,127 @@
+NDA(4)                   BSD Kernel Interfaces Manual                   NDA(4)
+
+NNAAMMEE
+     nnddaa — NVMe Direct Access device driver
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee nnvvmmee
+     ddeevviiccee ssccbbuuss
+
+DDEESSCCRRIIPPTTIIOONN
+     The nnddaa driver provides support for direct access devices, implementing
+     the NVMe command protocol, that are attached to the system through a host
+     adapter supported by the CAM subsystem.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     The following variables are available as both sysctl(8) variables and
+     loader(8) tunables:
+
+     _h_w_._n_v_m_e_._u_s_e___n_v_d
+         The nvme(4) driver will create nnddaa device nodes for block storage
+         when set to 0.  Create nvd(4) device nodes for block storage when set
+         to 1.  See nvd(4) when set to 1.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._n_v_d___c_o_m_p_a_t
+         When set to 1, nvd(4) aliases will be created for all nnddaa devices,
+         including partitions and other geom(4) providers that take their
+         names from the disk's name.  nvd(4) devices will not, however, be re‐
+         ported in the _k_e_r_n_._d_i_s_k_s sysctl(8).
+
+     _k_e_r_n_._c_a_m_._n_d_a_._s_o_r_t___i_o___q_u_e_u_e
+         This variable determines whether the software queued entries are
+         sorted in LBA order or not.  Sorting is almost always a waste of
+         time.  The default is to not sort.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._e_n_a_b_l_e___b_i_o_s_p_e_e_d_u_p
+         This variable determines if the nnddaa devices participate in the
+         speedup protocol.  When the device participates in the speedup, then
+         when the upper layers send a _B_I_O___S_P_E_E_D_U_P, all current _B_I_O___D_E_L_E_T_E re‐
+         quests not yet sent to the hardware are completed successfully imme‐
+         diate without sending them to the hardware.  Used in low disk space
+         scenarios when the filesystem encounters a critical shortage and
+         needs blocks immediately.  Since trims have maximum benefit when the
+         LBA is unused for a long time, skipping the trim when space is needed
+         for immediate writes results in little to no excess wear.  When par‐
+         ticipation is disabled, _B_I_O___S_P_E_E_D_U_P requests are ignored.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._m_a_x___t_r_i_m
+         The maximum number of LBA ranges to be collected together for each
+         DSM trims send to the hardware.  Defaults to 256, which is the maxi‐
+         mum number of ranges the protocol supports.  Sometimes poor trim per‐
+         formance can be mitigated by limiting the number of ranges sent to
+         the device.  This value must be between 1 and 256 inclusive.
+
+     The following report per-device settings, and are read-only unless other‐
+     wise indicated.  Replace _N with the device unit number.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._r_o_t_a_t_i_n_g
+         This variable reports whether the storage volume is spinning or
+         flash.  Its value is hard coded to 0 indicating flash.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._u_n_m_a_p_p_e_d___i_o
+         This variable reports whether the nnddaa driver accepts unmapped I/O for
+         this unit.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._f_l_a_g_s
+         This variable reports the current flags.
+
+         _O_P_E_N
+             The device is open.
+
+         _D_I_R_T_Y
+             Set when a write to the drive is scheduled.  Cleared after flush
+             commands.
+
+         _S_C_T_X___I_N_I_T
+             Internal flag set after sysctl(8) nodes have been created.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._s_o_r_t___i_o___q_u_e_u_e
+         Same as the _k_e_r_n_._c_a_m_._n_d_a_._s_o_r_t___i_o___q_u_e_u_e tunable.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._t_r_i_m___t_i_c_k_s
+         Writable.  When greater than zero, hold trims for up to this many
+         ticks before sending to the drive.  Sometimes waiting a little bit to
+         collect more trims to send at one time improves trim performance.
+         When 0, no delaying of trims are done.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._t_r_i_m___g_o_a_l
+         Writable.  When delaying a bit to collect multiple trims, send the
+         accumulated DSM TRIM to the drive.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._t_r_i_m___l_b_a_s
+         Total number of LBAs that have been trimmed.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._t_r_i_m___r_a_n_g_e_s
+         Total number of LBA ranges that have been trimmed.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._t_r_i_m___c_o_u_n_t
+         Total number of trims sent to the hardware.
+
+     _k_e_r_n_._c_a_m_._n_d_a_._N_._d_e_l_e_t_e_s
+         Total number of _B_I_O___D_E_L_E_T_E requests queued to the device.
+
+NNAAMMEESSPPAACCEE MMAAPPPPIINNGG
+     Each nvme(4) drive has one or more namespaces associated with it.  One
+     instance of the nnddaa driver will be created for each of the namespaces on
+     the drive.  All the nnddaa nodes for a nvme(4) device are at target 0.  How‐
+     ever, the namespace ID maps to the CAM lun, as reported in kernel mes‐
+     sages and in the _d_e_v_l_i_s_t sub command of camcontrol(8).
+
+     Namespaces are managed with the _n_s sub command of nvmecontrol(8).  Not
+     all drives support namespace management, but all drives support at least
+     one namespace.  Device nodes for nnddaa will be created and destroyed dynam‐
+     ically as namespaces are activated or detached.
+
+FFIILLEESS
+     /dev/nda*  NVMe storage device nodes
+
+SSEEEE AALLSSOO
+     cam(4), geom(4), nvd(4), nvme(4), gpart(8)
+
+HHIISSTTOORRYY
+     The nnddaa driver first appeared in FreeBSD 12.0.
+
+AAUUTTHHOORRSS
+     Warner Losh <_i_m_p_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                              June 6, 2020                              BSD

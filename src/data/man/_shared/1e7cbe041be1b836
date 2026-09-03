@@ -1,0 +1,109 @@
+DT(4)                    BSD Kernel Interfaces Manual                    DT(4)
+
+NNAAMMEE
+     ddtt — dynamic tracer
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ddtt
+
+DDEESSCCRRIIPPTTIIOONN
+     System and application tracing can happen in the kernel.  It has to be
+     configured and enabled through the ioctl(2) interface exposed by the
+     pseudo-device _/_d_e_v_/_d_t.
+
+     This device can only be opened when the _k_e_r_n_._a_l_l_o_w_d_t sysctl(2) variable
+     is set.
+
+IIOOCCTTLL IINNTTEERRFFAACCEE
+     The ioctl(2) command codes below are defined in <_d_e_v_/_d_t_/_d_t_v_a_r_._h>.
+
+     DTIOCGPLIST _s_t_r_u_c_t _d_t_i_o_c___p_r_o_b_e _*_d_t_p_r
+             Get available probe entries.
+
+             struct dtioc_probe {
+                     size_t                   dtpr_size;
+                     struct dtioc_probe_info *dtpr_probes;
+             };
+
+             If _d_t_p_r___s_i_z_e is non-zero, as many probes as possible that can fit
+             into this size will be copied into the supplied buffer.  On exit,
+             _d_t_p_r___s_i_z_e is always set to the total size required to hold all
+             probe entries (i.e., it is set to sizeof(struct dtioc_probe_info)
+             * dt_nprobes).
+
+     DTIOCGSTATS _s_t_r_u_c_t _d_t_i_o_c___s_t_a_t _*_d_t_s_t
+             Get statistics for current recording.
+
+             struct dtioc_stat {
+                     uint64_t                 dtst_readevt;
+                     uint64_t                 dtst_dropevt;
+             };
+
+     DTIOCRECORD _i_n_t _o_n
+             Start or stop recording.
+
+     DTIOCPRBENABLE _s_t_r_u_c_t _d_t_i_o_c___r_e_q _*_d_t_r_q
+             Enable the given probe for recording.
+
+             struct dtioc_req {
+                     uint32_t                 dtrq_pbn;
+                     struct dt_filter         dtrq_filter;
+                     uint32_t                 dtrq_rate;
+                     uint64_t                 dtrq_evtflags;
+             };
+
+     DTIOCRDVNODE _s_t_r_u_c_t _*_d_t_i_o_c___r_d_v_n
+             Resolve the instruction pointer from the traced process to the
+             ELF object.
+
+             struct dtioc_rdvn {
+                     pid_t                    dtrv_pid;
+                     int                      dtrv_fd;
+                     caddr_t                  dtrv_va;
+                     caddr_t                  dtrv_offset;
+                     caddr_t                  dtrv_start;
+                     size_t                   dtrv_len;
+             };
+
+             The caller populates _d_t_r_v___p_i_d with the process ID of the traced
+             process and _d_t_r_v___v_a with the program counter address to look up.
+
+             On success, the remaining members are populated.  _d_t_r_v___f_d is the
+             file descriptor to the DSO file that _d_t_r_v___v_a belongs to.  is the
+             length of the DSO file.  _d_t_r_v___o_f_f_s_e_t and _d_t_r_v___s_t_a_r_t are the rela‐
+             tive offset of _d_t_r_v___v_a to the start of the text segment and the
+             base address of that segment respectively.
+
+             To calculate the relative offset of _d_t_r_v___v_a in the DSO the fol‐
+             lowing calculation can be used:
+
+                   iOffset = dtrv_va - dtrv_start + dtrv_offset
+
+             The segment can be found by walking the ELF program headers and
+             looking for the mapping where iOffset is included in the range
+             [GElf_Phdr.p_offset, GElf_Phdr.p_offset + GElf_Phdr.p_filesz)
+
+             Using the _G_E_l_f___P_h_d_r_._p___v_a_d_d_r the base address of the segment can
+             be calculated by
+                   lbase = dtrv_start - GElf_Phdr.p_vaddr
+
+             For symbol lookups the offset can now be calculated as
+                   symOffset = dtrv_va - lbase
+
+FFIILLEESS
+     /dev/dt  dynamic tracing device.
+
+EERRRROORRSS
+     An open of _/_d_e_v_/_d_t will fail if:
+
+     [EPERM]            the _k_e_r_n_._a_l_l_o_w_d_t sysctl(2) variable wasn't set.
+
+     [ENOMEM]           not enough memory space was available.
+
+SSEEEE AALLSSOO
+     ioctl(2), bt(5), btrace(8)
+
+HHIISSTTOORRYY
+     The ddtt dynamic tracing mechanism first appeared in OpenBSD 6.7.
+
+BSD                             October 5, 2025                            BSD

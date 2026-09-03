@@ -1,0 +1,86 @@
+MEMGUARD(9)              BSD Kernel Developer's Manual             MEMGUARD(9)
+
+NNAAMMEE
+     MMeemmGGuuaarrdd — memory allocator for debugging purposes
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss DDEEBBUUGG__MMEEMMGGUUAARRDD
+
+DDEESSCCRRIIPPTTIIOONN
+     MMeemmGGuuaarrdd is a simple and small replacement memory allocator designed to
+     help detect tamper-after-free scenarios.  These problems are more and
+     more common and likely with multithreaded kernels where race conditions
+     are more prevalent.
+
+     MMeemmGGuuaarrdd can take over mmaalllloocc(), rreeaalllloocc() and ffrreeee() for a single malloc
+     type.  Alternatively MMeemmGGuuaarrdd can take over uummaa__zzaalllloocc(),
+     uummaa__zzaalllloocc__aarrgg() and uummaa__ffrreeee() for a single uma(9) zone.  Also MMeemmGGuuaarrdd
+     can guard all allocations larger than PAGE_SIZE, and can guard a random
+     fraction of all allocations.  There is also a knob to prevent allocations
+     smaller than a specified size from being guarded, to limit memory waste.
+
+EEXXAAMMPPLLEESS
+     To use MMeemmGGuuaarrdd for a memory type, either add an entry to
+     _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f:
+
+           vm.memguard.desc=<memory_type>
+
+     Or set the _v_m_._m_e_m_g_u_a_r_d_._d_e_s_c sysctl(8) variable at run-time:
+
+           sysctl vm.memguard.desc=<memory_type>
+
+     Where _m_e_m_o_r_y___t_y_p_e can be either a short description of the memory type to
+     monitor, either name of uma(9) zone.  Only allocations from that
+     _m_e_m_o_r_y___t_y_p_e made after _v_m_._m_e_m_g_u_a_r_d_._d_e_s_c is set will potentially be
+     guarded.  If _v_m_._m_e_m_g_u_a_r_d_._d_e_s_c is modified at run-time then only alloca‐
+     tions of the new _m_e_m_o_r_y___t_y_p_e will potentially be guarded once the
+     sysctl(8) is set.  Existing guarded allocations will still be properly
+     released by either free(9) or uma_zfree(9), depending on what kind of al‐
+     location was taken over.
+
+     To determine short description of a malloc(9) type one can either take it
+     from the first column of vmstat(8) --mm output, or to find it in the kernel
+     source.  It is the second argument to MALLOC_DEFINE(9) macro.  To deter‐
+     mine name of uma(9) zone one can either take it from the first column of
+     vmstat(8) --zz output, or to find it in the kernel source.  It is the first
+     argument to the uma_zcreate(9) function.
+
+     The _v_m_._m_e_m_g_u_a_r_d_._d_i_v_i_s_o_r boot-time tunable is used to scale how much of
+     the system's physical memory MMeemmGGuuaarrdd is allowed to consume.  The default
+     is 10, so up to _v_m___c_n_t_._v___p_a_g_e___c_o_u_n_t/10 pages can be used.  MMeemmGGuuaarrdd will
+     reserve _v_m___k_m_e_m___m_a_x / _v_m_._m_e_m_g_u_a_r_d_._d_i_v_i_s_o_r bytes of virtual address space,
+     limited by twice the physical memory size.  The physical limit is re‐
+     ported as _v_m_._m_e_m_g_u_a_r_d_._p_h_y_s___l_i_m_i_t and the virtual space reserved for
+     MMeemmGGuuaarrdd is reported as _v_m_._m_e_m_g_u_a_r_d_._m_a_p_s_i_z_e.
+
+     MMeemmGGuuaarrdd will not do page promotions for any allocation smaller than
+     _v_m_._m_e_m_g_u_a_r_d_._m_i_n_s_i_z_e bytes.  The default is 0, meaning all allocations can
+     potentially be guarded.  MMeemmGGuuaarrdd can guard sufficiently large alloca‐
+     tions randomly, with average frequency of every one in 100000 /
+     _v_m_._m_e_m_g_u_a_r_d_._f_r_e_q_u_e_n_c_y allocations.  The default is 0, meaning no alloca‐
+     tions are randomly guarded.
+
+     MMeemmGGuuaarrdd can optionally add unmapped guard pages around each allocation
+     to detect overflow and underflow, if _v_m_._m_e_m_g_u_a_r_d_._o_p_t_i_o_n_s has the 1 bit
+     set.  This option is enabled by default.  MMeemmGGuuaarrdd will optionally guard
+     all allocations of PAGE_SIZE or larger if _v_m_._m_e_m_g_u_a_r_d_._o_p_t_i_o_n_s has the 2
+     bit set.  This option is off by default.  By default MMeemmGGuuaarrdd does not
+     guard uma(9) zones that have been initialized with the UMA_ZONE_NOFREE
+     flag set, since it can produce false positives on them.  However, this
+     safety measure can be turned off by setting bit 3 of the
+     _v_m_._m_e_m_g_u_a_r_d_._o_p_t_i_o_n_s tunable.
+
+SSEEEE AALLSSOO
+     sysctl(8), vmstat(8), contigmalloc(9), malloc(9), redzone(9), uma(9)
+
+HHIISSTTOORRYY
+     MMeemmGGuuaarrdd first appeared in FreeBSD 6.0.
+
+AAUUTTHHOORRSS
+     MMeemmGGuuaarrdd was originally written by Bosko Milekic <_b_m_i_l_e_k_i_c_@_F_r_e_e_B_S_D_._o_r_g>.
+     This manual page was originally written by Christian Brueffer
+     <_b_r_u_e_f_f_e_r_@_F_r_e_e_B_S_D_._o_r_g>.  Additions have been made by Matthew Fleming
+     <_m_d_f_@_F_r_e_e_B_S_D_._o_r_g> and Gleb Smirnoff <_g_l_e_b_i_u_s_@_F_r_e_e_B_S_D_._o_r_g> to both the im‐
+     plementation and the documentation.
+
+BSD                             March 22, 2017                             BSD

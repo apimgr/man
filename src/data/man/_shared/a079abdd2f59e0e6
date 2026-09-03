@@ -1,0 +1,111 @@
+MTX_POOL(9)              BSD Kernel Developer's Manual             MTX_POOL(9)
+
+NNAAMMEE
+     mmttxx__ppooooll, mmttxx__ppooooll__aalllloocc, mmttxx__ppooooll__ffiinndd, mmttxx__ppooooll__lloocckk,
+     mmttxx__ppooooll__lloocckk__ssppiinn, mmttxx__ppooooll__uunnlloocckk, mmttxx__ppooooll__uunnlloocckk__ssppiinn,
+     mmttxx__ppooooll__ccrreeaattee, mmttxx__ppooooll__ddeessttrrooyy — mutex pool routines
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//lloocckk..hh>>
+     ##iinncclluuddee <<ssyyss//mmuutteexx..hh>>
+
+     _s_t_r_u_c_t _m_t_x _*
+     mmttxx__ppooooll__aalllloocc(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_p_o_o_l);
+
+     _s_t_r_u_c_t _m_t_x _*
+     mmttxx__ppooooll__ffiinndd(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_p_o_o_l, _v_o_i_d _*_p_t_r);
+
+     _v_o_i_d
+     mmttxx__ppooooll__lloocckk(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_p_o_o_l, _v_o_i_d _*_p_t_r);
+
+     _v_o_i_d
+     mmttxx__ppooooll__lloocckk__ssppiinn(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_p_o_o_l, _v_o_i_d _*_p_t_r);
+
+     _v_o_i_d
+     mmttxx__ppooooll__uunnlloocckk(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_p_o_o_l, _v_o_i_d _*_p_t_r);
+
+     _v_o_i_d
+     mmttxx__ppooooll__uunnlloocckk__ssppiinn(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_p_o_o_l, _v_o_i_d _*_p_t_r);
+
+     _s_t_r_u_c_t _m_t_x___p_o_o_l _*
+     mmttxx__ppooooll__ccrreeaattee(_c_o_n_s_t _c_h_a_r _*_m_t_x___n_a_m_e, _i_n_t _p_o_o_l___s_i_z_e, _i_n_t _o_p_t_s);
+
+     _v_o_i_d
+     mmttxx__ppooooll__ddeessttrrooyy(_s_t_r_u_c_t _m_t_x___p_o_o_l _*_*_p_o_o_l_p);
+
+DDEESSCCRRIIPPTTIIOONN
+     Mutex pools are designed to be used as short term leaf mutexes; i.e., the
+     last mutex one might acquire before calling mtx_sleep(9).  They operate
+     using a shared pool of mutexes.  A mutex may be chosen from the pool
+     based on a supplied pointer, which may or may not point to anything
+     valid, or the caller may allocate an arbitrary shared mutex from the pool
+     and save the returned mutex pointer for later use.
+
+     The shared mutexes in the _m_t_x_p_o_o_l___s_l_e_e_p mutex pool, which is created by
+     default, are standard, non-recursive, blockable mutexes, and should only
+     be used in appropriate situations.  The mutexes in the
+     _m_t_x_p_o_o_l___l_o_c_k_b_u_i_l_d_e_r mutex pool are similar, except that they are initial‐
+     ized with the MTX_NOWITNESS flag so that they may be used to build
+     higher-level locks.  Other mutex pools may be created that contain mu‐
+     texes with different properties, such as spin mutexes.
+
+     The caller can lock and unlock mutexes returned by the pool routines, but
+     since the mutexes are shared, the caller should not attempt to destroy
+     them or modify their characteristics.  While pool mutexes are normally
+     leaf mutexes (meaning that one cannot depend on any ordering guarantees
+     after obtaining one), one can still obtain other mutexes under carefully
+     controlled circumstances.  Specifically, if one has a private mutex (one
+     that was allocated and initialized by the caller), one can obtain it af‐
+     ter obtaining a pool mutex if ordering issues are carefully accounted
+     for.  In these cases the private mutex winds up being the true leaf mu‐
+     tex.
+
+     Pool mutexes have the following advantages:
+
+           1.   No structural overhead; i.e., they can be associated with a
+                structure without adding bloat to it.
+           2.   Mutexes can be obtained for invalid pointers, which is useful
+                when one uses mutexes to interlock destructor operations.
+           3.   No initialization or destruction overhead.
+           4.   Can be used with mtx_sleep(9).
+
+     And the following disadvantages:
+
+           1.   Should generally only be used as leaf mutexes.
+           2.   Pool/pool dependency ordering cannot be guaranteed.
+           3.   Possible L1 cache mastership contention between CPUs.
+
+     mmttxx__ppooooll__aalllloocc() obtains a shared mutex from the specified pool.  This
+     routine uses a simple rover to choose one of the shared mutexes managed
+     by the mmttxx__ppooooll subsystem.
+
+     mmttxx__ppooooll__ffiinndd() returns the shared mutex associated with the specified
+     address.  This routine will create a hash out of the pointer passed into
+     it and will choose a shared mutex from the specified pool based on that
+     hash.  The pointer does not need to point to anything real.
+
+     mmttxx__ppooooll__lloocckk(), mmttxx__ppooooll__lloocckk__ssppiinn(), mmttxx__ppooooll__uunnlloocckk(), and
+     mmttxx__ppooooll__uunnlloocckk__ssppiinn() lock and unlock the shared mutex from the speci‐
+     fied pool associated with the specified address; they are a combination
+     of mmttxx__ppooooll__ffiinndd() and mtx_lock(9), mtx_lock_spin(9), mtx_unlock(9), and
+     mtx_unlock_spin(9), respectively.  Since these routines must first find
+     the mutex to operate on, they are not as fast as directly using the mutex
+     pointer returned by a previous invocation of mmttxx__ppooooll__ffiinndd() or
+     mmttxx__ppooooll__aalllloocc().
+
+     mmttxx__ppooooll__ccrreeaattee() allocates and initializes a new mutex pool of the spec‐
+     ified size.  The pool size must be a power of two.  The _o_p_t_s argument is
+     passed to mtx_init(9) to set the options for each mutex in the pool.
+
+     mmttxx__ppooooll__ddeessttrrooyy() calls mtx_destroy(9) on each mutex in the specified
+     pool, deallocates the memory associated with the pool, and assigns NULL
+     to the pool pointer.
+
+SSEEEE AALLSSOO
+     locking(9), mutex(9)
+
+HHIISSTTOORRYY
+     These routines first appeared in FreeBSD 5.0.
+
+BSD                            February 6, 2010                            BSD

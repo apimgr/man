@@ -1,0 +1,179 @@
+EXPR(1)                   BSD General Commands Manual                  EXPR(1)
+
+NNAAMMEE
+     eexxpprr — evaluate expression
+
+SSYYNNOOPPSSIISS
+     eexxpprr [--ee] _e_x_p_r_e_s_s_i_o_n
+
+DDEESSCCRRIIPPTTIIOONN
+     The eexxpprr utility evaluates _e_x_p_r_e_s_s_i_o_n and writes the result on standard
+     output.
+
+     All operators and operands must be passed as separate arguments.  Several
+     of the operators have special meaning to command interpreters and must
+     therefore be quoted appropriately.  All integer operands are interpreted
+     in base 10 and must consist of only an optional leading minus sign fol‐
+     lowed by one or more digits (unless less strict parsing has been enabled
+     for backwards compatibility with prior versions of eexxpprr in FreeBSD).
+
+     Arithmetic operations are performed using signed integer math with a
+     range according to the C _i_n_t_m_a_x___t data type (the largest signed integral
+     type available).  All conversions and operations are checked for over‐
+     flow.  Overflow results in program termination with an error message on
+     stdout and with an error status.
+
+     The --ee option enables backwards compatible behaviour as detailed below.
+
+     Operators are listed below in order of increasing precedence; all are
+     left-associative.  Operators with equal precedence are grouped within
+     symbols ‘{’ and ‘}’.
+
+     _e_x_p_r_1 | _e_x_p_r_2
+             Return the evaluation of _e_x_p_r_1 if it is neither an empty string
+             nor zero; otherwise, returns the evaluation of _e_x_p_r_2 if it is not
+             an empty string; otherwise, returns zero.
+
+     _e_x_p_r_1 & _e_x_p_r_2
+             Return the evaluation of _e_x_p_r_1 if neither expression evaluates to
+             an empty string or zero; otherwise, returns zero.
+
+     _e_x_p_r_1 {=, >, >=, <, <=, !=} _e_x_p_r_2
+             Return the results of integer comparison if both arguments are
+             integers; otherwise, returns the results of string comparison us‐
+             ing the locale-specific collation sequence.  The result of each
+             comparison is 1 if the specified relation is true, or 0 if the
+             relation is false.
+
+     _e_x_p_r_1 {+, -} _e_x_p_r_2
+             Return the results of addition or subtraction of integer-valued
+             arguments.
+
+     _e_x_p_r_1 {*, /, %} _e_x_p_r_2
+             Return the results of multiplication, integer division, or re‐
+             mainder of integer-valued arguments.
+
+     _e_x_p_r_1 : _e_x_p_r_2
+             The “:” operator matches _e_x_p_r_1 against _e_x_p_r_2, which must be a ba‐
+             sic regular expression.  The regular expression is anchored to
+             the beginning of the string with an implicit “^”.
+
+             If the match succeeds and the pattern contains at least one regu‐
+             lar expression subexpression “\(...\)”, the string corresponding
+             to “\1” is returned; otherwise the matching operator returns the
+             number of characters matched.  If the match fails and the pattern
+             contains a regular expression subexpression the null string is
+             returned; otherwise 0.
+
+     Parentheses are used for grouping in the usual manner.
+
+     The eexxpprr utility makes no lexical distinction between arguments which may
+     be operators and arguments which may be operands.  An operand which is
+     lexically identical to an operator will be considered a syntax error.
+     See the examples below for a work-around.
+
+     The syntax of the eexxpprr command in general is historic and inconvenient.
+     New applications are advised to use shell arithmetic rather than eexxpprr.
+
+   CCoommppaattiibbiilliittyy wwiitthh pprreevviioouuss iimmpplleemmeennttaattiioonnss
+     Unless FreeBSD 4.x compatibility is enabled, this version of eexxpprr adheres
+     to the POSIX Utility Syntax Guidelines, which require that a leading ar‐
+     gument beginning with a minus sign be considered an option to the pro‐
+     gram.  The standard ---- syntax may be used to prevent this interpretation.
+     However, many historic implementations of eexxpprr, including the one in pre‐
+     vious versions of FreeBSD, will not permit this syntax.  See the examples
+     below for portable ways to guarantee the correct interpretation.  The
+     check_utility_compat(3) function (with a _u_t_i_l_i_t_y argument of “expr”) is
+     used to determine whether backwards compatibility mode should be enabled.
+     This feature is intended for use as a transition and debugging aid, when
+     eexxpprr is used in complex scripts which cannot easily be recast to avoid
+     the non-portable usage.  Enabling backwards compatibility mode also im‐
+     plicitly enables the --ee option, since this matches the historic behavior
+     of eexxpprr in FreeBSD. This option makes number parsing less strict and
+     permits leading white space and an optional leading plus sign.  In addi‐
+     tion, empty operands have an implied value of zero in numeric context.
+     For historical reasons, defining the environment variable EXPR_COMPAT
+     also enables backwards compatibility mode.
+
+EENNVVIIRROONNMMEENNTT
+     EXPR_COMPAT  If set, enables backwards compatibility mode.
+
+EEXXIITT SSTTAATTUUSS
+     The eexxpprr utility exits with one of the following values:
+     0       the expression is neither an empty string nor 0.
+     1       the expression is an empty string or 0.
+     2       the expression is invalid.
+
+EEXXAAMMPPLLEESS
+     ••   The following example (in sh(1) syntax) adds one to the variable _a:
+               a=$(expr $a + 1)
+
+     ••   This will fail if the value of _a is a negative number.  To protect
+         negative values of _a from being interpreted as options to the eexxpprr
+         command, one might rearrange the expression:
+               a=$(expr 1 + $a)
+
+     ••   More generally, parenthesize possibly-negative values:
+               a=$(expr \( $a \) + 1)
+
+     ••   With shell arithmetic, no escaping is required:
+               a=$((a + 1))
+
+     ••   This example prints the filename portion of a pathname stored in
+         variable _a.  Since _a might represent the path _/, it is necessary to
+         prevent it from being interpreted as the division operator.  The //
+         characters resolve this ambiguity.
+               expr "//$a" : '.*/\(.*\)'
+
+     ••   With modern sh(1) syntax,
+               "${a##*/}"
+         expands to the same value.
+
+     The following examples output the number of characters in variable _a.
+     Again, if _a might begin with a hyphen, it is necessary to prevent it from
+     being interpreted as an option to eexxpprr, and _a might be interpreted as an
+     operator.
+
+     ••   To deal with all of this, a complicated command is required:
+               expr \( "X$a" : ".*" \) - 1
+
+     ••   With modern sh(1) syntax, this can be done much more easily:
+               ${#a}
+         expands to the required number.
+
+SSEEEE AALLSSOO
+     sh(1), test(1), check_utility_compat(3)
+
+SSTTAANNDDAARRDDSS
+     The eexxpprr utility conforms to IEEE Std 1003.1-2008 (“POSIX.1”), provided
+     that backwards compatibility mode is not enabled.
+
+     Backwards compatibility mode performs less strict checks of numeric argu‐
+     ments:
+
+     ••   An empty operand string is interpreted as 0.
+
+     ••   Leading white space and/or a plus sign before an otherwise valid pos‐
+         itive numeric operand are allowed and will be ignored.
+
+     The extended arithmetic range and overflow checks do not conflict with
+     POSIX's requirement that arithmetic be done using signed longs, since
+     they only make a difference to the result in cases where using signed
+     longs would give undefined behavior.
+
+     According to the POSIX standard, the use of string arguments _l_e_n_g_t_h,
+     _s_u_b_s_t_r, _i_n_d_e_x, or _m_a_t_c_h produces undefined results.  In this version of
+     eexxpprr, these arguments are treated just as their respective string values.
+
+     The --ee flag is an extension.
+
+HHIISSTTOORRYY
+     An eexxpprr utility first appeared in the Programmer's Workbench (PWB/UNIX).
+     A public domain version of eexxpprr written by Pace Willisson
+     <_p_a_c_e_@_b_l_i_t_z_._c_o_m> appeared in 386BSD 0.1.
+
+AAUUTTHHOORRSS
+     Initial implementation by Pace Willisson <_p_a_c_e_@_b_l_i_t_z_._c_o_m> was largely
+     rewritten by J.T. Conklin <_j_t_c_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             October 5, 2016                            BSD

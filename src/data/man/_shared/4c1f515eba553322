@@ -1,0 +1,169 @@
+TUN(4)                   BSD Kernel Interfaces Manual                   TUN(4)
+
+NNAAMMEE
+     ttuunn — tunnel software network interface
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee ttuunnttaapp
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following lines in loader.conf(5):
+
+           if_tuntap_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The ttuunn interface is a software loopback mechanism that can be loosely
+     described as the network interface analog of the pty(4), that is, ttuunn
+     does for network interfaces what the pty(4) driver does for terminals.
+
+     The ttuunn driver, like the pty(4) driver, provides two interfaces: an in‐
+     terface like the usual facility it is simulating (a network interface in
+     the case of ttuunn, or a terminal for pty(4)), and a character-special de‐
+     vice “control” interface.  A client program transfers IP (by default)
+     packets to or from the ttuunn “control” interface.  The tap(4) interface
+     provides similar functionality at the Ethernet layer: a client will
+     transfer Ethernet frames to or from a tap(4) “control” interface.
+
+     The network interfaces are named “tun0”, “tun1”, etc., one for each con‐
+     trol device that has been opened.  These network interfaces persist until
+     the _i_f___t_u_n_t_a_p_._k_o module is unloaded, or until removed with the
+     ifconfig(8) command.
+
+     ttuunn devices are created using interface cloning.  This is done using the
+     “ifconfig tunNN create” command.  This is the preferred method of creating
+     ttuunn devices.  The same method allows removal of interfaces.  For this,
+     use the “ifconfig tunNN destroy” command.
+
+     If the sysctl(8) variable _n_e_t_._l_i_n_k_._t_u_n_._d_e_v_f_s___c_l_o_n_i_n_g is non-zero, the ttuunn
+     interface permits opens on the special control device _/_d_e_v_/_t_u_n.  When
+     this device is opened, ttuunn will return a handle for the lowest unused ttuunn
+     device (use devname(3) to determine which).
+
+     _D_i_s_a_b_l_i_n_g _t_h_e _l_e_g_a_c_y _d_e_v_f_s _c_l_o_n_i_n_g _f_u_n_c_t_i_o_n_a_l_i_t_y _m_a_y _b_r_e_a_k _e_x_i_s_t_i_n_g _a_p_‐
+     _p_l_i_c_a_t_i_o_n_s _w_h_i_c_h _u_s_e ttuunn_, _s_u_c_h _a_s ppp(_8) _a_n_d ssh(_1)_.  _I_t _t_h_e_r_e_f_o_r_e _d_e_‐
+     _f_a_u_l_t_s _t_o _b_e_i_n_g _e_n_a_b_l_e_d _u_n_t_i_l _f_u_r_t_h_e_r _n_o_t_i_c_e_.
+
+     Control devices (once successfully opened) persist until _i_f___t_u_n_t_a_p_._k_o is
+     unloaded in the same way that network interfaces persist (see above).
+
+     Each interface supports the usual network-interface ioctl(2)s, such as
+     SIOCAIFADDR and thus can be used with ifconfig(8) like any other inter‐
+     face.  At boot time, they are POINTOPOINT interfaces, but this can be
+     changed; see the description of the control device, below.  When the sys‐
+     tem chooses to transmit a packet on the network interface, the packet can
+     be read from the control device (it appears as “input” there); writing a
+     packet to the control device generates an input packet on the network in‐
+     terface, as if the (non-existent) hardware had just received it.
+
+     The tunnel device (_/_d_e_v_/_t_u_n_N) is exclusive-open (it cannot be opened if
+     it is already open).  A read(2) call will return an error (EHOSTDOWN) if
+     the interface is not “ready” (which means that the control device is open
+     and the interface's address has been set).
+
+     Once the interface is ready, read(2) will return a packet if one is
+     available; if not, it will either block until one is or return
+     EWOULDBLOCK, depending on whether non-blocking I/O has been enabled.  If
+     the packet is longer than is allowed for in the buffer passed to read(2),
+     the extra data will be silently dropped.
+
+     If the TUNSLMODE ioctl has been set, packets read from the control device
+     will be prepended with the destination address as presented to the net‐
+     work interface output routine, ttuunnoouuttppuutt().  The destination address is
+     in _s_t_r_u_c_t _s_o_c_k_a_d_d_r format.  The actual length of the prepended address is
+     in the member _s_a___l_e_n.  If the TUNSIFHEAD ioctl has been set, packets will
+     be prepended with a four byte address family in network byte order.
+     TUNSLMODE and TUNSIFHEAD are mutually exclusive.  In any case, the packet
+     data follows immediately.
+
+     A write(2) call passes a packet in to be “received” on the pseudo-inter‐
+     face.  If the TUNSIFHEAD ioctl has been set, the address family must be
+     prepended, otherwise the packet is assumed to be of type AF_INET.  Each
+     write(2) call supplies exactly one packet; the packet length is taken
+     from the amount of data provided to write(2) (minus any supplied address
+     family).  Writes will not block; if the packet cannot be accepted for a
+     transient reason (e.g., no buffer space available), it is silently
+     dropped; if the reason is not transient (e.g., packet too large), an er‐
+     ror is returned.
+
+     The following ioctl(2) calls are supported (defined in <_n_e_t_/_i_f___t_u_n_._h>):
+
+     TUNSDEBUG   The argument should be a pointer to an _i_n_t; this sets the in‐
+                 ternal debugging variable to that value.  What, if anything,
+                 this variable controls is not documented here; see the source
+                 code.
+
+     TUNGDEBUG   The argument should be a pointer to an _i_n_t; this stores the
+                 internal debugging variable's value into it.
+
+     TUNSIFINFO  The argument should be a pointer to an _s_t_r_u_c_t _t_u_n_i_n_f_o and al‐
+                 lows setting the MTU and the baudrate of the tunnel device.
+                 The type must be the same as returned by TUNGIFINFO or set to
+                 IFT_PPP else the ioctl(2) call will fail.  The _s_t_r_u_c_t _t_u_n_i_n_f_o
+                 is declared in <_n_e_t_/_i_f___t_u_n_._h>.
+
+                 The use of this ioctl is restricted to the super-user.
+
+     TUNGIFINFO  The argument should be a pointer to an _s_t_r_u_c_t _t_u_n_i_n_f_o, where
+                 the current MTU, type, and baudrate will be stored.
+
+     TUNSIFMODE  The argument should be a pointer to an _i_n_t; its value must be
+                 either IFF_POINTOPOINT or IFF_BROADCAST and should have
+                 IFF_MULTICAST OR'd into the value if multicast support is re‐
+                 quired.  The type of the corresponding “tun_N” interface is
+                 set to the supplied type.  If the value is outside the above
+                 range, an EINVAL error is returned.  The interface must be
+                 down at the time; if it is up, an EBUSY error is returned.
+
+     TUNSLMODE   The argument should be a pointer to an _i_n_t; a non-zero value
+                 turns off “multi-af” mode and turns on “link-layer” mode,
+                 causing packets read from the tunnel device to be prepended
+                 with the network destination address (see above).
+
+     TUNSIFPID   Will set the pid owning the tunnel device to the current
+                 process's pid.
+
+     TUNSIFHEAD  The argument should be a pointer to an _i_n_t; a non-zero value
+                 turns off “link-layer” mode, and enables “multi-af” mode,
+                 where every packet is preceded with a four byte address fam‐
+                 ily.
+
+     TUNGIFHEAD  The argument should be a pointer to an _i_n_t; the ioctl sets
+                 the value to one if the device is in “multi-af” mode, and
+                 zero otherwise.
+
+     FIONBIO     Turn non-blocking I/O for reads off or on, according as the
+                 argument _i_n_t's value is or is not zero.  (Writes are always
+                 non-blocking.)
+
+     FIOASYNC    Turn asynchronous I/O for reads (i.e., generation of SIGIO
+                 when data is available to be read) off or on, according as
+                 the argument _i_n_t's value is or is not zero.
+
+     FIONREAD    If any packets are queued to be read, store the size of the
+                 first one into the argument _i_n_t; otherwise, store zero.
+
+     TIOCSPGRP   Set the process group to receive SIGIO signals, when asyn‐
+                 chronous I/O is enabled, to the argument _i_n_t value.
+
+     TIOCGPGRP   Retrieve the process group value for SIGIO signals into the
+                 argument _i_n_t value.
+
+     The control device also supports select(2) for read; selecting for write
+     is pointless, and always succeeds, since writes are always non-blocking.
+
+     On the last close of the data device, by default, the interface is
+     brought down (as if with iiffccoonnffiigg _t_u_n_N ddoowwnn).  All queued packets are
+     thrown away.  If the interface is up when the data device is not open
+     output packets are always thrown away rather than letting them pile up.
+
+SSEEEE AALLSSOO
+     ioctl(2), read(2), select(2), write(2), devname(3), inet(4), intro(4),
+     pty(4), tap(4), ifconfig(8)
+
+AAUUTTHHOORRSS
+     This manual page was originally obtained from NetBSD.
+
+BSD                             March 17, 2020                             BSD

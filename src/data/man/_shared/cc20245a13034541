@@ -1,0 +1,79 @@
+DEVCTL(4)                BSD Kernel Interfaces Manual                DEVCTL(4)
+
+NNAAMMEE
+     ddeevvccttll — device event reporting and device control interface
+
+SSYYNNOOPPSSIISS
+     The
+     ddeevvccttll driver is automatically included in the kernel.
+
+DDEESSCCRRIIPPTTIIOONN
+     The ddeevvccttll device is used to report device events from the kernel.  Fu‐
+     ture versions will allow for some device control as well.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     This design allows only one reader for _/_d_e_v_/_d_e_v_c_t_l.  This is not desir‐
+     able in the long run, but will get a lot of hair out of this implementa‐
+     tion.  Maybe we should make this device a clonable device.
+
+     Also note: we specifically do not attach a device to the _d_e_v_i_c_e___t tree to
+     avoid potential chicken and egg problems.  One could argue that all of
+     this belongs to the root node.  One could also further argue that the
+     sysctl(3) interface that we have now might more properly be an ioctl(2)
+     interface.
+
+     SIGIO support is included in the driver.  However, the author is not sure
+     that the SIGIO support is done correctly.  It was copied from a driver
+     that had SIGIO support that likely has not been tested since FreeBSD 3.4
+     or FreeBSD 2.2.8!
+
+     The read channel for this device is used to report changes to userland in
+     realtime.  We return one record at a time.  If you try to read this de‐
+     vice a character at a time, you will lose the rest of the data.  Listen‐
+     ing programs are expected to cope.
+
+     The sysctl _h_w_._b_u_s_._d_e_v_c_t_l___q_u_e_u_e can be used to control queue length.  It
+     is set to 0 to disable ddeevvccttll when no devd(8) is running.
+
+PPRROOTTOOCCOOLL
+     The ddeevvccttll device uses an ASCII protocol.  The driver returns one record
+     at a time to its readers.  Each record is terminated with a newline.  The
+     first character of the record is the event type.
+
+     _T_y_p_e    _D_e_s_c_r_i_p_t_i_o_n
+     !       A notify event, such as a link state change.
+     +       Device node in tree attached.
+     -       Device node in tree detached.
+     ?       Unknown device detected.
+
+   MMeessssaaggee FFoorrmmaattss
+     Except for the first character in the record, attach and detach messages
+     have the same format.
+
+           _T_d_e_v at _p_a_r_e_n_t on _l_o_c_a_t_i_o_n
+
+     _P_a_r_t        _D_e_s_c_r_i_p_t_i_o_n
+     _T           + or -
+     _d_e_v         The device name that was attached/detached.
+     _p_a_r_e_n_t      The device name of the parent bus that attached the device.
+     _l_o_c_a_t_i_o_n    Bus specific location information.
+
+     The nomatch messages can be used to load devices driver.  If you load a
+     device driver, then one of two things can happen.  If the device driver
+     attaches to something, you will get a device attached message.  If it
+     does not, then nothing will happen.
+
+     The attach and detach messages arrive after the event.  This means one
+     cannot use the attach message to load an alternate driver.  The attach
+     message driver has already claimed this device.  One cannot use the de‐
+     tach messages to flush data to the device.  The device is already gone.
+
+     All values passed back are of the form ‘key=value’ or ‘key="value"’.
+     When the latter, the string “value” must have any internal backslashes
+     doubled.  It must also have any internal double quote characters ‘’ pre‐
+     ceded by a backslash.  All other characters should be passed through.
+
+SSEEEE AALLSSOO
+     devd(8)
+
+BSD                           September 21, 2020                           BSD

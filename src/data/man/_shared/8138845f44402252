@@ -1,0 +1,127 @@
+PFSYNC(4)                BSD Kernel Interfaces Manual                PFSYNC(4)
+
+NNAAMMEE
+     ppffssyynncc — packet filter state table synchronisation interface
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ppffssyynncc
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppffssyynncc interface is a pseudo-device which exposes certain changes to
+     the state table used by pf(4).  State changes can be viewed by invoking
+     tcpdump(8) on the ppffssyynncc interface.  If configured with a physical syn‐
+     chronisation interface, ppffssyynncc will also send state changes out on that
+     interface, and insert state changes received on that interface from other
+     systems into the state table.
+
+     By default, all local changes to the state table are exposed via ppffssyynncc.
+     State changes from packets received by ppffssyynncc over the network are not
+     rebroadcast.  Updates to states created by a rule marked with the _n_o_-_s_y_n_c
+     keyword are ignored by the ppffssyynncc interface (see pf.conf(5) for details).
+
+     The ppffssyynncc interface will attempt to collapse multiple state updates into
+     a single packet where possible.  The maximum number of times a single
+     state can be updated before a ppffssyynncc packet will be sent out is con‐
+     trolled by the ifconfig(8) _m_a_x_u_p_d parameter.  The sending out of a ppffssyynncc
+     packet will be delayed by a maximum of one second.
+
+     Where more than one firewall might actively handle packets, e.g. with
+     certain ospfd(8), bgpd(8) or carp(4) configurations, it is beneficial to
+     defer transmission of the initial packet of a connection.  The ppffssyynncc
+     state insert message is sent immediately; the packet is queued until ei‐
+     ther this message is acknowledged by another system, or a timeout has ex‐
+     pired.  This behaviour is enabled with the _d_e_f_e_r parameter to
+     ifconfig(8).
+
+NNEETTWWOORRKK SSYYNNCCHHRROONNIISSAATTIIOONN
+     States can be synchronised between two or more firewalls using this in‐
+     terface, by specifying a synchronisation interface using ifconfig(8).
+     For example, the following command configures an address on fxp0 and sets
+     it as the synchronisation interface:
+
+           # ifconfig fxp0 inet 172.19.13.1/28
+           # ifconfig pfsync0 syncdev fxp0
+
+     By default, state change messages are sent out on the synchronisation in‐
+     terface using IP multicast packets to the 224.0.0.240 group address.  An
+     alternative destination address for ppffssyynncc packets can be specified using
+     the ssyynnccppeeeerr keyword.
+
+     It is important that the pfsync traffic be well secured as there is no
+     authentication on the protocol and it would be trivial to spoof packets
+     which create states, bypassing the pf ruleset.  Only run the pfsync pro‐
+     tocol on a trusted network - ideally a network dedicated to pfsync mes‐
+     sages such as a crossover cable between two firewalls.
+
+     ppffssyynncc will increase the carp(4) demotion counter for any interface
+     groups associated with the interface by 32 during initialisation, and by
+     1 if the ppffssyynncc link is down or if a bulk update fails.
+
+EEXXAAMMPPLLEESS
+     ppffssyynncc and carp(4) can be used together to provide automatic failover of
+     a pair of firewalls configured in parallel.  One firewall will handle all
+     traffic until it dies, is shut down, or is manually demoted, at which
+     point the second firewall will take over automatically.
+
+     Both firewalls in this example have three sis(4) interfaces.  sis0 is the
+     external interface, on the 10.0.0.0/24 subnet; sis1 is the internal in‐
+     terface, on the 192.168.0.0/24 subnet; and sis2 is the ppffssyynncc interface,
+     using the 192.168.254.0/24 subnet.  A crossover cable connects the two
+     firewalls via their sis2 interfaces.  On all three interfaces, firewall A
+     uses the .254 address, while firewall B uses .253.  The interfaces are
+     configured as follows (firewall A unless otherwise indicated):
+
+     _/_e_t_c_/_h_o_s_t_n_a_m_e_._s_i_s_0:
+           inet 10.0.0.254 255.255.255.0 NONE
+
+     _/_e_t_c_/_h_o_s_t_n_a_m_e_._s_i_s_1:
+           inet 192.168.0.254 255.255.255.0 NONE
+
+     _/_e_t_c_/_h_o_s_t_n_a_m_e_._s_i_s_2:
+           inet 192.168.254.254 255.255.255.0 NONE
+
+     _/_e_t_c_/_h_o_s_t_n_a_m_e_._c_a_r_p_0:
+           inet 10.0.0.1 255.255.255.0 10.0.0.255 \
+                   vhid 1 carpdev sis0 pass foo
+
+     _/_e_t_c_/_h_o_s_t_n_a_m_e_._c_a_r_p_1:
+           inet 192.168.0.1 255.255.255.0 192.168.0.255 \
+                   vhid 2 carpdev sis1 pass bar
+
+     _/_e_t_c_/_h_o_s_t_n_a_m_e_._p_f_s_y_n_c_0:
+           syncdev sis2
+           up
+
+     pf(4) must also be configured to allow ppffssyynncc and carp(4) traffic
+     through.  The following should be added to the top of _/_e_t_c_/_p_f_._c_o_n_f:
+
+           pass quick on { sis2 } proto pfsync keep state (no-sync)
+           pass on { sis0 sis1 } proto carp keep state (no-sync)
+
+     It is preferable that one firewall handle the forwarding of all the traf‐
+     fic, therefore the _a_d_v_s_k_e_w on the backup firewall's carp(4) interfaces
+     should be set to something higher than the primary's.  For example, if
+     firewall B is the backup, its _/_e_t_c_/_h_o_s_t_n_a_m_e_._c_a_r_p_1 would look like this:
+
+           inet 192.168.0.1 255.255.255.0 192.168.0.255 \
+                   vhid 2 pass bar advskew 100
+
+     The following must also be added to _/_e_t_c_/_s_y_s_c_t_l_._c_o_n_f:
+
+           net.inet.carp.preempt=1
+
+SSEEEE AALLSSOO
+     bpf(4), carp(4), inet(4), inet6(4), netintro(4), pf(4), hostname.if(5),
+     pf.conf(5), protocols(5), ifconfig(8), ifstated(8), tcpdump(8)
+
+HHIISSTTOORRYY
+     The ppffssyynncc device first appeared in OpenBSD 3.3.
+
+     The ppffssyynncc protocol and kernel implementation were significantly modified
+     between OpenBSD 4.4 and OpenBSD 4.5.  The two protocols are incompatible
+     and will not interoperate.
+
+BBUUGGSS
+     ppffssyynncc does not currently work with ipsec(4).
+
+BSD                            January 31, 2024                            BSD

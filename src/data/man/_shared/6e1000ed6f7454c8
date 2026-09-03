@@ -1,0 +1,659 @@
+_s_t(4)                      Kernel Interfaces Manual                      _s_t(4)
+
+NNAAMMEE
+       st - SCSI tape device
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//mmttiioo..hh>>
+
+       iinntt iiooccttll((iinntt _f_d,, iinntt _r_e_q_u_e_s_t [[,, ((vvooiidd **))_a_r_g_3]]));;
+       iinntt iiooccttll((iinntt _f_d,, MMTTIIOOCCTTOOPP,, ((ssttrruucctt mmttoopp **))_m_t___c_m_d));;
+       iinntt iiooccttll((iinntt _f_d,, MMTTIIOOCCGGEETT,, ((ssttrruucctt mmttggeett **))_m_t___s_t_a_t_u_s));;
+       iinntt iiooccttll((iinntt _f_d,, MMTTIIOOCCPPOOSS,, ((ssttrruucctt mmttppooss **))_m_t___p_o_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The sstt driver provides the interface to a variety of SCSI tape devices.
+       Currently,  the  driver  takes  control of all detected devices of type
+       “sequential‐access”.  The sstt driver uses major device number 9.
+
+       Each device uses eight minor device numbers.  The lowermost  five  bits
+       in  the  minor numbers are assigned sequentially in the order of detec‐
+       tion.  In the 2.6 kernel, the bits above the eight lowermost  bits  are
+       concatenated  to  the five lowermost bits to form the tape number.  The
+       minor numbers can be grouped into two sets of four numbers: the princi‐
+       pal (auto‐rewind) minor device numbers, _n, and the  “no‐rewind”  device
+       numbers,  (_n  + 128).  Devices opened using the principal device number
+       will be sent a RREEWWIINNDD command when they are closed.  Devices opened us‐
+       ing the “no‐rewind” device number will not.  (Note that using an  auto‐
+       rewind  device for positioning the tape with, for instance, mt does not
+       lead to the desired result: the tape is rewound after  the  mt  command
+       and the next command starts from the beginning of the tape).
+
+       Within  each  group, four minor numbers are available to define devices
+       with different characteristics (block size, compression, density, etc.)
+       When the system starts up, only the first  device  is  available.   The
+       other  three are activated when the default characteristics are defined
+       (see below).  (By changing compile‐time constants, it  is  possible  to
+       change  the  balance  between the maximum number of tape drives and the
+       number of minor numbers for each drive.  The default allocation  allows
+       control  of 32 tape drives.  For instance, it is possible to control up
+       to 64 tape drives with two minor numbers for different options.)
+
+       Devices are typically created by:
+
+           mknod -m 666 /dev/st0 c 9 0
+           mknod -m 666 /dev/st0l c 9 32
+           mknod -m 666 /dev/st0m c 9 64
+           mknod -m 666 /dev/st0a c 9 96
+           mknod -m 666 /dev/nst0 c 9 128
+           mknod -m 666 /dev/nst0l c 9 160
+           mknod -m 666 /dev/nst0m c 9 192
+           mknod -m 666 /dev/nst0a c 9 224
+
+       There is no corresponding block device.
+
+       The driver uses an internal buffer that has to be large enough to  hold
+       at least one tape block.  Before Linux 2.1.121, the buffer is allocated
+       as  one  contiguous  block.   This limits the block size to the largest
+       contiguous block of memory the kernel allocator can provide.  The limit
+       is currently 128 kB for 32‐bit architectures and 256 kB for 64‐bit  ar‐
+       chitectures.   In newer kernels the driver allocates the buffer in sev‐
+       eral parts if necessary.  By default, the maximum number  of  parts  is
+       16.   This means that the maximum block size is very large (2 MB if al‐
+       location of 16 blocks of 128 kB succeeds).
+
+       The driver’s internal buffer size is determined by a compile‐time  con‐
+       stant  which  can be overridden with a kernel startup option.  In addi‐
+       tion to this, the driver tries to allocate a larger temporary buffer at
+       run time if necessary.  However, run‐time allocation of large  contigu‐
+       ous  blocks of memory may fail and it is advisable not to rely too much
+       on dynamic buffer allocation before Linux 2.1.121 (this applies also to
+       demand‐loading the driver with kerneld or kmod).
+
+       The driver does not specifically support any tape drive brand or model.
+       After system start‐up the tape device options are defined by the  drive
+       firmware.  For example, if the drive firmware selects fixed‐block mode,
+       the tape device uses fixed‐block mode.  The options can be changed with
+       explicit  iiooccttll(2) calls and remain in effect when the device is closed
+       and reopened.  Setting the options affects both the auto‐rewind and the
+       nonrewind device.
+
+       Different options can be specified for the different devices within the
+       subgroup of four.  The options take effect when the device  is  opened.
+       For example, the system administrator can define one device that writes
+       in  fixed‐block mode with a certain block size, and one which writes in
+       variable‐block mode (if the drive supports both modes).
+
+       The driver supports ttaappee ppaarrttiittiioonnss if they are supported by the drive.
+       (Note that the tape partitions have nothing to do with disk partitions.
+       A partitioned tape can be seen as  several  logical  tapes  within  one
+       medium.)   Partition  support  has to be enabled with an iiooccttll(2).  The
+       tape location is  preserved  within  each  partition  across  partition
+       changes.  The partition used for subsequent tape operations is selected
+       with  an  iiooccttll(2).  The partition switch is executed together with the
+       next tape operation in order to avoid unnecessary tape  movement.   The
+       maximum  number  of  partitions  on a tape is defined by a compile‐time
+       constant (originally four).  The driver contains an iiooccttll(2)  that  can
+       format a tape with either one or two partitions.
+
+       Device  _/_d_e_v_/_t_a_p_e  is usually created as a hard or soft link to the de‐
+       fault tape device on the system.
+
+       Starting from Linux 2.6.2, the driver exports in  the  sysfs  directory
+       _/_s_y_s_/_c_l_a_s_s_/_s_c_s_i___t_a_p_e  the attached devices and some parameters assigned
+       to the devices.
+
+   DDaattaa ttrraannssffeerr
+       The driver supports operation in both fixed‐block  mode  and  variable‐
+       block  mode (if supported by the drive).  In fixed‐block mode the drive
+       writes blocks of the specified size and the block size is not dependent
+       on the byte counts of the write system calls.  In  variable‐block  mode
+       one tape block is written for each write call and the byte count deter‐
+       mines  the  size of the corresponding tape block.  Note that the blocks
+       on the tape don’t contain any information about the writing mode:  when
+       reading,  the  only  important thing is to use commands that accept the
+       block sizes on the tape.
+
+       In variable‐block mode the read byte count does not have to  match  the
+       tape  block  size  exactly.   If the byte count is larger than the next
+       block on tape, the driver returns the data and the function returns the
+       actual block size.  If the block size is larger than the byte count, an
+       error is returned.
+
+       In fixed‐block mode the read byte counts can be arbitrary if  buffering
+       is  enabled,  or a multiple of the tape block size if buffering is dis‐
+       abled.  Before Linux 2.1.121 allow writes with arbitrary byte count  if
+       buffering  is  enabled.   In all other cases (before Linux 2.1.121 with
+       buffering disabled or newer kernel) the write byte count must be a mul‐
+       tiple of the tape block size.
+
+       In Linux 2.6, the driver tries to use direct transfers between the user
+       buffer and the device.  If this is not possible, the driver’s  internal
+       buffer is used.  The reasons for not using direct transfers include im‐
+       proper  alignment of the user buffer (default is 512 bytes but this can
+       be changed by the HBA driver), one or more pages of the user buffer not
+       reachable by the SCSI adapter, and so on.
+
+       A filemark is automatically written to tape if the last tape  operation
+       before close was a write.
+
+       When  a  filemark  is encountered while reading, the following happens.
+       If there are data remaining in the buffer when the filemark  is  found,
+       the  buffered data is returned.  The next read returns zero bytes.  The
+       following read returns data from the next file.  The  end  of  recorded
+       data  is  signaled  by  returning  zero  bytes for two consecutive read
+       calls.  The third read returns an error.
+
+   IIooccttllss
+       The driver supports three iiooccttll(2) requests.  Requests  not  recognized
+       by  the sstt driver are passed to the SSCCSSII driver.  The definitions below
+       are from _/_u_s_r_/_i_n_c_l_u_d_e_/_l_i_n_u_x_/_m_t_i_o_._h:
+
+   MMTTIIOOCCTTOOPP —— ppeerrffoorrmm aa ttaappee ooppeerraattiioonn
+       This request takes an argument of type _(_s_t_r_u_c_t _m_t_o_p _*_).  Not all drives
+       support all operations.  The driver returns an EEIIOO error if  the  drive
+       rejects an operation.
+
+           /* Structure for MTIOCTOP - mag tape op command: */
+           struct mtop {
+               short   mt_op;       /* operations defined below */
+               int     mt_count;    /* how many of them */
+           };
+
+       Magnetic tape operations for normal tape use:
+
+       MMTTBBSSFF  Backward space over _m_t___c_o_u_n_t filemarks.
+
+       MMTTBBSSFFMM Backward  space over _m_t___c_o_u_n_t filemarks.  Reposition the tape to
+              the EOT side of the last filemark.
+
+       MMTTBBSSRR  Backward space over _m_t___c_o_u_n_t records (tape blocks).
+
+       MMTTBBSSSS  Backward space over _m_t___c_o_u_n_t setmarks.
+
+       MMTTCCOOMMPPRREESSSSIIOONN
+              Enable compression of tape data within the drive if _m_t___c_o_u_n_t  is
+              nonzero  and disable compression if _m_t___c_o_u_n_t is zero.  This com‐
+              mand uses the MODE page 15 supported by most DATs.
+
+       MMTTEEOOMM  Go to the end of the recorded media (for appending files).
+
+       MMTTEERRAASSEE
+              Erase tape.  With Linux 2.6, short erase (mark  tape  empty)  is
+              performed if the argument is zero.  Otherwise, long erase (erase
+              all) is done.
+
+       MMTTFFSSFF  Forward space over _m_t___c_o_u_n_t filemarks.
+
+       MMTTFFSSFFMM Forward  space  over _m_t___c_o_u_n_t filemarks.  Reposition the tape to
+              the BOT side of the last filemark.
+
+       MMTTFFSSRR  Forward space over _m_t___c_o_u_n_t records (tape blocks).
+
+       MMTTFFSSSS  Forward space over _m_t___c_o_u_n_t setmarks.
+
+       MMTTLLOOAADD Execute the SCSI load command.  A special case is available  for
+              some    HP   autoloaders.    If   _m_t___c_o_u_n_t   is   the   constant
+              MMTT__SSTT__HHPPLLOOAADDEERR__OOFFFFSSEETT plus a number, the number is sent  to  the
+              drive to control the autoloader.
+
+       MMTTLLOOCCKK Lock the tape drive door.
+
+       MMTTMMKKPPAARRTT
+              Format the tape into one or two partitions.  If _m_t___c_o_u_n_t is pos‐
+              itive, it gives the size of partition 1 and partition 0 contains
+              the  rest of the tape.  If _m_t___c_o_u_n_t is zero, the tape is format‐
+              ted into one partition.  From Linux  4.6,  a  negative  _m_t___c_o_u_n_t
+              specifies  the size of partition 0 and the rest of the tape con‐
+              tains partition 1.  The physical ordering of partitions  depends
+              on  the  drive.   This command is not allowed for a drive unless
+              the  partition  support  is   enabled   for   the   drive   (see
+              MMTT__SSTT__CCAANN__PPAARRTTIITTIIOONNSS below).
+
+       MMTTNNOOPP  No  op—flushes  the driver’s buffer as a side effect.  Should be
+              used before reading status with MMTTIIOOCCGGEETT.
+
+       MMTTOOFFFFLL Rewind and put the drive off line.
+
+       MMTTRREESSEETT
+              Reset drive.
+
+       MMTTRREETTEENN
+              Re‐tension tape.
+
+       MMTTRREEWW  Rewind.
+
+       MMTTSSEEEEKK Seek to the tape block number specified in _m_t___c_o_u_n_t.  This oper‐
+              ation requires either a SCSI‐2 drive that  supports  the  LLOOCCAATTEE
+              command   (device‐specific  address)  or  a  Tandberg‐compatible
+              SCSI‐1 drive (Tandberg, Archive Viper, Wangtek, ...).  The block
+              number should be one that was previously returned by MMTTIIOOCCPPOOSS if
+              device‐specific addresses are used.
+
+       MMTTSSEETTBBLLKK
+              Set the drive’s block length to the value specified in _m_t___c_o_u_n_t.
+              A block length of zero sets the drive  to  variable  block  size
+              mode.
+
+       MMTTSSEETTDDEENNSSIITTYY
+              Set the tape density to the code in _m_t___c_o_u_n_t.  The density codes
+              supported by a drive can be found from the drive documentation.
+
+       MMTTSSEETTPPAARRTT
+              The  active  partition  is switched to _m_t___c_o_u_n_t.  The partitions
+              are numbered from zero.  This command is not allowed for a drive
+              unless the partition support  is  enabled  for  the  drive  (see
+              MMTT__SSTT__CCAANN__PPAARRTTIITTIIOONNSS below).
+
+       MMTTUUNNLLOOAADD
+              Execute the SCSI unload command (does not eject the tape).
+
+       MMTTUUNNLLOOCCKK
+              Unlock the tape drive door.
+
+       MMTTWWEEOOFF Write _m_t___c_o_u_n_t filemarks.
+
+       MMTTWWSSMM  Write _m_t___c_o_u_n_t setmarks.
+
+       Magnetic  tape  operations  for setting of device options (by the supe‐
+       ruser):
+
+       MMTTSSEETTDDRRVVBBUUFFFFEERR
+              Set various drive and driver options according to  bits  encoded
+              in _m_t___c_o_u_n_t.  These consist of the drive’s buffering mode, a set
+              of  Boolean driver options, the buffer write threshold, defaults
+              for the block size and density, and timeouts (only  since  Linux
+              2.1).   A  single operation can affect only one item in the list
+              below (the Booleans counted as one item.)
+
+              A value having zeros in the high‐order 4 bits will  be  used  to
+              set the drive’s buffering mode.  The buffering modes are:
+
+              00      The  drive  will not report GGOOOODD status on write commands
+                     until the data blocks are actually written to the medium.
+
+              11      The drive may report GGOOOODD status  on  write  commands  as
+                     soon  as all the data has been transferred to the drive’s
+                     internal buffer.
+
+              22      The drive may report GGOOOODD status  on  write  commands  as
+                     soon  as  (a)  all  the  data has been transferred to the
+                     drive’s internal buffer, and (b) all buffered  data  from
+                     different initiators has been successfully written to the
+                     medium.
+
+              To  control  the  write threshold the value in _m_t___c_o_u_n_t must in‐
+              clude the constant MMTT__SSTT__WWRRIITTEE__TTHHRREESSHHOOLLDD  bitwise  ORed  with  a
+              block  count  in  the  low  28  bits.  The block count refers to
+              1024‐byte blocks, not the physical block size on the tape.   The
+              threshold  cannot  exceed the driver’s internal buffer size (see
+              DESCRIPTION, above).
+
+              To set and clear the Boolean options the value in _m_t___c_o_u_n_t  must
+              include  one of the constants MMTT__SSTT__BBOOOOLLEEAANNSS, MMTT__SSTT__SSEETTBBOOOOLLEEAANNSS,
+              MMTT__SSTT__CCLLEEAARRBBOOOOLLEEAANNSS,  or  MMTT__SSTT__DDEEFFBBOOOOLLEEAANNSS  bitwise  ORed  with
+              whatever combination of the following options is desired.  Using
+              MMTT__SSTT__BBOOOOLLEEAANNSS  the  options can be set to the values defined in
+              the corresponding bits.  With MMTT__SSTT__SSEETTBBOOOOLLEEAANNSS the options  can
+              be   selectively  set  and  with  MMTT__SSTT__DDEEFFBBOOOOLLEEAANNSS  selectively
+              cleared.
+
+              The default options for a tape device are  set  with  MMTT__SSTT__DDEEFF‐‐
+              BBOOOOLLEEAANNSS.   A  nonactive tape device (e.g., device with minor 32
+              or 160) is activated when the default options for it are defined
+              the first time.  An activated device inherits  from  the  device
+              activated at start‐up the options not set explicitly.
+
+              The Boolean options are:
+
+              MMTT__SSTT__BBUUFFFFEERR__WWRRIITTEESS (Default: true)
+                     Buffer all write operations in fixed‐block mode.  If this
+                     option  is  false  and the drive uses a fixed block size,
+                     then all write operations must be for a multiple  of  the
+                     block size.  This option must be set false to write reli‐
+                     able multivolume archives.
+
+              MMTT__SSTT__AASSYYNNCC__WWRRIITTEESS (Default: true)
+                     When this option is true, write operations return immedi‐
+                     ately  without  waiting for the data to be transferred to
+                     the drive if the data fits into the driver’s buffer.  The
+                     write threshold determines how full the  buffer  must  be
+                     before  a  new  SCSI write command is issued.  Any errors
+                     reported by the drive will be held until the next  opera‐
+                     tion.   This  option  must be set false to write reliable
+                     multivolume archives.
+
+              MMTT__SSTT__RREEAADD__AAHHEEAADD (Default: true)
+                     This option causes the driver to provide  read  buffering
+                     and  read‐ahead  in  fixed‐block mode.  If this option is
+                     false and the drive uses a fixed  block  size,  then  all
+                     read operations must be for a multiple of the block size.
+
+              MMTT__SSTT__TTWWOO__FFMM (Default: false)
+                     This  option  modifies the driver behavior when a file is
+                     closed.  The normal action is to write a single filemark.
+                     If the option is true, the driver will  write  two  file‐
+                     marks and backspace over the second one.
+
+                     Note:  This  option  should  not be set true for QIC tape
+                     drives since they are unable  to  overwrite  a  filemark.
+                     These  drives  detect the end of recorded data by testing
+                     for blank tape rather  than  two  consecutive  filemarks.
+                     Most other current drives also detect the end of recorded
+                     data  and  using  two filemarks is usually necessary only
+                     when interchanging tapes with some other systems.
+
+              MMTT__SSTT__DDEEBBUUGGGGIINNGG (Default: false)
+                     This option turns on various debugging messages from  the
+                     driver  (effective  only  if the driver was compiled with
+                     DDEEBBUUGG defined nonzero).
+
+              MMTT__SSTT__FFAASSTT__EEOOMM (Default: false)
+                     This option causes the MMTTEEOOMM operation  to  be  sent  di‐
+                     rectly  to  the drive, potentially speeding up the opera‐
+                     tion but causing the driver to lose track of the  current
+                     file  number  normally  returned by the MMTTIIOOCCGGEETT request.
+                     If MMTT__SSTT__FFAASSTT__EEOOMM is false, the driver will respond to an
+                     MMTTEEOOMM request by forward spacing over files.
+
+              MMTT__SSTT__AAUUTTOO__LLOOCCKK (Default: false)
+                     When this option is true, the drive door is  locked  when
+                     the device file is opened and unlocked when it is closed.
+
+              MMTT__SSTT__DDEEFF__WWRRIITTEESS (Default: false)
+                     The  tape  options  (block size, mode, compression, etc.)
+                     may change when changing from  one  device  linked  to  a
+                     drive  to another device linked to the same drive depend‐
+                     ing on how the devices are defined.  This option  defines
+                     when  the  changes are enforced by the driver using SCSI‐
+                     commands and when the drives auto‐detection  capabilities
+                     are  relied  upon.   If  this option is false, the driver
+                     sends the SCSI‐commands immediately when  the  device  is
+                     changed.   If  the  option is true, the SCSI‐commands are
+                     not sent until a write is requested.  In this  case,  the
+                     drive  firmware  is  allowed to detect the tape structure
+                     when reading and the SCSI‐commands are used only to  make
+                     sure  that  a  tape  is  written according to the correct
+                     specification.
+
+              MMTT__SSTT__CCAANN__BBSSRR (Default: false)
+                     When read‐ahead is  used,  the  tape  must  sometimes  be
+                     spaced  backward  to the correct position when the device
+                     is closed and the SCSI command  to  space  backward  over
+                     records  is  used  for  this  purpose.  Some older drives
+                     can’t process this command reliably and this  option  can
+                     be  used  to  instruct the driver not to use the command.
+                     The end result is that, with read‐ahead  and  fixed‐block
+                     mode,  the  tape may not be correctly positioned within a
+                     file when the device is closed.  With Linux 2.6, the  de‐
+                     fault is true for drives supporting SCSI‐3.
+
+              MMTT__SSTT__NNOO__BBLLKKLLIIMMSS (Default: false)
+                     Some  drives don’t accept the RREEAADD BBLLOOCCKK LLIIMMIITTSS SCSI com‐
+                     mand.  If this is used, the driver does not use the  com‐
+                     mand.  The drawback is that the driver can’t check before
+                     sending commands if the selected block size is acceptable
+                     to the drive.
+
+              MMTT__SSTT__CCAANN__PPAARRTTIITTIIOONNSS (Default: false)
+                     This option enables support for several partitions within
+                     a  tape.   The  option applies to all devices linked to a
+                     drive.
+
+              MMTT__SSTT__SSCCSSII22LLOOGGIICCAALL (Default: false)
+                     This option instructs the driver to use the logical block
+                     addresses defined in the SCSI‐2 standard when  performing
+                     the seek and tell operations (both with MMTTSSEEEEKK and MMTTIIOOCC‐‐
+                     PPOOSS  commands  and when changing tape partition).  Other‐
+                     wise, the device‐specific  addresses  are  used.   It  is
+                     highly advisable to set this option if the drive supports
+                     the  logical addresses because they count also filemarks.
+                     There are some drives that support only the logical block
+                     addresses.
+
+              MMTT__SSTT__SSYYSSVV (Default: false)
+                     When this option is enabled, the  tape  devices  use  the
+                     System  V  semantics.   Otherwise,  the BSD semantics are
+                     used.  The most important difference between  the  seman‐
+                     tics  is  what  happens when a device used for reading is
+                     closed: in System V semantics the tape is spaced  forward
+                     past the next filemark if this has not happened while us‐
+                     ing  the  device.   In BSD semantics the tape position is
+                     not changed.
+
+              MMTT__NNOO__WWAAIITT (Default: false)
+                     Enables immediate mode (i.e., don’t wait for the  command
+                     to finish) for some commands (e.g., rewind).
+
+              An example:
+
+                  struct mtop mt_cmd;
+                  mt_cmd.mt_op = MTSETDRVBUFFER;
+                  mt_cmd.mt_count = MT_ST_BOOLEANS |
+                          MT_ST_BUFFER_WRITES | MT_ST_ASYNC_WRITES;
+                  ioctl(fd, MTIOCTOP, mt_cmd);
+
+              The   default   block   size  for  a  device  can  be  set  with
+              MMTT__SSTT__DDEEFF__BBLLKKSSIIZZEE and the default density code can be  set  with
+              MMTT__SSTT__DDEEFFDDEENNSSIITTYY.   The values for the parameters are or’ed with
+              the operation code.
+
+              With Linux 2.1.x and later, the timeout values can be  set  with
+              the  subcommand  MMTT__SSTT__SSEETT__TTIIMMEEOOUUTT ORed with the timeout in sec‐
+              onds.  The long timeout (used for  rewinds  and  other  commands
+              that  may take a long time) can be set with MMTT__SSTT__SSEETT__LLOONNGG__TTIIMMEE‐‐
+              OOUUTT.  The kernel defaults are very long to make sure that a suc‐
+              cessful command is not timed out with  any  drive.   Because  of
+              this,  the  driver may seem stuck even if it is only waiting for
+              the timeout.  These commands can be used to set  more  practical
+              values  for  a  specific drive.  The timeouts set for one device
+              apply for all devices linked to the same drive.
+
+              Starting from Linux 2.4.19 and Linux 2.5.43, the driver supports
+              a status bit which indicates whether the drive  requests  clean‐
+              ing.   The  method used by the drive to return cleaning informa‐
+              tion is set using the MMTT__SSTT__SSEELL__CCLLNN subcommand.  If the value is
+              zero, the cleaning bit is always zero.  If the value is one, the
+              TapeAlert data defined in the SCSI‐3 standard is used  (not  yet
+              implemented).   Values  2–17  are reserved.  If the lowest eight
+              bits are >= 18, bits from the extended sense data are used.  The
+              bits 9–16 specify a mask to select the bits to look at  and  the
+              bits 17–23 specify the bit pattern to look for.  If the bit pat‐
+              tern  is  zero,  one  or  more  bits under the mask indicate the
+              cleaning request.  If the pattern is nonzero, the  pattern  must
+              match the masked sense data byte.
+
+   MMTTIIOOCCGGEETT —— ggeett ssttaattuuss
+       This request takes an argument of type _(_s_t_r_u_c_t _m_t_g_e_t _*_).
+
+           /* structure for MTIOCGET - mag tape get status command */
+           struct mtget {
+               long     mt_type;
+               long     mt_resid;
+               /* the following registers are device dependent */
+               long     mt_dsreg;
+               long     mt_gstat;
+               long     mt_erreg;
+               /* The next two fields are not always used */
+               daddr_t  mt_fileno;
+               daddr_t  mt_blkno;
+           };
+
+       _m_t___t_y_p_e
+              The header file defines many values for _m_t___t_y_p_e, but the current
+              driver reports only the generic types MMTT__IISSSSCCSSII11 (Generic SCSI‐1
+              tape) and MMTT__IISSSSCCSSII22 (Generic SCSI‐2 tape).
+
+       _m_t___r_e_s_i_d
+              contains the current tape partition number.
+
+       _m_t___d_s_r_e_g
+              reports  the drive’s current settings for block size (in the low
+              24 bits) and density (in the high 8 bits).  These fields are de‐
+              fined  by  MMTT__SSTT__BBLLKKSSIIZZEE__SSHHIIFFTT,  MMTT__SSTT__BBLLKKSSIIZZEE__MMAASSKK,  MMTT__SSTT__DDEENN‐‐
+              SSIITTYY__SSHHIIFFTT, and MMTT__SSTT__DDEENNSSIITTYY__MMAASSKK.
+
+       _m_t___g_s_t_a_t
+              reports  generic  (device  independent) status information.  The
+              header file defines macros for testing these status bits:
+
+              GGMMTT__EEOOFF(_x)
+                     The tape is positioned  just  after  a  filemark  (always
+                     false after an MMTTSSEEEEKK operation).
+
+              GGMMTT__BBOOTT(_x)
+                     The tape is positioned at the beginning of the first file
+                     (always false after an MMTTSSEEEEKK operation).
+
+              GGMMTT__EEOOTT(_x)
+                     A tape operation has reached the physical End Of Tape.
+
+              GGMMTT__SSMM(_x)
+                     The  tape  is  currently  positioned at a setmark (always
+                     false after an MMTTSSEEEEKK operation).
+
+              GGMMTT__EEOODD(_x)
+                     The tape is positioned at the end of recorded data.
+
+              GGMMTT__WWRR__PPRROOTT(_x)
+                     The drive is write‐protected.  For some drives  this  can
+                     also  mean that the drive does not support writing on the
+                     current medium type.
+
+              GGMMTT__OONNLLIINNEE(_x)
+                     The last ooppeenn(2) found the drive with a tape in place and
+                     ready for operation.
+
+              GGMMTT__DD__66225500(_x)
+              GGMMTT__DD__11660000(_x)
+              GGMMTT__DD__880000(_x)
+                     This “generic” status  information  reports  the  current
+                     density setting for 9‐track ½" tape drives only.
+
+              GGMMTT__DDRR__OOPPEENN(_x)
+                     The drive does not have a tape in place.
+
+              GGMMTT__IIMM__RREEPP__EENN(_x)
+                     Immediate  report  mode.  This bit is set if there are no
+                     guarantees that the data has been physically  written  to
+                     the  tape  when  the  write call returns.  It is set zero
+                     only when the driver does not buffer data and  the  drive
+                     is set not to buffer data.
+
+              GGMMTT__CCLLNN(_x)
+                     The  drive  has  requested  cleaning.   Implemented since
+                     Linux 2.4.19 and Linux 2.5.43.
+
+       _m_t___e_r_r_e_g
+              The only field defined in _m_t___e_r_r_e_g is the recovered error  count
+              in  the  low  16  bits  (as  defined  by MMTT__SSTT__SSOOFFTTEERRRR__SSHHIIFFTT and
+              MMTT__SSTT__SSOOFFTTEERRRR__MMAASSKK).  Due to inconsistencies in the  way  drives
+              report  recovered  errors,  this  count  is often not maintained
+              (most drives do not by default report soft errors but  this  can
+              be changed with a SCSI MODE SELECT command).
+
+       _m_t___f_i_l_e_n_o
+              reports the current file number (zero‐based).  This value is set
+              to  -1 when the file number is unknown (e.g., after MMTTBBSSSS or MMTT‐‐
+              SSEEEEKK).
+
+       _m_t___b_l_k_n_o
+              reports the block number (zero‐based) within the  current  file.
+              This  value is set to -1 when the block number is unknown (e.g.,
+              after MMTTBBSSFF, MMTTBBSSSS, or MMTTSSEEEEKK).
+
+   MMTTIIOOCCPPOOSS —— ggeett ttaappee ppoossiittiioonn
+       This request takes an argument of type _(_s_t_r_u_c_t _m_t_p_o_s _*_) and reports the
+       drive’s notion of the current tape block number, which is not the  same
+       as  _m_t___b_l_k_n_o  returned  by MMTTIIOOCCGGEETT.  This drive must be a SCSI‐2 drive
+       that supports the RREEAADD PPOOSSIITTIIOONN command (device‐specific address) or  a
+       Tandberg‐compatible  SCSI‐1  drive  (Tandberg,  Archive Viper, Wangtek,
+       ...).
+
+           /* structure for MTIOCPOS - mag tape get position command */
+           struct mtpos {
+               long mt_blkno;    /* current block number */
+           };
+
+RREETTUURRNN VVAALLUUEE
+       EEAACCCCEESS An attempt was made to write or erase  a  write‐protected  tape.
+              (This error is not detected during ooppeenn(2).)
+
+       EEBBUUSSYY  The  device  is already in use or the driver was unable to allo‐
+              cate a buffer.
+
+       EEFFAAUULLTT The command parameters point to  memory  not  belonging  to  the
+              calling process.
+
+       EEIINNVVAALL An  iiooccttll(2)  had an invalid argument, or a requested block size
+              was invalid.
+
+       EEIIOO    The requested operation could not be completed.
+
+       EENNOOMMEEMM The byte count in rreeaadd(2) is  smaller  than  the  next  physical
+              block on the tape.  (Before Linux 2.2.18 and Linux 2.4.0 the ex‐
+              tra bytes have been silently ignored.)
+
+       EENNOOSSPPCC A  write  operation  could  not  be  completed  because the tape
+              reached end‐of‐medium.
+
+       EENNOOSSYYSS Unknown iiooccttll(2).
+
+       EENNXXIIOO  During opening, the tape device does not exist.
+
+       EEOOVVEERRFFLLOOWW
+              An attempt was made to read or  write  a  variable‐length  block
+              that is larger than the driver’s internal buffer.
+
+       EERROOFFSS  Open  is  attempted with OO__WWRROONNLLYY or OO__RRDDWWRR when the tape in the
+              drive is write‐protected.
+
+FFIILLEESS
+       _/_d_e_v_/_s_t_*
+              the auto‐rewind SCSI tape devices
+
+       _/_d_e_v_/_n_s_t_*
+              the nonrewind SCSI tape devices
+
+NNOOTTEESS
+       •  When exchanging data between systems, both systems have to agree  on
+          the  physical  tape  block  size.   The  parameters of a drive after
+          startup are often not the ones most operating systems use with these
+          devices.  Most systems use drives  in  variable‐block  mode  if  the
+          drive  supports  that mode.  This applies to most modern drives, in‐
+          cluding DATs, 8mm helical scan drives, DLTs, etc.  It may be  advis‐
+          able to use these drives in variable‐block mode also in Linux (i.e.,
+          use  MMTTSSEETTBBLLKK  or MMTTSSEETTDDEEFFBBLLKK at system startup to set the mode), at
+          least when exchanging data with a foreign system.  The  drawback  of
+          this  is  that  a fairly large tape block size has to be used to get
+          acceptable data transfer rates on the SCSI bus.
+
+       •  Many programs (e.g., ttaarr(1)) allow the user to specify the  blocking
+          factor  on the command line.  Note that this determines the physical
+          block size on tape only in variable‐block mode.
+
+       •  In order to use SCSI tape drives, the basic  SCSI  driver,  a  SCSI‐
+          adapter  driver  and  the SCSI tape driver must be either configured
+          into the kernel or loaded as modules.  If the  SCSI‐tape  driver  is
+          not  present, the drive is recognized but the tape support described
+          in this page is not available.
+
+       •  The driver writes error messages  to  the  console/log.   The  SENSE
+          codes  written  into  some  messages are automatically translated to
+          text if verbose SCSI messages are enabled in kernel configuration.
+
+       •  The driver’s internal buffering allows  good  throughput  in  fixed‐
+          block  mode  also with small rreeaadd(2) and wwrriittee(2) byte counts.  With
+          direct transfers this is not possible and may cause a surprise  when
+          moving  to  the 2.6 kernel.  The solution is to tell the software to
+          use larger transfers (often telling it to use  larger  blocks).   If
+          this is not possible, direct transfers can be disabled.
+
+SSEEEE AALLSSOO
+       mmtt(1)
+
+       The file _d_r_i_v_e_r_s_/_s_c_s_i_/_R_E_A_D_M_E_._s_t or _D_o_c_u_m_e_n_t_a_t_i_o_n_/_s_c_s_i_/_s_t_._t_x_t (kernel >=
+       2.6)  in the Linux kernel source tree contains the most recent informa‐
+       tion about the driver and its configuration possibilities
+
+Linux man‐pages (unreleased)      2025‐09‐21                             _s_t(4)

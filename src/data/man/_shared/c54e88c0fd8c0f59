@@ -1,0 +1,251 @@
+and  The  system  call  allocates a kqueue file descriptor.  This
+file descriptor provides a generic method of notifying  the  user
+when  a kernel event (kevent) happens or a condition holds, based
+on the results of small pieces of kernel code termed filters.   A
+kevent  is  identified  by  an (ident, filter, and optional udata
+value) tuple.  It specifies the interesting conditions to be  no‐
+tified  about  for  that  tuple.  An (ident, filter, and optional
+udata value) tuple can only appear once in a given kqueue.   Sub‐
+sequent  attempts  to  register the same tuple for a given kqueue
+will result in the replacement of the conditions  being  watched,
+not  an  addition.  Whether the udata value is considered as part
+of the tuple is controlled by the EV_UDATA_SPECIFIC flag  on  the
+kevent.   The  filter identified in a kevent is executed upon the
+initial registration of that event in order to detect  whether  a
+preexisting  condition  is present, and is also executed whenever
+an event is passed to the filter for evaluation.  If  the  filter
+determines that the condition should be reported, then the kevent
+is  placed on the kqueue for the user to retrieve.  The filter is
+also run when the user attempts to retrieve the kevent  from  the
+kqueue.   If  the  filter indicates that the condition that trig‐
+gered the event no longer holds, the kevent is removed  from  the
+kqueue  and  is  not returned.  Multiple events which trigger the
+filter do not result in multiple  kevents  being  placed  on  the
+kqueue; instead, the filter will aggregate the events into a sin‐
+gle  struct kevent.  Calling on a file descriptor will remove any
+kevents that reference the descriptor.  The system call creates a
+new kernel event queue and returns a descriptor.   The  queue  is
+not  inherited  by  a child created with The and system calls are
+used to register events with the queue, and  return  any  pending
+events  to the user.  The argument is a pointer to an array of or
+structures, as defined in All changes contained in  the  are  ap‐
+plied before any pending events are read from the queue.  The ar‐
+gument gives the size of The argument is a pointer to an array of
+out or structures.  The argument determines the size of The argu‐
+ment  provides space for extra out data provided by specific fil‐
+ters.  The argument’s contents specified the space  available  in
+the  data  pool on input, and contains the amount still remaining
+on output.  If the KEVENT_FLAG_STACK_DATA flag  is  specified  on
+the system call, the data is allocated from the pool in stack or‐
+der  instead of typical heap order.  If is a non‐NULL pointer, it
+specifies a maximum interval to wait for an event, which will  be
+interpreted as a struct timespec.  If is a NULL pointer, both and
+wait  indefinitely.  To effect a poll, the argument to or can in‐
+clude the KEVENT_FLAG_IMMEDIATE value to  indicate  an  immediate
+timeout.   Alternatively, the argument should be non‐NULL, point‐
+ing to a zero‐valued structure.  The same array may be  used  for
+the  and  The macro is provided for ease of initializing a struc‐
+ture. Similarly, initializes a structure and initializes a struc‐
+ture.  The  and  structures  are  defined  as:  struct  kevent  {
+        uintptr_t         ident;          /*  identifier for this
+event */          int16_t         filter;         /*  filter  for
+event */         uint16_t        flags;          /* general flags
+*/           uint32_t        fflags;         /*   filter‐specific
+flags */         intptr_t         data;           /*  filter‐spe‐
+cific  data  */         void            *udata;         /* opaque
+user data identifier */ };
+
+struct kevent64_s {
+        uint64_t        ident;          /*  identifier  for  this
+event  */          int16_t          filter;         /* filter for
+event */         uint16_t        flags;          /* general flags
+*/          uint32_t         fflags;          /*  filter‐specific
+flags  */          int64_t         data;           /* filter‐spe‐
+cific data */         uint64_t        udata;           /*  opaque
+user   data   identifier   */           uint64_t          ext[2];
+/* filter‐specific extensions */ };
+
+struct kevent_qos_s {
+        uint64_t        ident;          /*  identifier  for  this
+event  */          int16_t          filter;         /* filter for
+event */         uint16_t        flags;          /* general flags
+*/         uint32_t        qos;            /* quality of  service
+when    servicing   event   */           uint64_t          udata;
+/* opaque user data identifier */         uint32_t        fflags;
+/*  filter‐specific  flags  */          uint32_t          xflags;
+/*  extra  filter‐specific flags */         int64_t         data;
+/*  filter‐specific  data  */           uint64_t          ext[4];
+/*  filter‐specific  extensions */ }; ‐‐‐‐ The fields of and are:
+Value used to identify the source of the event.  The exact inter‐
+pretation is determined by the attached filter, but  often  is  a
+file  descriptor.   Identifies  the kernel filter used to process
+this event.  The pre‐defined system filters are described  below.
+Actions to perform on the event.  Filter‐specific flags.  Filter‐
+specific  data  value.   Opaque user‐defined value passed through
+the kernel unchanged. It can optionally be part of  the  uniquing
+decision  of  the kevent system In addition, contains: This field
+stores extensions for the event’s filter. What type of  extension
+depends  on what type of filter is being used.  In addition, con‐
+tains: Extra filter‐specific flags.   The  QoS  variant  provides
+twice  as  many  extension values for filter‐specific uses.  ‐‐‐‐
+The field can contain the following values: Adds the event to the
+kqueue.  Re‐adding an existing event will modify  the  parameters
+of  the  original  event,  and  not  result in a duplicate entry.
+Adding an event automatically enables it,  unless  overridden  by
+the  EV_DISABLE  flag.   Permit  and to return the event if it is
+triggered.  Disable the event so and will  not  return  it.   The
+filter  itself  is  not  disabled.   Removes  the  event from the
+kqueue.  Events which are attached to file descriptors are  auto‐
+matically deleted on the last close of the descriptor.  This flag
+is  useful  for  making bulk changes to a kqueue without draining
+any pending events. When passed as input, it forces  EV_ERROR  to
+always  be  returned.   When  a filter is successfully added, the
+field will be zero.  Causes the event to return  only  the  first
+occurrence  of  the  filter  being triggered.  After the user re‐
+trieves the event from the kqueue,  it  is  deleted.   After  the
+event is retrieved by the user, its state is reset.  This is use‐
+ful  for  filters  which  report state transitions instead of the
+current state.  Note that some filters may automatically set this
+flag internally.  Filters may set this flag to  indicate  filter‐
+specific  EOF condition.  Read filter on socket may set this flag
+to indicate the presence of out of band data on  the  descriptor.
+See  below.  ‐‐‐‐ The predefined system filters are listed below.
+Arguments may be passed to and from the filter via  the  and  op‐
+tionally  fields in the or structure.  Takes a file descriptor as
+the identifier, and returns whenever there is data  available  to
+read.  The behavior of the filter is slightly different depending
+on  the  descriptor  type.   Sockets  which  have previously been
+passed to return when there is an  incoming  connection  pending.
+contains  the  size of the listen backlog.  Other socket descrip‐
+tors return when there is data to be read, subject to  the  value
+of  the  socket buffer.  This may be overridden with a per‐filter
+low water mark at the time the filter is  added  by  setting  the
+NOTE_LOWAT  flag  in and specifying the new low water mark in The
+derived per filter low water mark value is, however,  bounded  by
+socket  receive  buffer’s high and low water mark values.  On re‐
+turn, contains the number of bytes of protocol data available  to
+read.  The presence of EV_OOBAND in indicates the presence of out
+of  band  data on the socket equal to the potential number of OOB
+bytes availble to read.  If the read direction of the socket  has
+shutdown,  then  the  filter  also sets EV_EOF in and returns the
+socket error (if any) in It is possible for EOF  to  be  returned
+(indicating  the  connection  is  gone) while there is still data
+pending in the socket buffer.  Returns when the file  pointer  is
+not  at  the end of file.  contains the offset from current posi‐
+tion to end of file, and may be negative.  Returns when there  is
+data  to  read; contains the number of bytes available.  When the
+last writer disconnects, the filter will set EV_EOF in  This  may
+be cleared by passing in EV_CLEAR, at which point the filter will
+resume  waiting  for  data  to become available before returning.
+Returns when there is data to read from the device; contains  the
+number  of  bytes  available.  If the device does not support re‐
+turning number of bytes, it will not allow the filter to  be  at‐
+tached.   However,  if  the  NOTE_LOWAT flag is specified and the
+field contains 1 on input, those devices will attach ‐ but cannot
+be relied upon to provide an accurate count of bytes to  be  read
+on  output.   Takes  a  descriptor as the identifier, and returns
+whenever one of the specified exceptional conditions has occurred
+on the descriptor. Conditions are specified  in  Currently,  this
+filter  can be used to monitor the arrival of out‐of‐band data on
+a socket descriptor using the filter flag If the  read  direction
+of  the  socket has shutdown, then the filter also sets EV_EOF in
+and returns the socket error (if any) in Takes a file  descriptor
+as  the  identifier, and returns whenever it is possible to write
+to the descriptor.  For sockets, pipes and  fifos,  will  contain
+the  amount  of  space remaining in the write buffer.  The filter
+will set EV_EOF when the reader disconnects,  and  for  the  fifo
+case,  this  may  be  cleared by use of EV_CLEAR.  Note that this
+filter is not supported for vnodes.  For sockets, the  low  water
+mark  and  socket  error handling is identical to the EVFILT_READ
+case.  Events for this filter are not  registered  with  directly
+but  are registered via the member of an asynchronous I/O request
+when it is scheduled via an asynchronous I/O system call such  as
+Takes a file descriptor as the identifier and the events to watch
+for  in  and returns when one or more of the requested events oc‐
+curs on the descriptor.  The events to monitor  are:  The  system
+call  was  called  on  the  file referenced by the descriptor.  A
+write occurred on the file referenced  by  the  descriptor.   The
+file  referenced by the descriptor was extended.  The file refer‐
+enced by the descriptor had its  attributes  changed.   The  link
+count on the file changed.  The file referenced by the descriptor
+was  renamed.  Access to the file was revoked via or the underly‐
+ing fileystem was unmounted.  The file was unlocked by calling or
+A lease break to downgrade the lease to read lease  is  requested
+on  the  file referenced by the descriptor.  A lease break to re‐
+lease the lease is requested on the file or directory  referenced
+by the descriptor.  On return, contains the filter‐specific flags
+which  are associated with the triggered events seen by this fil‐
+ter.  Takes the process ID to monitor as the identifier  and  the
+events  to watch for in and returns when the process performs one
+or more of the requested events.  If a process can  normally  see
+another  process,  it  can  attach an event to it.  The events to
+monitor are: The process has exited.  The process has exited  and
+its  exit  status is in filter specific data. Valid only on child
+processes and to be used along with NOTE_EXIT.  The process  cre‐
+ated a child process via or similar call.  The process executed a
+new  process via or similar call.  The process was sent a signal.
+Status can be checked via  or  similar  call.   The  process  was
+reaped  by  the  parent  via  or  similar  call.  Deprecated, use
+NOTE_EXIT.  On return, contains the events  which  triggered  the
+filter.  Takes the signal number to monitor as the identifier and
+returns when the given signal is generated for the process.  This
+coexists  with  the  and  facilities, and has a lower precedence.
+Only signals sent to the process, not  to  a  particular  thread,
+will  trigger  the filter. The filter will record all attempts to
+deliver a signal to a process, even if the signal has been marked
+as SIG_IGN.  Event notification happens before normal signal  de‐
+livery  processing.   returns  the number of times the signal has
+been generated since the last call to This  filter  automatically
+sets  the  EV_CLEAR  flag  internally.   Takes the name of a mach
+port, or port set, in and waits until a message  is  enqueued  on
+the  port  or  port  set. When a message is detected, but not di‐
+rectly received by the kevent call, the name of the specific port
+where  the  message  is  enqueued  is  returned  in  If  contains
+MACH_RCV_MSG,  the ext[0] and ext[1] flags are assumed to contain
+a pointer to the buffer where the message is to be  received  and
+the size of the receive buffer, respectively.  If MACH_RCV_MSG is
+specifed,  yet  the  buffer size in ext[1] is zero, The space for
+the buffer may be carved out of the data_out area provided to  if
+there  is  enough space remaining there.  Establishes an interval
+timer identified by where specifies the timeout period  (in  mil‐
+liseconds).   can include one of the following flags to specify a
+different unit: is in seconds is in microseconds is  in  nanosec‐
+onds is in Mach absolute time units can also include which estab‐
+lishes an timer with an absolute deadline instead of an interval.
+The  absolute deadline is expressed in terms of With the deadline
+is expressed in terms of The timer can be  coalesced  with  other
+timers to save power. The following flags can be set in to modify
+this  behavior:  override default power‐saving techniques to more
+strictly respect the leeway value apply more  power‐saving  tech‐
+niques  to  coalesce this timer with other timers holds user‐sup‐
+plied slop in deadline for timer coalescing.  The timer  will  be
+periodic  unless is specified.  On return, contains the number of
+times the timeout has expired since the last arming or  last  de‐
+livery  of  the  timer event.  This filter automatically sets the
+flag.  ‐‐‐‐ In the field of the struture, is only used  with  the
+EVFILT_MACHPORT  filter.   With  other filters, is passed through
+much like can always be used like For the use of ext[0], see  the
+EVFILT_MACHPORT filter above.  The system call creates a new ker‐
+nel  event  queue and returns a file descriptor.  If there was an
+error creating the kernel event queue, a value of ‐1 is  returned
+and  errno set.  The and system calls return the number of events
+placed in the up to the value given by If an error  occurs  while
+processing an element of the and there is enough room in the then
+the  event will be placed in the with set in and the system error
+in Otherwise, will be returned, and will be set to  indicate  the
+error  condition.   If the time limit expires, then and return 0.
+The system call fails if: The kernel failed  to  allocate  enough
+memory for the kernel queue.  The per‐process descriptor table is
+full.   The system file table is full.  The and system calls fail
+if: The process does not have permission to  register  a  filter.
+There  was  an  error  reading  or writing the or structure.  The
+specified descriptor is invalid.  A signal was  delivered  before
+the  timeout  expired  and  before  any events were placed on the
+kqueue for return.  The specified time limit  or  filter  is  in‐
+valid.   The  event could not be found to be modified or deleted.
+No memory was available to register  the  event.   The  specified
+process  to attach to does not exist.  The and system calls first
+appeared in The system and this manual page were written  by  Not
+all  filesystem  types  support  kqueue‐style notifications.  And
+even some that do, like some remote filesystems, may only support
+a subset of the notification semantics described here.

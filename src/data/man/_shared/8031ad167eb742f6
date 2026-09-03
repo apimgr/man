@@ -1,0 +1,1543 @@
+_p_t_r_a_c_e(2)                     System Calls Manual                    _p_t_r_a_c_e(2)
+
+NNAAMMEE
+       ptrace - process trace
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ppttrraaccee..hh>>
+
+       lloonngg ppttrraaccee((eennuumm ____ppttrraaccee__rreeqquueesstt _o_p,, ppiidd__tt _p_i_d,,
+                   vvooiidd **_a_d_d_r,, vvooiidd **_d_a_t_a));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  ppttrraaccee()  system  call  provides a means by which one process (the
+       "tracer") may observe and control the execution of another process (the
+       "tracee"), and examine and change the tracee’s  memory  and  registers.
+       It  is primarily used to implement breakpoint debugging and system call
+       tracing.
+
+       A tracee first needs to be attached to the tracer.  Attachment and sub‐
+       sequent commands are per thread:  in  a  multithreaded  process,  every
+       thread  can  be  individually  attached  to  a  (potentially different)
+       tracer, or  left  not  attached  and  thus  not  debugged.   Therefore,
+       "tracee" always means "(one) thread", never "a (possibly multithreaded)
+       process".  Ptrace commands are always sent to a specific tracee using a
+       call of the form
+
+           ptrace(PTRACE_foo, pid, ...)
+
+       where _p_i_d is the thread ID of the corresponding Linux thread.
+
+       (Note that in this page, a "multithreaded process" means a thread group
+       consisting of threads created using the cclloonnee(2) CCLLOONNEE__TTHHRREEAADD flag.)
+
+       A  process  can  initiate a trace by calling ffoorrkk(2) and having the re‐
+       sulting child do a  PPTTRRAACCEE__TTRRAACCEEMMEE,  followed  (typically)  by  an  eexx‐‐
+       eeccvvee(2).   Alternatively,  one  process  may  commence  tracing another
+       process using PPTTRRAACCEE__AATTTTAACCHH or PPTTRRAACCEE__SSEEIIZZEE.
+
+       While being traced, the tracee will stop each time a signal  is  deliv‐
+       ered,  even  if the signal is being ignored.  (An exception is SSIIGGKKIILLLL,
+       which has its usual effect.)  The tracer will be notified at  its  next
+       call  to  wwaaiittppiidd(2)  (or one of the related "wait" system calls); that
+       call will return a _s_t_a_t_u_s value containing information  that  indicates
+       the  cause of the stop in the tracee.  While the tracee is stopped, the
+       tracer can use various ptrace operations  to  inspect  and  modify  the
+       tracee.   The tracer then causes the tracee to continue, optionally ig‐
+       noring the delivered signal (or even delivering a different signal  in‐
+       stead).
+
+       If the PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC option is not in effect, all successful calls
+       to  eexxeeccvvee(2)  by the traced process will cause it to be sent a SSIIGGTTRRAAPP
+       signal, giving the parent a chance to gain control before the new  pro‐
+       gram begins execution.
+
+       When  the  tracer  is finished tracing, it can cause the tracee to con‐
+       tinue executing in a normal, untraced mode via PPTTRRAACCEE__DDEETTAACCHH.
+
+       The value of _o_p determines the operation to be performed:
+
+       PPTTRRAACCEE__TTRRAACCEEMMEE
+              Indicate that this process is to be traced  by  its  parent.   A
+              process  probably  shouldn’t  make  this operation if its parent
+              isn’t expecting to trace it.  (_p_i_d, _a_d_d_r, and _d_a_t_a are ignored.)
+
+              The PPTTRRAACCEE__TTRRAACCEEMMEE operation is used only by the tracee; the re‐
+              maining operations are used only by the tracer.  In the  follow‐
+              ing  operations, _p_i_d specifies the thread ID of the tracee to be
+              acted   on.    For   operations   other   than    PPTTRRAACCEE__AATTTTAACCHH,
+              PPTTRRAACCEE__SSEEIIZZEE, PPTTRRAACCEE__IINNTTEERRRRUUPPTT, and PPTTRRAACCEE__KKIILLLL, the tracee must
+              be stopped.
+
+       PPTTRRAACCEE__PPEEEEKKTTEEXXTT
+       PPTTRRAACCEE__PPEEEEKKDDAATTAA
+              Read  a word at the address _a_d_d_r in the tracee’s memory, return‐
+              ing the word as the result of the ppttrraaccee() call.  Linux does not
+              have separate text and data address spaces, so these two  opera‐
+              tions  are  currently  equivalent.   (_d_a_t_a  is  ignored; but see
+              NOTES.)
+
+       PPTTRRAACCEE__PPEEEEKKUUSSEERR
+              Read a word at offset _a_d_d_r in  the  tracee’s  USER  area,  which
+              holds the registers and other information about the process (see
+              _<_s_y_s_/_u_s_e_r_._h_>).   The  word  is  returned  as  the  result of the
+              ppttrraaccee() call.  Typically,  the  offset  must  be  word‐aligned,
+              though  this  might  vary by architecture.  See NOTES.  (_d_a_t_a is
+              ignored; but see NOTES.)
+
+       PPTTRRAACCEE__PPOOKKEETTEEXXTT
+       PPTTRRAACCEE__PPOOKKEEDDAATTAA
+              Copy the word _d_a_t_a to the address _a_d_d_r in the  tracee’s  memory.
+              As for PPTTRRAACCEE__PPEEEEKKTTEEXXTT and PPTTRRAACCEE__PPEEEEKKDDAATTAA, these two operations
+              are currently equivalent.
+
+       PPTTRRAACCEE__PPOOKKEEUUSSEERR
+              Copy the word _d_a_t_a to offset _a_d_d_r in the tracee’s USER area.  As
+              for  PPTTRRAACCEE__PPEEEEKKUUSSEERR, the offset must typically be word‐aligned.
+              In order to maintain the integrity of the kernel, some modifica‐
+              tions to the USER area are disallowed.
+
+       PPTTRRAACCEE__GGEETTRREEGGSS
+       PPTTRRAACCEE__GGEETTFFPPRREEGGSS
+              Copy the tracee’s general‐purpose or  floating‐point  registers,
+              respectively,   to   the   address  _d_a_t_a  in  the  tracer.   See
+              _<_s_y_s_/_u_s_e_r_._h_> for information on the format of this data.   (_a_d_d_r
+              is  ignored.)   Note that SPARC systems have the meaning of _d_a_t_a
+              and _a_d_d_r reversed; that is, _d_a_t_a is ignored  and  the  registers
+              are copied to the address _a_d_d_r.  PPTTRRAACCEE__GGEETTRREEGGSS and PPTTRRAACCEE__GGEETTFF‐‐
+              PPRREEGGSS are not present on all architectures.
+
+       PPTTRRAACCEE__GGEETTRREEGGSSEETT (since Linux 2.6.34)
+              Read  the  tracee’s  registers.  _a_d_d_r specifies, in an architec‐
+              ture‐dependent way, the type of registers to be read.  NNTT__PPRRSSTTAA‐‐
+              TTUUSS (with numerical value 1) usually results in reading of  gen‐
+              eral‐purpose  registers.  If the CPU has, for example, floating‐
+              point and/or vector registers, they can be retrieved by  setting
+              _a_d_d_r  to  the  corresponding  NNTT__ffoooo constant.  _d_a_t_a points to a
+              ssttrruucctt iioovveecc, which describes the destination buffer’s  location
+              and  size.   On  return, the kernel modifies iioovv..lleenn to indicate
+              the actual number of bytes returned.
+
+       PPTTRRAACCEE__SSEETTRREEGGSS
+       PPTTRRAACCEE__SSEETTFFPPRREEGGSS
+              Modify the tracee’s general‐purpose or floating‐point registers,
+              respectively, from the address  _d_a_t_a  in  the  tracer.   As  for
+              PPTTRRAACCEE__PPOOKKEEUUSSEERR, some general‐purpose register modifications may
+              be disallowed.  (_a_d_d_r is ignored.)  Note that SPARC systems have
+              the  meaning of _d_a_t_a and _a_d_d_r reversed; that is, _d_a_t_a is ignored
+              and the registers are copied from the address _a_d_d_r.   PPTTRRAACCEE__SSEE‐‐
+              TTRREEGGSS and PPTTRRAACCEE__SSEETTFFPPRREEGGSS are not present on all architectures.
+
+       PPTTRRAACCEE__SSEETTRREEGGSSEETT (since Linux 2.6.34)
+              Modify  the tracee’s registers.  The meaning of _a_d_d_r and _d_a_t_a is
+              analogous to PPTTRRAACCEE__GGEETTRREEGGSSEETT.
+
+       PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO (since Linux 2.3.99‐pre6)
+              Retrieve information about the  signal  that  caused  the  stop.
+              Copy a _s_i_g_i_n_f_o___t structure (see ssiiggaaccttiioonn(2)) from the tracee to
+              the address _d_a_t_a in the tracer.  (_a_d_d_r is ignored.)
+
+       PPTTRRAACCEE__SSEETTSSIIGGIINNFFOO (since Linux 2.3.99‐pre6)
+              Set  signal information: copy a _s_i_g_i_n_f_o___t structure from the ad‐
+              dress _d_a_t_a in the tracer to the tracee.  This will  affect  only
+              signals  that would normally be delivered to the tracee and were
+              caught by the tracer.  It may be difficult to tell these  normal
+              signals  from  synthetic  signals  generated by ppttrraaccee() itself.
+              (_a_d_d_r is ignored.)
+
+       PPTTRRAACCEE__PPEEEEKKSSIIGGIINNFFOO (since Linux 3.10)
+              Retrieve _s_i_g_i_n_f_o___t structures without removing  signals  from  a
+              queue.   _a_d_d_r points to a _p_t_r_a_c_e___p_e_e_k_s_i_g_i_n_f_o___a_r_g_s structure that
+              specifies the ordinal position from  which  copying  of  signals
+              should  start,  and  the  number  of signals to copy.  _s_i_g_i_n_f_o___t
+              structures are copied into the buffer pointed to by  _d_a_t_a.   The
+              return  value  contains the number of copied signals (zero indi‐
+              cates that there is no signal corresponding to the specified or‐
+              dinal position).  Within the returned  _s_i_g_i_n_f_o  structures,  the
+              _s_i___c_o_d_e field includes information (____SSII__CCHHLLDD, ____SSII__FFAAUULLTT, etc.)
+              that are not otherwise exposed to user space.
+
+           struct ptrace_peeksiginfo_args {
+               u64 off;    /* Ordinal position in queue at which
+                              to start copying signals */
+               u32 flags;  /* PTRACE_PEEKSIGINFO_SHARED or 0 */
+               s32 nr;     /* Number of signals to copy */
+           };
+
+              Currently,  there  is  only one flag, PPTTRRAACCEE__PPEEEEKKSSIIGGIINNFFOO__SSHHAARREEDD,
+              for dumping signals from the process‐wide signal queue.  If this
+              flag is not set, signals are read from the per‐thread  queue  of
+              the specified thread.
+
+       PPTTRRAACCEE__GGEETTSSIIGGMMAASSKK (since Linux 3.11)
+              Place a copy of the mask of blocked signals (see ssiiggpprrooccmmaasskk(2))
+              in the buffer pointed to by _d_a_t_a, which should be a pointer to a
+              buffer of type _s_i_g_s_e_t___t.  The _a_d_d_r argument contains the size of
+              the buffer pointed to by _d_a_t_a (i.e., _s_i_z_e_o_f_(_s_i_g_s_e_t___t_)).
+
+       PPTTRRAACCEE__SSEETTSSIIGGMMAASSKK (since Linux 3.11)
+              Change  the  mask of blocked signals (see ssiiggpprrooccmmaasskk(2)) to the
+              value specified in the buffer pointed to by _d_a_t_a,  which  should
+              be  a  pointer  to a buffer of type _s_i_g_s_e_t___t.  The _a_d_d_r argument
+              contains the size of  the  buffer  pointed  to  by  _d_a_t_a  (i.e.,
+              _s_i_z_e_o_f_(_s_i_g_s_e_t___t_)).
+
+       PPTTRRAACCEE__SSEETTOOPPTTIIOONNSS (since Linux 2.4.6; see BUGS for caveats)
+              Set  ptrace  options from _d_a_t_a.  (_a_d_d_r is ignored.)  _d_a_t_a is in‐
+              terpreted as a bit mask of options, which are specified  by  the
+              following flags:
+
+              PPTTRRAACCEE__OO__EEXXIITTKKIILLLL (since Linux 3.8)
+                     Send  a SSIIGGKKIILLLL signal to the tracee if the tracer exits.
+                     This option is useful for ptrace jailers that want to en‐
+                     sure that tracees can never escape the tracer’s control.
+
+              PPTTRRAACCEE__OO__TTRRAACCEECCLLOONNEE (since Linux 2.5.46)
+                     Stop the tracee at the next  cclloonnee(2)  and  automatically
+                     start  tracing the newly cloned process, which will start
+                     with a SSIIGGSSTTOOPP, or PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP if PPTTRRAACCEE__SSEEIIZZEE  was
+                     used.   A  wwaaiittppiidd(2)  by the tracer will return a _s_t_a_t_u_s
+                     value such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_CLONE<<8))
+
+                     The  PID  of  the  new  process  can  be  retrieved  with
+                     PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+                     This  option  may  not catch cclloonnee(2) calls in all cases.
+                     If the tracee calls cclloonnee(2) with the  CCLLOONNEE__VVFFOORRKK  flag,
+                     PPTTRRAACCEE__EEVVEENNTT__VVFFOORRKK   will   be   delivered   instead   if
+                     PPTTRRAACCEE__OO__TTRRAACCEEVVFFOORRKK is set; otherwise if the tracee calls
+                     cclloonnee(2)  with  the   exit   signal   set   to   SSIIGGCCHHLLDD,
+                     PPTTRRAACCEE__EEVVEENNTT__FFOORRKK will be delivered if PPTTRRAACCEE__OO__TTRRAACCEEFFOORRKK
+                     is set.
+
+              PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC (since Linux 2.5.46)
+                     Stop  the  tracee at the next eexxeeccvvee(2).  A wwaaiittppiidd(2) by
+                     the tracer will return a _s_t_a_t_u_s value such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_EXEC<<8))
+
+                     If the execing thread is not a thread group  leader,  the
+                     thread  ID  is  reset  to thread group leader’s ID before
+                     this stop.  Since Linux 3.0, the former thread ID can  be
+                     retrieved with PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+              PPTTRRAACCEE__OO__TTRRAACCEEEEXXIITT (since Linux 2.5.60)
+                     Stop the tracee at exit.  A wwaaiittppiidd(2) by the tracer will
+                     return a _s_t_a_t_u_s value such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_EXIT<<8))
+
+                     The   tracee’s   exit   status   can  be  retrieved  with
+                     PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+                     The tracee is stopped early  during  process  exit,  when
+                     registers are still available, allowing the tracer to see
+                     where  the exit occurred, whereas the normal exit notifi‐
+                     cation is done after the  process  is  finished  exiting.
+                     Even  though context is available, the tracer cannot pre‐
+                     vent the exit from happening at this point.
+
+              PPTTRRAACCEE__OO__TTRRAACCEEFFOORRKK (since Linux 2.5.46)
+                     Stop the tracee at the  next  ffoorrkk(2)  and  automatically
+                     start  tracing the newly forked process, which will start
+                     with a SSIIGGSSTTOOPP, or PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP if PPTTRRAACCEE__SSEEIIZZEE  was
+                     used.   A  wwaaiittppiidd(2)  by the tracer will return a _s_t_a_t_u_s
+                     value such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_FORK<<8))
+
+                     The  PID  of  the  new  process  can  be  retrieved  with
+                     PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+              PPTTRRAACCEE__OO__TTRRAACCEESSYYSSGGOOOODD (since Linux 2.4.6)
+                     When  delivering system call traps, set bit 7 in the sig‐
+                     nal number (i.e., deliver _S_I_G_T_R_A_P_|_0_x_8_0).  This  makes  it
+                     easy  for  the  tracer  to  distinguish normal traps from
+                     those caused by a system call.
+
+              PPTTRRAACCEE__OO__TTRRAACCEEVVFFOORRKK (since Linux 2.5.46)
+                     Stop the tracee at the next  vvffoorrkk(2)  and  automatically
+                     start tracing the newly vforked process, which will start
+                     with  a SSIIGGSSTTOOPP, or PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP if PPTTRRAACCEE__SSEEIIZZEE was
+                     used.  A wwaaiittppiidd(2) by the tracer will  return  a  _s_t_a_t_u_s
+                     value such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_VFORK<<8))
+
+                     The  PID  of  the  new  process  can  be  retrieved  with
+                     PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+              PPTTRRAACCEE__OO__TTRRAACCEEVVFFOORRKKDDOONNEE (since Linux 2.5.60)
+                     Stop the tracee at the completion of the  next  vvffoorrkk(2).
+                     A  wwaaiittppiidd(2)  by  the  tracer will return a _s_t_a_t_u_s value
+                     such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_VFORK_DONE<<8))
+
+                     The PID of the new process can (since  Linux  2.6.18)  be
+                     retrieved with PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+              PPTTRRAACCEE__OO__TTRRAACCEESSEECCCCOOMMPP (since Linux 3.5)
+                     Stop  the tracee when a sseeccccoommpp(2) SSEECCCCOOMMPP__RREETT__TTRRAACCEE rule
+                     is triggered.  A wwaaiittppiidd(2) by the tracer will  return  a
+                     _s_t_a_t_u_s value such that
+
+                       status>>8 == (SIGTRAP | (PTRACE_EVENT_SECCOMP<<8))
+
+                     While this triggers a PPTTRRAACCEE__EEVVEENNTT stop, it is similar to
+                     a  syscall‐enter‐stop.   For  details,  see  the  note on
+                     PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP below.  The  seccomp  event  message
+                     data  (from  the  SSEECCCCOOMMPP__RREETT__DDAATTAA portion of the seccomp
+                     filter rule) can be retrieved with PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+              PPTTRRAACCEE__OO__SSUUSSPPEENNDD__SSEECCCCOOMMPP (since Linux 4.3)
+                     Suspend the tracee’s seccomp protections.   This  applies
+                     regardless  of  mode, and can be used when the tracee has
+                     not yet installed seccomp filters.  That is, a valid  use
+                     case  is to suspend a tracee’s seccomp protections before
+                     they are installed by the tracee, let the tracee  install
+                     the  filters,  and  then clear this flag when the filters
+                     should be resumed.  Setting this option requires that the
+                     tracer have the CCAAPP__SSYYSS__AADDMMIINN capability,  not  have  any
+                     seccomp protections installed, and not have PPTTRRAACCEE__OO__SSUUSS‐‐
+                     PPEENNDD__SSEECCCCOOMMPP set on itself.
+
+       PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG (since Linux 2.5.46)
+              Retrieve  a message (as an _u_n_s_i_g_n_e_d _l_o_n_g) about the ptrace event
+              that just happened, placing  it  at  the  address  _d_a_t_a  in  the
+              tracer.   For  PPTTRRAACCEE__EEVVEENNTT__EEXXIITT, this is the tracee’s exit sta‐
+              tus.       For      PPTTRRAACCEE__EEVVEENNTT__FFOORRKK,       PPTTRRAACCEE__EEVVEENNTT__VVFFOORRKK,
+              PPTTRRAACCEE__EEVVEENNTT__VVFFOORRKK__DDOONNEE, and PPTTRRAACCEE__EEVVEENNTT__CCLLOONNEE, this is the PID
+              of  the new process.  For PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP, this is the sseecc‐‐
+              ccoommpp(2) filter’s SSEECCCCOOMMPP__RREETT__DDAATTAA associated with the  triggered
+              rule.  (_a_d_d_r is ignored.)
+
+       PPTTRRAACCEE__CCOONNTT
+              Restart  the  stopped tracee process.  If _d_a_t_a is nonzero, it is
+              interpreted as the number of a signal to  be  delivered  to  the
+              tracee;  otherwise,  no signal is delivered.  Thus, for example,
+              the tracer can control whether a signal sent to  the  tracee  is
+              delivered or not.  (_a_d_d_r is ignored.)
+
+       PPTTRRAACCEE__SSYYSSCCAALLLL
+       PPTTRRAACCEE__SSIINNGGLLEESSTTEEPP
+              Restart  the  stopped tracee as for PPTTRRAACCEE__CCOONNTT, but arrange for
+              the tracee to be stopped at the next entry to  or  exit  from  a
+              system call, or after execution of a single instruction, respec‐
+              tively.   (The  tracee  will also, as usual, be stopped upon re‐
+              ceipt of a signal.)  From the tracer’s perspective,  the  tracee
+              will  appear  to have been stopped by receipt of a SSIIGGTTRRAAPP.  So,
+              for PPTTRRAACCEE__SSYYSSCCAALLLL, for example, the idea is to inspect the  ar‐
+              guments  to  the  system call at the first stop, then do another
+              PPTTRRAACCEE__SSYYSSCCAALLLL and inspect the return value of the  system  call
+              at  the  second  stop.   The  _d_a_t_a  argument  is  treated as for
+              PPTTRRAACCEE__CCOONNTT.  (_a_d_d_r is ignored.)
+
+       PPTTRRAACCEE__SSEETT__SSYYSSCCAALLLL (since Linux 2.6.16)
+              When in syscall‐enter‐stop, change the number of the system call
+              that is about to be executed to the number specified in the _d_a_t_a
+              argument.  The _a_d_d_r argument is ignored.  This operation is cur‐
+              rently supported only on arm (and arm64, though only  for  back‐
+              wards  compatibility),  but  most other architectures have other
+              means of accomplishing this (usually by  changing  the  register
+              that the userland code passed the system call number in).
+
+       PPTTRRAACCEE__SSYYSSEEMMUU
+       PPTTRRAACCEE__SSYYSSEEMMUU__SSIINNGGLLEESSTTEEPP (since Linux 2.6.14)
+              For PPTTRRAACCEE__SSYYSSEEMMUU, continue and stop on entry to the next system
+              call,  which  will  not  be  executed.  See the documentation on
+              syscall‐stops below.  For PPTTRRAACCEE__SSYYSSEEMMUU__SSIINNGGLLEESSTTEEPP, do the  same
+              but  also singlestep if not a system call.  This call is used by
+              programs like User Mode Linux  that  want  to  emulate  all  the
+              tracee’s  system  calls.   The  _d_a_t_a  argument is treated as for
+              PPTTRRAACCEE__CCOONNTT.  The _a_d_d_r argument is  ignored.   These  operations
+              are currently supported only on x86.
+
+       PPTTRRAACCEE__LLIISSTTEENN (since Linux 3.4)
+              Restart  the stopped tracee, but prevent it from executing.  The
+              resulting state of the tracee is similar to a process which  has
+              been  stopped  by a SSIIGGSSTTOOPP (or other stopping signal).  See the
+              "group‐stop" subsection for additional information.  PPTTRRAACCEE__LLIISS‐‐
+              TTEENN works only on tracees attached by PPTTRRAACCEE__SSEEIIZZEE.
+
+       PPTTRRAACCEE__KKIILLLL
+              Send the tracee a SSIIGGKKIILLLL to terminate it.  (_a_d_d_r and  _d_a_t_a  are
+              ignored.)
+
+              _T_h_i_s  _o_p_e_r_a_t_i_o_n  _i_s  _d_e_p_r_e_c_a_t_e_d_; _d_o _n_o_t _u_s_e _i_t_!  Instead, send a
+              SSIIGGKKIILLLL directly using kkiillll(2) or ttggkkiillll(2).  The  problem  with
+              PPTTRRAACCEE__KKIILLLL  is  that it requires the tracee to be in signal‐de‐
+              livery‐stop, otherwise it may not work (i.e., may complete  suc‐
+              cessfully  but  won’t  kill the tracee).  By contrast, sending a
+              SSIIGGKKIILLLL directly has no such limitation.
+
+       PPTTRRAACCEE__IINNTTEERRRRUUPPTT (since Linux 3.4)
+              Stop a tracee.  If the tracee is running or sleeping  in  kernel
+              space and PPTTRRAACCEE__SSYYSSCCAALLLL is in effect, the system call is inter‐
+              rupted and syscall‐exit‐stop is reported.  (The interrupted sys‐
+              tem  call  is  restarted  when the tracee is restarted.)  If the
+              tracee was already stopped by a  signal  and  PPTTRRAACCEE__LLIISSTTEENN  was
+              sent  to  it, the tracee stops with PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP and _W_S_T_O_P_‐
+              _S_I_G_(_s_t_a_t_u_s_) returns the stop signal.  If any  other  ptrace‐stop
+              is  generated at the same time (for example, if a signal is sent
+              to the tracee), this ptrace‐stop happens.  If none of the  above
+              applies  (for  example, if the tracee is running in user space),
+              it stops with PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP with  _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_)  ==  SSIIGG‐‐
+              TTRRAAPP.   PPTTRRAACCEE__IINNTTEERRRRUUPPTT  only  works  on  tracees  attached  by
+              PPTTRRAACCEE__SSEEIIZZEE.
+
+       PPTTRRAACCEE__AATTTTAACCHH
+              Attach to the process specified in _p_i_d, making it  a  tracee  of
+              the calling process.  The tracee is sent a SSIIGGSSTTOOPP, but will not
+              necessarily  have  stopped  by  the completion of this call; use
+              wwaaiittppiidd(2) to wait for the tracee to stop.  See  the  "Attaching
+              and detaching" subsection for additional information.  (_a_d_d_r and
+              _d_a_t_a are ignored.)
+
+              Permission  to  perform  a PPTTRRAACCEE__AATTTTAACCHH is governed by a ptrace
+              access mode PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH__RREEAALLCCRREEDDSS check; see below.
+
+       PPTTRRAACCEE__SSEEIIZZEE (since Linux 3.4)
+              Attach to the process specified in _p_i_d, making it  a  tracee  of
+              the  calling  process.   Unlike PPTTRRAACCEE__AATTTTAACCHH, PPTTRRAACCEE__SSEEIIZZEE does
+              not   stop   the   process.    Group‐stops   are   reported   as
+              PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP  and _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_) returns the stop signal.
+              Automatically attached children stop with PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP  and
+              _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_)  returns SSIIGGTTRRAAPP instead of having SSIIGGSSTTOOPP sig‐
+              nal delivered to them.  eexxeeccvvee(2) does not deliver an extra SSIIGG‐‐
+              TTRRAAPP.  Only a PPTTRRAACCEE__SSEEIIZZEEd process can accept  PPTTRRAACCEE__IINNTTEERRRRUUPPTT
+              and  PPTTRRAACCEE__LLIISSTTEENN  commands.   The  "seized"  behavior just de‐
+              scribed is inherited by children that are automatically attached
+              using     PPTTRRAACCEE__OO__TTRRAACCEEFFOORRKK,      PPTTRRAACCEE__OO__TTRRAACCEEVVFFOORRKK,      and
+              PPTTRRAACCEE__OO__TTRRAACCEECCLLOONNEE.   _a_d_d_r  must  be zero.  _d_a_t_a contains a bit
+              mask of ptrace options to activate immediately.
+
+              Permission to perform a PPTTRRAACCEE__SSEEIIZZEE is governed by a ptrace ac‐
+              cess mode PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH__RREEAALLCCRREEDDSS check; see below.
+
+       PPTTRRAACCEE__SSEECCCCOOMMPP__GGEETT__FFIILLTTEERR (since Linux 4.4)
+              This operation allows the tracer to dump  the  tracee’s  classic
+              BPF filters.
+
+              _a_d_d_r  is  an  integer  specifying  the index of the filter to be
+              dumped.  The most recently installed filter has the index 0.  If
+              _a_d_d_r is greater than the number of installed filters, the opera‐
+              tion fails with the error EENNOOEENNTT.
+
+              _d_a_t_a is either a pointer to a _s_t_r_u_c_t _s_o_c_k___f_i_l_t_e_r array  that  is
+              large enough to store the BPF program, or NULL if the program is
+              not to be stored.
+
+              Upon  success, the return value is the number of instructions in
+              the BPF program.  If _d_a_t_a was NULL, then this return  value  can
+              be used to correctly size the _s_t_r_u_c_t _s_o_c_k___f_i_l_t_e_r array passed in
+              a subsequent call.
+
+              This  operation  fails  with the error EEAACCCCEESS if the caller does
+              not have the CCAAPP__SSYYSS__AADDMMIINN capability or if  the  caller  is  in
+              strict  or  filter  seccomp  mode.  If the filter referred to by
+              _a_d_d_r is not a classic BPF filter, the operation fails  with  the
+              error EEMMEEDDIIUUMMTTYYPPEE.
+
+              This  operation  is  available if the kernel was configured with
+              both the CCOONNFFIIGG__SSEECCCCOOMMPP__FFIILLTTEERR and the CCOONNFFIIGG__CCHHEECCKKPPOOIINNTT__RREESSTTOORREE
+              options.
+
+       PPTTRRAACCEE__DDEETTAACCHH
+              Restart the stopped tracee as for PPTTRRAACCEE__CCOONNTT, but first  detach
+              from  it.  Under Linux, a tracee can be detached in this way re‐
+              gardless of which method was used to initiate tracing.  (_a_d_d_r is
+              ignored.)
+
+       PPTTRRAACCEE__GGEETT__TTHHRREEAADD__AARREEAA (since Linux 2.6.0)
+              This operation performs a similar  task  to  ggeett__tthhrreeaadd__aarreeaa(2).
+              It  reads the TLS entry in the GDT whose index is given in _a_d_d_r,
+              placing a copy of the entry into the _s_t_r_u_c_t _u_s_e_r___d_e_s_c pointed to
+              by _d_a_t_a.  (By contrast with ggeett__tthhrreeaadd__aarreeaa(2), the _e_n_t_r_y___n_u_m_b_e_r
+              of the _s_t_r_u_c_t _u_s_e_r___d_e_s_c is ignored.)
+
+       PPTTRRAACCEE__SSEETT__TTHHRREEAADD__AARREEAA (since Linux 2.6.0)
+              This operation performs a similar  task  to  sseett__tthhrreeaadd__aarreeaa(2).
+              It  sets  the TLS entry in the GDT whose index is given in _a_d_d_r,
+              assigning it the data supplied in the _s_t_r_u_c_t  _u_s_e_r___d_e_s_c  pointed
+              to  by  _d_a_t_a.   (By  contrast  with  sseett__tthhrreeaadd__aarreeaa(2), the _e_n_‐
+              _t_r_y___n_u_m_b_e_r of the _s_t_r_u_c_t _u_s_e_r___d_e_s_c is ignored; in  other  words,
+              this  ptrace  operation can’t be used to allocate a free TLS en‐
+              try.)
+
+       PPTTRRAACCEE__GGEETT__SSYYSSCCAALLLL__IINNFFOO (since Linux 5.3)
+              Retrieve information about the system call that caused the stop.
+              The information is placed into the buffer pointed  by  the  _d_a_t_a
+              argument,  which  should be a pointer to a buffer of type _s_t_r_u_c_t
+              _p_t_r_a_c_e___s_y_s_c_a_l_l___i_n_f_o.  The _a_d_d_r argument contains the size of the
+              buffer pointed to by  the  _d_a_t_a  argument  (i.e.,  _s_i_z_e_o_f_(_s_t_r_u_c_t
+              _p_t_r_a_c_e___s_y_s_c_a_l_l___i_n_f_o_)).   The return value contains the number of
+              bytes available to be written by the kernel.  If the size of the
+              data to be written by the kernel exceeds the size  specified  by
+              the _a_d_d_r argument, the output data is truncated.
+
+              The _p_t_r_a_c_e___s_y_s_c_a_l_l___i_n_f_o structure contains the following fields:
+
+                  struct ptrace_syscall_info {
+                      __u8 op;        /* Type of system call stop */
+                      __u32 arch;     /* AUDIT_ARCH_* value; see seccomp(2) */
+                      __u64 instruction_pointer; /* CPU instruction pointer */
+                      __u64 stack_pointer;    /* CPU stack pointer */
+                      union {
+                          struct {    /* op == PTRACE_SYSCALL_INFO_ENTRY */
+                              __u64 nr;       /* System call number */
+                              __u64 args[6];  /* System call arguments */
+                          } entry;
+                          struct {    /* op == PTRACE_SYSCALL_INFO_EXIT */
+                              __s64 rval;     /* System call return value */
+                              __u8 is_error;  /* System call error flag;
+                                                 Boolean: does rval contain
+                                                 an error value (-ERRCODE) or
+                                                 a nonerror return value? */
+                          } exit;
+                          struct {    /* op == PTRACE_SYSCALL_INFO_SECCOMP */
+                              __u64 nr;       /* System call number */
+                              __u64 args[6];  /* System call arguments */
+                              __u32 ret_data; /* SECCOMP_RET_DATA portion
+                                                 of SECCOMP_RET_TRACE
+                                                 return value */
+                          } seccomp;
+                      };
+                  };
+
+              The  _o_p, _a_r_c_h, _i_n_s_t_r_u_c_t_i_o_n___p_o_i_n_t_e_r, and _s_t_a_c_k___p_o_i_n_t_e_r fields are
+              defined for all kinds of ptrace system call stops.  The rest  of
+              the structure is a union; one should read only those fields that
+              are meaningful for the kind of system call stop specified by the
+              _o_p field.
+
+              The  _o_p  field  has  one  of  the  following  values (defined in
+              _<_l_i_n_u_x_/_p_t_r_a_c_e_._h_>) indicating what  type  of  stop  occurred  and
+              which part of the union is filled:
+
+              PPTTRRAACCEE__SSYYSSCCAALLLL__IINNFFOO__EENNTTRRYY
+                     The _e_n_t_r_y component of the union contains information re‐
+                     lating to a system call entry stop.
+
+              PPTTRRAACCEE__SSYYSSCCAALLLL__IINNFFOO__EEXXIITT
+                     The  _e_x_i_t component of the union contains information re‐
+                     lating to a system call exit stop.
+
+              PPTTRRAACCEE__SSYYSSCCAALLLL__IINNFFOO__SSEECCCCOOMMPP
+                     The _s_e_c_c_o_m_p component of the union  contains  information
+                     relating to a PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP stop.
+
+              PPTTRRAACCEE__SSYYSSCCAALLLL__IINNFFOO__NNOONNEE
+                     No component of the union contains relevant information.
+
+              In case of system call entry or exit stops, the data returned by
+              PPTTRRAACCEE__GGEETT__SSYYSSCCAALLLL__IINNFFOO       is       limited      to      type
+              PPTTRRAACCEE__SSYYSSCCAALLLL__IINNFFOO__NNOONNEE unless PPTTRRAACCEE__OO__TTRRAACCEESSYYSSGGOOOODD option  is
+              set before the corresponding system call stop has occurred.
+
+   DDeeaatthh uunnddeerr ppttrraaccee
+       When  a (possibly multithreaded) process receives a killing signal (one
+       whose disposition is set to SSIIGG__DDFFLL and whose default action is to kill
+       the process), all threads exit.  Tracees report their  death  to  their
+       tracer(s).  Notification of this event is delivered via wwaaiittppiidd(2).
+
+       Note  that the killing signal will first cause signal‐delivery‐stop (on
+       one tracee only), and only after it is injected by the tracer (or after
+       it was dispatched to a thread which isn’t traced), will death from  the
+       signal happen on _a_l_l tracees within a multithreaded process.  (The term
+       "signal‐delivery‐stop" is explained below.)
+
+       SSIIGGKKIILLLL does not generate signal‐delivery‐stop and therefore the tracer
+       can’t  suppress  it.   SSIIGGKKIILLLL kills even within system calls (syscall‐
+       exit‐stop is not generated prior to death by SSIIGGKKIILLLL).  The net  effect
+       is  that  SSIIGGKKIILLLL  always  kills the process (all its threads), even if
+       some threads of the process are ptraced.
+
+       When the tracee calls __eexxiitt(2), it reports its  death  to  its  tracer.
+       Other threads are not affected.
+
+       When  any  thread  executes  eexxiitt__ggrroouupp(2),  every tracee in its thread
+       group reports its death to its tracer.
+
+       If the PPTTRRAACCEE__OO__TTRRAACCEEEEXXIITT option is on, PPTTRRAACCEE__EEVVEENNTT__EEXXIITT  will  happen
+       before actual death.  This applies to exits via eexxiitt(2), eexxiitt__ggrroouupp(2),
+       and signal deaths (except SSIIGGKKIILLLL, depending on the kernel version; see
+       BUGS  below),  and  when threads are torn down on eexxeeccvvee(2) in a multi‐
+       threaded process.
+
+       The tracer cannot assume that the ptrace‐stopped tracee exists.   There
+       are  many  scenarios  when  the  tracee  may die while stopped (such as
+       SSIIGGKKIILLLL).  Therefore, the tracer must be prepared to  handle  an  EESSRRCCHH
+       error  on  any  ptrace operation.  Unfortunately, the same error is re‐
+       turned if the tracee exists but is  not  ptrace‐stopped  (for  commands
+       which  require a stopped tracee), or if it is not traced by the process
+       which issued the ptrace call.  The tracer needs to keep  track  of  the
+       stopped/running  state  of  the  tracee, and interpret EESSRRCCHH as "tracee
+       died unexpectedly" only if it knows that the tracee has  been  observed
+       to  enter  ptrace‐stop.   Note  that  there  is no guarantee that _w_a_i_t_‐
+       _p_i_d_(_W_N_O_H_A_N_G_) will reliably report the tracee’s death status if a ptrace
+       operation returned EESSRRCCHH.  _w_a_i_t_p_i_d_(_W_N_O_H_A_N_G_) may return 0  instead.   In
+       other words, the tracee may be "not yet fully dead", but already refus‐
+       ing ptrace operations.
+
+       The tracer can’t assume that the tracee _a_l_w_a_y_s ends its life by report‐
+       ing  _W_I_F_E_X_I_T_E_D_(_s_t_a_t_u_s_)  or  _W_I_F_S_I_G_N_A_L_E_D_(_s_t_a_t_u_s_);  there are cases where
+       this does not occur.  For example, if a thread other than thread  group
+       leader  does  an  eexxeeccvvee(2),  it disappears; its PID will never be seen
+       again, and any subsequent ptrace  stops  will  be  reported  under  the
+       thread group leader’s PID.
+
+   SSttooppppeedd ssttaatteess
+       A tracee can be in two states: running or stopped.  For the purposes of
+       ptrace,  a  tracee  which is blocked in a system call (such as rreeaadd(2),
+       ppaauussee(2), etc.)  is nevertheless considered to be running, even if  the
+       tracee  is  blocked  for  a  long  time.  The state of the tracee after
+       PPTTRRAACCEE__LLIISSTTEENN is somewhat of a gray area: it is not in any  ptrace‐stop
+       (ptrace commands won’t work on it, and it will deliver wwaaiittppiidd(2) noti‐
+       fications),  but  it also may be considered "stopped" because it is not
+       executing instructions (is not scheduled), and if it was in  group‐stop
+       before  PPTTRRAACCEE__LLIISSTTEENN,  it will not respond to signals until SSIIGGCCOONNTT is
+       received.
+
+       There are many kinds of states when  the  tracee  is  stopped,  and  in
+       ptrace  discussions  they are often conflated.  Therefore, it is impor‐
+       tant to use precise terms.
+
+       In this manual page, any stopped state in which the tracee is ready  to
+       accept  ptrace commands from the tracer is called _p_t_r_a_c_e_‐_s_t_o_p.  Ptrace‐
+       stops can be further subdivided into _s_i_g_n_a_l_‐_d_e_l_i_v_e_r_y_‐_s_t_o_p,  _g_r_o_u_p_‐_s_t_o_p,
+       _s_y_s_c_a_l_l_‐_s_t_o_p,  _P_T_R_A_C_E___E_V_E_N_T _s_t_o_p_s, and so on.  These stopped states are
+       described in detail below.
+
+       When the running tracee enters ptrace‐stop, it notifies its tracer  us‐
+       ing wwaaiittppiidd(2) (or one of the other "wait" system calls).  Most of this
+       manual page assumes that the tracer waits with:
+
+           pid = waitpid(pid_or_minus_1, &status, __WALL);
+
+       Ptrace‐stopped  tracees are reported as returns with _p_i_d greater than 0
+       and _W_I_F_S_T_O_P_P_E_D_(_s_t_a_t_u_s_) true.
+
+       The ____WWAALLLL flag does not include the WWSSTTOOPPPPEEDD and  WWEEXXIITTEEDD  flags,  but
+       implies their functionality.
+
+       Setting the WWCCOONNTTIINNUUEEDD flag when calling wwaaiittppiidd(2) is not recommended:
+       the  "continued"  state is per‐process and consuming it can confuse the
+       real parent of the tracee.
+
+       Use of the WWNNOOHHAANNGG flag may cause wwaaiittppiidd(2) to return 0 ("no wait  re‐
+       sults  available yet") even if the tracer knows there should be a noti‐
+       fication.  Example:
+
+           errno = 0;
+           ptrace(PTRACE_CONT, pid, 0L, 0L);
+           if (errno == ESRCH) {
+               /* tracee is dead */
+               r = waitpid(tracee, &status, __WALL | WNOHANG);
+               /* r can still be 0 here! */
+           }
+
+       The  following  kinds  of  ptrace‐stops  exist:  signal‐delivery‐stops,
+       group‐stops,  PPTTRRAACCEE__EEVVEENNTT stops, syscall‐stops.  They all are reported
+       by wwaaiittppiidd(2) with _W_I_F_S_T_O_P_P_E_D_(_s_t_a_t_u_s_) true.  They may be differentiated
+       by examining the value _s_t_a_t_u_s_>_>_8, and if there  is  ambiguity  in  that
+       value,  by  querying  PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO.   (Note:  the _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_)
+       macro can’t be used to perform this examination, because it returns the
+       value _(_s_t_a_t_u_s_>_>_8_) _& _0_x_f_f.)
+
+   SSiiggnnaall‐‐ddeelliivveerryy‐‐ssttoopp
+       When a (possibly multithreaded)  process  receives  any  signal  except
+       SSIIGGKKIILLLL,  the kernel selects an arbitrary thread which handles the sig‐
+       nal.  (If the signal is generated with ttggkkiillll(2), the target thread can
+       be explicitly selected by the  caller.)   If  the  selected  thread  is
+       traced,  it  enters signal‐delivery‐stop.  At this point, the signal is
+       not yet delivered to the process, and can be suppressed by the  tracer.
+       If  the tracer doesn’t suppress the signal, it passes the signal to the
+       tracee in the next ptrace restart operation.  This second step of  sig‐
+       nal delivery is called _s_i_g_n_a_l _i_n_j_e_c_t_i_o_n in this manual page.  Note that
+       if the signal is blocked, signal‐delivery‐stop doesn’t happen until the
+       signal  is  unblocked,  with  the usual exception that SSIIGGSSTTOOPP can’t be
+       blocked.
+
+       Signal‐delivery‐stop is observed by the tracer as wwaaiittppiidd(2)  returning
+       with _W_I_F_S_T_O_P_P_E_D_(_s_t_a_t_u_s_) true, with the signal returned by _W_S_T_O_P_S_I_G_(_s_t_a_‐
+       _t_u_s_).   If  the  signal  is  SSIIGGTTRRAAPP,  this  may be a different kind of
+       ptrace‐stop; see the "Syscall‐stops" and "execve"  sections  below  for
+       details.   If _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_) returns a stopping signal, this may be a
+       group‐stop; see below.
+
+   SSiiggnnaall iinnjjeeccttiioonn aanndd ssuupppprreessssiioonn
+       After signal‐delivery‐stop is observed by the tracer, the tracer should
+       restart the tracee with the call
+
+           ptrace(PTRACE_restart, pid, 0, sig)
+
+       where PPTTRRAACCEE__rreessttaarrtt is one of the restarting  ptrace  operations.   If
+       _s_i_g is 0, then a signal is not delivered.  Otherwise, the signal _s_i_g is
+       delivered.   This  operation  is called _s_i_g_n_a_l _i_n_j_e_c_t_i_o_n in this manual
+       page, to distinguish it from signal‐delivery‐stop.
+
+       The _s_i_g value may be different from  the  _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_)  value:  the
+       tracer can cause a different signal to be injected.
+
+       Note  that a suppressed signal still causes system calls to return pre‐
+       maturely.  In this case, system calls will  be  restarted:  the  tracer
+       will  observe  the  tracee to reexecute the interrupted system call (or
+       rreessttaarrtt__ssyyssccaallll(2) system call for a few system calls which use a  dif‐
+       ferent  mechanism  for  restarting)  if the tracer uses PPTTRRAACCEE__SSYYSSCCAALLLL.
+       Even system calls (such as ppoollll(2)) which  are  not  restartable  after
+       signal  are  restarted after signal is suppressed; however, kernel bugs
+       exist which cause some system calls to fail with EEIINNTTRR even  though  no
+       observable signal is injected to the tracee.
+
+       Restarting ptrace commands issued in ptrace‐stops other than signal‐de‐
+       livery‐stop  are  not  guaranteed  to  inject  a signal, even if _s_i_g is
+       nonzero.  No error is reported; a nonzero _s_i_g may  simply  be  ignored.
+       Ptrace  users  should  not  try  to "create a new signal" this way: use
+       ttggkkiillll(2) instead.
+
+       The fact that signal injection operations may be ignored when  restart‐
+       ing the tracee after ptrace stops that are not signal‐delivery‐stops is
+       a  cause of confusion among ptrace users.  One typical scenario is that
+       the tracer observes group‐stop, mistakes it  for  signal‐delivery‐stop,
+       restarts the tracee with
+
+           ptrace(PTRACE_restart, pid, 0, stopsig)
+
+       with  the  intention of injecting _s_t_o_p_s_i_g, but _s_t_o_p_s_i_g gets ignored and
+       the tracee continues to run.
+
+       The SSIIGGCCOONNTT signal has a side effect of waking up (all  threads  of)  a
+       group‐stopped  process.   This side effect happens before signal‐deliv‐
+       ery‐stop.  The tracer can’t suppress this side effect (it can only sup‐
+       press signal injection, which only causes the SSIIGGCCOONNTT handler to not be
+       executed in the tracee, if such a handler is installed).  In fact, wak‐
+       ing up from group‐stop may be followed by signal‐delivery‐stop for sig‐
+       nal(s) _o_t_h_e_r _t_h_a_n SSIIGGCCOONNTT, if they were pending when SSIIGGCCOONNTT was deliv‐
+       ered.  In other words, SSIIGGCCOONNTT may be not the first signal observed  by
+       the tracee after it was sent.
+
+       Stopping  signals cause (all threads of) a process to enter group‐stop.
+       This side effect happens after signal injection, and therefore  can  be
+       suppressed by the tracer.
+
+       In Linux 2.4 and earlier, the SSIIGGSSTTOOPP signal can’t be injected.
+
+       PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO  can  be used to retrieve a _s_i_g_i_n_f_o___t structure which
+       corresponds to the delivered signal.  PPTTRRAACCEE__SSEETTSSIIGGIINNFFOO may be used  to
+       modify  it.  If PPTTRRAACCEE__SSEETTSSIIGGIINNFFOO has been used to alter _s_i_g_i_n_f_o___t, the
+       _s_i___s_i_g_n_o field and the _s_i_g parameter in  the  restarting  command  must
+       match, otherwise the result is undefined.
+
+   GGrroouupp‐‐ssttoopp
+       When a (possibly multithreaded) process receives a stopping signal, all
+       threads  stop.   If  some  threads are traced, they enter a group‐stop.
+       Note that the stopping signal will first cause signal‐delivery‐stop (on
+       one tracee only), and only after it is injected by the tracer (or after
+       it was dispatched to a thread which isn’t traced), will  group‐stop  be
+       initiated  on  _a_l_l tracees within the multithreaded process.  As usual,
+       every tracee reports its group‐stop  separately  to  the  corresponding
+       tracer.
+
+       Group‐stop  is observed by the tracer as wwaaiittppiidd(2) returning with _W_I_F_‐
+       _S_T_O_P_P_E_D_(_s_t_a_t_u_s_) true, with the stopping  signal  available  via  _W_S_T_O_P_‐
+       _S_I_G_(_s_t_a_t_u_s_).   The  same  result  is  returned by some other classes of
+       ptrace‐stops, therefore the recommended practice is to perform the call
+
+           ptrace(PTRACE_GETSIGINFO, pid, 0, &siginfo)
+
+       The call can be avoided if the signal is not SSIIGGSSTTOOPP, SSIIGGTTSSTTPP, SSIIGGTTTTIINN,
+       or SSIIGGTTTTOOUU; only these four  signals  are  stopping  signals.   If  the
+       tracer  sees  something else, it can’t be a group‐stop.  Otherwise, the
+       tracer needs to call  PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO.   If  PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO  fails
+       with  EEIINNVVAALL, then it is definitely a group‐stop.  (Other failure codes
+       are possible, such as EESSRRCCHH ("no such process") if a SSIIGGKKIILLLL killed the
+       tracee.)
+
+       If tracee was attached using PPTTRRAACCEE__SSEEIIZZEE, group‐stop is  indicated  by
+       PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP: _s_t_a_t_u_s_>_>_1_6 _=_= _P_T_R_A_C_E___E_V_E_N_T___S_T_O_P.  This allows detec‐
+       tion of group‐stops without requiring an extra PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO call.
+
+       As  of  Linux  2.6.38, after the tracer sees the tracee ptrace‐stop and
+       until it restarts or kills it, the tracee will not run,  and  will  not
+       send  notifications  (except  SSIIGGKKIILLLL death) to the tracer, even if the
+       tracer enters into another wwaaiittppiidd(2) call.
+
+       The kernel behavior described in the previous paragraph causes a  prob‐
+       lem  with  transparent  handling  of  stopping  signals.  If the tracer
+       restarts the tracee after group‐stop, the  stopping  signal  is  effec‐
+       tively  ignored—the  tracee  doesn’t  remain  stopped, it runs.  If the
+       tracer doesn’t restart the tracee before entering into the  next  wwaaiitt‐‐
+       ppiidd(2), future SSIIGGCCOONNTT signals will not be reported to the tracer; this
+       would cause the SSIIGGCCOONNTT signals to have no effect on the tracee.
+
+       Since Linux 3.4, there is a method to overcome this problem: instead of
+       PPTTRRAACCEE__CCOONNTT, a PPTTRRAACCEE__LLIISSTTEENN command can be used to restart a tracee in
+       a way where it does not execute, but waits for a new event which it can
+       report via wwaaiittppiidd(2) (such as when it is restarted by a SSIIGGCCOONNTT).
+
+   PPTTRRAACCEE__EEVVEENNTT ssttooppss
+       If  the  tracer  sets  PPTTRRAACCEE__OO__TTRRAACCEE__**  options, the tracee will enter
+       ptrace‐stops called PPTTRRAACCEE__EEVVEENNTT stops.
+
+       PPTTRRAACCEE__EEVVEENNTT stops are observed by the tracer as  wwaaiittppiidd(2)  returning
+       with  _W_I_F_S_T_O_P_P_E_D_(_s_t_a_t_u_s_),  and _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_) returns SSIIGGTTRRAAPP (or for
+       PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP, returns the stopping signal if tracee is in a group‐
+       stop).  An additional bit is set in the higher byte of the status word:
+       the value _s_t_a_t_u_s_>_>_8 will be
+
+           ((PTRACE_EVENT_foo<<8) | SIGTRAP).
+
+       The following events exist:
+
+       PPTTRRAACCEE__EEVVEENNTT__VVFFOORRKK
+              Stop  before  return  from  vvffoorrkk(2)  or   cclloonnee(2)   with   the
+              CCLLOONNEE__VVFFOORRKK flag.  When the tracee is continued after this stop,
+              it will wait for child to exit/exec before continuing its execu‐
+              tion (in other words, the usual behavior on vvffoorrkk(2)).
+
+       PPTTRRAACCEE__EEVVEENNTT__FFOORRKK
+              Stop before return from ffoorrkk(2) or cclloonnee(2) with the exit signal
+              set to SSIIGGCCHHLLDD.
+
+       PPTTRRAACCEE__EEVVEENNTT__CCLLOONNEE
+              Stop before return from cclloonnee(2).
+
+       PPTTRRAACCEE__EEVVEENNTT__VVFFOORRKK__DDOONNEE
+              Stop   before   return   from  vvffoorrkk(2)  or  cclloonnee(2)  with  the
+              CCLLOONNEE__VVFFOORRKK flag, but after the child unblocked this  tracee  by
+              exiting or execing.
+
+       For  all  four  stops  described  above,  the stop occurs in the parent
+       (i.e.,   the   tracee),   not   in   the    newly    created    thread.
+       PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG can be used to retrieve the new thread’s ID.
+
+       PPTTRRAACCEE__EEVVEENNTT__EEXXEECC
+              Stop   before   return   from   eexxeeccvvee(2).    Since  Linux  3.0,
+              PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG returns the former thread ID.
+
+       PPTTRRAACCEE__EEVVEENNTT__EEXXIITT
+              Stop before exit (including death  from  eexxiitt__ggrroouupp(2)),  signal
+              death,  or  exit caused by eexxeeccvvee(2) in a multithreaded process.
+              PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG returns the exit status.   Registers  can  be
+              examined (unlike when "real" exit happens).  The tracee is still
+              alive; it needs to be PPTTRRAACCEE__CCOONNTTed or PPTTRRAACCEE__DDEETTAACCHHed to finish
+              exiting.
+
+       PPTTRRAACCEE__EEVVEENNTT__SSTTOOPP
+              Stop induced by PPTTRRAACCEE__IINNTTEERRRRUUPPTT command, or group‐stop, or ini‐
+              tial  ptrace‐stop when a new child is attached (only if attached
+              using PPTTRRAACCEE__SSEEIIZZEE).
+
+       PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP
+              Stop triggered by a sseeccccoommpp(2) rule on tracee syscall entry when
+              PPTTRRAACCEE__OO__TTRRAACCEESSEECCCCOOMMPP has been set by the tracer.   The  seccomp
+              event  message  data  (from  the SSEECCCCOOMMPP__RREETT__DDAATTAA portion of the
+              seccomp filter rule) can be retrieved  with  PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+              The semantics of this stop are described in detail in a separate
+              section below.
+
+       PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO  on  PPTTRRAACCEE__EEVVEENNTT  stops returns SSIIGGTTRRAAPP in _s_i___s_i_g_n_o,
+       with _s_i___c_o_d_e set to _(_e_v_e_n_t_<_<_8_) _| _S_I_G_T_R_A_P.
+
+   SSyyssccaallll‐‐ssttooppss
+       If the tracee was restarted by  PPTTRRAACCEE__SSYYSSCCAALLLL  or  PPTTRRAACCEE__SSYYSSEEMMUU,  the
+       tracee enters syscall‐enter‐stop just prior to entering any system call
+       (which will not be executed if the restart was using PPTTRRAACCEE__SSYYSSEEMMUU, re‐
+       gardless  of  any  change  made  to  registers at this point or how the
+       tracee is restarted after this stop).  No matter  which  method  caused
+       the   syscall‐entry‐stop,  if  the  tracer  restarts  the  tracee  with
+       PPTTRRAACCEE__SSYYSSCCAALLLL, the tracee enters  syscall‐exit‐stop  when  the  system
+       call  is finished, or if it is interrupted by a signal.  (That is, sig‐
+       nal‐delivery‐stop never happens between syscall‐enter‐stop and syscall‐
+       exit‐stop; it happens _a_f_t_e_r syscall‐exit‐stop.).  If the tracee is con‐
+       tinued using any other method (including  PPTTRRAACCEE__SSYYSSEEMMUU),  no  syscall‐
+       exit‐stop  occurs.   Note that all mentions PPTTRRAACCEE__SSYYSSEEMMUU apply equally
+       to PPTTRRAACCEE__SSYYSSEEMMUU__SSIINNGGLLEESSTTEEPP.
+
+       However, even if the tracee was continued using PPTTRRAACCEE__SSYYSSCCAALLLL,  it  is
+       not  guaranteed  that the next stop will be a syscall‐exit‐stop.  Other
+       possibilities are that the tracee may stop in a PPTTRRAACCEE__EEVVEENNTT stop  (in‐
+       cluding seccomp stops), exit (if it entered __eexxiitt(2) or eexxiitt__ggrroouupp(2)),
+       be  killed by SSIIGGKKIILLLL, or die silently (if it is a thread group leader,
+       the eexxeeccvvee(2) happened in another thread, and that thread is not traced
+       by the same tracer; this situation is discussed later).
+
+       Syscall‐enter‐stop and syscall‐exit‐stop are observed by the tracer  as
+       wwaaiittppiidd(2) returning with _W_I_F_S_T_O_P_P_E_D_(_s_t_a_t_u_s_) true, and _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_)
+       giving  SSIIGGTTRRAAPP.   If  the  PPTTRRAACCEE__OO__TTRRAACCEESSYYSSGGOOOODD option was set by the
+       tracer, then _W_S_T_O_P_S_I_G_(_s_t_a_t_u_s_) will give the value _(_S_I_G_T_R_A_P _| _0_x_8_0_).
+
+       Syscall‐stops can be distinguished from signal‐delivery‐stop with  SSIIGG‐‐
+       TTRRAAPP by querying PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO for the following cases:
+
+       _s_i___c_o_d_e <= 0
+              SSIIGGTTRRAAPP  was  delivered  as a result of a user‐space action, for
+              example, a system call (ttggkkiillll(2), kkiillll(2), ssiiggqquueeuuee(3),  etc.),
+              expiration  of a POSIX timer, change of state on a POSIX message
+              queue, or completion of an asynchronous I/O operation.
+
+       _s_i___c_o_d_e == SI_KERNEL (0x80)
+              SSIIGGTTRRAAPP was sent by the kernel.
+
+       _s_i___c_o_d_e == SIGTRAP or _s_i___c_o_d_e == (SIGTRAP|0x80)
+              This is a syscall‐stop.
+
+       However, syscall‐stops happen very often (twice per system  call),  and
+       performing PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO for every syscall‐stop may be somewhat ex‐
+       pensive.
+
+       Some  architectures  allow  the  cases to be distinguished by examining
+       registers.  For example, on x86, _r_a_x == -EENNOOSSYYSS in  syscall‐enter‐stop.
+       Since  SSIIGGTTRRAAPP  (like  any  other signal) always happens _a_f_t_e_r syscall‐
+       exit‐stop, and at this point _r_a_x almost  never  contains  -EENNOOSSYYSS,  the
+       SSIIGGTTRRAAPP  looks  like "syscall‐stop which is not syscall‐enter‐stop"; in
+       other words, it looks like a "stray syscall‐exit‐stop" and can  be  de‐
+       tected this way.  But such detection is fragile and is best avoided.
+
+       Using  the  PPTTRRAACCEE__OO__TTRRAACCEESSYYSSGGOOOODD  option  is the recommended method to
+       distinguish syscall‐stops from other kinds of ptrace‐stops, since it is
+       reliable and does not incur a performance penalty.
+
+       Syscall‐enter‐stop and  syscall‐exit‐stop  are  indistinguishable  from
+       each  other  by  the tracer.  The tracer needs to keep track of the se‐
+       quence of ptrace‐stops in order to not misinterpret  syscall‐enter‐stop
+       as  syscall‐exit‐stop  or vice versa.  In general, a syscall‐enter‐stop
+       is always followed by  syscall‐exit‐stop,  PPTTRRAACCEE__EEVVEENNTT  stop,  or  the
+       tracee’s  death;  no  other  kinds of ptrace‐stop can occur in between.
+       However, note that seccomp stops (see below)  can  cause  syscall‐exit‐
+       stops,  without  preceding  syscall‐entry‐stops.  If seccomp is in use,
+       care needs to be taken not to misinterpret such stops as syscall‐entry‐
+       stops.
+
+       If after syscall‐enter‐stop, the tracer uses a restarting command other
+       than PPTTRRAACCEE__SSYYSSCCAALLLL, syscall‐exit‐stop is not generated.
+
+       PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO on syscall‐stops returns SSIIGGTTRRAAPP  in  _s_i___s_i_g_n_o,  with
+       _s_i___c_o_d_e set to SSIIGGTTRRAAPP or _(_S_I_G_T_R_A_P_|_0_x_8_0_).
+
+   PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP ssttooppss ((LLiinnuuxx 33..55 ttoo LLiinnuuxx 44..77))
+       The  behavior  of PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP stops and their interaction with
+       other kinds of ptrace stops has changed between kernel versions.   This
+       documents  the behavior from their introduction until Linux 4.7 (inclu‐
+       sive).  The behavior in later kernel versions is documented in the next
+       section.
+
+       A PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP stop occurs whenever a SSEECCCCOOMMPP__RREETT__TTRRAACCEE rule is
+       triggered.  This is independent of which methods was  used  to  restart
+       the  system  call.   Notably, seccomp still runs even if the tracee was
+       restarted using PPTTRRAACCEE__SSYYSSEEMMUU and this system call  is  unconditionally
+       skipped.
+
+       Restarts  from  this stop will behave as if the stop had occurred right
+       before the system call in question.  In particular, both PPTTRRAACCEE__SSYYSSCCAALLLL
+       and PPTTRRAACCEE__SSYYSSEEMMUU will normally cause a subsequent  syscall‐entry‐stop.
+       However,  if  after  the PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP the system call number is
+       negative, both the syscall‐entry‐stop and the system call  itself  will
+       be  skipped.  This means that if the system call number is negative af‐
+       ter  a  PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP  and  the  tracee   is   restarted   using
+       PPTTRRAACCEE__SSYYSSCCAALLLL,  the  next  observed  stop will be a syscall‐exit‐stop,
+       rather than the syscall‐entry‐stop that might have been expected.
+
+   PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP ssttooppss ((ssiinnccee LLiinnuuxx 44..88))
+       Starting with Linux 4.8, the PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP stop was reordered to
+       occur between syscall‐entry‐stop and syscall‐exit‐stop.  Note that sec‐
+       comp no longer runs (and no PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP will be  reported)  if
+       the system call is skipped due to PPTTRRAACCEE__SSYYSSEEMMUU.
+
+       Functionally,  a  PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP  stop  functions comparably to a
+       syscall‐entry‐stop (i.e., continuations using PPTTRRAACCEE__SSYYSSCCAALLLL will cause
+       syscall‐exit‐stops, the system call number may be changed and any other
+       modified registers are visible to the  to‐be‐executed  system  call  as
+       well).   Note  that  there  may  be, but need not have been a preceding
+       syscall‐entry‐stop.
+
+       After a PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP stop, seccomp will be rerun, with  a  SSEECC‐‐
+       CCOOMMPP__RREETT__TTRRAACCEE  rule  now  functioning the same as a SSEECCCCOOMMPP__RREETT__AALLLLOOWW.
+       Specifically, this means that if registers are not modified during  the
+       PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP stop, the system call will then be allowed.
+
+   PPTTRRAACCEE__SSIINNGGLLEESSTTEEPP ssttooppss
+       [Details of these kinds of stops are yet to be documented.]
+
+   IInnffoorrmmaattiioonnaall aanndd rreessttaarrttiinngg ppttrraaccee ccoommmmaannddss
+       Most   ptrace   commands   (all   except  PPTTRRAACCEE__AATTTTAACCHH,  PPTTRRAACCEE__SSEEIIZZEE,
+       PPTTRRAACCEE__TTRRAACCEEMMEE, PPTTRRAACCEE__IINNTTEERRRRUUPPTT, and PPTTRRAACCEE__KKIILLLL) require  the  tracee
+       to be in a ptrace‐stop, otherwise they fail with EESSRRCCHH.
+
+       When  the  tracee is in ptrace‐stop, the tracer can read and write data
+       to the tracee using informational commands.  These commands  leave  the
+       tracee in ptrace‐stopped state:
+
+           ptrace(PTRACE_PEEKTEXT/PEEKDATA/PEEKUSER, pid, addr, 0);
+           ptrace(PTRACE_POKETEXT/POKEDATA/POKEUSER, pid, addr, long_val);
+           ptrace(PTRACE_GETREGS/GETFPREGS, pid, 0, &struct);
+           ptrace(PTRACE_SETREGS/SETFPREGS, pid, 0, &struct);
+           ptrace(PTRACE_GETREGSET, pid, NT_foo, &iov);
+           ptrace(PTRACE_SETREGSET, pid, NT_foo, &iov);
+           ptrace(PTRACE_GETSIGINFO, pid, 0, &siginfo);
+           ptrace(PTRACE_SETSIGINFO, pid, 0, &siginfo);
+           ptrace(PTRACE_GETEVENTMSG, pid, 0, &long_var);
+           ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_flags);
+
+       Note  that  some  errors are not reported.  For example, setting signal
+       information (_s_i_g_i_n_f_o) may have no effect in some ptrace‐stops, yet  the
+       call   may   succeed   (return   0   and   not   set  _e_r_r_n_o);  querying
+       PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG may succeed and return some random value if  current
+       ptrace‐stop is not documented as returning a meaningful event message.
+
+       The call
+
+           ptrace(PTRACE_SETOPTIONS, pid, 0, PTRACE_O_flags);
+
+       affects  one  tracee.   The tracee’s current flags are replaced.  Flags
+       are inherited by new tracees created  and  "auto‐attached"  via  active
+       PPTTRRAACCEE__OO__TTRRAACCEEFFOORRKK,  PPTTRRAACCEE__OO__TTRRAACCEEVVFFOORRKK,  or  PPTTRRAACCEE__OO__TTRRAACCEECCLLOONNEE  op‐
+       tions.
+
+       Another group of commands makes the ptrace‐stopped  tracee  run.   They
+       have the form:
+
+           ptrace(cmd, pid, 0, sig);
+
+       where _c_m_d is PPTTRRAACCEE__CCOONNTT, PPTTRRAACCEE__LLIISSTTEENN, PPTTRRAACCEE__DDEETTAACCHH, PPTTRRAACCEE__SSYYSSCCAALLLL,
+       PPTTRRAACCEE__SSIINNGGLLEESSTTEEPP,  PPTTRRAACCEE__SSYYSSEEMMUU, or PPTTRRAACCEE__SSYYSSEEMMUU__SSIINNGGLLEESSTTEEPP.  If the
+       tracee is in signal‐delivery‐stop, _s_i_g is the signal to be injected (if
+       it is nonzero).  Otherwise, _s_i_g may be  ignored.   (When  restarting  a
+       tracee  from a ptrace‐stop other than signal‐delivery‐stop, recommended
+       practice is to always pass 0 in _s_i_g.)
+
+   AAttttaacchhiinngg aanndd ddeettaacchhiinngg
+       A thread can be attached to the tracer using the call
+
+           ptrace(PTRACE_ATTACH, pid, 0, 0);
+
+       or
+
+           ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_flags);
+
+       PPTTRRAACCEE__AATTTTAACCHH sends SSIIGGSSTTOOPP to this thread.  If the tracer  wants  this
+       SSIIGGSSTTOOPP to have no effect, it needs to suppress it.  Note that if other
+       signals  are concurrently sent to this thread during attach, the tracer
+       may see the tracee  enter  signal‐delivery‐stop  with  other  signal(s)
+       first!   The  usual practice is to reinject these signals until SSIIGGSSTTOOPP
+       is seen, then suppress SSIIGGSSTTOOPP injection.  The design bug here is  that
+       a  ptrace  attach and a concurrently delivered SSIIGGSSTTOOPP may race and the
+       concurrent SSIIGGSSTTOOPP may be lost.
+
+       Since attaching sends SSIIGGSSTTOOPP and the  tracer  usually  suppresses  it,
+       this may cause a stray EEIINNTTRR return from the currently executing system
+       call  in the tracee, as described in the "Signal injection and suppres‐
+       sion" section.
+
+       Since Linux 3.4, PPTTRRAACCEE__SSEEIIZZEE can be  used  instead  of  PPTTRRAACCEE__AATTTTAACCHH.
+       PPTTRRAACCEE__SSEEIIZZEE  does  not stop the attached process.  If you need to stop
+       it after attach (or at any other time) without sending it any  signals,
+       use PPTTRRAACCEE__IINNTTEERRRRUUPPTT command.
+
+       The operation
+
+           ptrace(PTRACE_TRACEME, 0, 0, 0);
+
+       turns  the  calling  thread into a tracee.  The thread continues to run
+       (doesn’t enter ptrace‐stop).   A  common  practice  is  to  follow  the
+       PPTTRRAACCEE__TTRRAACCEEMMEE with
+
+           raise(SIGSTOP);
+
+       and  allow  the parent (which is our tracer now) to observe our signal‐
+       delivery‐stop.
+
+       If the PPTTRRAACCEE__OO__TTRRAACCEEFFOORRKK, PPTTRRAACCEE__OO__TTRRAACCEEVVFFOORRKK, or  PPTTRRAACCEE__OO__TTRRAACCEECCLLOONNEE
+       options are in effect, then children created by, respectively, vvffoorrkk(2)
+       or  cclloonnee(2)  with  the  CCLLOONNEE__VVFFOORRKK flag, ffoorrkk(2) or cclloonnee(2) with the
+       exit signal set to SSIIGGCCHHLLDD, and other kinds of cclloonnee(2), are  automati‐
+       cally  attached  to the same tracer which traced their parent.  SSIIGGSSTTOOPP
+       is delivered to the children, causing them  to  enter  signal‐delivery‐
+       stop after they exit the system call which created them.
+
+       Detaching of the tracee is performed by:
+
+           ptrace(PTRACE_DETACH, pid, 0, sig);
+
+       PPTTRRAACCEE__DDEETTAACCHH  is  a  restarting  operation;  therefore it requires the
+       tracee to be in ptrace‐stop.  If the tracee is in signal‐delivery‐stop,
+       a signal can be injected.  Otherwise, the _s_i_g parameter may be silently
+       ignored.
+
+       If the tracee is running when the tracer wants to detach it, the  usual
+       solution  is  to send SSIIGGSSTTOOPP (using ttggkkiillll(2), to make sure it goes to
+       the correct thread), wait for the tracee to  stop  in  signal‐delivery‐
+       stop for SSIIGGSSTTOOPP and then detach it (suppressing SSIIGGSSTTOOPP injection).  A
+       design  bug  is  that  this can race with concurrent SSIIGGSSTTOOPPs.  Another
+       complication is that the tracee may enter other ptrace‐stops and  needs
+       to  be  restarted and waited for again, until SSIIGGSSTTOOPP is seen.  Yet an‐
+       other complication is to be sure that the tracee is not already ptrace‐
+       stopped, because no  signal  delivery  happens  while  it  is—not  even
+       SSIIGGSSTTOOPP.
+
+       If  the  tracer  dies,  all  tracees  are  automatically  detached  and
+       restarted, unless they were in group‐stop.  Handling  of  restart  from
+       group‐stop  is  currently  buggy,  but  the "as planned" behavior is to
+       leave tracee stopped  and  waiting  for  SSIIGGCCOONNTT.   If  the  tracee  is
+       restarted from signal‐delivery‐stop, the pending signal is injected.
+
+   eexxeeccvvee((22)) uunnddeerr ppttrraaccee
+       When  one thread in a multithreaded process calls eexxeeccvvee(2), the kernel
+       destroys all other threads in the process, and resets the thread ID  of
+       the  execing  thread  to the thread group ID (process ID).  (Or, to put
+       things another way, when a multithreaded process does an eexxeeccvvee(2),  at
+       completion  of the call, it appears as though the eexxeeccvvee(2) occurred in
+       the thread group leader, regardless of which thread did the eexxeeccvvee(2).)
+       This resetting of the thread ID looks very confusing to tracers:
+
+       •  All  other  threads  stop  in   PPTTRRAACCEE__EEVVEENNTT__EEXXIITT   stop,   if   the
+          PPTTRRAACCEE__OO__TTRRAACCEEEEXXIITT option was turned on.  Then all other threads ex‐
+          cept  the  thread  group  leader  report death as if they exited via
+          __eexxiitt(2) with exit code 0.
+
+       •  The execing tracee changes its thread ID while  it  is  in  the  eexx‐‐
+          eeccvvee(2).   (Remember,  under  ptrace,  the "pid" returned from wwaaiitt‐‐
+          ppiidd(2), or fed into ptrace calls, is the tracee’s thread ID.)   That
+          is,  the  tracee’s  thread ID is reset to be the same as its process
+          ID, which is the same as the thread group leader’s thread ID.
+
+       •  Then a PPTTRRAACCEE__EEVVEENNTT__EEXXEECC stop happens, if the PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC op‐
+          tion was turned on.
+
+       •  If the thread group leader has reported its  PPTTRRAACCEE__EEVVEENNTT__EEXXIITT  stop
+          by  this  time, it appears to the tracer that the dead thread leader
+          "reappears from nowhere".  (Note: the thread group leader  does  not
+          report death via _W_I_F_E_X_I_T_E_D_(_s_t_a_t_u_s_) until there is at least one other
+          live  thread.   This eliminates the possibility that the tracer will
+          see it dying and then reappearing.)  If the thread group leader  was
+          still  alive, for the tracer this may look as if thread group leader
+          returns from a different system call than it entered, or  even  "re‐
+          turned  from  a  system  call  even  though it was not in any system
+          call".  If the thread group leader was not traced (or was traced  by
+          a  different  tracer), then during eexxeeccvvee(2) it will appear as if it
+          has become a tracee of the tracer of the execing tracee.
+
+       All of the above effects are the artifacts of the thread ID  change  in
+       the tracee.
+
+       The  PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC option is the recommended tool for dealing with
+       this situation.  First, it enables PPTTRRAACCEE__EEVVEENNTT__EEXXEECC stop, which occurs
+       before  eexxeeccvvee(2)  returns.   In  this  stop,  the   tracer   can   use
+       PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG  to  retrieve  the tracee’s former thread ID.  (This
+       feature was introduced in Linux 3.0.)  Second,  the  PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC
+       option disables legacy SSIIGGTTRRAAPP generation on eexxeeccvvee(2).
+
+       When  the  tracer  receives  PPTTRRAACCEE__EEVVEENNTT__EEXXEECC stop notification, it is
+       guaranteed that except this tracee and  the  thread  group  leader,  no
+       other threads from the process are alive.
+
+       On receiving the PPTTRRAACCEE__EEVVEENNTT__EEXXEECC stop notification, the tracer should
+       clean  up  all  its  internal data structures describing the threads of
+       this process, and retain only one data  structure—one  which  describes
+       the single still running tracee, with
+
+           thread ID == thread group ID == process ID.
+
+       Example: two threads call eexxeeccvvee(2) at the same time:
+
+       *** we get syscall‐enter‐stop in thread 1: **
+       PID1 execve("/bin/foo", "foo" <unfinished ...>
+       *** we issue PTRACE_SYSCALL for thread 1 **
+       *** we get syscall‐enter‐stop in thread 2: **
+       PID2 execve("/bin/bar", "bar" <unfinished ...>
+       *** we issue PTRACE_SYSCALL for thread 2 **
+       *** we get PTRACE_EVENT_EXEC for PID0, we issue PTRACE_SYSCALL **
+       *** we get syscall‐exit‐stop for PID0: **
+       PID0 <... execve resumed> )             = 0
+
+       If  the  PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC  option  is  _n_o_t  in effect for the execing
+       tracee,  and  if   the   tracee   was   PPTTRRAACCEE__AATTTTAACCHHed   rather   that
+       PPTTRRAACCEE__SSEEIIZZEEd, the kernel delivers an extra SSIIGGTTRRAAPP to the tracee after
+       eexxeeccvvee(2)  returns.   This  is an ordinary signal (similar to one which
+       can be generated by _k_i_l_l _-_T_R_A_P), not a  special  kind  of  ptrace‐stop.
+       Employing  PPTTRRAACCEE__GGEETTSSIIGGIINNFFOO  for  this signal returns _s_i___c_o_d_e set to 0
+       (_S_I___U_S_E_R).  This signal may be blocked by signal mask, and thus may  be
+       delivered (much) later.
+
+       Usually,  the  tracer  (for  example, ssttrraaccee(1)) would not want to show
+       this extra post‐execve SSIIGGTTRRAAPP signal to the user, and  would  suppress
+       its  delivery  to  the  tracee  (if  SSIIGGTTRRAAPP is set to SSIIGG__DDFFLL, it is a
+       killing signal).  However, determining _w_h_i_c_h SSIIGGTTRRAAPP to suppress is not
+       easy.  Setting the PPTTRRAACCEE__OO__TTRRAACCEEEEXXEECC option or using PPTTRRAACCEE__SSEEIIZZEE  and
+       thus suppressing this extra SSIIGGTTRRAAPP is the recommended approach.
+
+   RReeaall ppaarreenntt
+       The  ptrace  API (ab)uses the standard UNIX parent/child signaling over
+       wwaaiittppiidd(2).  This used to cause the real parent of the process to  stop
+       receiving  several  kinds  of  wwaaiittppiidd(2)  notifications when the child
+       process is traced by some other process.
+
+       Many of these bugs have been fixed, but  as  of  Linux  2.6.38  several
+       still exist; see BUGS below.
+
+       As of Linux 2.6.38, the following is believed to work correctly:
+
+       •  exit/death by signal is reported first to the tracer, then, when the
+          tracer  consumes  the  wwaaiittppiidd(2) result, to the real parent (to the
+          real parent only when the whole multithreaded  process  exits).   If
+          the  tracer  and the real parent are the same process, the report is
+          sent only once.
+
+RREETTUURRNN VVAALLUUEE
+       On success, the PPTTRRAACCEE__PPEEEEKK** operations return the requested data  (but
+       see  NOTES), the PPTTRRAACCEE__SSEECCCCOOMMPP__GGEETT__FFIILLTTEERR operation returns the number
+       of instructions in the BPF program, the PPTTRRAACCEE__GGEETT__SSYYSSCCAALLLL__IINNFFOO  opera‐
+       tion returns the number of bytes available to be written by the kernel,
+       and other operations return zero.
+
+       On  error,  all  operations return -1, and _e_r_r_n_o is set to indicate the
+       error.  Since the value returned by a successful PPTTRRAACCEE__PPEEEEKK** operation
+       may be -1, the caller must clear _e_r_r_n_o before the call, and then  check
+       it afterward to determine whether or not an error occurred.
+
+EERRRROORRSS
+       EEBBUUSSYY  (i386  only) There was an error with allocating or freeing a de‐
+              bug register.
+
+       EEFFAAUULLTT There was an attempt to read from or write to an invalid area in
+              the tracer’s or the tracee’s memory, probably because  the  area
+              wasn’t  mapped  or accessible.  Unfortunately, under Linux, dif‐
+              ferent variations of this fault will return EEIIOO or  EEFFAAUULLTT  more
+              or less arbitrarily.
+
+       EEIINNVVAALL An attempt was made to set an invalid option.
+
+       EEIIOO    _o_p  is  invalid, or an attempt was made to read from or write to
+              an invalid area in the tracer’s or the tracee’s memory, or there
+              was a word‐alignment violation, or an invalid signal was  speci‐
+              fied during a restart operation.
+
+       EEPPEERRMM  The  specified  process cannot be traced.  This could be because
+              the tracer has insufficient privileges (the required  capability
+              is   CCAAPP__SSYYSS__PPTTRRAACCEE);   unprivileged   processes   cannot  trace
+              processes that they cannot send signals to or those running set‐
+              user‐ID/set‐group‐ID programs, for  obvious  reasons.   Alterna‐
+              tively,  the  process  may  already  be being traced, or (before
+              Linux 2.6.26) be iinniitt(1) (PID 1).
+
+       EESSRRCCHH  The specified process does not exist, or is not currently  being
+              traced by the caller, or is not stopped (for operations that re‐
+              quire a stopped tracee).
+
+SSTTAANNDDAARRDDSS
+       None.
+
+HHIISSTTOORRYY
+       SVr4, 4.3BSD.
+
+       Before  Linux  2.6.26,  iinniitt(1),  the  process  with  PID 1, may not be
+       traced.
+
+NNOOTTEESS
+       Although arguments to ppttrraaccee() are interpreted according to the  proto‐
+       type  given,  glibc  currently declares ppttrraaccee() as a variadic function
+       with only the _o_p argument fixed.  It is recommended  to  always  supply
+       four arguments, even if the requested operation does not use them, set‐
+       ting unused/ignored arguments to _0_L or _(_v_o_i_d _*_) _0.
+
+       A  tracees  parent continues to be the tracer even if that tracer calls
+       eexxeeccvvee(2).
+
+       The layout of the contents of memory and the USER area are quite  oper‐
+       ating‐system‐  and architecture‐specific.  The offset supplied, and the
+       data returned, might not entirely match with the definition  of  _s_t_r_u_c_t
+       _u_s_e_r.
+
+       The  size  of  a  "word"  is determined by the operating‐system variant
+       (e.g., for 32‐bit Linux it is 32 bits).
+
+       This page documents the way the ppttrraaccee() call works currently in Linux.
+       Its behavior differs significantly on other flavors of  UNIX.   In  any
+       case,  use  of  ppttrraaccee() is highly specific to the operating system and
+       architecture.
+
+   PPttrraaccee aacccceessss mmooddee cchheecckkiinngg
+       Various parts of the kernel‐user‐space API (not  just  ppttrraaccee()  opera‐
+       tions),  require  so‐called  "ptrace access mode" checks, whose outcome
+       determines whether an operation is  permitted  (or,  in  a  few  cases,
+       causes  a "read" operation to return sanitized data).  These checks are
+       performed in cases where one process can inspect sensitive  information
+       about,  or  in  some  cases  modify the state of, another process.  The
+       checks are based on factors such as the credentials and capabilities of
+       the two processes, whether or not the "target" process is dumpable, and
+       the results of checks performed by any enabled  Linux  Security  Module
+       (LSM)—for  example,  SELinux,  Yama,  or Smack—and by the commoncap LSM
+       (which is always invoked).
+
+       Prior to Linux 2.6.27, all access checks were of a single type.   Since
+       Linux 2.6.27, two access mode levels are distinguished:
+
+       PPTTRRAACCEE__MMOODDEE__RREEAADD
+              For  "read" operations or other operations that are less danger‐
+              ous,   such    as:    ggeett__rroobbuusstt__lliisstt(2);    kkccmmpp(2);    reading
+              _/_p_r_o_c_/pid_/_a_u_x_v,  _/_p_r_o_c_/pid_/_e_n_v_i_r_o_n,  or _/_p_r_o_c_/pid_/_s_t_a_t; or rreeaadd‐‐
+              lliinnkk(2) of a _/_p_r_o_c_/pid_/_n_s_/_* file.
+
+       PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH
+              For "write" operations, or other operations that are  more  dan‐
+              gerous,  such  as:  ptrace  attaching (PPTTRRAACCEE__AATTTTAACCHH) to another
+              process or  calling  pprroocceessss__vvmm__wwrriitteevv(2).   (PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH
+              was effectively the default before Linux 2.6.27.)
+
+       Since  Linux 4.5, the above access mode checks are combined (ORed) with
+       one of the following modifiers:
+
+       PPTTRRAACCEE__MMOODDEE__FFSSCCRREEDDSS
+              Use the caller’s filesystem UID and GID (see ccrreeddeennttiiaallss(7))  or
+              effective capabilities for LSM checks.
+
+       PPTTRRAACCEE__MMOODDEE__RREEAALLCCRREEDDSS
+              Use  the caller’s real UID and GID or permitted capabilities for
+              LSM checks.  This was effectively the default before Linux 4.5.
+
+       Because combining one of the  credential  modifiers  with  one  of  the
+       aforementioned  access modes is typical, some macros are defined in the
+       kernel sources for the combinations:
+
+       PPTTRRAACCEE__MMOODDEE__RREEAADD__FFSSCCRREEDDSS
+              Defined as PPTTRRAACCEE__MMOODDEE__RREEAADD || PPTTRRAACCEE__MMOODDEE__FFSSCCRREEDDSS.
+
+       PPTTRRAACCEE__MMOODDEE__RREEAADD__RREEAALLCCRREEDDSS
+              Defined as PPTTRRAACCEE__MMOODDEE__RREEAADD || PPTTRRAACCEE__MMOODDEE__RREEAALLCCRREEDDSS.
+
+       PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH__FFSSCCRREEDDSS
+              Defined as PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH || PPTTRRAACCEE__MMOODDEE__FFSSCCRREEDDSS.
+
+       PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH__RREEAALLCCRREEDDSS
+              Defined as PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH || PPTTRRAACCEE__MMOODDEE__RREEAALLCCRREEDDSS.
+
+       One further modifier can be ORed with the access mode:
+
+       PPTTRRAACCEE__MMOODDEE__NNOOAAUUDDIITT (since Linux 3.3)
+              Don’t audit this access mode check.  This modifier  is  employed
+              for  ptrace  access  mode  checks  (such  as checks when reading
+              _/_p_r_o_c_/pid_/_s_t_a_t) that merely cause the output to be  filtered  or
+              sanitized,  rather  than  causing an error to be returned to the
+              caller.  In these cases, accessing the file is  not  a  security
+              violation  and  there  is no reason to generate a security audit
+              record.  This modifier suppresses the generation of such an  au‐
+              dit record for the particular access check.
+
+       Note  that all of the PPTTRRAACCEE__MMOODDEE__** constants described in this subsec‐
+       tion are kernel‐internal, and not visible to user space.  The  constant
+       names  are mentioned here in order to label the various kinds of ptrace
+       access mode checks that are performed for various system calls and  ac‐
+       cesses  to  various  pseudofiles  (e.g., under _/_p_r_o_c).  These names are
+       used in other manual pages to provide a simple shorthand  for  labeling
+       the different kernel checks.
+
+       The  algorithm  employed  for  ptrace  access  mode checking determines
+       whether the calling process is allowed to perform the corresponding ac‐
+       tion on the target process.  (In the case of opening  _/_p_r_o_c_/pid  files,
+       the "calling process" is the one opening the file, and the process with
+       the  corresponding  PID  is the "target process".)  The algorithm is as
+       follows:
+
+       (1)  If the calling thread and the target thread are in the same thread
+            group, access is always allowed.
+
+       (2)  If the access mode specifies PPTTRRAACCEE__MMOODDEE__FFSSCCRREEDDSS,  then,  for  the
+            check  in  the  next  step, employ the caller’s filesystem UID and
+            GID.  (As noted in ccrreeddeennttiiaallss(7), the filesystem UID and GID  al‐
+            most  always  have  the same values as the corresponding effective
+            IDs.)
+
+            Otherwise, the access mode specifies PPTTRRAACCEE__MMOODDEE__RREEAALLCCRREEDDSS, so use
+            the caller’s real UID and GID for the checks  in  the  next  step.
+            (Most  APIs  that check the caller’s UID and GID use the effective
+            IDs.  For historical reasons, the PPTTRRAACCEE__MMOODDEE__RREEAALLCCRREEDDSS check uses
+            the real IDs instead.)
+
+       (3)  Deny access if _n_e_i_t_h_e_r of the following is true:
+
+            •  The real, effective, and saved‐set user IDs of the target match
+               the caller’s user ID, _a_n_d the real,  effective,  and  saved‐set
+               group IDs of the target match the caller’s group ID.
+
+            •  The  caller has the CCAAPP__SSYYSS__PPTTRRAACCEE capability in the user name‐
+               space of the target.
+
+       (4)  Deny access if the target process "dumpable" attribute has a value
+            other   than   1   (SSUUIIDD__DDUUMMPP__UUSSEERR;   see   the   discussion    of
+            PPRR__SSEETT__DDUUMMPPAABBLLEE  in  pprrccttll(2)),  and  the caller does not have the
+            CCAAPP__SSYYSS__PPTTRRAACCEE capability in the  user  namespace  of  the  target
+            process.
+
+       (5)  The kernel LSM _s_e_c_u_r_i_t_y___p_t_r_a_c_e___a_c_c_e_s_s___c_h_e_c_k() interface is invoked
+            to  see  if ptrace access is permitted.  The results depend on the
+            LSM(s).  The implementation of this interface in the commoncap LSM
+            performs the following steps:
+
+            (5.1)  If the access mode includes PPTTRRAACCEE__MMOODDEE__FFSSCCRREEDDSS,  then  use
+                   the  caller’s  _e_f_f_e_c_t_i_v_e  capability  set  in the following
+                   check; otherwise (the access mode specifies PPTTRRAACCEE__MMOODDEE__RREE‐‐
+                   AALLCCRREEDDSS, so) use the caller’s _p_e_r_m_i_t_t_e_d capability set.
+
+            (5.2)  Deny access if _n_e_i_t_h_e_r of the following is true:
+
+                   •  The caller and the target process are in the  same  user
+                      namespace,  and the caller’s capabilities are a superset
+                      of the target process’s _p_e_r_m_i_t_t_e_d capabilities.
+
+                   •  The caller has the CCAAPP__SSYYSS__PPTTRRAACCEE capability in the tar‐
+                      get process’s user namespace.
+
+                   Note that the commoncap LSM does  not  distinguish  between
+                   PPTTRRAACCEE__MMOODDEE__RREEAADD and PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH.
+
+       (6)  If  access has not been denied by any of the preceding steps, then
+            access is allowed.
+
+   //pprroocc//ssyyss//kkeerrnneell//yyaammaa//ppttrraaccee__ssccooppee
+       On systems with the Yama Linux Security Module (LSM)  installed  (i.e.,
+       the    kernel    was   configured   with   CCOONNFFIIGG__SSEECCUURRIITTYY__YYAAMMAA),   the
+       _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_y_a_m_a_/_p_t_r_a_c_e___s_c_o_p_e file (available since Linux 3.4) can
+       be used to restrict the ability to trace a process with  ppttrraaccee()  (and
+       thus  also the ability to use tools such as ssttrraaccee(1) and ggddbb(1)).  The
+       goal of such restrictions is to prevent  attack  escalation  whereby  a
+       compromised  process  can  ptrace‐attach  to  other sensitive processes
+       (e.g., a GPG agent or an SSH session) owned by the  user  in  order  to
+       gain  additional  credentials  that may exist in memory and thus expand
+       the scope of the attack.
+
+       More precisely, the Yama LSM limits two types of operations:
+
+       •  Any operation that performs a ptrace access mode  PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH
+          check—for  example, ppttrraaccee() PPTTRRAACCEE__AATTTTAACCHH.  (See the "Ptrace access
+          mode checking" discussion above.)
+
+       •  ppttrraaccee() PPTTRRAACCEE__TTRRAACCEEMMEE.
+
+       A process  that  has  the  CCAAPP__SSYYSS__PPTTRRAACCEE  capability  can  update  the
+       _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_y_a_m_a_/_p_t_r_a_c_e___s_c_o_p_e  file with one of the following val‐
+       ues:
+
+       0 ("classic ptrace permissions")
+              No  additional   restrictions   on   operations   that   perform
+              PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH checks (beyond those imposed by the commoncap
+              and other LSMs).
+
+              The use of PPTTRRAACCEE__TTRRAACCEEMMEE is unchanged.
+
+       1 ("restricted ptrace") [default value]
+              When  performing an operation that requires a PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH
+              check, the calling process must either have  the  CCAAPP__SSYYSS__PPTTRRAACCEE
+              capability  in  the  user  namespace of the target process or it
+              must have a predefined relationship with the target process.  By
+              default, the predefined relationship is that the target  process
+              must be a descendant of the caller.
+
+              A  target  process can employ the pprrccttll(2) PPRR__SSEETT__PPTTRRAACCEERR opera‐
+              tion to declare an additional PID that  is  allowed  to  perform
+              PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH  operations  on  the  target.  See the kernel
+              source file _D_o_c_u_m_e_n_t_a_t_i_o_n_/_a_d_m_i_n_-_g_u_i_d_e_/_L_S_M_/_Y_a_m_a_._r_s_t (or  _D_o_c_u_m_e_n_‐
+              _t_a_t_i_o_n_/_s_e_c_u_r_i_t_y_/_Y_a_m_a_._t_x_t before Linux 4.13) for further details.
+
+              The use of PPTTRRAACCEE__TTRRAACCEEMMEE is unchanged.
+
+       2 ("admin‐only attach")
+              Only  processes  with  the CCAAPP__SSYYSS__PPTTRRAACCEE capability in the user
+              namespace of the target process may  perform  PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH
+              operations or trace children that employ PPTTRRAACCEE__TTRRAACCEEMMEE.
+
+       3 ("no attach")
+              No  process  may  perform PPTTRRAACCEE__MMOODDEE__AATTTTAACCHH operations or trace
+              children that employ PPTTRRAACCEE__TTRRAACCEEMMEE.
+
+              Once this value has been written  to  the  file,  it  cannot  be
+              changed.
+
+       With respect to values 1 and 2, note that creating a new user namespace
+       effectively  removes the protection offered by Yama.  This is because a
+       process in the parent user namespace whose effective  UID  matches  the
+       UID of the creator of a child namespace has all capabilities (including
+       CCAAPP__SSYYSS__PPTTRRAACCEE)  when performing operations within the child user name‐
+       space (and further‐removed  descendants  of  that  namespace).   Conse‐
+       quently, when a process tries to use user namespaces to sandbox itself,
+       it inadvertently weakens the protections offered by the Yama LSM.
+
+   CC lliibbrraarryy//kkeerrnneell ddiiffffeerreenncceess
+       At  the  system  call  level, the PPTTRRAACCEE__PPEEEEKKTTEEXXTT, PPTTRRAACCEE__PPEEEEKKDDAATTAA, and
+       PPTTRRAACCEE__PPEEEEKKUUSSEERR operations have a different API: they store the  result
+       at the address specified by the _d_a_t_a parameter, and the return value is
+       the  error  flag.  The glibc wrapper function provides the API given in
+       DESCRIPTION above, with the result being returned via the function  re‐
+       turn value.
+
+BBUUGGSS
+       On  hosts  with Linux 2.6 kernel headers, PPTTRRAACCEE__SSEETTOOPPTTIIOONNSS is declared
+       with a different value than the one for Linux 2.4.  This leads  to  ap‐
+       plications  compiled  with Linux 2.6 kernel headers failing when run on
+       Linux 2.4.  This can be worked around by  redefining  PPTTRRAACCEE__SSEETTOOPPTTIIOONNSS
+       to PPTTRRAACCEE__OOLLDDSSEETTOOPPTTIIOONNSS, if that is defined.
+
+       Group‐stop  notifications  are sent to the tracer, but not to real par‐
+       ent.  Last confirmed on 2.6.38.6.
+
+       If a thread group leader is traced and exits  by  calling  __eexxiitt(2),  a
+       PPTTRRAACCEE__EEVVEENNTT__EEXXIITT  stop will happen for it (if requested), but the sub‐
+       sequent WWIIFFEEXXIITTEEDD notification will not be delivered  until  all  other
+       threads  exit.   As  explained above, if one of other threads calls eexx‐‐
+       eeccvvee(2), the death of the thread group leader will _n_e_v_e_r  be  reported.
+       If  the  execed  thread  is  not traced by this tracer, the tracer will
+       never know that eexxeeccvvee(2) happened.   One  possible  workaround  is  to
+       PPTTRRAACCEE__DDEETTAACCHH  the thread group leader instead of restarting it in this
+       case.  Last confirmed on 2.6.38.6.
+
+       A SSIIGGKKIILLLL signal may still cause a PPTTRRAACCEE__EEVVEENNTT__EEXXIITT stop before actual
+       signal death.  This may be changed in the future; SSIIGGKKIILLLL is  meant  to
+       always  immediately  kill  tasks  even under ptrace.  Last confirmed on
+       Linux 3.13.
+
+       Some system calls return with EEIINNTTRR if a signal was sent to  a  tracee,
+       but delivery was suppressed by the tracer.  (This is very typical oper‐
+       ation: it is usually done by debuggers on every attach, in order to not
+       introduce  a  bogus  SSIIGGSSTTOOPP).  As of Linux 3.2.9, the following system
+       calls are affected (this list is likely incomplete): eeppoollll__wwaaiitt(2), and
+       rreeaadd(2) from an iinnoottiiffyy(7) file descriptor.  The usual symptom of  this
+       bug is that when you attach to a quiescent process with the command
+
+           strace -p <process-ID>
+
+       then, instead of the usual and expected one‐line output such as
+
+           restart_syscall(<... resuming interrupted call ...>_
+
+       or
+
+           select(6, [5], NULL, [5], NULL_
+
+       (’_’ denotes the cursor position), you observe more than one line.  For
+       example:
+
+               clock_gettime(CLOCK_MONOTONIC, {15370, 690928118}) = 0
+               epoll_wait(4,_
+
+       What   is  not  visible  here  is  that  the  process  was  blocked  in
+       eeppoollll__wwaaiitt(2) before ssttrraaccee(1) has attached to  it.   Attaching  caused
+       eeppoollll__wwaaiitt(2)  to  return  to user space with the error EEIINNTTRR.  In this
+       particular case, the program reacted to EEIINNTTRR by checking  the  current
+       time,  and  then executing eeppoollll__wwaaiitt(2) again.  (Programs which do not
+       expect such "stray" EEIINNTTRR errors may behave in an unintended  way  upon
+       an ssttrraaccee(1) attach.)
+
+       Contrary  to  the  normal rules, the glibc wrapper for ppttrraaccee() can set
+       _e_r_r_n_o to zero.
+
+SSEEEE AALLSSOO
+       ggddbb(1), llttrraaccee(1), ssttrraaccee(1), cclloonnee(2), eexxeeccvvee(2), ffoorrkk(2),  ggeettttiidd(2),
+       pprrccttll(2),  sseeccccoommpp(2),  ssiiggaaccttiioonn(2),  ttggkkiillll(2), vvffoorrkk(2), wwaaiittppiidd(2),
+       eexxeecc(3), ccaappaabbiilliittiieess(7), ssiiggnnaall(7)
+
+Linux man‐pages (unreleased)      2025‐10‐05                         _p_t_r_a_c_e(2)

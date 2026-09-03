@@ -1,0 +1,73 @@
+is a daemon similar to that listens to sockets at paths specified
+in  the  for notifications from other daemons about successful or
+failed connection attempts.  If no such file is  specified,  then
+it only listens to the socket path specified by or if that is not
+specified  to Each notification contains an (action, port, proto‐
+col, address, owner) tuple that identifies the remote  connection
+and  the action.  This tuple is consulted against entries in with
+syntax specified in If an entry is matched, a state entry is cre‐
+ated for that tuple.  Each entry contains a number of tries limit
+and a duration.  The way does configuration entry matching is  by
+having  the  client side pass the file descriptor associated with
+the connection the client wants to blocklist as well  as  passing
+socket  credentials.  The file descriptor is used to retrieve in‐
+formation (address and port) about the remote side with  and  the
+local  side with By examining the port of the local side, can de‐
+termine if the client program the port.   By  examining  the  op‐
+tional  address  portion  on  the local side, it can match inter‐
+faces.  By examining the remote address, it  can  match  specific
+allow  or deny rules.  Finally can examine the socket credentials
+to match the user in the configuration file.   While  this  works
+well  for  TCP  sockets,  it  cannot be relied on for unbound UDP
+sockets.  It is also less meaningful when it comes to connections
+using non‐privileged ports.  On the other hand, if we  receive  a
+request  that  has  a  local endpoint indicating a UDP privileged
+port, we can presume that the client was privileged to be able to
+acquire that port.  Once an entry is matched can perform  various
+actions.   If  the  action  is  and  the number of tries limit is
+reached, then a control script is invoked with arguments: control
+add <rulename> <proto> <address> <mask> <port> and should  invoke
+a  packet filter command to block the connection specified by the
+arguments.  The argument can be set from the  command  line  (de‐
+fault The script could print a numerical id to stdout as a handle
+for  the  rule  that can be used later to remove that connection,
+but that is not required as all information to remove the rule is
+kept.  If the action is Then the same control script  is  invoked
+as:  control  rem <rulename> <proto> <address> <mask> <port> <id>
+where is the number returned from the action.  maintains a  data‐
+base  of  known  connections  in On startup it reads entries from
+that file, and updates its internal state.  checks  the  list  of
+active  entries  every  seconds  (default and removes entries and
+block rules using the control program as necessary.  The  follow‐
+ing  options  are  available:  Use to communicate with the packet
+filter, usually The following arguments are passed to the control
+program: The action to perform: or to  add,  remove  or  flush  a
+firewall  rule.   The rule name.  The optional protocol name (can
+be empty): The IPv4 or IPv6 numeric address to be blocked or  re‐
+leased.   The  numeric  mask  to be applied to the blocked or re‐
+leased address The optional numeric port to be  blocked  (can  be
+empty).  For packet filters that support removal of rules by rule
+identifier,  the  identifier  of the rule to be removed.  The add
+command is expected to return the rule identifier string to  std‐
+out.   The  name  of  the configuration file to read, usually The
+Berkeley DB file where stores its state, usually Normally, disas‐
+sociates itself from the terminal unless the flag  is  specified,
+in  which  case  it  stays in the foreground.  Truncate the state
+database and flush all the rules named are  deleted  by  invoking
+the control script as: control flush <rulename> A file containing
+a  list  of  pathnames,  one per line that will create sockets to
+listen to.  This is useful for  chrooted  environments.   Specify
+the  default  rule  name for the packet filter rules, usually Re‐
+read the firewall rules from the internal database,  then  remove
+and  re‐add  them.  This helps for packet filters that do not re‐
+tain state across reboots.  Add to the list of Unix sockets  lis‐
+tens  to.  The interval in seconds polls the state file to update
+the rules.  Cause to print  diagnostic  messages  to  instead  of
+deals  with  the following signals: Receipt of this signal causes
+to re‐read the configuration file.  These signals tell to exit in
+an orderly fashion.  This signal tells to increase  the  internal
+debugging level by 1.  This signal tells to decrease the internal
+debugging level by 1.  Shell script invoked to interface with the
+packet  filter.  Configuration file.  Database of current connec‐
+tion entries.  Socket to receive connection notifications.  first
+appeared in support for was implemented in

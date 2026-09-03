@@ -1,0 +1,231 @@
+DISKLESS(8)               BSD System Manager's Manual              DISKLESS(8)
+
+NNAAMMEE
+     ddiisskklleessss — booting a system over the network with PXE
+
+DDEESSCCRRIIPPTTIIOONN
+     The ability to boot a machine over the network is useful for _d_i_s_k_l_e_s_s or
+     _d_a_t_a_l_e_s_s machines, or as a temporary measure while repairing or re-in‐
+     stalling file systems on a local disk.  This file provides a general de‐
+     scription of the interactions between a client and its server when a
+     client is booting over the network.
+
+OOPPEERRAATTIIOONN
+     When booting a system over the network, there are three phases of inter‐
+     action between client and server:
+
+     1.   The stage-1 bootstrap, typically PXE built into your Ethernet card,
+          loads a second-stage boot program.
+
+     2.   The second-stage boot program, typically pxeboot(8), loads modules
+          and the kernel, and boots the kernel.
+
+     3.   The kernel NFS mounts the root directory and continues from there.
+
+     Each of these phases are described in further detail below.
+
+     First, the stage-1 bootstrap loads the stage-2 boot program over the net‐
+     work.  The stage-1 bootstrap typically uses BOOTP or DHCP to obtain the
+     filename to load, then uses TFTP to load the file.  This file is typi‐
+     cally called _p_x_e_b_o_o_t, and should be copied from _/_b_o_o_t_/_p_x_e_b_o_o_t into the
+     TFTP directory on the server, which is typically _/_t_f_t_p_d_i_r.
+
+     The stage-2 boot program then loads additional modules and the kernel.
+     These files may not exist on the DHCP or BOOTP server.  You can use the
+     nneexxtt--sseerrvveerr option available in DHCP configurations to specify the server
+     holding the second stage boot files and kernel.  The stage-2 program uses
+     NFS or TFTP to obtain these files.  By default, NFS is used.  If you are
+     using pxeboot(8), you can install a version that uses TFTP by setting
+     LOADER_TFTP_SUPPORT=YES in your make.conf(5), then recompiling and rein‐
+     stalling pxeboot(8) via the command listed below.  It is often necessary
+     to use TFTP here so you can place a custom kernel in _/_t_f_t_p_d_i_r_/.  If you
+     use NFS and do not have a custom root file system for the ddiisskklleessss
+     client, the stage-2 boot will load your server's kernel as the kernel for
+     the ddiisskklleessss machine, which may not be what you want to have happen.
+
+           cd /usr/src/stand
+           make clean; make; make install
+           cp /boot/pxeboot /tftpdir/
+
+     In phase 3, the kernel acquires IP networking configuration in one of two
+     ways, and then proceeds to mount the root file system and start opera‐
+     tion.  If the phase 2 loader supports passing network configuration to
+     the kernel using the kernel environment, then the kernel will configure
+     the network interface using that information.  Otherwise, it must use
+     DHCP or BOOTP to acquire configuration information.  The boot scripts
+     recognize a ddiisskklleessss startup and perform the actions found in
+     _/_e_t_c_/_r_c_._d_/_r_e_s_o_l_v, _/_e_t_c_/_r_c_._d_/_t_m_p, _/_e_t_c_/_r_c_._d_/_v_a_r, and _/_e_t_c_/_r_c_._i_n_i_t_d_i_s_k_l_e_s_s.
+
+CCOONNFFIIGGUURRAATTIIOONN
+     In order to run a ddiisskklleessss client, you need the following:
+
+     ••   An NFS server which exports a root and _/_u_s_r partitions with appropri‐
+         ate permissions.  The ddiisskklleessss scripts work with read-only parti‐
+         tions, as long as root is exported with --mmaapprroooott=0 so that some sys‐
+         tem files can be accessed.  As an example, _/_e_t_c_/_e_x_p_o_r_t_s can contain
+         the following lines:
+
+               <ROOT> -ro -maproot=0 -alldirs <list of diskless clients>
+               /usr -ro -alldirs <list of diskless clients>
+
+         where ⟨ROOT⟩ is the mount point on the server of the root partition.
+         The script _/_u_s_r_/_s_h_a_r_e_/_e_x_a_m_p_l_e_s_/_d_i_s_k_l_e_s_s_/_c_l_o_n_e___r_o_o_t can be used to
+         create a shared read-only root partition, but in many cases you may
+         decide to export (again as read-only) the root directory used by the
+         server itself.
+
+     ••   A BOOTP or DHCP server.  bootpd(8) can be enabled by uncommenting the
+         “bootps” line in _/_e_t_c_/_i_n_e_t_d_._c_o_n_f.  A sample _/_e_t_c_/_b_o_o_t_p_t_a_b can be the
+         following:
+
+                .default:\
+                   hn:ht=1:vm=rfc1048:\
+                   :sm=255.255.255.0:\
+                   :sa=<SERVER>:\
+                   :gw=<GATEWAY>:\
+                   :rp="<SERVER>:<ROOT>":
+
+               <CLIENT>:ha=0123456789ab:tc=.default
+
+         where ⟨SERVER⟩, ⟨GATEWAY⟩ and ⟨ROOT⟩ have the obvious meanings.
+
+     ••   A properly initialized root partition.  The script
+         _/_u_s_r_/_s_h_a_r_e_/_e_x_a_m_p_l_e_s_/_d_i_s_k_l_e_s_s_/_c_l_o_n_e___r_o_o_t can help in creating it, us‐
+         ing the server's root partition as a reference.  If you are just
+         starting out, you should simply use the server's own root directory,
+         _/, and not try to clone it.
+
+         You often do not want to use the same _r_c_._c_o_n_f or _r_c_._l_o_c_a_l files for
+         the ddiisskklleessss boot as you do on the server.  The ddiisskklleessss boot scripts
+         provide a mechanism through which you can override various files in
+         _/_e_t_c (as well as other subdirectories of root).
+
+         One difference that you should pay particular attention to is the
+         value of _l_o_c_a_l___s_t_a_r_t_u_p in _/_e_t_c_/_d_e_f_a_u_l_t_s_/_r_c_._c_o_n_f.  A typical value for
+         a ddiisskklleessss boot is _m_o_u_n_t_c_r_i_t_r_e_m_o_t_e, however your needs may be differ‐
+         ent.
+
+         The scripts provide four overriding directories situated in
+         _/_c_o_n_f_/_b_a_s_e, _/_c_o_n_f_/_d_e_f_a_u_l_t, _/_c_o_n_f_/_<_b_r_o_a_d_c_a_s_t_-_i_p_>, and
+         _/_c_o_n_f_/_<_m_a_c_h_i_n_e_-_i_p_>.  You should always create _/_c_o_n_f_/_b_a_s_e_/_e_t_c, which
+         will entirely replace the server's _/_e_t_c on the ddiisskklleessss machine.  You
+         can clone the server's _/_e_t_c here or you can create a special file
+         which tells the ddiisskklleessss boot scripts to remount the server's _/_e_t_c
+         onto _/_c_o_n_f_/_b_a_s_e_/_e_t_c.  You do this by creating the file
+         _/_c_o_n_f_/_b_a_s_e_/_e_t_c_/_d_i_s_k_l_e_s_s___r_e_m_o_u_n_t containing the mount point to use as
+         a basis of the ddiisskklleessss machine's _/_e_t_c.  For example, the file might
+         contain:
+
+               10.0.0.1:/etc
+
+         Alternatively, if the server contains several independent roots, the
+         file might contain:
+
+               10.0.0.1:/usr/diskless/4.7-RELEASE/etc
+
+         This would work, but if you copied _/_u_s_r_/_d_i_s_k_l_e_s_s_/_4_._7_-_R_E_L_E_A_S_E to
+         _/_u_s_r_/_d_i_s_k_l_e_s_s_/_4_._8_-_R_E_L_E_A_S_E and upgraded the installation, you would
+         need to modify the _d_i_s_k_l_e_s_s___r_e_m_o_u_n_t files to reflect that move.  To
+         avoid that, paths in _d_i_s_k_l_e_s_s___r_e_m_o_u_n_t files beginning with _/ have the
+         actual path of the client's root prepended to them so the file could
+         instead contain:
+
+               /etc
+
+         The ddiisskklleessss scripts create memory file systems to hold the overrid‐
+         den directories.  Only a 5MB partition is created by default, which
+         may not be sufficient for your purposes.  To override this, you can
+         create the file _/_c_o_n_f_/_b_a_s_e_/_e_t_c_/_m_d___s_i_z_e containing the size, in 512
+         byte sectors, of the memory disk to create for that directory.
+
+         You then typically provide file-by-file overrides in the
+         _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c directory.  At a minimum, you must provide over‐
+         rides for _/_e_t_c_/_f_s_t_a_b, _/_e_t_c_/_r_c_._c_o_n_f, and _/_e_t_c_/_r_c_._l_o_c_a_l via
+         _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c_/_f_s_t_a_b, _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c_/_r_c_._c_o_n_f, and
+         _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c_/_r_c_._l_o_c_a_l.
+
+         Overrides are hierarchical.  You can supply network-specific defaults
+         in the _/_c_o_n_f_/⟨_B_R_O_A_D_C_A_S_T_I_P⟩_/_e_t_c directory, where ⟨_B_R_O_A_D_C_A_S_T_I_P⟩ repre‐
+         sents the broadcast IP address of the ddiisskklleessss system as given to it
+         via BOOTP.  The _d_i_s_k_l_e_s_s___r_e_m_o_u_n_t and _m_d___s_i_z_e features work in any of
+         these directories.  The configuration feature works on directories
+         other then _/_e_t_c, you simply create the directory you wish to replace
+         or override in _/_c_o_n_f_/_{_b_a_s_e_,_d_e_f_a_u_l_t_,_<_b_r_o_a_d_c_a_s_t_>_,_<_i_p_>_}_/_* and work it in
+         the same way that you work _/_e_t_c.
+
+         Since you normally clone the server's _/_e_t_c using the
+         _/_c_o_n_f_/_b_a_s_e_/_e_t_c_/_d_i_s_k_l_e_s_s___r_e_m_o_u_n_t, you might wish to remove unneeded
+         files from the memory file system.  For example, if the server has a
+         firewall but you do not, you might wish to remove _/_e_t_c_/_i_p_f_w_._c_o_n_f.
+         You can do this by creating a _/_c_o_n_f_/_b_a_s_e_/⟨_D_I_R_E_C_T_O_R_Y⟩_._r_e_m_o_v_e file.
+         For example, _/_c_o_n_f_/_b_a_s_e_/_e_t_c_._r_e_m_o_v_e, which contains a list of relative
+         paths that the boot scripts should remove from the memory file sys‐
+         tems.
+
+         As a minimum, you normally need to have the following in
+         _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c_/_f_s_t_a_b
+
+               <SERVER>:<ROOT> /     nfs    ro 0 0
+               <SERVER>:/usr   /usr  nfs    ro 0 0
+
+         You also need to create a customized version of
+         _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c_/_r_c_._c_o_n_f which should contain the startup options
+         for the ddiisskklleessss client, and _/_c_o_n_f_/_d_e_f_a_u_l_t_/_e_t_c_/_r_c_._l_o_c_a_l which could
+         be empty but prevents the server's own _/_e_t_c_/_r_c_._l_o_c_a_l from leaking
+         onto the ddiisskklleessss system.
+
+         In _r_c_._c_o_n_f, most likely you will not need to set _h_o_s_t_n_a_m_e and
+         _i_f_c_o_n_f_i_g___* because these will be already set by the startup code.
+         Finally, it might be convenient to use a ccaassee statement using
+         `hostname` as the switch variable to do machine-specific configura‐
+         tion in case a number of ddiisskklleessss clients share the same configura‐
+         tion files.
+
+     ••   The kernel for the ddiisskklleessss clients, which will be loaded using NFS
+         or TFTP, must include support for the NFS client:
+
+               ooppttiioonnss NNFFSSCCLL
+               ooppttiioonnss NNFFSS__RROOOOTT
+
+         If you are using a boot mechanism that does not pass network configu‐
+         ration to the kernel using the kernel environment, you will also need
+         to include the following options:
+
+               ooppttiioonnss BBOOOOTTPP
+               ooppttiioonnss BBOOOOTTPP__NNFFSSRROOOOTT
+               ooppttiioonnss BBOOOOTTPP__CCOOMMPPAATT
+
+         _N_o_t_e: the PXE environment does not require these options.
+
+         The ddiisskklleessss booting environment relies on memory-backed file systems
+         to support temporary local storage in the event that the root file
+         system is mounted read-only; as such, it is necessary to add the fol‐
+         lowing to the device section of the kernel configuration:
+
+               ddeevviiccee mmdd
+
+         If you use the firewall, remember to default to “open”, or your ker‐
+         nel will not be able to send/receive the BOOTP packets.
+
+SSEECCUURRIITTYY IISSSSUUEESS
+     Be warned that using unencrypted NFS to mount root and user partitions
+     may expose information such as encryption keys.
+
+SSEEEE AALLSSOO
+     ethers(5), exports(5), make.conf(5), bootpd(8), mountd(8), nfsd(8),
+     pxeboot(8), reboot(8), tftpd(8)
+
+     _p_o_r_t_s_/_n_e_t_/_e_t_h_e_r_b_o_o_t
+
+HHIISSTTOORRYY
+     The ddiisskklleessss environment first appeared in FreeBSD 2.2.5.
+
+BBUUGGSS
+     This manpage is probably incomplete.
+
+     FreeBSD sometimes requires to write onto the root partition, so the
+     startup scripts mount MFS file systems on some locations (e.g. _/_e_t_c and
+     _/_v_a_r), while trying to preserve the original content.  The process might
+     not handle all cases.
+
+BSD                             August 11, 2024                            BSD

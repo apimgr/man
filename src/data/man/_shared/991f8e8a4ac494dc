@@ -1,0 +1,218 @@
+CRYPTO(4)                BSD Kernel Interfaces Manual                CRYPTO(4)
+
+NNAAMMEE
+     ccrryyppttoo, ccrryyppttooddeevv — user-mode access to hardware-accelerated cryptography
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ccrryyppttoo
+     ddeevviiccee ccrryyppttooddeevv
+
+     ##iinncclluuddee <<ssyyss//iiooccttll..hh>>
+     ##iinncclluuddee <<ssyyss//ttiimmee..hh>>
+     ##iinncclluuddee <<ccrryyppttoo//ccrryyppttooddeevv..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ccrryyppttoo driver gives user-mode applications access to hardware-accel‐
+     erated cryptographic transforms as implemented by the crypto(9) in-kernel
+     interface.
+
+     The _/_d_e_v_/_c_r_y_p_t_o special device provides an ioctl(2) based interface.
+     User-mode applications open the special device and then issue ioctl(2)
+     calls on the descriptor.  User-mode access to _/_d_e_v_/_c_r_y_p_t_o is controlled
+     by the kkeerrnn..ccrryyppttooddeevvaalllloowwssoofftt sysctl(8) variable.  If this variable is
+     zero, then user-mode sessions are only permitted to use cryptography co‐
+     processors.
+
+TTHHEEOORRYY OOFF OOPPEERRAATTIIOONN
+     Use of the device requires a basic series of steps:
+
+     1.   Open the _/_d_e_v_/_c_r_y_p_t_o device.
+
+     2.   Create a session with CIOCGSESSION or CIOCGSESSION2.  Applications
+          will require at least one symmetric session.  Since cipher and MAC
+          keys are tied to sessions, many applications will require more.
+
+     3.   Submit requests, synchronously with CIOCCRYPT or CIOCCRYPTAEAD.
+
+     4.   Optionally destroy a session with CIOCFSESSION.
+
+     5.   Close the _/_d_e_v_/_c_r_y_p_t_o device.  This will automatically close any re‐
+          maining sessions associated with the file desriptor.
+
+SSYYMMMMEETTRRIICC--KKEEYY OOPPEERRAATTIIOONN
+     ccrryyppttooddeevv provides a context-based API to traditional symmetric-key en‐
+     cryption (or privacy) algorithms, keyed and unkeyed one-way hash (HMAC
+     and MAC) algorithms, encrypt-then-authenticate (ETA) fused operations,
+     and authenticated encryption with additional data (AEAD) operations.  For
+     ETA operations, drivers perform both a privacy algorithm and an integ‐
+     rity-check algorithm in a single pass over the data: either a fused en‐
+     crypt/HMAC-generate operation, or a fused HMAC-verify/decrypt operation.
+     Similarly, for AEAD operations, drivers perform either an encrypt/MAC-
+     generate operation or a MAC-verify/decrypt operation.
+
+     The algorithm(s) and key(s) to use are specified when a session is cre‐
+     ated.  Individual requests are able to specify per-request initialization
+     vectors or nonces.
+
+   AAllggoorriitthhmmss
+     For a list of supported algorithms, see crypto(7).
+
+   IIOOCCTTLL RReeqquueesstt DDeessccrriippttiioonnss
+     CIOCFINDDEV _s_t_r_u_c_t _c_r_y_p_t___f_i_n_d___o_p _*_f_o_p
+
+                   struct crypt_find_op {
+                       int     crid;       /* driver id + flags */
+                       char    name[32];   /* device/driver name */
+                   };
+
+                   If _c_r_i_d is -1, then find the driver named _n_a_m_e and return
+                   the id in _c_r_i_d.  If _c_r_i_d is not -1, return the name of the
+                   driver with _c_r_i_d in _n_a_m_e.  In either case, if the driver is
+                   not found, ENOENT is returned.
+
+     CIOCGSESSION _s_t_r_u_c_t _s_e_s_s_i_o_n___o_p _*_s_e_s_s_p
+
+                   struct session_op {
+                       uint32_t cipher;    /* e.g. CRYPTO_AES_CBC */
+                       uint32_t mac;       /* e.g. CRYPTO_SHA2_256_HMAC */
+
+                       uint32_t keylen;    /* cipher key */
+                       const void *key;
+                       int mackeylen;      /* mac key */
+                       const void *mackey;
+
+                       uint32_t ses;       /* returns: ses # */
+                   };
+
+                   Create a new cryptographic session on a file descriptor for
+                   the device; that is, a persistent object specific to the
+                   chosen privacy algorithm, integrity algorithm, and keys
+                   specified in _s_e_s_s_p.  The special value 0 for either privacy
+                   or integrity is reserved to indicate that the indicated op‐
+                   eration (privacy or integrity) is not desired for this ses‐
+                   sion.  ETA sessions specify both privacy and integrity al‐
+                   gorithms.  AEAD sessions specify only a privacy algorithm.
+
+                   Multiple sessions may be bound to a single file descriptor.
+                   The session ID returned in _s_e_s_s_p_-_>_s_e_s is supplied as a re‐
+                   quired field in the operation structure _c_r_y_p_t___o_p for future
+                   encryption or hashing requests.
+
+                   For non-zero privacy algorithms, the privacy algorithm must
+                   be specified in _s_e_s_s_p_-_>_c_i_p_h_e_r, the key length in
+                   _s_e_s_s_p_-_>_k_e_y_l_e_n, and the key value in the octets addressed by
+                   _s_e_s_s_p_-_>_k_e_y.
+
+                   For keyed one-way hash algorithms, the one-way hash must be
+                   specified in _s_e_s_s_p_-_>_m_a_c, the key length in _s_e_s_s_p_-_>_m_a_c_k_e_y,
+                   and the key value in the octets addressed by
+                   _s_e_s_s_p_-_>_m_a_c_k_e_y_l_e_n.
+
+                   Support for a specific combination of fused privacy and in‐
+                   tegrity-check algorithms depends on whether the underlying
+                   hardware supports that combination.  Not all combinations
+                   are supported by all hardware, even if the hardware sup‐
+                   ports each operation as a stand-alone non-fused operation.
+
+     CIOCGSESSION2 _s_t_r_u_c_t _s_e_s_s_i_o_n_2___o_p _*_s_e_s_s_p
+
+                   struct session2_op {
+                       uint32_t cipher;    /* e.g. CRYPTO_AES_CBC */
+                       uint32_t mac;       /* e.g. CRYPTO_SHA2_256_HMAC */
+
+                       uint32_t keylen;    /* cipher key */
+                       const void *key;
+                       int mackeylen;      /* mac key */
+                       const void *mackey;
+
+                       uint32_t ses;       /* returns: ses # */
+                       int crid;           /* driver id + flags (rw) */
+                       int ivlen;          /* length of nonce/IV */
+                       int maclen;         /* length of MAC/tag */
+                       int pad[2];         /* for future expansion */
+                   };
+
+                   This request is similar to CIOGSESSION but adds additional
+                   fields.
+
+                   _s_e_s_s_p_-_>_c_r_i_d requests either a specific crypto device or a
+                   class of devices (software vs hardware).
+
+                   _s_e_s_s_p_-_>_i_v_l_e_n specifies the length of the IV or nonce sup‐
+                   plied with each request.  If this field is set to zero, the
+                   default IV or nonce length is used.
+
+                   _s_e_s_s_p_-_>_m_a_c_l_e_n specifies the length of the MAC or authenti‐
+                   cation tag supplied or computed by each request.  If this
+                   field is set to zero, the full MAC is used.
+
+                   The _s_e_s_s_p_-_>_p_a_d field must be initialized to zero.
+
+     CIOCCRYPT _s_t_r_u_c_t _c_r_y_p_t___o_p _*_c_r___o_p
+
+                   struct crypt_op {
+                       uint32_t ses;
+                       uint16_t op;        /* e.g. COP_ENCRYPT */
+                       uint16_t flags;
+                       u_int len;
+                       const void *src;
+                       void *dst;
+                       void *mac;          /* must be large enough for result */
+                       const void *iv;
+                   };
+
+                   Request an encryption/decryption (or hash) operation.  To
+                   encrypt, set _c_r___o_p_-_>_o_p to COP_ENCRYPT.  To decrypt, set
+                   _c_r___o_p_-_>_o_p to COP_DECRYPT.  The field _c_r___o_p_-_>_l_e_n supplies
+                   the length of the input buffer; the fields _c_r___o_p_-_>_s_r_c,
+                   _c_r___o_p_-_>_d_s_t, _c_r___o_p_-_>_m_a_c, _c_r___o_p_-_>_i_v supply the addresses of
+                   the input buffer, output buffer, one-way hash, and initial‐
+                   ization vector, respectively.
+
+                   If a session is using either fused encrypt-then-authenti‐
+                   cate or an AEAD algorithm, decryption operations require
+                   the associated hash as an input.  If the hash is incorrect,
+                   the operation will fail with EBADMSG and the output buffer
+                   will remain unchanged.
+
+     CIOCCRYPTAEAD _s_t_r_u_c_t _c_r_y_p_t___a_e_a_d _*_c_r___a_e_a_d
+
+                   struct crypt_aead {
+                       uint32_t ses;
+                       uint16_t op;        /* e.g. COP_ENCRYPT */
+                       uint16_t flags;
+                       u_int len;
+                       u_int aadlen;
+                       u_int ivlen;
+                       const void *src;
+                       void *dst;
+                       const void *aad;    /* additional authenticated data */
+                       void *tag;          /* must fit for chosen TAG length */
+                       const void *iv;
+                   };
+
+                   The CIOCCRYPTAEAD is similar to the CIOCCRYPT but provides
+                   additional data in _c_r___a_e_a_d_-_>_a_a_d to include in the authenti‐
+                   cation mode.
+
+     CIOCFSESSION _u___i_n_t_3_2___t _s_e_s___i_d
+                   Destroys the session identified by _s_e_s___i_d.
+
+SSEEEE AALLSSOO
+     aesni(4), hifn(4), ipsec(4), padlock(4), safe(4), crypto(7), geli(8),
+     crypto(9)
+
+HHIISSTTOORRYY
+     The ccrryyppttoo driver first appeared in OpenBSD 3.0.  The ccrryyppttoo driver was
+     imported to FreeBSD 5.0.
+
+BBUUGGSS
+     Error checking and reporting is weak.
+
+     The values specified for symmetric-key key sizes to CIOCGSESSION must ex‐
+     actly match the values expected by opencrypto(9).  The output buffer and
+     MAC buffers supplied to CIOCCRYPT must follow whether privacy or integ‐
+     rity algorithms were specified for session: if you request a non-NULL al‐
+     gorithm, you must supply a suitably-sized buffer.
+
+BSD                             October 6, 2021                            BSD

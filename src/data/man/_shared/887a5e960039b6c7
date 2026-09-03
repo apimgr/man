@@ -1,0 +1,200 @@
+SND_EMU10KX(4)           BSD Kernel Interfaces Manual           SND_EMU10KX(4)
+
+NNAAMMEE
+     ssnndd__eemmuu1100kkxx — Creative SoundBlaster Live! and Audigy sound cards device
+     driver
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following lines in your
+     kernel configuration file:
+
+           ddeevviiccee ssoouunndd
+           ddeevviiccee ssnndd__eemmuu1100kkxx
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           snd_emu10kx_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssnndd__eemmuu1100kkxx bridge driver allows the generic audio driver sound(4) to
+     attach to Creative sound cards based on the EMU10K1, CA0100, CA0101,
+     CA0102 and CA0108 DSPs.
+
+     The ssnndd__eemmuu1100kkxx sound cards have a PCM part, which is accessible through
+     one to five pcm(4) devices (see _M_U_L_T_I_C_H_A_N_N_E_L _P_L_A_Y_B_A_C_K for details), and
+     MPU401-compatible MIDI I/O controller, which is accessible through the
+     midi device.  Wave table synthesizer support is not available.
+
+HHAARRDDWWAARREE
+     The ssnndd__eemmuu1100kkxx driver supports the following sound cards:
+
+     ••   Creative Sound Blaster Live! (EMU10K1 Chipset).  Both PCM and MIDI
+         interfaces are available.
+     ••   Creative Sound Blaster Audigy (CA0100 and CA0101 Chipset).  PCM and
+         two MIDI interfaces available.
+     ••   Creative Sound Blaster Audigy 2 and Creative Sound Blaster Audigy 4
+         (CA0102 Chipset).  PCM support is limited to 48kHz/16 bit stereo
+         (192kHz/24 bit part of this chipset is not supported).
+     ••   Creative Sound Blaster Audigy 2 Value (CA0108 Chipset).  PCM support
+         is limited to 48kHz/16 bit stereo (192kHz/24 bit part of this chipset
+         is not supported).  There is no MIDI support for this card.
+
+     The ssnndd__eemmuu1100kkxx driver does _n_o_t support the following sound cards (al‐
+     though they have names similar to some supported ones):
+
+     ••   Creative Sound Blaster Live! 24-Bit, identified by FreeBSD as
+         "emu10k1x Soundblaster Live! 5.1".
+     ••   Creative Sound Blaster Audigy LS / ES, identified by FreeBSD as
+         "CA0106-DAT Audigy LS".
+     ••   All other Creative sound cards with -DAT chipsets.
+     ••   All Creative X-Fi series sound cards.
+
+MMUULLTTIICCHHAANNNNEELL PPLLAAYYBBAACCKK
+     By default the ssnndd__eemmuu1100kkxx driver is loaded with multichannel playback
+     capabilities enabled.  If you do not set the
+     hint.emu10kx.0.multichannel_disabled option in your loader.conf(5) con‐
+     figuration file you will get up to five DSP devices, one for each sound
+     card output.  You can use additional software (like _a_u_d_i_o_/_p_u_l_s_e_a_u_d_i_o from
+     _T_h_e _P_o_r_t_s _C_o_l_l_e_c_t_i_o_n) to do sound stream demultiplexing.  Only “FRONT”
+     output can play and record sound from external sources (like line or
+     S/PDIF inputs).
+
+MMUULLTTIICCHHAANNNNEELL RREECCOORRDDIINNGG
+     By default multichannel recording capabilities are not enabled when you
+     load the ssnndd__eemmuu1100kkxx driver.  If you enable the
+     hint.emu10kx.0.multichannel_recording option in loader.conf(5) you will
+     get one more DSP device that is rate-locked to 48kHz/16bit/mono.  This is
+     actually 48kHz/16bit/32 channels on SB Live! cards and
+     48kHz/16bit/64channels on Audigy cards, but the current implementation of
+     the sound subsystem does not support such an amount of PCM channels.
+     This device can not be opened for read, thus confusing many applications.
+
+     Within a multichannel stream, the first half (0-15 or 0-31) is a copy of
+     all DSP outputs, the second half (15-30 or 32-63) is a copy of some DSP
+     inputs.  On Live! cards the last substream (31) is used as a sync stream
+     and is always set to 0xc0de.  Audigy cards do not need such sync data,
+     because a stream always starts with substream 0.
+
+   SSBB LLiivvee!! ssuubbssttrreeaamm mmaapp ((iinn bbyyttee ooffffsseettss,, eeaacchh ssuubbssttrreeaamm iiss 22 bbyytteess LLEE))
+     Offset        Substream
+
+     +0x00..+0x1E  PCM streams 0..15
+
+     +0x20, +0x22  Empty
+
+     +0x24..+0x2A  PCM inputs: front left, front right, rear left, rear right,
+                   center, sub
+
+     +0x2C..+0x3C  DSP inputs 0..8:
+
+     +0x3E         sync substream (0xc0de)
+
+   AAuuddiiggyy ssuubbssttrreeaamm mmaapp ((iinn bbyyttee ooffffsseettss,, eeaacchh ssuubbssttrreeaamm iiss 22 bbyytteess LLEE))
+     Offset        Substream
+
+     +0x00..+0x3E  PCM streams 0..31
+
+     +0x40..+0x5E  PCM inputs: front LR, rear LR, center, sub, ...
+
+     +0x60..+0x7E  DSP inputs 0..16
+
+OOSSSS MMIIXXEERR CCOONNTTRROOLLSS
+     These are the controls available through the standard OSS programming in‐
+     terface.  You can use mixer(8) to change them.
+
+     On EMU10K1-based cards the OSS mixer directly controls the AC97 codec.
+     On newer cards the OSS mixer controls some parameters of the AC97 codec
+     and some DSP-based mixer controls.
+
+     "vol" mixer control for the overall sound volume.
+
+     "pcm" mixer control for the PCM playback volume.  It controls only front
+     output volume in multichannel mode and all output volume in single chan‐
+     nel mode.
+
+     "rec" mixer control acts very differently on EMU10K1 and other cards.  On
+     EMU10K1 cards it controls the AC97 codec recording level.  On non-EMU10K1
+     cards it controls the amount of AC97 “stereo mix”
+      entering the DSP.  AC97 recording level and AC97 recording source are
+     fixed on CA0100, CA0101, CA0102 and CA0108 cards.  The AC97 recording
+     levels are always set to maximum and recording source is always “stereo
+     mix”.
+
+     "dig1" is a CD S/PDIF (on-card) volume control
+
+     "dig2" is an AudigyDrive S/PDIF (Audigy series) or TOSLink (SB Live! se‐
+     ries) volume control
+
+     "dig3" is an on-card S/PDIF volume control
+
+     "line2" is AudigyDrive "Line In 2" volume control
+
+     "line3" is AudigyDrive "AUX In 2" volume control
+
+     Other OSS mixer controls control the inputs of the AC97 codec.
+
+PPRRIIVVAATTEE DDEEVVIICCEE CCOONNTTRROOLLSS
+     You can control some of EMU10Kx's operation and configuration parameters
+     through _d_e_v_._e_m_u_1_0_k_x_.⟨_X⟩ sysctls.  These sysctl(8) values are temporary
+     and should not be relied upon.
+
+DDRRIIVVEERR CCOONNFFIIGGUURRAATTIIOONN
+     Loader tunables are used to set driver configuration.  Tunables can be
+     set at the loader(8) prompt before booting the kernel or they can be
+     stored in _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f.  These tunables cannot be changed from a ma‐
+     chine sysctl(8) entry after boot, but you can change them using kenv(1)
+     before loading the ssnndd__eemmuu1100kkxx driver.
+
+     _h_i_n_t_._e_m_u_1_0_k_x_.⟨_X⟩_._d_i_s_a_b_l_e_d
+             Disables loading a driver instance.
+
+     _h_i_n_t_._e_m_u_1_0_k_x_.⟨_X⟩_._m_u_l_t_i_c_h_a_n_n_e_l___d_i_s_a_b_l_e_d
+             Disables multichannel playback support, when one card is repre‐
+             sented as several PCM devices.
+
+     _h_i_n_t_._e_m_u_1_0_k_x_.⟨_X⟩_._m_u_l_t_i_c_h_a_n_n_e_l___r_e_c_o_r_d_i_n_g
+             Enables experimental multichannel recording support.
+
+     _h_i_n_t_._e_m_u_1_0_k_x_.⟨_X⟩_._d_e_b_u_g
+             Set debug output level.
+
+             0   No additional debug options enabled
+
+             1   Enables all DSP outputs to be connected, even those that are
+                 known to be unused on a particular card.
+
+             2   Additional debug messages about in-driver events will be
+                 printed.
+
+             2   Additional debug messages will be printed when memory alloca‐
+                 tion fails.
+
+FFIILLEESS
+     /dev/emu10kx?  ssnndd__eemmuu1100kkxx management interface
+
+SSEEEE AALLSSOO
+     sound(4)
+
+HHIISSTTOORRYY
+     The ssnndd__eemmuu1100kkxx device driver first appeared in FreeBSD 7.0.
+
+AAUUTTHHOORRSS
+     The PCM part of the driver is based on the snd_emu10k1(4) SB Live! driver
+     by Cameron Grant <_c_g_@_F_r_e_e_B_S_D_._o_r_g>.  The MIDI interface is based on the
+     snd_emu10k1(4) MIDI interface code by Mathew Kanner <_m_a_t_k_@_F_r_e_e_B_S_D_._o_r_g>.
+     The ssnndd__eemmuu1100kkxx device driver and this manual page were written by Yuriy
+     Tsibizov.
+
+BBUUGGSS
+     The driver does not detect lost S/PDIF signals and produces noise when
+     S/PDIF is not connected and S/PDIF volume is not zero.
+
+     The PCM driver cannot detect the presence of Live!Drive or AudigyDrive
+     breakout boxes and tries to use them (and list their connectors in the
+     mixer).
+
+     The MIDI driver cannot detect the presence of Live!Drive or AudigyDrive
+     breakout boxes and tries to enable the IR receiver on them anyway.
+
+BSD                              May 28, 2008                              BSD

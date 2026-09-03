@@ -1,0 +1,168 @@
+CARP(4)                  BSD Kernel Interfaces Manual                  CARP(4)
+
+NNAAMMEE
+     ccaarrpp — Common Address Redundancy Protocol
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ccaarrpp
+
+DDEESSCCRRIIPPTTIIOONN
+     The ccaarrpp interface is a pseudo-device which implements and controls the
+     CARP protocol.  ccaarrpp allows multiple hosts on the same local network to
+     share a set of IP addresses.  Its primary purpose is to ensure that these
+     addresses are always available, but in some configurations ccaarrpp can also
+     provide load balancing functionality.
+
+     A ccaarrpp interface can be created at runtime using the iiffccoonnffiigg ccaarrpp_N
+     ccrreeaattee command or by setting up a hostname.if(5) configuration file for
+     netstart(8).
+
+     To use ccaarrpp, the administrator needs to configure at minimum a common
+     virtual host ID (VHID) and virtual host IP address on each machine which
+     is to take part in the virtual group.  Additional parameters can also be
+     set on a per-interface basis: aaddvvbbaassee and aaddvvsskkeeww, which are used to con‐
+     trol how frequently the host sends advertisements when it is the master
+     for a virtual host, and ppaassss which is used to authenticate carp adver‐
+     tisements.  Finally ccaarrppddeevv is used to specify which interface the ccaarrpp
+     device attaches to.  These configurations can be done using ifconfig(8),
+     or through the SIOCSVH ioctl.
+
+     ccaarrpp can also be used in conjunction with ifstated(8) to respond to
+     changes in CARP state; however, for most uses this will not be necessary.
+     See the manual page for ifstated(8) for more information.
+
+     Additionally, there are a number of global parameters which can be set
+     using sysctl(8):
+
+     net.inet.carp.allow         Accept incoming ccaarrpp packets.  Enabled by de‐
+                                 fault.
+
+     net.inet.carp.preempt       Allow virtual hosts to preempt each other.
+                                 Disabled by default.
+
+     net.inet.carp.log           Make ccaarrpp log state changes, bad packets, and
+                                 other errors.  May be a value between 0 and 7
+                                 corresponding with syslog(3) priorities.  The
+                                 default value is 2, which limits logging to
+                                 changes in CARP state.
+
+LLOOAADD BBAALLAANNCCIINNGG
+     ccaarrpp uses IP balancing to load balance incoming traffic over a group of
+     ccaarrpp hosts.  IP balancing is not dependent on ARP and therefore works for
+     traffic that comes over a router.  However it requires the traffic that
+     is destined towards the load balanced IP addresses to be received by all
+     ccaarrpp hosts.  While this is always the case when connected to a hub, it
+     has to play some tricks in switched networks, which will result in a
+     higher network load.
+
+     To configure load balancing one has to specify multiple carp nodes using
+     the ccaarrppnnooddeess option.  Each node in a load balancing cluster is repre‐
+     sented by at least one "vvhhiidd:aaddvvsskkeeww" pair in a comma separated list.
+     ccaarrpp tries to distribute the incoming network load over all configured
+     carpnodes.  The following example creates a load balancing group consist‐
+     ing of three nodes, using vhids 3, 4 and 6:
+
+           # ifconfig carp0 carpnodes 3:0,4:0,6:100
+
+     The advskew value of the last node is set to 100, so that this node is
+     designated to the BACKUP state.  It will only become MASTER if all nodes
+     with a lower advskew value have failed.  By varying this value throughout
+     the machines in the cluster it is possible to decide which share of the
+     network load each node receives.  Therefore, all carp interfaces in the
+     cluster are configured identically, except for a different aaddvvsskkeeww value
+     within the carpnodes specification.
+
+     IP balancing works by utilizing the network itself to distribute incoming
+     traffic to all ccaarrpp nodes in the cluster.  Each packet is filtered on the
+     incoming ccaarrpp interface so that only one node in the cluster accepts the
+     packet.  All the other nodes will just silently drop it.  The filtering
+     function uses a hash over the source and destination address of the IPv4
+     or IPv6 packet and compares the result against the state of the carpnode.
+
+     IP balancing is activated by setting the balancing mode to iipp.  This is
+     the recommended default setting.  In this mode, carp uses a multicast MAC
+     address, so that a switch sends incoming traffic towards all nodes.
+
+     However, there are a few OS and routers that do not accept a multicast
+     MAC address being mapped to a unicast IP.  This can be resolved by using
+     one of the following unicast options.  For scenarios where a hub is used
+     it is not necessary to use a multicast MAC and it is safe to use the
+     iipp--uunniiccaasstt mode.  Manageable switches can usually be tricked into for‐
+     warding unicast traffic to all cluster nodes ports by configuring them
+     into some sort of monitoring mode.  If this is not possible, using the
+     iipp--sstteeaalltthh mode is another option, which should work on most switches.
+     In this mode ccaarrpp never sends packets with its virtual MAC address as
+     source.  Stealth mode prevents a switch from learning the virtual MAC ad‐
+     dress, so that it has to flood the traffic to all its ports.  Activating
+     stealth mode on a ccaarrpp interface that has already been running might not
+     work instantly.  As a workaround the VHID of the first carpnode can be
+     changed to a previously unused one, or just wait until the MAC table en‐
+     try in the switch times out.  Some layer 3 switches do port learning
+     based on ARP packets.  Therefore the stealth mode cannot hide the virtual
+     MAC address from these kind of devices.
+
+     If IP balancing is being used on a firewall, it is recommended to config‐
+     ure the ccaarrppnnooddeess in a symmetrical manner.  This is achieved by simply
+     using the same ccaarrppnnooddeess list on all sides of the firewall.  This ensures
+     that packets of one connection will pass in and out on the same host and
+     are not routed asymmetrically.
+
+EEXXAAMMPPLLEESS
+     For most scenarios it is desirable to have a well-defined master,
+     achieved by enabling the pprreeeemmpptt option.  Enable it on both host A and B:
+
+           # sysctl net.inet.carp.preempt=1
+
+     Assume that host A is the preferred master and carp should run on the
+     physical interfaces em0 with the network 192.168.1.0/24 and em1 with net‐
+     work 192.168.2.0/24.  This is the setup for host A:
+
+           # ifconfig carp0 192.168.1.1/24 carpdev em0 vhid 1
+           # ifconfig carp1 192.168.2.1/24 carpdev em1 vhid 2
+
+     The setup for host B is identical, but it has a higher aaddvvsskkeeww:
+
+           # ifconfig carp0 192.168.1.1/24 carpdev em0 vhid 1 advskew 100
+           # ifconfig carp1 192.168.2.1/24 carpdev em1 vhid 2 advskew 100
+
+   LLOOAADD BBAALLAANNCCIINNGG
+     In order to set up a load balanced virtual host, it is necessary to con‐
+     figure one ccaarrppnnooddeess entry for each physical host.  In the following ex‐
+     ample, two physical hosts are configured to provide balancing and
+     failover for the IP address 192.168.1.10.
+
+     First the ccaarrpp interface on Host A is configured.  The aaddvvsskkeeww of 100 on
+     the second carpnode entry means that its advertisements will be sent out
+     slightly less frequently and will therefore become the designated backup.
+
+           # ifconfig carp0 192.168.1.10 carpdev em0 carpnodes 1:0,2:100 \
+                   balancing ip
+
+     The configuration for host B is identical, except the skew is on the
+     carpnode entry with virtual host 1 rather than virtual host 2.
+
+           # ifconfig carp0 192.168.1.10 carpdev em0 carpnodes 1:100,2:0 \
+                   balancing ip
+
+     If a different mode of load balancing is desired, the bbaallaanncciinngg mode can
+     be adjusted accordingly.
+
+SSEEEE AALLSSOO
+     sysctl(2), inet(4), pfsync(4), hostname.if(5), ifconfig(8), ifstated(8),
+     netstart(8), sysctl(8)
+
+HHIISSTTOORRYY
+     The ccaarrpp device first appeared in OpenBSD 3.5.
+
+BBUUGGSS
+     If load balancing is used in setups where the carpdev does not share an
+     IP in the same subnet as ccaarrpp, it is not possible to use the IP of the
+     ccaarrpp interface for self originated traffic.  This is because the return
+     packets are also subject to load balancing and might end up on any other
+     node in the cluster.
+
+     If an IPv6 load balanced carp interface is taken down manually, it will
+     accept all incoming packets for its address.  This will lead to dupli‐
+     cated packets.
+
+BSD                             March 31, 2022                             BSD

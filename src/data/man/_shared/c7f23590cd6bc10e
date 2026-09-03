@@ -1,0 +1,405 @@
+_f_c_n_t_l___l_o_c_k_i_n_g(2)              System Calls Manual             _f_c_n_t_l___l_o_c_k_i_n_g(2)
+
+NNAAMMEE
+       F_GETLK,  F_SETLK,  F_SETLKW,  F_OFD_GETLK, F_OFD_SETLK, F_OFD_SETLKW -
+       locking
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ffccnnttll..hh>>
+
+       iinntt ffccnnttll((iinntt _f_d,, FF__GGEETTLLKK,, ssttrruucctt fflloocckk **_l_o_c_k));;
+       iinntt ffccnnttll((iinntt _f_d,, FF__SSEETTLLKK,, ccoonnsstt ssttrruucctt fflloocckk **_l_o_c_k));;
+       iinntt ffccnnttll((iinntt _f_d,, FF__SSEETTLLKKWW,, ccoonnsstt ssttrruucctt fflloocckk **_l_o_c_k));;
+
+       iinntt ffccnnttll((iinntt _f_d,, FF__OOFFDD__GGEETTLLKK,, ssttrruucctt fflloocckk **_l_o_c_k));;
+       iinntt ffccnnttll((iinntt _f_d,, FF__OOFFDD__SSEETTLLKK,, ccoonnsstt ssttrruucctt fflloocckk **_l_o_c_k));;
+       iinntt ffccnnttll((iinntt _f_d,, FF__OOFFDD__SSEETTLLKKWW,, ccoonnsstt ssttrruucctt fflloocckk **_l_o_c_k));;
+
+DDEESSCCRRIIPPTTIIOONN
+   AAddvviissoorryy rreeccoorrdd lloocckkiinngg
+       Linux implements traditional ("process‐associated") UNIX record  locks,
+       as standardized by POSIX.  For a Linux‐specific alternative with better
+       semantics, see the discussion of open file description locks below.
+
+       FF__SSEETTLLKK,  FF__SSEETTLLKKWW,  and FF__GGEETTLLKK are used to acquire, release, and test
+       for the existence of record locks (also known as byte‐range,  file‐seg‐
+       ment, or file‐region locks).  The third argument, _l_o_c_k, is a pointer to
+       a  structure that has at least the following fields (in unspecified or‐
+       der).
+
+           struct flock {
+               ...
+               short l_type;    /* Type of lock: F_RDLCK,
+                                   F_WRLCK, F_UNLCK */
+               short l_whence;  /* How to interpret l_start:
+                                   SEEK_SET, SEEK_CUR, SEEK_END */
+               off_t l_start;   /* Starting offset for lock */
+               off_t l_len;     /* Number of bytes to lock */
+               pid_t l_pid;     /* PID of process blocking our lock
+                                   (set by F_GETLK and F_OFD_GETLK) */
+               ...
+           };
+
+       The _l___w_h_e_n_c_e, _l___s_t_a_r_t, and _l___l_e_n fields of this structure  specify  the
+       range  of bytes we wish to lock.  Bytes past the end of the file may be
+       locked, but not bytes before the start of the file.
+
+       _l___s_t_a_r_t is the starting offset for the lock, and is  interpreted  rela‐
+       tive  to  either:  the start of the file (if _l___w_h_e_n_c_e is SSEEEEKK__SSEETT); the
+       current file offset (if _l___w_h_e_n_c_e is SSEEEEKK__CCUURR); or the end of  the  file
+       (if  _l___w_h_e_n_c_e  is  SSEEEEKK__EENNDD).  In the final two cases, _l___s_t_a_r_t can be a
+       negative number provided the offset does not lie before  the  start  of
+       the file.
+
+       _l___l_e_n  specifies  the  number of bytes to be locked.  If _l___l_e_n is posi‐
+       tive, then the range to be locked covers bytes _l___s_t_a_r_t up  to  and  in‐
+       cluding  _l___s_t_a_r_t+_l___l_e_n-1.  Specifying 0 for _l___l_e_n has the special mean‐
+       ing: lock all bytes starting at the location specified by _l___w_h_e_n_c_e  and
+       _l___s_t_a_r_t through to the end of file, no matter how large the file grows.
+
+       POSIX.1‐2001 allows (but does not require) an implementation to support
+       a negative _l___l_e_n value; if _l___l_e_n is negative, the interval described by
+       _l_o_c_k covers bytes _l___s_t_a_r_t+_l___l_e_n up to and including _l___s_t_a_r_t-1.  This is
+       supported since Linux 2.4.21 and Linux 2.5.49.
+
+       The  _l___t_y_p_e  field  can  be  used  to place a read (FF__RRDDLLCCKK) or a write
+       (FF__WWRRLLCCKK) lock on a file.  Any number of processes may hold a read lock
+       (shared lock) on a file region, but only one process may hold  a  write
+       lock  (exclusive  lock).   An  exclusive lock excludes all other locks,
+       both shared and exclusive.  A single process can hold only one type  of
+       lock  on  a  file region; if a new lock is applied to an already‐locked
+       region, then the existing lock is  converted  to  the  new  lock  type.
+       (Such  conversions may involve splitting, shrinking, or coalescing with
+       an existing lock if the byte range specified by the new lock  does  not
+       precisely coincide with the range of the existing lock.)
+
+       FF__SSEETTLLKK
+              Acquire  a lock (when _l___t_y_p_e is FF__RRDDLLCCKK or FF__WWRRLLCCKK) or release a
+              lock (when _l___t_y_p_e is FF__UUNNLLCCKK) on  the  bytes  specified  by  the
+              _l___w_h_e_n_c_e,  _l___s_t_a_r_t,  and _l___l_e_n fields of _l_o_c_k.  If a conflicting
+              lock is held by another process, this call returns -1  and  sets
+              _e_r_r_n_o  to  EEAACCCCEESS  or  EEAAGGAAIINN.  (The error returned in this case
+              differs across implementations, so POSIX requires a portable ap‐
+              plication to check for both errors.)
+
+       FF__SSEETTLLKKWW
+              As for FF__SSEETTLLKK, but if a conflicting lock is held on  the  file,
+              then  wait  for that lock to be released.  If a signal is caught
+              while waiting, then the call is interrupted and (after the  sig‐
+              nal handler has returned) returns immediately (with return value
+              -1 and _e_r_r_n_o set to EEIINNTTRR; see ssiiggnnaall(7)).
+
+       FF__GGEETTLLKK
+              On  input  to  this call, _l_o_c_k describes a lock we would like to
+              place on the file.  If the lock could be  placed,  ffccnnttll()  does
+              not  actually  place it, but returns FF__UUNNLLCCKK in the _l___t_y_p_e field
+              of _l_o_c_k and leaves the other fields of the structure unchanged.
+
+              If one or more incompatible locks would prevent this lock  being
+              placed, then ffccnnttll() returns details about one of those locks in
+              the _l___t_y_p_e, _l___w_h_e_n_c_e, _l___s_t_a_r_t, and _l___l_e_n fields of _l_o_c_k.  If the
+              conflicting  lock  is  a traditional (process‐associated) record
+              lock, then the _l___p_i_d field is set to  the  PID  of  the  process
+              holding  that lock.  If the conflicting lock is an open file de‐
+              scription lock, then _l___p_i_d is set to -1.  Note that the returned
+              information may already be out of date by the  time  the  caller
+              inspects it.
+
+       In  order  to place a read lock, _f_d must be open for reading.  In order
+       to place a write lock, _f_d must be open  for  writing.   To  place  both
+       types of lock, open a file read‐write.
+
+       When placing locks with FF__SSEETTLLKKWW, the kernel detects _d_e_a_d_l_o_c_k_s, whereby
+       two  or  more  processes  have  their lock requests mutually blocked by
+       locks held by the other processes.   For  example,  suppose  process  A
+       holds  a  write lock on byte 100 of a file, and process B holds a write
+       lock on byte 200.  If each process then attempts to lock the  byte  al‐
+       ready  locked  by the other process using FF__SSEETTLLKKWW, then, without dead‐
+       lock detection, both processes would remain blocked indefinitely.  When
+       the kernel detects such deadlocks, it causes one of the  blocking  lock
+       requests  to  immediately  fail  with the error EEDDEEAADDLLKK; an application
+       that encounters such an error should release some of its locks to allow
+       other applications to proceed before attempting regain the  locks  that
+       it  requires.  Circular deadlocks involving more than two processes are
+       also detected.  Note, however, that there are limitations to  the  ker‐
+       nel’s deadlock‐detection algorithm; see BUGS.
+
+       As well as being removed by an explicit FF__UUNNLLCCKK, record locks are auto‐
+       matically released when the process terminates.
+
+       Record  locks are not inherited by a child created via ffoorrkk(2), but are
+       preserved across an eexxeeccvvee(2).
+
+       Because of the buffering performed by the ssttddiioo(3) library, the use  of
+       record  locking  with  routines  in that package should be avoided; use
+       rreeaadd(2) and wwrriittee(2) instead.
+
+       The record locks described above are associated with the  process  (un‐
+       like  the  open file description locks described below).  This has some
+       unfortunate consequences:
+
+       •  If a process closes _a_n_y file descriptor referring to  a  file,  then
+          all  of the process’s locks on that file are released, regardless of
+          the file descriptor(s) on which the locks were  obtained.   This  is
+          bad:  it  means  that a process can lose its locks on a file such as
+          _/_e_t_c_/_p_a_s_s_w_d or _/_e_t_c_/_m_t_a_b when for some reason a library function de‐
+          cides to open, read, and close the same file.
+
+       •  The threads in a process share locks.   In  other  words,  a  multi‐
+          threaded  program  can’t  use  record locking to ensure that threads
+          don’t simultaneously access the same region of a file.
+
+       Open file description locks solve both of these problems.
+
+   OOppeenn ffiillee ddeessccrriippttiioonn lloocckkss ((nnoonn‐‐PPOOSSIIXX))
+       Open file description locks are advisory byte‐range locks whose  opera‐
+       tion  is in most respects identical to the traditional record locks de‐
+       scribed above.  This lock type is Linux‐specific, and  available  since
+       Linux 3.15.  (There is a proposal with the Austin Group to include this
+       lock type in the next revision of POSIX.1.)  For an explanation of open
+       file descriptions, see ooppeenn(2).
+
+       The  principal  difference  between  the two lock types is that whereas
+       traditional record locks are associated with a process, open  file  de‐
+       scription  locks are associated with the open file description on which
+       they are acquired, much like  locks  acquired  with  fflloocckk(2).   Conse‐
+       quently  (and  unlike traditional advisory record locks), open file de‐
+       scription  locks  are  inherited  across  ffoorrkk(2)  (and  cclloonnee(2)  with
+       CCLLOONNEE__FFIILLEESS),  and are only automatically released on the last close of
+       the open file description, instead of being released on  any  close  of
+       the file.
+
+       Conflicting  lock  combinations  (i.e., a read lock and a write lock or
+       two write locks) where one lock is an open file  description  lock  and
+       the  other is a traditional record lock conflict even when they are ac‐
+       quired by the same process on the same file descriptor.
+
+       Open file description locks placed via the same open  file  description
+       (i.e., via the same file descriptor, or via a duplicate of the file de‐
+       scriptor  created  by  ffoorrkk(2), dduupp(2), FF__DDUUPPFFDD(2const), and so on) are
+       always compatible: if a new lock is placed on an already locked region,
+       then the existing lock is converted to the new lock type.   (Such  con‐
+       versions  may result in splitting, shrinking, or coalescing with an ex‐
+       isting lock as discussed above.)
+
+       On the other hand, open file description locks may conflict  with  each
+       other  when  they  are  acquired  via different open file descriptions.
+       Thus, the threads in a multithreaded program can use open file descrip‐
+       tion locks to synchronize access to a file region by having each thread
+       perform its own ooppeenn(2) on the file and applying locks via the  result‐
+       ing file descriptor.
+
+       As  with  traditional  advisory  locks,  the third argument to ffccnnttll(),
+       _l_o_c_k, is a pointer to an _f_l_o_c_k structure.  By contrast with traditional
+       record locks, the _l___p_i_d field of that structure must  be  set  to  zero
+       when using the operations described below.
+
+       The  operations for working with open file description locks are analo‐
+       gous to those used with traditional locks:
+
+       FF__OOFFDD__SSEETTLLKK
+              Acquire an open file description lock (when _l___t_y_p_e is FF__RRDDLLCCKK or
+              FF__WWRRLLCCKK) or release an open file description lock  (when  _l___t_y_p_e
+              is FF__UUNNLLCCKK) on the bytes specified by the _l___w_h_e_n_c_e, _l___s_t_a_r_t, and
+              _l___l_e_n  fields of _l_o_c_k.  If a conflicting lock is held by another
+              process, this call returns -1 and sets _e_r_r_n_o to EEAAGGAAIINN.
+
+       FF__OOFFDD__SSEETTLLKKWW
+              As for FF__OOFFDD__SSEETTLLKK, but if a conflicting lock  is  held  on  the
+              file,  then  wait  for that lock to be released.  If a signal is
+              caught while waiting, then the call is  interrupted  and  (after
+              the  signal  handler has returned) returns immediately (with re‐
+              turn value -1 and _e_r_r_n_o set to EEIINNTTRR; see ssiiggnnaall(7)).
+
+       FF__OOFFDD__GGEETTLLKK
+              On input to this call, _l_o_c_k describes an open  file  description
+              lock  we  would like to place on the file.  If the lock could be
+              placed, ffccnnttll() does not actually place it, but returns  FF__UUNNLLCCKK
+              in  the  _l___t_y_p_e field of _l_o_c_k and leaves the other fields of the
+              structure unchanged.  If one or more  incompatible  locks  would
+              prevent  this lock being placed, then details about one of these
+              locks are returned via _l_o_c_k, as described above for FF__GGEETTLLKK.
+
+       In the current implementation, no deadlock detection is  performed  for
+       open  file  description locks.  (This contrasts with process‐associated
+       record locks, for which the kernel does perform deadlock detection.)
+
+   MMaannddaattoorryy lloocckkiinngg
+       _W_a_r_n_i_n_g: the Linux implementation of mandatory locking  is  unreliable.
+       See  BUGS  below.  Because of these bugs, and the fact that the feature
+       is believed to be little used, since Linux 4.5, mandatory  locking  has
+       been made an optional feature, governed by a configuration option (CCOONN‐‐
+       FFIIGG__MMAANNDDAATTOORRYY__FFIILLEE__LLOOCCKKIINNGG).   This  feature  is no longer supported at
+       all in Linux 5.15 and above.
+
+       By default, both traditional (process‐associated)  and  open  file  de‐
+       scription  record  locks are advisory.  Advisory locks are not enforced
+       and are useful only between cooperating processes.
+
+       Both lock types can also be mandatory.  Mandatory  locks  are  enforced
+       for  all  processes.  If a process tries to perform an incompatible ac‐
+       cess (e.g., rreeaadd(2) or wwrriittee(2)) on a file region that has an incompat‐
+       ible mandatory lock, then the result depends upon  whether  the  OO__NNOONN‐‐
+       BBLLOOCCKK flag is enabled for its open file description.  If the OO__NNOONNBBLLOOCCKK
+       flag  is not enabled, then the system call is blocked until the lock is
+       removed or converted to a mode that is compatible with the access.   If
+       the OO__NNOONNBBLLOOCCKK flag is enabled, then the system call fails with the er‐
+       ror EEAAGGAAIINN.
+
+       To  make use of mandatory locks, mandatory locking must be enabled both
+       on the filesystem that contains the file to be locked, and on the  file
+       itself.   Mandatory  locking  is  enabled on a filesystem using the "-o
+       mand" option to mmoouunntt(8), or the MMSS__MMAANNDDLLOOCCKK flag for mmoouunntt(2).  Manda‐
+       tory locking is enabled on a file by disabling group execute permission
+       on the file and enabling the set‐group‐ID permission bit (see  cchhmmoodd(1)
+       and cchhmmoodd(2)).
+
+       Mandatory  locking  is not specified by POSIX.  Some other systems also
+       support mandatory locking, although the details of  how  to  enable  it
+       vary across systems.
+
+   LLoosstt lloocckkss
+       When an advisory lock is obtained on a networked filesystem such as NFS
+       it  is  possible  that the lock might get lost.  This may happen due to
+       administrative action on the server, or  due  to  a  network  partition
+       (i.e.,  loss  of network connectivity with the server) which lasts long
+       enough for the server to assume that the client is no longer  function‐
+       ing.
+
+       When  the  filesystem  determines  that  a  lock  has been lost, future
+       rreeaadd(2) or wwrriittee(2) requests may fail with the error EEIIOO.   This  error
+       will  persist  until  the  lock  is  removed  or the file descriptor is
+       closed.  Since Linux 3.12, this happens at least for  NFSv4  (including
+       all minor versions).
+
+       Some  versions  of  UNIX  send a signal (SSIIGGLLOOSSTT) in this circumstance.
+       Linux does not define this signal, and does not provide  any  asynchro‐
+       nous notification of lost locks.
+
+RREETTUURRNN VVAALLUUEE
+       Zero.
+
+       On error, -1 is returned, and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       See ffccnnttll(2).
+
+       EEBBAADDFF  _o_p  is  FF__SSEETTLLKK  or  FF__SSEETTLLKKWW  and the file descriptor open mode
+              doesn’t match with the type of lock requested.
+
+       EEDDEEAADDLLKK
+              It was detected that  the  specified  FF__SSEETTLLKKWW  operation  would
+              cause a deadlock.
+
+       EEFFAAUULLTT _l_o_c_k is outside your accessible address space.
+
+       EEIINNTTRR  _o_p is FF__SSEETTLLKKWW or FF__OOFFDD__SSEETTLLKKWW and the operation was interrupted
+              by a signal; see ssiiggnnaall(7).
+
+       EEIINNTTRR  _o_p is FF__GGEETTLLKK, FF__SSEETTLLKK, FF__OOFFDD__GGEETTLLKK, or FF__OOFFDD__SSEETTLLKK, and the op‐
+              eration  was interrupted by a signal before the lock was checked
+              or acquired.  Most likely when  locking  a  remote  file  (e.g.,
+              locking over NFS), but can sometimes happen locally.
+
+       EEIINNVVAALL _o_p  is  FF__OOFFDD__SSEETTLLKK, FF__OOFFDD__SSEETTLLKKWW, or FF__OOFFDD__GGEETTLLKK, and _l___p_i_d was
+              not specified as zero.
+
+       EENNOOLLCCKK Too many segment locks open, lock table is  full,  or  a  remote
+              locking protocol failed (e.g., locking over NFS).
+
+SSTTAANNDDAARRDDSS
+       POSIX.1‐2024.
+
+HHIISSTTOORRYY
+       FF__GGEETTLLKK
+       FF__SSEETTLLKK
+       FF__SSEETTLLKKWW
+              SVr4, 4.3BSD, POSIX.1‐2001.
+
+       FF__OOFFDD__SSEETTLLKK
+       FF__OOFFDD__SSEETTLLKKWW
+       FF__OOFFDD__GGEETTLLKK
+              POSIX.1‐2024.
+
+NNOOTTEESS
+   FFiillee lloocckkiinngg
+       The original Linux ffccnnttll() system call was not designed to handle large
+       file offsets (in the _f_l_o_c_k structure).  Consequently, an ffccnnttll6644() sys‐
+       tem  call was added in Linux 2.4.  The newer system call employs a dif‐
+       ferent structure for file locking, _f_l_o_c_k_6_4,  and  corresponding  opera‐
+       tions,  FF__GGEETTLLKK6644,  FF__SSEETTLLKK6644,  and FF__SSEETTLLKKWW6644.  However, these details
+       can be ignored by applications using glibc, whose ffccnnttll() wrapper func‐
+       tion transparently employs the more recent  system  call  where  it  is
+       available.
+
+   RReeccoorrdd lloocckkss
+       Since  Linux  2.0,  there  is  no interaction between the types of lock
+       placed by fflloocckk(2) and ffccnnttll().
+
+       Several systems have more fields in _s_t_r_u_c_t _f_l_o_c_k such as, for  example,
+       _l___s_y_s_i_d  (to  identify  the  machine where the lock is held).  Clearly,
+       _l___p_i_d alone is not going to be very useful if the process  holding  the
+       lock  may  live on a different machine; on Linux, while present on some
+       architectures (such as MIPS32), this field is not used.
+
+       The original Linux ffccnnttll() system call was not designed to handle large
+       file offsets (in the _f_l_o_c_k structure).  Consequently, an ffccnnttll6644() sys‐
+       tem call was added in Linux 2.4.  The newer system call employs a  dif‐
+       ferent  structure  for  file locking, _f_l_o_c_k_6_4, and corresponding opera‐
+       tions, FF__GGEETTLLKK6644, FF__SSEETTLLKK6644, and FF__SSEETTLLKKWW6644.   However,  these  details
+       can be ignored by applications using glibc, whose ffccnnttll() wrapper func‐
+       tion  transparently  employs  the  more  recent system call where it is
+       available.
+
+   RReeccoorrdd lloocckkiinngg aanndd NNFFSS
+       Before Linux 3.12, if an NFSv4 client loses contact with the server for
+       a period of time (defined as more than 90 seconds  with  no  communica‐
+       tion),  it might lose and regain a lock without ever being aware of the
+       fact.  (The period of time after which contact is assumed lost is known
+       as the NFSv4 leasetime.  On a Linux NFS server, this can be  determined
+       by  looking at _/_p_r_o_c_/_f_s_/_n_f_s_d_/_n_f_s_v_4_l_e_a_s_e_t_i_m_e, which expresses the period
+       in seconds.  The default value for this file is 90.)  This scenario po‐
+       tentially risks data corruption, since another process might acquire  a
+       lock in the intervening period and perform file I/O.
+
+       Since Linux 3.12, if an NFSv4 client loses contact with the server, any
+       I/O  to  the file by a process which "thinks" it holds a lock will fail
+       until that process closes and reopens the file.   A  kernel  parameter,
+       _n_f_s_._r_e_c_o_v_e_r___l_o_s_t___l_o_c_k_s,  can  be set to 1 to obtain the pre‐3.12 behav‐
+       ior, whereby the client will attempt to recover lost locks when contact
+       is reestablished with the server.  Because of  the  attendant  risk  of
+       data corruption, this parameter defaults to 0 (disabled).
+
+BBUUGGSS
+   DDeeaaddlloocckk ddeetteeccttiioonn
+       The  deadlock‐detection  algorithm  employed by the kernel when dealing
+       with FF__SSEETTLLKKWW requests can yield both false negatives (failures to  de‐
+       tect  deadlocks,  leaving a set of deadlocked processes blocked indefi‐
+       nitely) and false positives (EEDDEEAADDLLKK errors when there is no deadlock).
+       For example, the kernel limits the lock depth of its dependency  search
+       to  10  steps,  meaning  that circular deadlock chains that exceed that
+       size will not be detected.  In addition, the kernel may  falsely  indi‐
+       cate  a  deadlock when two or more processes created using the cclloonnee(2)
+       CCLLOONNEE__FFIILLEESS flag place locks that appear (to the kernel) to conflict.
+
+   MMaannddaattoorryy lloocckkiinngg
+       The Linux implementation of mandatory locking is subject to race condi‐
+       tions which render it unreliable: a wwrriittee(2) call that overlaps with  a
+       lock  may  modify  data after the mandatory lock is acquired; a rreeaadd(2)
+       call that overlaps with a lock may detect changes  to  data  that  were
+       made only after a write lock was acquired.  Similar races exist between
+       mandatory  locks  and  mmmmaapp(2).  It is therefore inadvisable to rely on
+       mandatory locking.
+
+SSEEEE AALLSSOO
+       ffccnnttll(2), fflloocckk(2), lloocckkff(3), llsslloocckkss(8)
+
+       _l_o_c_k_s_._t_x_t, _m_a_n_d_a_t_o_r_y_-_l_o_c_k_i_n_g_._t_x_t, and _d_n_o_t_i_f_y_._t_x_t in the  Linux  kernel
+       source  directory  _D_o_c_u_m_e_n_t_a_t_i_o_n_/_f_i_l_e_s_y_s_t_e_m_s_/  (on older kernels, these
+       files are directly  under  the  _D_o_c_u_m_e_n_t_a_t_i_o_n_/  directory,  and  _m_a_n_d_a_‐
+       _t_o_r_y_-_l_o_c_k_i_n_g_._t_x_t is called _m_a_n_d_a_t_o_r_y_._t_x_t)
+
+Linux man‐pages (unreleased)      2025‐10‐29                  _f_c_n_t_l___l_o_c_k_i_n_g(2)

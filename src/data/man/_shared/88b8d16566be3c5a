@@ -1,0 +1,100 @@
+G_ATTACH(9)              BSD Kernel Developer's Manual             G_ATTACH(9)
+
+NNAAMMEE
+     gg__aattttaacchh, gg__ddeettaacchh — attach/detach GEOM consumers to/from providers
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ggeeoomm//ggeeoomm..hh>>
+
+     _i_n_t
+     gg__aattttaacchh(_s_t_r_u_c_t _g___c_o_n_s_u_m_e_r _*_c_p, _s_t_r_u_c_t _g___p_r_o_v_i_d_e_r _*_p_p);
+
+     _v_o_i_d
+     gg__ddeettaacchh(_s_t_r_u_c_t _g___c_o_n_s_u_m_e_r _*_c_p);
+
+DDEESSCCRRIIPPTTIIOONN
+     The gg__aattttaacchh() function attaches given consumer _c_p to given provider _p_p,
+     thus establishing a communication channel between the consumer and the
+     provider that allows to change access counts and perform I/O operations.
+
+     The gg__ddeettaacchh() function detaches given consumer _c_p from its corresponding
+     provider, tearing down the communication channel between them.
+
+RREESSTTRRIICCTTIIOONNSS//CCOONNDDIITTIIOONNSS
+     gg__aattttaacchh():
+
+           The consumer must not be attached to a provider.
+
+           The operation must not create a topology loop.
+
+           The topology lock has to be held.
+
+     gg__ddeettaacchh():
+
+           The consumer has to be attached.
+
+           The access count has to be 0.
+
+           There must be no active requests.
+
+           The topology lock has to be held.
+
+RREETTUURRNN VVAALLUUEESS
+     The gg__aattttaacchh() function returns 0 if successful; otherwise an error code
+     is returned.
+
+EEXXAAMMPPLLEESS
+     Create a consumer, attach it to a given provider, gain read access and
+     clean up.
+
+           void
+           some_function(struct g_geom *mygeom, struct g_provider *pp)
+           {
+                   struct g_consumer *cp;
+
+                   g_topology_assert();
+
+                   /* Create new consumer on 'mygeom' geom. */
+                   cp = g_new_consumer(mygeom);
+                   /* Attach newly created consumer to given provider. */
+                   if (g_attach(cp, pp) != 0) {
+                           g_destroy_consumer(cp);
+                           return;
+                   }
+                   /* Open provider for reading through our consumer. */
+                   if (g_access(cp, 1, 0, 0) != 0) {
+                           g_detach(cp);
+                           g_destroy_consumer(cp);
+                           return;
+                   }
+
+                   g_topology_unlock();
+                   /*
+                    * Read data from provider.
+                    */
+                   g_topology_lock();
+
+                   /* Disconnect from provider (release access count). */
+                   g_access(cp, -1, 0, 0);
+                   /* Detach from provider. */
+                   g_detach(cp);
+                   /* Destroy consumer. */
+                   g_destroy_consumer(cp);
+           }
+
+EERRRROORRSS
+     Possible errors:
+
+     [ELOOP]            The operation creates a topology loop.
+
+     [ENXIO]            Provider got orphaned.
+
+SSEEEE AALLSSOO
+     geom(4), DECLARE_GEOM_CLASS(9), g_access(9), g_bio(9), g_consumer(9),
+     g_data(9), g_event(9), g_geom(9), g_provider(9), g_provider_by_name(9),
+     g_wither_geom(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            October 10, 2020                            BSD

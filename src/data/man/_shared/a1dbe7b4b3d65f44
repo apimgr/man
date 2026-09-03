@@ -1,0 +1,627 @@
+PORT-MODULES(5)             BSD File Formats Manual            PORT-MODULES(5)
+
+NNAAMMEE
+     ppoorrtt--mmoodduulleess — documentation and conventions used in port modules
+
+DDEESSCCRRIIPPTTIIOONN
+     The OpenBSD Ports framework is based on a gigantic makefile named
+     bsd.port.mk(5).
+
+     In order to curb unwieldy growth, parts of the framework that are not al‐
+     ways needed have been set apart in optional files called ppoorrtt mmoodduulleess,
+     which are retrieved as needed through the MODULES variable of
+     bsd.port.mk(5).
+
+     Some of these modules correspond to basic mechanisms which are not always
+     needed, such as GNU autoconf, or perl5.
+
+     For convenience, setting CONFIGURE_STYLE in a port's main Makefile is
+     enough to get perl5 or autoconf support, but _g_n_u, _i_m_a_k_e and _p_e_r_l_5 are ac‐
+     tually modules, and there is some glue in bsd.port.mk(5) that magically
+     adds the required module in that case.  This doesn't work when parsing
+     modules.  For instance, if you set CONFIGURE_STYLE=gnu in a module, you
+     also need to MODULES += gnu.
+
+     Other modules correspond to shortcuts for using some other ports as de‐
+     pendencies without needing to hardcode too much, such as the qt ports.
+
+TTHHEE MMOODDUULLEESS LLOOOOKK--UUPP MMEECCHHAANNIISSMM
+     The variable MODULES should contain a list of module names.  Some core
+     modules are a single word, all other modules should be ${PKGPATH}.  If
+     the module is _s_o_m_e_/_d_i_r_/_p_o_r_t_n_a_m_e, the ports framework will look for a file
+     named _$_{_P_O_R_T_S_D_I_R_}_/_s_o_m_e_/_d_i_r_/_p_o_r_t_n_a_m_e_/_p_o_r_t_n_a_m_e_._p_o_r_t_._m_k and include it.
+
+     Most modules should conform to this syntax.  The historic practice of
+     having a redirection file directly under _$_{_P_O_R_T_S_D_I_R_}_/_i_n_f_r_a_s_t_r_u_c_t_u_r_e_/_m_k is
+     deprecated for new modules.
+
+     Modules may refer to each other.  The modules mechanism has specific re‐
+     cursion handling such that adding MODULES += foo/bar to a module will
+     work as expected.
+
+NNAAMMIINNGG CCOONNVVEENNTTIIOONNSS
+     Since there is no actual scope in makefiles, everything defined within a
+     module will be global to the ports framework, and thus may interfere with
+     other ports.
+
+     As far as possible, all variables and targets belonging to a module named
+     _s_o_m_e_/_d_i_r_/_f_o_o should be named MODFOO_* and _m_o_d_f_o_o___*.
+
+     Following the same conventions as bsd.port.mk(5), internal variables and
+     targets not intended for user consumption should be named _MODFOO_* and
+     ___m_o_d_f_o_o___*.
+
+     For instance, if a module wants some value to be available for the rest
+     of the world, it should define MODFOO_VARNAME, with a name matching the
+     basic infrastructure as far as possible.  That is, a port that defines
+     specific dependencies will usually define MODFOO_WANTLIB,
+     MODFOO_LIB_DEPENDS, and MODFOO_RUN_DEPENDS, as appropriate.
+
+     As an exception to the naming mechanism, some ports have several distinct
+     versions in the ports tree, say _x_1_1_/_q_t_5 and _x_1_1_/_q_t_6.  Instead of using
+     the namespace MODQT5*, variables will usually drop the version suffix and
+     be simply called MODQT_* so that a port using the module can be switched
+     from version to version without needing to change everything.
+
+     It is highly desirable to define names in both namespaces for such ports,
+     for example to define both MODQT4_LIB_DEPENDS and MODQT_LIB_DEPENDS.
+     Normal client ports will use MODQT_LIB_DEPENDS, but a port may exception‐
+     ally import both modules with MODULES += x11/qt5 x11/qt6 and differenti‐
+     ate between qt5 and qt6 needs with MODQT5_LIB_DEPENDS and
+     MODQT6_LIB_DEPENDS.  See _p_r_i_n_t_/_p_o_p_p_l_e_r for an example.
+
+OOVVEERRRRIIDDIINNGG TTAARRGGEETT BBEEHHAAVVIIOORR
+     The main framework contains several hooks that allow ports to override
+     normal behavior.  This evolved as an ad-hoc framework, where only hooks
+     that turned out to be needed were added.  If several modules define the
+     same hook, hook behaviors will be invoked in sequence.
+
+     eexxttrraacctt       There is a ppoosstt--eexxttrraacctt hook that can be activated by
+                   defining MODFOO_post-extract.  It will be run right after
+                   ppoosstt--eexxttrraacctt.
+
+     ppaattcchh         There is a ppoosstt--ppaattcchh hook that can be activated by defin‐
+                   ing MODFOO_post-patch.  It will be run right after
+                   ppoosstt--ppaattcchh.
+
+     ggeenn           There is a ggeenn hook that can be activated by defining
+                   MODFOO_gen.  It will be run right after ddoo--ggeenn and before
+                   REORDER_DEPENDENCIES touches things.
+
+     ccoonnffiigguurree     There is a pprree--ccoonnffiigguurree hook that can be activated by
+                   defining MODFOO_pre-configure.  It will be run right after
+                   pprree--ccoonnffiigguurree.  The normal ddoo--ccoonnffiigguurree behavior is to in‐
+                   voke all MODFOO_configure contents that are defined in
+                   CONFIGURE_STYLE.  By default, ccoonnffiigguurree will do nothing.
+
+                   Some CONFIGURE_STYLE values, namely perl, gnu, imake, and
+                   autoconf, will automatically import the correct module.
+                   User-defined modules must both add to CONFIGURE_STYLE and
+                   import the correct module to override behavior.
+
+                   Contrary to other hooks, module behavior is not invoked in
+                   addition to ddoo--ccoonnffiigguurree, but as the normal configure
+                   process.  If ddoo--ccoonnffiigguurree is overridden, normal hook pro‐
+                   cessing will not happen.
+
+     ffaakkee          There is a pprree--ffaakkee hook that can be activated by defining
+                   MODFOO_pre-fake.  This will be invoked right after
+                   mtree(8), and before the normal pprree--ffaakkee behavior.
+
+                   This can occasionally be used for ports that require some
+                   specific fake installation setup that will be provided by
+                   runtime dependencies.
+
+     iinnssttaallll       There is a ppoosstt--iinnssttaallll hook that can be activated by
+                   defining MODFOO_post-install.  This will be invoked at the
+                   end of iinnssttaallll, right after the normal ppoosstt--iinnssttaallll behav‐
+                   ior.
+
+     Some targets, such as ddoo--bbuuiilldd or ddoo--iinnssttaallll, can't be overridden simply.
+     A module that, for instance, requires specific ddoo--bbuuiilldd behavior should
+     do so in two steps:
+
+     ••   Define a variable named MODFOO_BUILD_TARGET that contains the com‐
+         mands necessary for ddoo--bbuuiilldd:
+
+               MODFOO_BUILD_TARGET = cmd1; cmd2
+
+     ••   Override ddoo--bbuuiilldd only if it's not already defined by the port
+         proper:
+
+               .if !target(do-build)
+               do-build:
+                       @${MODFOO_BUILD_TARGET}
+               .endif
+     That way, if several modules require specific actions for those targets,
+     the end user can choose the appropriate order in which to run the ac‐
+     tions:
+
+           do-build:
+                   @${MODBAR_BUILD_TARGET}
+                   @${MODFOO_BUILD_TARGET}
+                   ...
+
+OOVVEERRRRIIDDIINNGG VVAARRIIAABBLLEE BBEEHHAAVVIIOORR
+     Some variables can be overridden by modules.  Be very cautious, as this
+     can make the module difficult to use, or interact badly with other mod‐
+     ules.  As a rule, always provide the override as:
+
+           VARIABLE ?= value
+
+     and provide a module-specific variable with the same value:
+
+           MODFOO_VARIABLE = value.
+
+     The following variables can be overridden in a relatively safe fashion:
+     ALL_TARGET, CONFIGURE_SCRIPT, DESTDIRNAME, DIST_SUBDIR, DISTNAME,
+     DISTFILES, EXTRACT_SUFX, FAKE_FLAGS, FETCH_MANUALLY, HOMEPAGE, IGNORE,
+     IS_INTERACTIVE, LIBTOOL_FLAGS, MAKE_FILE, MULTI_PACKAGES, NO_BUILD,
+     NO_TEST, PATCH_LIST, PKG_ARCH, PKGNAME*, PREFIX, TEST_TARGET,
+     TEST_IS_INTERACTIVE, REORDER_DEPENDENCIES, SEPARATE_BUILD, SITES,
+     USE_GMAKE, USE_LIBTOOL.
+
+     The following variables can be added to in a relatively safe fashion:
+     BUILD_DEPENDS, CATEGORIES, CONFIGURE_ARGS, CONFIGURE_ENV, ERRORS,
+     FAKE_FLAGS, FLAVOR, FLAVORS, INSTALL_TARGET, LIB_DEPENDS, MAKE_ENV,
+     MAKE_FLAGS, PKG_ARGS, PSEUDO_FLAVORS, TEST_DEPENDS, REORDER_DEPENDENCIES,
+     RUN_DEPENDS, SUBST_VARS, WANTLIB.
+
+SSPPEECCIIFFIICC MMOODDUULLEE IINNTTEERRAACCTTIIOONNSS
+     Some modules correspond to extra ports that will be used mostly as
+     BUILD_DEPENDS or RUN_DEPENDS.  Such modules can safely append values di‐
+     rectly to the BUILD_DEPENDS, RUN_DEPENDS, LIB_DEPENDS, and WANTLIB vari‐
+     ables, as long as they also define module-specific variables for all run‐
+     time dependencies.
+
+     Simple client ports will use the module directly, and thus inherit extra
+     build and runtime dependencies.
+
+     More sophisticated ports can use MULTI_PACKAGES to select specific behav‐
+     ior: build-time dependencies will always be needed.  Runtime dependencies
+     will be selected on a subpackage basis, since runtime dependencies such
+     as LIB_DEPENDS-sub do not inherit the default LIB_DEPENDS value.  The
+     client port's author must only bear in mind that external modules may add
+     values to the default WANTLIB, LIB_DEPENDS, and RUN_DEPENDS, and thus
+     that it is not safe to inherit from it blindly.
+
+     Modules are imported during
+
+           .include <bsd.port.mk>
+
+     Thus they can be affected by user choices such as setting a variable to
+     Yes or No.  Modules may make decisions based on documented
+     MODFOO_BEHAVIOR values.
+
+     When modules are processed, only a few bsd.port.mk(5) variables are al‐
+     ready defined.  Modules may depend upon the following variables already
+     having a sane value: DISTDIR, LOCALBASE, NO_DEPENDS, PKGPATH, PORTSDIR,
+     X11BASE and all arch-dependent constants from bsd.port.arch.mk(5), such
+     as PROPERTIES or LP64_ARCHS.  Note that this is only relevant for tests.
+     It is perfectly okay to define variables or targets that depend on the
+     basic ports framework without having to care whether that variable is al‐
+     ready defined, since make(1) performs lazy evaluation.
+
+CCOORREE MMOODDUULLEESS DDOOCCUUMMEENNTTAATTIIOONN
+     The following modules are available.
+
+     cpan          For perl ports coming from CPAN.  Wrapper around the normal
+                   perl module that fetches the file from the correct location
+                   depending on DISTNAME, and sets a default PKGNAME.  Also
+                   affects TEST_DEPENDS, CONFIGURE_STYLE, PKG_ARCH, and
+                   CATEGORIES.
+
+                   Some CPAN modules are only indexed by author, set
+                   CPAN_AUTHOR=ID to locate the right directory.
+
+                   If no HOMEPAGE is defined, it will default to
+                   _h_t_t_p_:_/_/_s_e_a_r_c_h_._c_p_a_n_._o_r_g_/_d_i_s_t_/_$_{_D_I_S_T_N_A_M_E_:_C_/_-_[_^_-_]_*_$_/_/_}_/
+
+                   User settings: set CPAN_REPORT to Yes, CPAN_REPORT_DB to a
+                   valid directory, and CPAN_REPORT_FROM to a valid email ad‐
+                   dress to automate the reporting of regression tests to
+                   CPAN.
+
+                   If MODCPAN_EXAMPLES is set, the following variables will be
+                   set.  MODCPAN_EXAMPLES_DIST will hold the default directory
+                   in the distfile with example scripts.  MODCPAN_EXAMPLES_DIR
+                   will be set to the standard installation directory for ex‐
+                   amples.  Sets the ppoosstt--iinnssttaallll target if none has been de‐
+                   fined to install the examples, otherwise
+                   MODCPAN_POST_INSTALL should be used as such:
+
+                   post-install:
+                           ...
+                           ${MODCPAN_POST_INSTALL}
+
+     databases/mariadb
+                   Adds small framework for testing ports that require running
+                   MariaDB.  Defines MODMARIADB_TEST_TARGET which consists ac‐
+                   tual commands to run in ddoo--tteesstt target.  If this target
+                   isn't defined, it will be added automatically.
+
+                   The actual test command to be run could be specified in the
+                   MODMARIADB_TEST_CMD.  Default is similar to what
+                   bsd.port.mk(5) runs itself.
+
+                   The MariaDB server being started will listen on UNIX domain
+                   socket only, minimizing impact on running system.  The path
+                   to socket is recorded in MODMARIADB_TEST_SOCKET.  Any local
+                   user will be able to connect without password.
+
+                   If the MODMARIADB_TEST_DBNAME variable is set, the database
+                   with such name will be set up before running actual test
+                   command.  Otherwise (default), the test is responsible to
+                   call mysqladmin(1) itself, if needed.
+
+                   The _d_a_t_a_b_a_s_e_s_/_m_a_r_i_a_d_b_,_-_s_e_r_v_e_r will get added to
+                   TEST_DEPENDS, but not to any other *_DEPENDS.  The
+                   MODMARIADB_CLIENT_ARGS and MODMARIADB_ADMIN_ARGS variables
+                   hold arguments for mysql(1) and mysqladmin(1), respec‐
+                   tively; those argument lists could be used in test scripts
+                   for connecting to test server, if they aren't satisfied by
+                   environment.
+
+     databases/postgresql
+                   Adds small framework for testing ports that require running
+                   Postgres.  Defines MODPOSTGRESQL_TEST_TARGET which consists
+                   actual commands to run in ddoo--tteesstt target.  If this target
+                   isn't defined, it will be added automatically.
+
+                   The actual test command to be run could be specified in the
+                   MODPOSTGRESQL_TEST_CMD.  Default is similar to what
+                   bsd.port.mk(5) runs itself.
+
+                   The Postgres server being started will listen on UNIX do‐
+                   main socket only, minimizing impact on running system.  The
+                   path to directory where socket will be created is set by
+                   MODPOSTGRESQL_TEST_PGHOST, defaulting to _$_{_W_R_K_D_I_R_}.  Any
+                   local user will be able to connect without password.
+
+                   If the MODPOSTGRESQL_TEST_DBNAME variable is set, the data‐
+                   base with such name will be set up before running actual
+                   test command.  Otherwise (default), the test is responsible
+                   to call initdb(1) itself.
+
+                   The _d_a_t_a_b_a_s_e_s_/_p_o_s_t_g_r_e_s_q_l_,_-_s_e_r_v_e_r will get added to
+                   TEST_DEPENDS, but not to any other *_DEPENDS.
+
+     devel/cmake   Adds _d_e_v_e_l_/_c_m_a_k_e to BUILD_DEPENDS and fills up
+                   CONFIGURE_ARGS, CONFIGURE_ENV and MAKE_ENV.  Sets up
+                   ccoonnffiigguurree target.  If CONFIGURE_STYLE was not set before,
+                   sets its value to `cmake'.  Changes default value of
+                   SEPARATE_BUILD to `Yes' because modern CMake requires out-
+                   of-source build anyway.  Changes TEST_TARGET to `test' as
+                   this is standard for CMake projects.  Also this module has
+                   the following knobs:
+
+                   MODCMAKE_WANTCOLOR
+                           If set to `Yes', CMake will colorize its output.
+                           Should not be used in ports Makefiles.  Default
+                           value is `No'.
+
+                   MODCMAKE_VERBOSE
+                           If set to `Yes', CMake will print details during
+                           configure and build stages about exact command be‐
+                           ing run, etc.  Should not be used in ports Make‐
+                           files.  Default value is `Yes'.
+
+                   MODCMAKE_DEBUG
+                           If set to `Yes', CMake will produce a debug build
+                           instead of a release build.  The exact effects on
+                           the build process depend on settings specified in
+                           the CMake config files.  Default value is `No'.
+                   Also, ‘nojunk’ is added to DPB_PROPERTIES because CMake's
+                   include files parser cheats too much.
+
+     devel/cabal   See cabal-module(5) for porting Haskell applications.
+
+     devel/cargo   See cargo-module(5).
+
+     devel/dconf   Sets CONFIGURE_ARGS, BUILD_DEPENDS and RUN_DEPENDS.  This
+                   module is used by ports installing gsettings schemas under
+                   _$_{_P_R_E_F_I_X_}_/_s_h_a_r_e_/_g_l_i_b_-_2_._0_/_s_c_h_e_m_a_s_/.  PLIST must contain:
+
+                         @tag glib-compile-schemas
+
+     devel/gconf2  A link from gconftool-2(1) to true(1) will be put at the
+                   front of the PATH.  Sets CONFIGURE_ARGS, BUILD_DEPENDS and
+                   RUN_DEPENDS.  According to the values of MODGCONF2_LIBDEP,
+                   sets LIB_DEPENDS.  User settings: set MODGCONF2_SCHEMAS_DIR
+                   to the directory name under _$_{_L_O_C_A_L_B_A_S_E_}_/_s_h_a_r_e_/_s_c_h_e_m_a_s_/
+                   where schemas files will be installed.
+
+     devel/meson   Adds _d_e_v_e_l_/_m_e_s_o_n and _d_e_v_e_l_/_n_i_n_j_a to BUILD_DEPENDS.  Sets up
+                   ccoonnffiigguurree target.  If CONFIGURE_STYLE was not set before,
+                   sets its value to `meson'.  Changes default value of
+                   SEPARATE_BUILD to `Yes' because meson requires out-of-
+                   source build.  If CONFIGURE_STYLE is 'meson',
+                   MODMESON_CONFIGURE_ARGS and MODMESON_CONFIGURE_ENV will add
+                   default values to CONFIGURE_ARGS and CONFIGURE_ENV.
+
+                   To figure out some dependencies, meson(1) uses
+                   pkg-config(1) then falls back to cmake(1).  As we do not
+                   want to enforce a dependency on devel/cmake/core, dpb(1)
+                   might junk it if it's found.  This could create a race be‐
+                   tween finding foo.cmake and junking cmake(1) at configure
+                   time.  To prevent this, unless devel/cmake/core is explic‐
+                   itly part of BUILD_DEPENDS, cmake(1) will be disabled by
+                   creating a link to false in ${WRKDIR}/bin/.
+
+                   This module supports the following knob:
+
+                   MODMESON_WANTCOLOR
+                           If set to `Yes', meson will colorize its output.
+                           Should not be used in ports Makefiles.  Default
+                           value is `No'.
+
+     devel/qmake   See qmake-module(5).
+
+     devel/scons   Adds _d_e_v_e_l_/_s_c_o_n_s to BUILD_DEPENDS.  Sets MODSCONS_BIN and
+                   MODSCONS_ENV.  Also defines an overridable MODSCONS_FLAGS.
+                   It provides a ddoo--bbuuiilldd and ddoo--iinnssttaallll targets that can be
+                   overridden in the port Makefile.
+
+     font          Used for ports which primarily install fonts.  Affects
+                   PKG_ARCH and EXTRACT_SUFX.  Appends to CATEGORIES.  When
+                   MODFONT_FAMILY is set in combination with MODFONT_VERSION,
+                   it sets PKGNAME.  MODFONT_FAMILY should be set to the name
+                   of the font family.  This sets MODFONT_FONTDIR and
+                   MODFONT_DOCDIR using said family name.  A ddoo--iinnssttaallll target
+                   is provided if the port itself does not provide it.  This
+                   installs fonts from WRKSRC in the distribution.  If one or
+                   more filenames (relative to WRKSRC) are listed in
+                   MODFONT_FONTFILES, they will be installed to
+                   MODFONT_FONTDIR.  Otherwise, otf files in WRKSRC will be
+                   installed, with a fallback to ttf.  If filenames (relative
+                   to WRKSRC) are listed in MODFONT_DOCFILES, they will be in‐
+                   stalled to MODFONT_DOCDIR.
+
+     fortran       Sets MODFORTRAN_LIB_DEPENDS, MODFORTRAN_WANTLIB,
+                   MODFORTRAN_BUILD_DEPENDS.  Set MODFORTRAN_COMPILER to
+                   `gfortran', or `flang', depending on what the port re‐
+                   quires.  The default is `gfortran'.  The dependencies are
+                   chosen according to MODFORTRAN_COMPILER.
+
+     gcc4          If COMPILER_VERSION is not gcc4 (defined by
+                   _/_u_s_r_/_s_h_a_r_e_/_m_k_/_b_s_d_._o_w_n_._m_k), and architecture is in
+                   MODGCC4_ARCHS, then the gcc4 compilers will be put at the
+                   front of the path.  By default, only C language support is
+                   included by this module.  If other languages are needed,
+                   they must be listed in MODGCC4_LANGS (e.g. c++, fortran).
+                   The MODGCC4_VERSION variable can be used to change the ver‐
+                   sion of gcc.  By default gcc 4.9 is used.  If MODGCC4_LANGS
+                   contains c++, this module provides MODGCC4_CPPLIBDEP and
+                   MODGCC4_CPPWANTLIB.
+
+     gnu           This module is documented in the main bsd.port.mk(5) man‐
+                   page.
+
+     imake         This module is documented in the main bsd.port.mk(5) man‐
+                   page.
+
+     java          Set MODJAVA_VER=x.y to use exactly the JDK x.y,
+                   MODJAVA_VER=x.y+ to use any x.y or higher version.  Set
+                   MODJAVA_JRERUN=Yes if the port only needs the JRE at run‐
+                   time.  The module sets JAVA_HOME, ONLY_FOR_ARCHS,
+                   MODJAVA_RUN_DEPENDS, MODJAVA_SHARE_DIR, MODJAVA_JAR_DIR,
+                   MODJAVA_EXAMPLE_DIR and MODJAVA_DOC_DIR.  It appends to
+                   BUILD_DEPENDS, RUN_DEPENDS, CATEGORIES and SUBST_VARS.  If
+                   MODJAVA_BUILD=ant then this module provides
+                   MODJAVA_BUILD_DIR, MODJAVA_BUILD_FILE and
+                   MODJAVA_BUILD_TARGET_NAME, as well as a ddoo--bbuuiilldd target (if
+                   not already defined).  It heeds NO_BUILD.
+
+     lang/clang    Similar to gcc4 module.  If architecture is in MOD‐
+                   CLANG_ARCHS, the Clang compilers will be put at the front
+                   of the path.  By default, only C language support is in‐
+                   cluded by this module.  If other languages are needed, they
+                   must be listed in MODCLANG_LANGS (e.g. c++).  Sets
+                   MODCLANG_VERSION which is also appended to SUBST_VARS.
+
+     lang/erlang
+
+     lang/go       See go-module(5).
+
+     lang/lua      Sets MODLUA_BIN, MODLUA_DATADIR, MODLUA_DEP,
+                   MODLUA_DEP_VERSION, MODLUA_DOCDIR, MODLUA_EXAMPLEDIR,
+                   MODLUA_INCL_DIR, MODLUA_LIB, MODLUA_LIBDIR, MODLUA_VERSION,
+                   MODLUA_WANTLIB.  Appends to CATEGORIES.  Also appends to
+                   BUILD_DEPENDS, unless NO_BUILD has been set to Yes.  Also
+                   appends to RUN_DEPENDS, unless MODLUA_RUNDEP is set to No.
+                   Appends MODLUA_VERSION, MODLUA_LIB, MODLUA_INCL_DIR,
+                   MODLUA_EXAMPLEDIR, MODLUA_DOCDIR, MODLUA_LIBDIR,
+                   MODLUA_DATADIR, MODLUA_DEP, MODLUA_DEP_VERSION, MODLUA_BIN
+                   to SUBST_VARS.  MODLUA_DEFAULT_VERSION is set to 5.1.
+                   MODLUA_VERSION is set to MODLUA_DEFAULT_VERSION by default.
+                   Ports can be built with several lua versions.  If no FLAVOR
+                   is set, it defaults to MODLUA_DEFAULT_VERSION.  Otherwise
+                   the FULLPKGNAME is adjusted, if MODLUA_SA is not set.  In
+                   order to set a build, run or test dependency on a lua port,
+                   use the following, which will propagate the currently used
+                   flavor: MODLUA_BUILD_DEPENDS, MODLUA_TEST_DEPENDS,
+                   MODLUA_RUN_DEPENDS.
+
+     lang/mono     Sets MODMONO_ONLY_FOR_ARCHS, CONFIGURE_ENV, MAKE_FLAGS,
+                   MODMONO_BUILD_DEPENDS and MODMONO_RUN_DEPENDS.  If
+                   MODMONO_DEPS is set to Yes, _l_a_n_g_/_m_o_n_o is appended to
+                   BUILD_DEPENDS and RUN_DEPENDS.  DLLMAP_FILES defines in
+                   which files the module will substitute hardcoded shared li‐
+                   brary versions using a ppoosstt--ccoonnffiigguurree target.
+
+     lang/ocaml    Appends to BUILD_DEPENDS and MAKE_ENV.  Appends to
+                   RUN_DEPENDS unless MODOCAML_RUNDEP is set to No, or set to
+                   if-not-native and native compilation is supported on this
+                   architecture.  Including this module selects a %%native%%
+                   plist fragment and ocaml_native property depending on
+                   whether the architecture supports native compilation.  If
+                   dynamic linking is supported on the native architecture,
+                   the %%dynlink%% plist fragment and ocaml_native_dynlink
+                   property is set.  When CONFIGURE_STYLE is set to `oasis',
+                   overrides for the ddoo--bbuuiilldd, ddoo--iinnssttaallll, and ddoo--tteesstt targets
+                   are added.
+
+     lang/php      Used for ports using PHP in some way: either extensions to
+                   PHP, or software written in PHP.  Sets MODPHP_RUN_DEPENDS,
+                   MODPHP_LIB_DEPENDS, MODPHP_WANTLIB, MODPHP_BIN,
+                   MODPHP_PHPIZE, MODPHP_PHP_CONFIG, MODPHP_INCDIR and
+                   MODPHP_LIBDIR.  Adds to RUN_DEPENDS unless MODPHP_RUNDEP is
+                   set to No.  Adds to BUILD_DEPENDS if MODPHP_BUILDDEP is set
+                   to Yes.  If MODPHP_DO_PHPIZE is set, prepares a build envi‐
+                   ronment for extensions that use phpize.
+
+                   Ports using PDO for database connectivity often have a
+                   choice of dependencies (pdo_sqlite, pdo_mysql, pdo_pgsql
+                   and others).  The module constructs MODPHP_PDO_DEPENDS from
+                   the PDO types listed in MODPHP_PDO_ALLOWED (defaulting to
+                   "sqlite mysql pgsql").  This can be added to RUN_DEPENDS
+                   and allows any of these PDO packages to satisfy the depen‐
+                   dency, with MODPHP_PDO_PREF (sqlite by default) chosen if
+                   none are installed.
+
+     lang/php/pecl
+                   Used for ports for PHP PECL extensions.  Sets default
+                   SITES, HOMEPAGE, EXTRACT_SUFX, DESTDIRNAME,
+                   MODPHP_DO_SAMPLE, MODPHP_DO_PHPIZE, AUTOCONF_VERSION,
+                   AUTOMAKE_VERSION, LIBTOOL_FLAGS.  Provides a default
+                   TEST_TARGET and TEST_FLAGS unless NO_TEST or a ddoo--tteesstt tar‐
+                   get is defined.  Adds common dependencies to RUN_DEPENDS
+                   and BUILD_DEPENDS.  Sets a default PKGNAME and appends to
+                   CATEGORIES.
+
+     lang/python   See python-module(5).
+
+     lang/ruby     See ruby-module(5).
+
+     lang/rust     Ports using Rust must use this module so a rebuild can be
+                   triggered via SYSTEM_VERSION-rust on updates of the
+                   lang/rust port or changes to the Rust standard library.
+                   Sets MODRUST_WANTLIB as appropriate for the architecture so
+                   it can be added to WANTLIB.  It adds lang/rust to the
+                   BUILD_DEPENDS unless MODRUST_BUILDDEP is set to anything
+                   but “yes”.
+
+     lang/tcl      Sets MODTCL_VERSION, MODTCL_BIN, MODTCL_INCDIR,
+                   MODTCL_LIBDIR, MODTCL_BUILD_DEPENDS, MODTCL_RUN_DEPENDS,
+                   MODTCL_LIB, MODTCL_LIB_DEPENDS, and MODTCL_CONFIG.
+                   MODTCL_VERSION is the default version used by all Tcl ports
+                   and may be overridden.  Provides MODTCL_TCLSH_ADJ and
+                   MODTCL_WISH_ADJ shell fragments to patch the interpreter
+                   path in executable scripts.  Also affects CATEGORIES and
+                   SUBST_VARS.
+
+     perl          This module is documented in the main bsd.port.mk(5) man‐
+                   page.
+
+     security/heimdal
+                   A link from ${LOCALBASE}/heimdal/bin/krb5-config to
+                   krb5-config(1) will be put at the front of the path.  Sets
+                   LIB_DEPENDS and WANTLIB according to the values of
+                   MODHEIMDAL_LIB_DEPENDS, and MODHEIMDAL_WANTLIB.
+
+     textproc/intltool
+                   Sets MODINTLTOOL_OVERRIDE.  _t_e_x_t_p_r_o_c_/_i_n_t_l_t_o_o_l is added to
+                   BUILD_DEPENDS.  MODINTLTOOL_OVERRIDE changes the paths of
+                   INTLTOOL_EXTRACT, INTLTOOL_MERGE and INTLTOOL_UPDATE to use
+                   the installed versions of intltool-extract, intltool-merge
+                   and intltool-update, instead of the version's packages into
+                   the distfile of the port using this module.  Also affects
+                   CONFIGURE_ENV, MAKE_ENV and MAKE_FLAGS by appending
+                   MODINTLTOOL_OVERRIDE to them.
+
+     www/mozilla   Sets PKGNAME, HOMEPAGE, SITES, DISTNAME, USE_GMAKE, and
+                   ONLY_FOR_ARCHS.  EXTRACT_SUFX defaults to .tar.bz2.
+
+                   Adds common dependencies to LIB_DEPENDS, WANTLIB,
+                   RUN_DEPENDS and BUILD_DEPENDS.  Sets common CONFIGURE_ARGS,
+                   MAKE_ENV and CONFIGURE_ENV.  Sets MOB variable as source
+                   directory and MOZ as target directory within ddoo--iinnssttaallll.
+
+                   Individual port Makefile must set MOZILLA_PROJECT,
+                   MOZILLA_CODENAME, MOZILLA_VERSION, MOZILLA_BRANCH,
+                   MOZILLA_LIBS and MOZILLA_DATADIRS variables.  Port can also
+                   append values to MOZILLA_SUBST_FILES which contains the
+                   list of files to run SUBST_CMD on during pprree--ccoonnffiigguurree, and
+                   MOZILLA_AUTOCONF_DIRS which contains the list of dirs where
+                   AUTOCONF will be run during pprree--ccoonnffiigguurree.
+
+     wayland/wlroots
+                   Used for Wayland ports using the wlroots library.  Sets
+                   MODWLROOTS_LIB_DEPENDS, MODWLROOTS_WANTLIB and
+                   MODWLROOTS_VERSION.  Appends the corresponding values to
+                   LIB_DEPENDS and WANTLIB, unless MODWLROOTS_LIBDEP is set to
+                   No.
+
+     www/pear      Used for PHP PEAR ports.  Sets default SITES, EXTRACT_SUFX,
+                   PKGNAME.  Sets PREFIX to _/_v_a_r_/_w_w_w.  Sets NO_TEST unless a
+                   ddoo--tteesstt target is defined.  Adds common dependencies to
+                   RUN_DEPENDS and BUILD_DEPENDS, sets MAKE_FILE and
+                   FAKE_FLAGS appropriately.  Makes PEAR_LIBDIR and
+                   PEAR_PHPBIN available for use in the port.  Sets a default
+                   PKGNAME and appends to CATEGORIES.
+
+     x11/gnome     See gnome-module(5).
+
+     x11/gnustep
+
+     x11/qt5 and x11/qt6
+                   All qt* modules share a common MODQT_* namespace for simple
+                   ports.  The qt5 module also defines the same variables un‐
+                   der MODQT5_* and the qt6 module also defines the same vari‐
+                   ables under MODQT6_*, to allow ports to use both modules,
+                   such as _p_r_i_n_t_/_p_o_p_p_l_e_r.
+
+                   Those modules define MODQT*_LIBDIR as the libraries loca‐
+                   tion, MODQT*_INCDIR as the include files location,
+                   MODQT*_QTDIR as the global qt directory location,
+                   MODQT*_CONFIGURE_ARGS as standard GNU configure-style pa‐
+                   rameters to locate the include and libraries.
+
+                   The location of Qt-specific tools llrreelleeaassee, mmoocc, qqmmaakkee and
+                   uuiicc is available through MODQT*_LRELEASE, MODQT*_MOC,
+                   MODQT*_QMAKE and MODQT*_UIC.  MODQT*_OVERRIDE_UIC controls
+                   whether the default setup will force a value of UIC or not.
+                   The value of MOC is always forced to ${MODQT*_MOC}.
+
+                   In most cases the _d_e_v_e_l_/_q_m_a_k_e module should be used instead
+                   of using MODQT*_QMAKE directly.
+
+                   The modules add to CONFIGURE_ENV, MAKE_ENV and MAKE_FLAGS.
+                   They define appropriate MODQT*_LIB_DEPENDS and
+                   MODQT*_WANTLIB.
+
+                   Note that Qt5 and Qt6 have their code split over several
+                   libraries.  Both modules qt5 and qt6 doesn't set
+                   MODQT*_WANTLIB at all.  Qt5 and Qt6 consist of many so
+                   called Qt modules, these Qt modules should be added to
+                   LIB_DEPENDS, BUILD_DEPENDS or RUN_DEPENDS manually.
+
+     x11/tk        Sets MODTK_VERSION, MODTK_BIN, MODTK_INCDIR, MODTK_LIBDIR,
+                   MODTK_BUILD_DEPENDS, MODTK_RUN_DEPENDS, MODTK_LIB,
+                   MODTK_LIB_DEPENDS, and MODTK_CONFIG.  MODTK_VERSION is the
+                   default version used by all Tk ports and may be overridden.
+                   Automatically adds the _l_a_n_g_/_t_c_l module, provides a default
+                   MODTCL_VERSION to match MODTK_VERSION, and affects
+                   CATEGORIES and SUBST_VARS.  Note the MODTCL_WISH_ADJ shell
+                   fragment in the _l_a_n_g_/_t_c_l module.
+
+     x11/xfce4     Sets DIST_SUBDIR, EXTRACT_SUFX, CONFIGURE_STYLE,
+                   CONFIGURE_ENV and USE_GMAKE.  If MODXFCE_ICON_CACHE is set
+                   to yes, it adds _x_1_1_/_g_t_k_+_4_,_-_g_u_i_c to RUN_DEPENDS.  Unless
+                   XFCE_NO_SRC is set, _t_e_x_t_p_r_o_c_/_i_n_t_l_t_o_o_l is added to MODULES.
+                   Also affects CATEGORIES.
+
+                   Xfce ports can be divided into five categories: core li‐
+                   braries and applications, goodies, artwork, thunar plugins,
+                   and panel plugins.  HOMEPAGE, SITES and DISTNAME are built
+                   using XFCE_VERSION (which defaults to XFCE_DESKTOP_VERSION
+                   if not set) and either XFCE_PROJECT, XFCE_GOODIE,
+                   XFCE_ARTWORK, THUNAR_PLUGIN or XFCE_PLUGIN.  One of the
+                   latter has to be provided by the port Makefile.
+
+SSEEEE AALLSSOO
+     make(1), bsd.port.mk(5), cabal-module(5), cargo-module(5),
+     gnome-module(5), go-module(5), python-module(5), qmake-module(5),
+     ruby-module(5), ports(7)
+
+BSD                             August 17, 2025                            BSD

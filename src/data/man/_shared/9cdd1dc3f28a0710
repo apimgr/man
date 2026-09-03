@@ -1,0 +1,358 @@
+AUTHPF(8)                 BSD System Manager's Manual                AUTHPF(8)
+
+NNAAMMEE
+     aauutthhppff, aauutthhppff--nnooiipp — authenticating gateway user shell
+
+SSYYNNOOPPSSIISS
+     aauutthhppff
+     aauutthhppff--nnooiipp
+
+DDEESSCCRRIIPPTTIIOONN
+     aauutthhppff is a user shell for authenticating gateways.  It is used to change
+     pf(4) rules when a user authenticates and starts a session with sshd(8)
+     and to undo these changes when the user's session exits.  Typical use
+     would be for a gateway that authenticates users before allowing them In‐
+     ternet use, or a gateway that allows different users into different
+     places.  Combined with properly set up filter rules and secure switches,
+     aauutthhppff can be used to ensure users are held accountable for their network
+     traffic.  It is meant to be used with users who can connect via ssh(1)
+     only, and requires the pf(4) subsystem to be enabled.
+
+     aauutthhppff--nnooiipp is a user shell which allows multiple connections to take
+     place from the same IP address.  It is useful primarily in cases where
+     connections are tunneled via the gateway system, and can be directly as‐
+     sociated with the user name.  It cannot ensure accountability when clas‐
+     sifying connections by IP address; in this case the client's IP address
+     is not provided to the packet filter via the _c_l_i_e_n_t___i_p macro or the
+     _a_u_t_h_p_f___u_s_e_r_s table.  Additionally, states associated with the client IP
+     address are not purged when the session is ended.
+
+     To use either aauutthhppff or aauutthhppff--nnooiipp, the user's shell needs to be set to
+     _/_u_s_r_/_s_b_i_n_/_a_u_t_h_p_f or _/_u_s_r_/_s_b_i_n_/_a_u_t_h_p_f_-_n_o_i_p.
+
+     aauutthhppff uses the pf.conf(5) syntax to change rules for an individual user
+     or client IP address as long as a user maintains an active ssh(1) ses‐
+     sion, and logs the successful start and end of a session to syslogd(8).
+     aauutthhppff retrieves the client's connecting IP address via the SSH_CLIENT
+     environment variable and, after performing additional access checks,
+     reads a template file to determine what rules (if any) to add, and main‐
+     tains the list of IP addresses of connected users in the _a_u_t_h_p_f___u_s_e_r_s ta‐
+     ble.  On session exit the same rules and table entries that were added at
+     startup are removed, and all states associated with the client's IP ad‐
+     dress are purged.
+
+     Each aauutthhppff process stores its rules in a separate ruleset inside a pf(4)
+     _a_n_c_h_o_r shared by all aauutthhppff processes.  By default, the _a_n_c_h_o_r name "au‐
+     thpf" is used, and the ruleset names equal the username and PID of the
+     aauutthhppff processes as "username(pid)".  The following needs to be added to
+     the main ruleset _/_e_t_c_/_p_f_._c_o_n_f in order to cause evaluation of any aauutthhppff
+     rules:
+
+           anchor "authpf/*"
+
+     The "/*" at the end of the anchor name is required for pf(4) to process
+     the rulesets attached to the anchor by aauutthhppff.
+
+FFIILLTTEERR RRUULLEESS
+     Filter rules for aauutthhppff use the same format described in pf.conf(5).  The
+     only difference is that these rules may (and probably should) use the
+     macro _u_s_e_r___i_p, which is assigned the connecting IP address whenever
+     aauutthhppff is run.  Additionally, the macro _u_s_e_r___i_d is assigned the user
+     name.
+
+     Rules are stored in a file called _a_u_t_h_p_f_._r_u_l_e_s.  This file will first be
+     searched for in _/_e_t_c_/_a_u_t_h_p_f_/_u_s_e_r_s_/_$_U_S_E_R_/, then in
+     _/_e_t_c_/_a_u_t_h_p_f_/_g_r_o_u_p_s_/_$_G_R_O_U_P_/ and finally in _/_e_t_c_/_a_u_t_h_p_f_/.  Only the first
+     found file will be used.
+
+     Per-user rules from the _/_e_t_c_/_a_u_t_h_p_f_/_u_s_e_r_s_/_$_U_S_E_R_/ directory are intended
+     to be used when non-default rules are needed on an individual user basis.
+     Per-group rules from the _/_e_t_c_/_a_u_t_h_p_f_/_g_r_o_u_p_s_/_$_G_R_O_U_P_/ directory are in‐
+     tended to be used when non-default rules are needed on a group basis.  It
+     is important to ensure that a user cannot write or change these configu‐
+     ration files.
+
+     The _a_u_t_h_p_f_._r_u_l_e_s file must exist in one of the above locations for aauutthhppff
+     to run.
+
+CCOONNFFIIGGUURRAATTIIOONN
+     Options are controlled by the _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._c_o_n_f file.  If the file
+     is empty, defaults are used for all configuration options.  The file con‐
+     sists of pairs of the form name=value, one per line.  Currently, the al‐
+     lowed values are as follows:
+
+     anchor=name
+             Use the specified _a_n_c_h_o_r name instead of "authpf".
+
+     table=name
+             Use the specified _t_a_b_l_e name instead of "authpf_users".
+
+UUSSEERR MMEESSSSAAGGEESS
+     On successful invocation, aauutthhppff displays a message telling the user they
+     have been authenticated.  It will additionally display the contents of
+     the file called _a_u_t_h_p_f_._m_e_s_s_a_g_e.  This file will first be searched for in
+     _/_e_t_c_/_a_u_t_h_p_f_/_u_s_e_r_s_/_$_U_S_E_R_/ and then in _/_e_t_c_/_a_u_t_h_p_f_/.  Only one of these
+     files will be used if both are present.
+
+     There exist two methods for providing additional granularity to the con‐
+     trol offered by aauutthhppff - it is possible to set the gateway to explicitly
+     allow users who have authenticated to ssh(1) and deny access to only a
+     few troublesome individuals.  This is done by creating a file with the
+     banned user's login name as the filename in _/_e_t_c_/_a_u_t_h_p_f_/_b_a_n_n_e_d_/.  The
+     contents of this file will be displayed to a banned user, thus providing
+     a method for informing the user that they have been banned, and where
+     they can go and how to get there if they want to have their service re‐
+     stored.  This is the default behaviour.
+
+     It is also possible to configure aauutthhppff to only allow specific users ac‐
+     cess.  This is done by listing their login names, one per line, in
+     _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._a_l_l_o_w.  A group of users can also be indicated by
+     prepending "%" to the group name, and all members of a login class can be
+     indicated by prepending "@" to the login class name.  If "*" is found on
+     a line, then all usernames match.  If aauutthhppff is unable to verify the
+     user's permission to use the gateway, it will print a brief message and
+     die.  It should be noted that a ban takes precedence over an allow.
+
+     On failure, messages will be logged to syslogd(8) for the system adminis‐
+     trator.  The user does not see these, but will be told the system is un‐
+     available due to technical difficulties.  The contents of the file
+     _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._p_r_o_b_l_e_m will also be displayed if the file exists and
+     is readable.
+
+CCOONNFFIIGGUURRAATTIIOONN IISSSSUUEESS
+     aauutthhppff maintains the changed rules as long as the user maintains an ac‐
+     tive session.  It is important to remember however, that the existence of
+     this session means the user is authenticated.  Because of this, it is im‐
+     portant to configure sshd(8) to ensure the security of the session, and
+     to ensure that the network through which users connect is secure.
+     sshd(8) should be configured to use the _C_l_i_e_n_t_A_l_i_v_e_I_n_t_e_r_v_a_l and
+     _C_l_i_e_n_t_A_l_i_v_e_C_o_u_n_t_M_a_x parameters to ensure that a ssh session is terminated
+     quickly if it becomes unresponsive, or if arp or address spoofing is used
+     to hijack the session.  Note that TCP keepalives are not sufficient for
+     this, since they are not secure.  Also note that the various SSH tun‐
+     nelling mechanisms, such as _A_l_l_o_w_T_c_p_F_o_r_w_a_r_d_i_n_g and _P_e_r_m_i_t_T_u_n_n_e_l, should
+     be disabled for aauutthhppff users to prevent them from circumventing restric‐
+     tions imposed by the packet filter ruleset.
+
+     aauutthhppff will remove state table entries that were created during a user's
+     session.  This ensures that there will be no unauthenticated traffic al‐
+     lowed to pass after the controlling ssh(1) session has been closed.
+
+     aauutthhppff is designed for gateway machines which typically do not have regu‐
+     lar (non-administrative) users using the machine.  An administrator must
+     remember that aauutthhppff can be used to modify the pf(4) rules through the
+     environment in which it is run, and as such could be used to modify the
+     rules (based on the contents of the configuration files) by regular
+     users.  In the case where a machine has regular users using it, as well
+     as users with aauutthhppff as their shell, the regular users should be pre‐
+     vented from running aauutthhppff by using the _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._a_l_l_o_w or
+     _/_e_t_c_/_a_u_t_h_p_f_/_b_a_n_n_e_d_/ facilities.
+
+     aauutthhppff modifies the packet filter rules, and because of this it needs to
+     be configured carefully.  aauutthhppff will not run and will exit silently if
+     the _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._c_o_n_f file does not exist.  After considering the
+     effect aauutthhppff may have on the main packet filter rules, the system admin‐
+     istrator may enable aauutthhppff by creating an appropriate
+     _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._c_o_n_f file.
+
+EEXXAAMMPPLLEESS
+     CCoonnttrrooll FFiilleess - To illustrate the user-specific access control mecha‐
+     nisms, let us consider a typical user named bob.  Normally, as long as
+     bob can authenticate himself, the aauutthhppff program will load the appropri‐
+     ate rules.  Enter the _/_e_t_c_/_a_u_t_h_p_f_/_b_a_n_n_e_d_/ directory.  If bob has somehow
+     fallen from grace in the eyes of the powers-that-be, they can prohibit
+     him from using the gateway by creating the file _/_e_t_c_/_a_u_t_h_p_f_/_b_a_n_n_e_d_/_b_o_b
+     containing a message about why he has been banned from using the network.
+     Once bob has done suitable penance, his access may be restored by moving
+     or removing the file _/_e_t_c_/_a_u_t_h_p_f_/_b_a_n_n_e_d_/_b_o_b.
+
+     Now consider a workgroup containing alice, bob, carol and dave.  They
+     have a wireless network which they would like to protect from unautho‐
+     rized use.  To accomplish this, they create the file
+     _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._a_l_l_o_w which lists their login ids, group prepended
+     with "%", or login class prepended with "@", one per line.  At this
+     point, even if eve could authenticate to sshd(8), she would not be al‐
+     lowed to use the gateway.  Adding and removing users from the work group
+     is a simple matter of maintaining a list of allowed userids.  If bob once
+     again manages to annoy the powers-that-be, they can ban him from using
+     the gateway by creating the familiar _/_e_t_c_/_a_u_t_h_p_f_/_b_a_n_n_e_d_/_b_o_b file.  Though
+     bob is listed in the allow file, he is prevented from using this gateway
+     due to the existence of a ban file.
+
+     DDiissttrriibbuutteedd AAuutthheennttiiccaattiioonn - It is often desirable to interface with a
+     distributed password system rather than forcing the sysadmins to keep a
+     large number of local password files in sync.  The login.conf(5) mecha‐
+     nism in OpenBSD can be used to fork the right shell.  To make that hap‐
+     pen, login.conf(5) should have entries that look something like this:
+
+           shell-default:shell=/bin/csh
+
+           default:\
+                   ...
+                   :shell=/usr/sbin/authpf
+
+           daemon:\
+                   ...
+                   :shell=/bin/csh:\
+                   :tc=default:
+
+           staff:\
+                   ...
+                   :shell=/bin/csh:\
+                   :tc=default:
+
+     Using a default password file, all users will get aauutthhppff as their shell
+     except for root who will get _/_b_i_n_/_c_s_h.
+
+     SSSSHH CCoonnffiigguurraattiioonn - As stated earlier, sshd(8) must be properly config‐
+     ured to detect and defeat network attacks.  To that end, the following
+     options should be added to sshd_config(5):
+
+           ClientAliveInterval 15
+           ClientAliveCountMax 3
+
+     This ensures that unresponsive or spoofed sessions are terminated within
+     a minute, since a hijacker should not be able to spoof ssh keepalive mes‐
+     sages.
+
+     BBaannnneerrss - Once authenticated, the user is shown the contents of
+     _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._m_e_s_s_a_g_e.  This message may be a screen-full of the ap‐
+     propriate use policy, the contents of _/_e_t_c_/_m_o_t_d or something as simple as
+     the following:
+
+           This means you will be held accountable by the powers that be
+           for traffic originating from your machine, so please play nice.
+
+     To tell the user where to go when the system is broken,
+     _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._p_r_o_b_l_e_m could contain something like this:
+
+           Sorry, there appears to be some system problem. To report this
+           problem so we can fix it, please phone 1-900-314-1597 or send
+           an email to remove@bulkmailerz.net.
+
+     PPaacckkeett FFiilltteerr RRuulleess - In areas where this gateway is used to protect a
+     wireless network (a hub with several hundred ports), the default rule set
+     as well as the per-user rules should probably allow very few things be‐
+     yond encrypted protocols like ssh(1), ssl(8), or ipsec(4).  On a securely
+     switched network, with plug-in jacks for visitors who are given authenti‐
+     cation accounts, you might want to allow out everything.  In this con‐
+     text, a secure switch is one that tries to prevent address table overflow
+     attacks.
+
+     Example _/_e_t_c_/_p_f_._c_o_n_f:
+
+     # by default we allow internal clients to talk to us using
+     # ssh and use us as a dns server.
+     internal_if="fxp1"
+     gateway_addr="10.0.1.1"
+     block in on $internal_if from any to any
+     pass in quick on $internal_if proto tcp from any to $gateway_addr \
+           port = ssh
+     pass in quick on $internal_if proto udp from any to $gateway_addr \
+           port = domain
+     anchor "authpf/*"
+
+     FFoorr aa sswwiittcchheedd,, wwiirreedd nneett - This example _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._r_u_l_e_s makes
+     no real restrictions; it turns the IP address on and off, logging TCP
+     connections.
+
+     external_if = "xl0"
+     internal_if = "fxp0"
+
+     pass in log quick on $internal_if proto tcp from $user_ip to any
+     pass in quick on $internal_if from $user_ip to any
+
+     FFoorr aa wwiirreelleessss oorr sshhaarreedd nneett - This example _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._r_u_l_e_s
+     could be used for an insecure network (such as a public wireless network)
+     where we might need to be a bit more restrictive.
+
+     internal_if="fxp1"
+     ipsec_gw="10.2.3.4"
+
+     # rdr ftp for proxying by ftp-proxy(8)
+     match in on $internal_if proto tcp from $user_ip to any port 21 \
+           rdr-to 127.0.0.1 port 8021
+
+     # allow out ftp, ssh, www and https only, and allow user to negotiate
+     # ipsec with the ipsec server.
+     pass in log quick on $internal_if proto tcp from $user_ip to any \
+           port { 21, 22, 80, 443 }
+     pass in quick on $internal_if proto tcp from $user_ip to any \
+           port { 21, 22, 80, 443 }
+     pass in quick proto udp from $user_ip to $ipsec_gw port = isakmp
+     pass in quick proto esp from $user_ip to $ipsec_gw
+
+     DDeeaalliinngg wwiitthh NNAATT - The following _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._r_u_l_e_s shows how to
+     deal with NAT, using tags:
+
+     ext_if = "fxp1"
+     ext_addr = 129.128.11.10
+     int_if = "fxp0"
+     # nat and tag connections...
+     match out on $ext_if from $user_ip to any tag $user_ip nat-to $ext_addr
+     pass in quick on $int_if from $user_ip to any
+     pass out log quick on $ext_if tagged $user_ip
+
+     With the above rules added by aauutthhppff, outbound connections corresponding
+     to each users NAT'ed connections will be logged as in the example below,
+     where the user may be identified from the ruleset name.
+
+     # tcpdump -n -e -ttt -i pflog0
+     Oct 31 19:42:30.296553 rule 0.bbeck(20267).1/0(match): pass out on fxp1: \
+     129.128.11.10.60539 > 198.137.240.92.22: S 2131494121:2131494121(0) win \
+     16384 <mss 1460,nop,nop,sackOK> (DF)
+
+     UUssiinngg tthhee aauutthhppff__uusseerrss ttaabbllee - Simple aauutthhppff settings can be implemented
+     without an anchor by just using the "authpf_users" _t_a_b_l_e.  For example,
+     the following pf.conf(5) lines will give SMTP and IMAP access to logged
+     in users:
+
+     table <authpf_users> persist
+     pass in on $ext_if proto tcp from <authpf_users> \
+             to port { smtp imap }
+
+     It is also possible to use the "authpf_users" _t_a_b_l_e in combination with
+     anchors.  For example, pf(4) processing can be sped up by looking up the
+     anchor only for packets coming from logged in users:
+
+     table <authpf_users> persist
+     anchor "authpf/*" from <authpf_users>
+
+     TTuunnnneelleedd uusseerrss - normally aauutthhppff allows only one session per client IP
+     address.  However in some cases, such as when connections are tunneled
+     via ssh(1) or ipsec(4), the connections can be authorized based on the
+     userid of the user instead of the client IP address.  In this case it is
+     appropriate to use aauutthhppff--nnooiipp to allow multiple users behind a NAT gate‐
+     way to connect.  In the _/_e_t_c_/_a_u_t_h_p_f_/_a_u_t_h_p_f_._r_u_l_e_s example below, the re‐
+     mote user could tunnel a remote desktop session to their workstation:
+
+     internal_if="bge0"
+     workstation_ip="10.2.3.4"
+
+     pass out on $internal_if from (self) to $workstation_ip port 3389 \
+            user $user_id
+
+FFIILLEESS
+     /etc/authpf/authpf.conf
+     /etc/authpf/authpf.allow
+     /etc/authpf/authpf.rules
+     /etc/authpf/authpf.message
+     /etc/authpf/authpf.problem
+
+SSEEEE AALLSSOO
+     pf(4), pf.conf(5), securelevel(7), ftp-proxy(8)
+
+HHIISSTTOORRYY
+     The aauutthhppff program first appeared in OpenBSD 3.1.
+
+BBUUGGSS
+     Configuration issues are tricky.  The authenticating ssh(1) connection
+     may be secured, but if the network is not secured the user may expose in‐
+     secure protocols to attackers on the same network, or enable other at‐
+     tackers on the network to pretend to be the user by spoofing their IP ad‐
+     dress.
+
+     aauutthhppff is not designed to prevent users from denying service to other
+     users.
+
+BSD                            February 18, 2022                           BSD

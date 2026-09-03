@@ -1,0 +1,205 @@
+NG_TAG(4)                BSD Kernel Interfaces Manual                NG_TAG(4)
+
+NNAAMMEE
+     nngg__ttaagg — mbuf tags manipulating netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneettggrraapphh//nngg__ttaagg..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ttaagg node type allows mbuf packet tags (see mbuf_tags(9)) to be exam‐
+     ined, stripped or applied to data travelling through a Netgraph network.
+     Mbuf tags are used in many parts of the FreeBSD kernel network subsystem,
+     including the storage of VLAN tags as described in vlan(4), Mandatory Ac‐
+     cess Control (MAC) labels as described in mac(9), IPsec policy informa‐
+     tion as described in ipsec(4), and packet filter tags used by pf(4).  One
+     should also consider useful setting or checking ipfw(8) tags, which are
+     implemented as mbuf tags, too.
+
+     Each node allows an arbitrary number of connections to arbitrarily named
+     hooks.  With each hook is associated a tag which will be searched in the
+     list of all tags attached to a packet incoming to this hook, a destina‐
+     tion hook for matching packets, a destination hook for non-matching pack‐
+     ets, a tag which will be appended to data leaving node through this hook,
+     and various statistics counters.
+
+     The list of incoming packet's tags is traversed to find a tag with speci‐
+     fied _t_y_p_e and _c_o_o_k_i_e values.  Upon match, if specified _t_a_g___l_e_n is non-
+     zero, _t_a_g___d_a_t_a of tag is checked to be identical to that specified in the
+     hook structure.  Packets with matched tags are forwarded to “match” des‐
+     tination hook, or forwarded to “non-match” hook otherwise.  Either or
+     both destination hooks can be an empty string, or may not exist, in which
+     case the packet is dropped.
+
+     Tag list of packets leaving the node is extended with a new tag specified
+     in outgoing hook structure (it is possible to avoid appending a new tag
+     to pass packet completely unchanged by specifying zero _t_y_p_e and _c_o_o_k_i_e
+     values in the structure of the corresponding outgoing hook).  Addition‐
+     ally, a tag can be stripped from incoming packet after match if _s_t_r_i_p
+     flag is set.  This can be used for simple tag removal or tag replacement,
+     if combined with tag addition on outgoing matching hook.  Note that new
+     tag is appended unconditionally, without checking if such a tag is al‐
+     ready present in the list (it is up to user to check if this is a con‐
+     cern).
+
+     New hooks are initially configured to drop all incoming packets (as all
+     hook names are empty strings; zero values can be specified to forward all
+     packets to non-matching hook), and to forward all outgoing packets with‐
+     out any tag appending.
+
+     Data payload of packets passing through the node is completely unchanged,
+     all operations can affect tag list only.
+
+HHOOOOKKSS
+     This node type supports any number of hooks having arbitrary names.  In
+     order to allow internal optimizations, user should never try to configure
+     a hook with a structure pointing to hooks which do not exist yet.  The
+     safe way is to create all hooks first, then begin to configure them.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_TAG_SET_HOOKIN (sseetthhooookkiinn)
+          This command sets tag values which will be searched in the tag list
+          of incoming packets on a hook.  The following structure must be sup‐
+          plied as an argument:
+
+              struct ng_tag_hookin {
+                char            thisHook[NG_HOOKSIZ];     /* name of hook */
+                char            ifMatch[NG_HOOKSIZ];      /* match dest hook */
+                char            ifNotMatch[NG_HOOKSIZ];   /* !match dest hook */
+                uint8_t         strip;                    /* strip tag if found */
+                uint32_t        tag_cookie;               /* ABI/Module ID */
+                uint16_t        tag_id;                   /* tag ID */
+                uint16_t        tag_len;                  /* length of data */
+                uint8_t         tag_data[0];              /* tag data */
+              };
+
+          The hook to be updated is specified in _t_h_i_s_H_o_o_k.  Data bytes of tag
+          corresponding to specified _t_a_g___i_d (type) and _t_a_g___c_o_o_k_i_e are placed
+          in the _t_a_g___d_a_t_a array; there must be _t_a_g___l_e_n of them.  Matching and
+          non-matching incoming packets are delivered out the hooks named
+          _i_f_M_a_t_c_h and _i_f_N_o_t_M_a_t_c_h, respectively.  If _s_t_r_i_p flag is non-zero,
+          then found tag is deleted from list of packet tags.
+
+     NGM_TAG_GET_HOOKIN (ggeetthhooookkiinn)
+          This command takes an ASCII string argument, the hook name, and re‐
+          turns the corresponding _s_t_r_u_c_t _n_g___t_a_g___h_o_o_k_i_n as shown above.
+
+     NGM_TAG_SET_HOOKOUT (sseetthhooookkoouutt)
+          This command sets tags values which will be applied to outgoing
+          packets.  The following structure must be supplied as an argument:
+
+              struct ng_tag_hookout {
+                char            thisHook[NG_HOOKSIZ];     /* name of hook */
+                uint32_t        tag_cookie;               /* ABI/Module ID */
+                uint16_t        tag_id;                   /* tag ID */
+                uint16_t        tag_len;                  /* length of data */
+                uint8_t         tag_data[0];              /* tag data */
+              };
+
+          The hook to be updated is specified in _t_h_i_s_H_o_o_k.  Other variables
+          mean basically the same as in _s_t_r_u_c_t _n_g___t_a_g___h_o_o_k_i_n shown above, ex‐
+          cept used for setting values in a new tag.
+
+     NGM_TAG_GET_HOOKOUT (ggeetthhooookkoouutt)
+          This command takes an ASCII string argument, the hook name, and re‐
+          turns the corresponding _s_t_r_u_c_t _n_g___t_a_g___h_o_o_k_o_u_t as shown above.
+
+     NGM_TAG_GET_STATS (ggeettssttaattss)
+          This command takes an ASCII string argument, the hook name, and re‐
+          turns the statistics associated with the hook as a _s_t_r_u_c_t
+          _n_g___t_a_g___h_o_o_k_s_t_a_t.
+
+     NGM_TAG_CLR_STATS (ccllrrssttaattss)
+          This command takes an ASCII string argument, the hook name, and
+          clears the statistics associated with the hook.
+
+     NGM_TAG_GETCLR_STATS (ggeettccllrrssttaattss)
+          This command is identical to NGM_TAG_GET_STATS, except that the sta‐
+          tistics are also atomically cleared.
+
+     _N_o_t_e: statistics counters as well as three statistics messages above work
+     only if code was compiled with the NG_TAG_DEBUG option.  The reason for
+     this is that statistics is rarely used in practice, but still consumes
+     CPU cycles for every packet.  Moreover, it is even not accurate on SMP
+     systems due to lack of synchronization between threads, as this is very
+     expensive.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+EEXXAAMMPPLLEESS
+     It is possible to do a simple L7 filtering by using ipfw(8) tags in con‐
+     junction with ng_bpf(4) traffic analyzer.  Example below explains how to
+     filter DirectConnect P2P network data traffic, which cannot be done by
+     usual means as it uses random ports.  It is known that such data connec‐
+     tion always contains a TCP packet with 6-byte payload string "$Send|".
+     So ipfw's nneettggrraapphh action will be used to divert all TCP packets to an
+     ng_bpf(4) node which will check for the specified string and return non-
+     matching packets to ipfw(8).  Matching packets are passed to nngg__ttaagg node,
+     which will set a tag and pass them back to ng_bpf(4) node on a hook pro‐
+     grammed to accept all packets and pass them back to ipfw(8).  A script
+     provided in ng_bpf(4) manual page will be used for programming node.
+     Note that packets diverted from ipfw(8) to Netgraph have no link-level
+     header, so offsets in tcpdump(1) expressions must be altered accordingly.
+     Thus, there will be expression “ether[40:2]=0x244c &&
+     ether[42:4]=0x6f636b20” on incoming hook and empty expression to match
+     all packets from nngg__ttaagg.
+
+     So, this is ngctl(8) script for nodes creating and naming for easier ac‐
+     cess:
+
+         /usr/sbin/ngctl -f- <<-SEQ
+                 mkpeer ipfw: bpf 41 ipfw
+                 name ipfw:41 dcbpf
+                 mkpeer dcbpf: tag matched th1
+                 name dcbpf:matched ngdc
+         SEQ
+
+     Now “ngdc” node (which is of type nngg__ttaagg) must be programmed to echo all
+     packets received on the “th1” hook back, with the ipfw(8) tag 412 at‐
+     tached.  MTAG_IPFW value for _t_a_g___c_o_o_k_i_e was taken from file
+     <_n_e_t_i_n_e_t_/_i_p___f_w_._h> and value for _t_a_g___i_d is tag number (412), with zero tag
+     length:
+
+         ngctl msg ngdc: sethookin { thisHook=\"th1\" ifNotMatch=\"th1\" }
+         ngctl msg ngdc: sethookout { thisHook=\"th1\" \
+           tag_cookie=1148380143 \
+           tag_id=412 }
+
+     Do not forget to program ng_bpf(4) “ipfw” hook with the above expression
+     (see ng_bpf(4) for script doing this) and “matched” hook with an empty
+     expression:
+
+         ngctl msg dcbpf: setprogram { thisHook=\"matched\" ifMatch=\"ipfw\" \
+           bpf_prog_len=1 bpf_prog=[ { code=6 k=8192 } ] }
+
+     After finishing with netgraph(4) nodes, ipfw(8) rules must be added to
+     enable packet flow:
+
+         ipfw add 100 netgraph 41 tcp from any to any iplen 46
+         ipfw add 110 reset tcp from any to any tagged 412
+
+     Note: one should ensure that packets are returned to ipfw after process‐
+     ing inside netgraph(4), by setting appropriate sysctl(8) variable:
+
+         sysctl net.inet.ip.fw.one_pass=0
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_bpf(4), ng_ipfw(4), ipfw(8), ngctl(8), mbuf_tags(9)
+
+HHIISSTTOORRYY
+     The nngg__ttaagg node type was implemented in FreeBSD 6.2.
+
+AAUUTTHHOORRSS
+     Vadim Goncharov <_v_a_d_i_m_n_u_c_l_i_g_h_t_@_t_p_u_._r_u>
+
+BBUUGGSS
+     For manipulating any tags with data payload (that is, all tags with non-
+     zero _t_a_g___l_e_n) one should care about non-portable machine-dependent repre‐
+     sentation of tags on the low level as byte stream.  Perhaps this should
+     be done by another program rather than manually.
+
+BSD                              June 10, 2006                             BSD

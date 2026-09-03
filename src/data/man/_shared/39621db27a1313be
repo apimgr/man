@@ -1,0 +1,173 @@
+UFTDI(4)                 BSD Kernel Interfaces Manual                 UFTDI(4)
+
+NNAAMMEE
+     uuffttddii — USB support for serial adapters based on the FTDI family of USB
+     serial adapter chips.
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following lines in your
+     kernel configuration file:
+
+           ddeevviiccee uussbb
+           ddeevviiccee uuccoomm
+           ddeevviiccee uuffttddii
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           uftdi_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The uuffttddii driver provides support for various serial adapters based on
+     the following FTDI chips:
+
+     ••   FT8U100AX
+     ••   FT8U232AM
+     ••   FT8U232BM
+     ••   FT232R
+     ••   FT2232C
+     ••   FT2232D
+     ••   FT2232H
+     ••   FT4232H
+     ••   FT230X
+
+     The device is accessed through the ucom(4) driver which makes it behave
+     like a tty(4).
+
+     Many of the supported chips provide additional functionality such as bit‐
+     bang mode and the MPSSE engine for serial bus emulation.  The uuffttddii
+     driver provides access to that functionality with the following ioctl(2)
+     calls, defined in <_d_e_v_/_u_s_b_/_u_f_t_d_i_i_o_._h>:
+
+     UFTDIIOC_RESET_IO (_i_n_t)
+             Reset the channel to its default configuration, flush RX and TX
+             FIFOs.
+
+     UFTDIIOC_RESET_RX (_i_n_t)
+             Flush the RX FIFO.
+
+     UFTDIIOC_RESET_TX (_i_n_t)
+             Flush the TX FIFO.
+
+     UFTDIIOC_SET_BITMODE (_s_t_r_u_c_t _u_f_t_d_i___b_i_t_m_o_d_e)
+             Put the channel into the operating mode specified in _m_o_d_e, and
+             set the pins indicated by ones in _i_o_m_a_s_k to output mode.  The
+             _m_o_d_e must be one of the _u_f_t_d_i___b_i_t_m_o_d_e_s values.  Setting _m_o_d_e to
+             UFTDI_BITMODE_NONE returns the channel to standard UART mode.
+
+             enum uftdi_bitmodes
+             {
+                     UFTDI_BITMODE_ASYNC = 0,
+                     UFTDI_BITMODE_MPSSE = 1,
+                     UFTDI_BITMODE_SYNC = 2,
+                     UFTDI_BITMODE_CPU_EMUL = 3,
+                     UFTDI_BITMODE_FAST_SERIAL = 4,
+                     UFTDI_BITMODE_CBUS = 5,
+                     UFTDI_BITMODE_NONE = 0xff,
+             };
+
+             struct uftdi_bitmode
+             {
+                     uint8_t mode;
+                     uint8_t iomask;
+             };
+
+             Manuals and application notes published by FTDI describe these
+             modes in detail.  To use most of these modes, you first put the
+             channel into the desired mode, then you read(2) and write(2) data
+             which either reflects pin state or is interpreted as MPSSE com‐
+             mands and parameters, depending on the mode.
+
+     UFTDIIOC_GET_BITMODE (_s_t_r_u_c_t _u_f_t_d_i___b_i_t_m_o_d_e)
+             Return the current bitbang mode in the _m_o_d_e member, and the state
+             of the DBUS0..DBUS7 pins at the time of the call in the _i_o_m_a_s_k
+             member.  The pin state can be read while the chip is in any mode,
+             including UFTDI_BITMODE_NONE (UART) mode.
+
+     UFTDIIOC_SET_ERROR_CHAR (_i_n_t)
+             Set the character which is inserted into the buffer to mark the
+             point of an error such as FIFO overflow.
+
+     UFTDIIOC_SET_EVENT_CHAR (_i_n_t)
+             Set the character which causes a partial FIFO full of data to be
+             returned immediately even if the FIFO is not full.
+
+     UFTDIIOC_SET_LATENCY (_i_n_t)
+             Set the amount of time to wait for a full FIFO, in milliseconds.
+             If more than this much time elapses without receiving a new char‐
+             acter, any characters in the FIFO are returned.
+
+     UFTDIIOC_GET_LATENCY (_i_n_t)
+             Get the current value of the latency timer.
+
+     UFTDIIOC_GET_HWREV (_i_n_t)
+             Get the hardware revision number.  This is the _b_c_d_D_e_v_i_c_e value
+             from the _u_s_b___d_e_v_i_c_e___d_e_s_c_r_i_p_t_o_r.
+
+     UFTDIIOC_READ_EEPROM (_s_t_r_u_c_t _u_f_t_d_i___e_e_i_o)
+             Read one or more words from the configuration eeprom.  The FTDI
+             chip performs eeprom I/O in 16-bit words.  Set _o_f_f_s_e_t and _l_e_n_g_t_h
+             to values evenly divisible by two before the call, and the _d_a_t_a
+             array will contain the requested values from eeprom after the
+             call.
+
+             struct uftdi_eeio
+             {
+                     uint16_t offset;
+                     uint16_t length;
+                     uint16_t data[64];
+             };
+
+             The FT232R chip has an internal eeprom.  An external serial eep‐
+             rom is optional on other FTDI chips.  The eeprom may contain 64,
+             128, or 256 words, depending on the part used.  Multiple calls
+             may be needed to read or write the larger parts.  When no eeprom
+             is present, all words in the returned data are 0xffff.  An erased
+             eeprom also reads as all 0xffff.
+
+     UFTDIIOC_WRITE_EEPROM (_s_t_r_u_c_t _u_f_t_d_i___e_e_i_o)
+             Write one or more words to the configuration eeprom.  The
+             _u_f_t_d_i___e_e_i_o values are as described for UFTDIIOC_READ_EEPROM.
+
+             The FTDI chip does a blind write to the eeprom, and it will ap‐
+             pear to succeed even when no eeprom is present.  To ensure a good
+             write you must read back and verify the data.  It is _n_o_t neces‐
+             sary to erase before writing.  Any position within the eeprom can
+             be overwritten at any time.
+
+     UFTDIIOC_ERASE_EEPROM (_i_n_t)
+             Erase the entire eeprom.  This is useful primarily for test and
+             debugging, as there is no need to erase before writing.  To help
+             prevent accidental erasure caused by calling the wrong ioctl, you
+             must pass the special value UFTDI_CONFIRM_ERASE as the argument
+             to this ioctl.
+
+HHAARRDDWWAARREE
+     The uuffttddii driver supports the following adapters:
+
+     ••   B&B Electronics USB->RS422/485 adapter
+     ••   Elexol USB MOD1 and USB MOD3
+     ••   HP USB-Serial adapter shipped with some HP laptops
+     ••   Inland UAS111
+     ••   QVS USC-1000
+     ••   Buffalo PC-OP-RS / Kurouto-shikou KURO-RS universal remote
+     ••   Prologix GPIB-USB Controller
+
+FFIILLEESS
+     /dev/ttyU*       for callin ports
+     /dev/ttyU*.init
+     /dev/ttyU*.lock  corresponding callin initial-state and lock-state de‐
+                      vices
+
+     /dev/cuaU*       for callout ports
+     /dev/cuaU*.init
+     /dev/cuaU*.lock  corresponding callout initial-state and lock-state de‐
+                      vices
+
+SSEEEE AALLSSOO
+     tty(4), ucom(4), usb(4)
+
+HHIISSTTOORRYY
+     The uuffttddii driver appeared in FreeBSD 4.8 from NetBSD 1.5.
+
+BSD                             April 26, 2017                             BSD

@@ -1,0 +1,99 @@
+H_ERTT(4)                BSD Kernel Interfaces Manual                H_ERTT(4)
+
+NNAAMMEE
+     hh__eerrtttt — Enhanced Round Trip Time Khelp module
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneettiinneett//kkhheellpp//hh__eerrtttt..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The hh__eerrtttt Khelp module works within the khelp(9) framework to provide
+     TCP with a per-connection, low noise estimate of the instantaneous RTT.
+     The implementation attempts to be robust in the face of delayed acknowl‐
+     edgements, TCP Segmentation Offload (TSO), receivers who manipulate TCP
+     timestamps and lack of the TCP timestamp option altogether.
+
+     TCP receivers using delayed acknowledgements either acknowledge every
+     second packet (reflecting the time stamp of the first) or use a timeout
+     to trigger the acknowledgement if no second packet arrives.  If the
+     heuristic used by hh__eerrtttt determines that the receiver is using delayed
+     acknowledgements, it measures the RTT using the second packet (the one
+     that triggers the acknowledgement).  It does not measure the RTT if the
+     acknowledgement is for the first packet, since it cannot be accurately
+     determined.
+
+     When TSO is in use, hh__eerrtttt will momentarily disable TSO whilst marking a
+     packet to use for a new measurement.  The process has negligible impact
+     on the connection.
+
+     hh__eerrtttt associates the following struct with each connection's TCP control
+     block:
+
+     struct ertt {
+             TAILQ_HEAD(txseginfo_head, txseginfo) txsegi_q; /* Private. */
+             long            bytes_tx_in_rtt;                /* Private. */
+             long            bytes_tx_in_marked_rtt;
+             unsigned long   marked_snd_cwnd;
+             int             rtt;
+             int             maxrtt;
+             int             minrtt;
+             int             dlyack_rx;                      /* Private. */
+             int             timestamp_errors;               /* Private. */
+             int             markedpkt_rtt;                  /* Private. */
+             uint32_t        flags;
+     };
+
+     The fields marked as private should not be manipulated by any code out‐
+     side of the hh__eerrtttt implementation.  The non-private fields provide the
+     following data:
+
+           _b_y_t_e_s___t_x___i_n___m_a_r_k_e_d___r_t_t  The number of bytes transmitted in the
+                                   _m_a_r_k_e_d_p_k_t___r_t_t.
+
+           _m_a_r_k_e_d___s_n_d___c_w_n_d         The value of cwnd for the marked rtt mea‐
+                                   surement.
+
+           _r_t_t                     The most recent RTT measurement.
+
+           _m_a_x_r_t_t                  The longest RTT measurement that has been
+                                   taken.
+
+           _m_i_n_r_t_t                  The shortest RTT measurement that has been
+                                   taken.
+
+           _f_l_a_g_s                   The ERTT_NEW_MEASUREMENT flag will be set
+                                   by the implementation when a new measure‐
+                                   ment is available.  It is the responsibil‐
+                                   ity of hh__eerrtttt consumers to unset the flag
+                                   if they wish to use it as a notification
+                                   method for new measurements.
+
+SSEEEE AALLSSOO
+     cc_chd(4), cc_hd(4), cc_vegas(4), mod_cc(4), hhook(9), khelp(9)
+
+AACCKKNNOOWWLLEEDDGGEEMMEENNTTSS
+     Development and testing of this software were made possible in part by
+     grants from the FreeBSD Foundation and Cisco University Research Program
+     Fund at Community Foundation Silicon Valley.
+
+HHIISSTTOORRYY
+     The hh__eerrtttt module first appeared in FreeBSD 9.0.
+
+     The module was first released in 2010 by David Hayes whilst working on
+     the NewTCP research project at Swinburne University of Technology's Cen‐
+     tre for Advanced Internet Architectures, Melbourne, Australia.  More de‐
+     tails are available at:
+
+     http://caia.swin.edu.au/urp/newtcp/
+
+AAUUTTHHOORRSS
+     The hh__eerrtttt Khelp module and this manual page were written by David Hayes
+     <_d_a_v_i_d_._h_a_y_e_s_@_i_e_e_e_._o_r_g>.
+
+BBUUGGSS
+     The module maintains enhanced RTT estimates for all new TCP connections
+     created after the time at which the module was loaded.  It might be bene‐
+     ficial to see if it is possible to have the module only affect connec‐
+     tions which actually care about ERTT estimates.
+
+BSD                            January 18, 2012                            BSD

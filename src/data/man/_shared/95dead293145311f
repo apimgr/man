@@ -1,0 +1,786 @@
+_P_R_O_V_I_D_E_R_‐_B_A_S_E(7)                    OpenSSL                   _P_R_O_V_I_D_E_R_‐_B_A_S_E(7)
+
+NNAAMMEE
+       provider-base - The basic OpenSSL library <-> provider functions
+
+LLIIBBRRAARRYY
+       libcrypto, ‐lcrypto
+
+SSYYNNOOPPSSIISS
+        #include <openssl/core_dispatch.h>
+
+        /*
+         * None of these are actual functions, but are displayed like this for
+         * the function signatures for functions that are offered as function
+         * pointers in OSSL_DISPATCH arrays.
+         */
+
+        /* Functions offered by libcrypto to the providers */
+        const OSSL_ITEM *core_gettable_params(const OSSL_CORE_HANDLE *handle);
+        int core_get_params(const OSSL_CORE_HANDLE *handle, OSSL_PARAM params[]);
+
+        typedef void (*OSSL_thread_stop_handler_fn)(void *arg);
+        int core_thread_start(const OSSL_CORE_HANDLE *handle,
+                              OSSL_thread_stop_handler_fn handfn,
+                              void *arg);
+
+        OPENSSL_CORE_CTX *core_get_libctx(const OSSL_CORE_HANDLE *handle);
+        void core_new_error(const OSSL_CORE_HANDLE *handle);
+        void core_set_error_debug(const OSSL_CORE_HANDLE *handle,
+                                  const char *file, int line, const char *func);
+        void core_vset_error(const OSSL_CORE_HANDLE *handle,
+                             uint32_t reason, const char *fmt, va_list args);
+
+        int core_obj_add_sigid(const OSSL_CORE_HANDLE *prov, const char  *sign_name,
+                               const char *digest_name, const char *pkey_name);
+        int core_obj_create(const OSSL_CORE_HANDLE *handle, const char *oid,
+                            const char *sn, const char *ln);
+
+        /*
+         * Some OpenSSL functionality is directly offered to providers via
+         * dispatch
+         */
+        void *CRYPTO_malloc(size_t num, const char *file, int line);
+        void *CRYPTO_zalloc(size_t num, const char *file, int line);
+        void CRYPTO_free(void *ptr, const char *file, int line);
+        void CRYPTO_clear_free(void *ptr, size_t num,
+                               const char *file, int line);
+        void *CRYPTO_realloc(void *addr, size_t num,
+                             const char *file, int line);
+        void *CRYPTO_clear_realloc(void *addr, size_t old_num, size_t num,
+                                   const char *file, int line);
+        void *CRYPTO_secure_malloc(size_t num, const char *file, int line);
+        void *CRYPTO_secure_zalloc(size_t num, const char *file, int line);
+        void CRYPTO_secure_free(void *ptr, const char *file, int line);
+        void CRYPTO_secure_clear_free(void *ptr, size_t num,
+                                      const char *file, int line);
+        int CRYPTO_secure_allocated(const void *ptr);
+        void OPENSSL_cleanse(void *ptr, size_t len);
+
+        unsigned char *OPENSSL_hexstr2buf(const char *str, long *buflen);
+
+        OSSL_CORE_BIO *BIO_new_file(const char *filename, const char *mode);
+        OSSL_CORE_BIO *BIO_new_membuf(const void *buf, int len);
+        int BIO_read_ex(OSSL_CORE_BIO *bio, void *data, size_t data_len,
+                        size_t *bytes_read);
+        int BIO_write_ex(OSSL_CORE_BIO *bio, const void *data, size_t data_len,
+                         size_t *written);
+        int BIO_up_ref(OSSL_CORE_BIO *bio);
+        int BIO_free(OSSL_CORE_BIO *bio);
+        int BIO_vprintf(OSSL_CORE_BIO *bio, const char *format, va_list args);
+        int BIO_vsnprintf(char *buf, size_t n, const char *fmt, va_list args);
+
+        void OSSL_SELF_TEST_set_callback(OSSL_LIB_CTX *libctx, OSSL_CALLBACK *cb,
+                                         void *cbarg);
+
+        size_t get_entropy(const OSSL_CORE_HANDLE *handle,
+                           unsigned char **pout, int entropy,
+                           size_t min_len, size_t max_len);
+        void cleanup_entropy(const OSSL_CORE_HANDLE *handle,
+                             unsigned char *buf, size_t len);
+        size_t get_nonce(const OSSL_CORE_HANDLE *handle,
+                         unsigned char **pout, size_t min_len, size_t max_len,
+                         const void *salt, size_t salt_len);
+        void cleanup_nonce(const OSSL_CORE_HANDLE *handle,
+                           unsigned char *buf, size_t len);
+
+        /* Functions for querying the providers in the application library context */
+        int provider_register_child_cb(const OSSL_CORE_HANDLE *handle,
+                            int (*create_cb)(const OSSL_CORE_HANDLE *provider,
+                                             void *cbdata),
+                            int (*remove_cb)(const OSSL_CORE_HANDLE *provider,
+                                             void *cbdata),
+                            int (*global_props_cb)(const char *props, void *cbdata),
+                            void *cbdata);
+        void provider_deregister_child_cb(const OSSL_CORE_HANDLE *handle);
+        const char *provider_name(const OSSL_CORE_HANDLE *prov);
+        void *provider_get0_provider_ctx(const OSSL_CORE_HANDLE *prov);
+        const OSSL_DISPATCH *provider_get0_dispatch(const OSSL_CORE_HANDLE *prov);
+        int provider_up_ref(const OSSL_CORE_HANDLE *prov, int activate);
+        int provider_free(const OSSL_CORE_HANDLE *prov, int deactivate);
+
+        /* Functions offered by the provider to libcrypto */
+        void provider_teardown(void *provctx);
+        const OSSL_ITEM *provider_gettable_params(void *provctx);
+        int provider_get_params(void *provctx, OSSL_PARAM params[]);
+        const OSSL_ALGORITHM *provider_query_operation(void *provctx,
+                                                       int operation_id,
+                                                       const int *no_store);
+        void provider_unquery_operation(void *provctx, int operation_id,
+                                        const OSSL_ALGORITHM *algs);
+        const OSSL_ITEM *provider_get_reason_strings(void *provctx);
+        int provider_get_capabilities(void *provctx, const char *capability,
+                                      OSSL_CALLBACK *cb, void *arg);
+        int provider_self_test(void *provctx);
+
+DDEESSCCRRIIPPTTIIOONN
+       All "functions" mentioned here are passed as function pointers between
+       _l_i_b_c_r_y_p_t_o and the provider in OOSSSSLL__DDIISSPPAATTCCHH(3) arrays, in the call of
+       the provider initialization function.  See "Provider" in pprroovviiddeerr(7)
+       for a description of the initialization function. They are known as
+       "upcalls".
+
+       All these "functions" have a corresponding function type definition
+       named OOSSSSLL__FFUUNNCC__{{nnaammee}}__ffnn, and a helper function to retrieve the
+       function pointer from a OOSSSSLL__DDIISSPPAATTCCHH(3) element named
+       OOSSSSLL__FFUUNNCC__{{nnaammee}}.  For example, the "function" ccoorree__ggeettttaabbllee__ppaarraammss(())
+       has these:
+
+        typedef OSSL_PARAM *
+            (OSSL_FUNC_core_gettable_params_fn)(const OSSL_CORE_HANDLE *handle);
+        static ossl_inline OSSL_NAME_core_gettable_params_fn
+            OSSL_FUNC_core_gettable_params(const OSSL_DISPATCH *opf);
+
+       OOSSSSLL__DDIISSPPAATTCCHH(3) arrays are indexed by numbers that are provided as
+       macros in ooppeennssssll--ccoorree__ddiissppaattcchh..hh(7), as follows:
+
+       For _i_n (the OOSSSSLL__DDIISSPPAATTCCHH(3) array passed from _l_i_b_c_r_y_p_t_o to the
+       provider):
+
+        core_gettable_params           OSSL_FUNC_CORE_GETTABLE_PARAMS
+        core_get_params                OSSL_FUNC_CORE_GET_PARAMS
+        core_thread_start              OSSL_FUNC_CORE_THREAD_START
+        core_get_libctx                OSSL_FUNC_CORE_GET_LIBCTX
+        core_new_error                 OSSL_FUNC_CORE_NEW_ERROR
+        core_set_error_debug           OSSL_FUNC_CORE_SET_ERROR_DEBUG
+        core_vset_error                OSSL_FUNC_CORE_VSET_ERROR
+        core_obj_add_sigid             OSSL_FUNC_CORE_OBJ_ADD_SIGID
+        core_obj_create                OSSL_FUNC_CORE_OBJ_CREATE
+        CRYPTO_malloc                  OSSL_FUNC_CRYPTO_MALLOC
+        CRYPTO_zalloc                  OSSL_FUNC_CRYPTO_ZALLOC
+        CRYPTO_free                    OSSL_FUNC_CRYPTO_FREE
+        CRYPTO_clear_free              OSSL_FUNC_CRYPTO_CLEAR_FREE
+        CRYPTO_realloc                 OSSL_FUNC_CRYPTO_REALLOC
+        CRYPTO_clear_realloc           OSSL_FUNC_CRYPTO_CLEAR_REALLOC
+        CRYPTO_secure_malloc           OSSL_FUNC_CRYPTO_SECURE_MALLOC
+        CRYPTO_secure_zalloc           OSSL_FUNC_CRYPTO_SECURE_ZALLOC
+        CRYPTO_secure_free             OSSL_FUNC_CRYPTO_SECURE_FREE
+        CRYPTO_secure_clear_free       OSSL_FUNC_CRYPTO_SECURE_CLEAR_FREE
+        CRYPTO_secure_allocated        OSSL_FUNC_CRYPTO_SECURE_ALLOCATED
+        BIO_new_file                   OSSL_FUNC_BIO_NEW_FILE
+        BIO_new_mem_buf                OSSL_FUNC_BIO_NEW_MEMBUF
+        BIO_read_ex                    OSSL_FUNC_BIO_READ_EX
+        BIO_write_ex                   OSSL_FUNC_BIO_WRITE_EX
+        BIO_up_ref                     OSSL_FUNC_BIO_UP_REF
+        BIO_free                       OSSL_FUNC_BIO_FREE
+        BIO_vprintf                    OSSL_FUNC_BIO_VPRINTF
+        BIO_vsnprintf                  OSSL_FUNC_BIO_VSNPRINTF
+        BIO_puts                       OSSL_FUNC_BIO_PUTS
+        BIO_gets                       OSSL_FUNC_BIO_GETS
+        BIO_ctrl                       OSSL_FUNC_BIO_CTRL
+        OPENSSL_cleanse                OSSL_FUNC_OPENSSL_CLEANSE
+        OSSL_SELF_TEST_set_callback    OSSL_FUNC_SELF_TEST_CB
+        ossl_rand_get_entropy          OSSL_FUNC_GET_ENTROPY
+        ossl_rand_cleanup_entropy      OSSL_FUNC_CLEANUP_ENTROPY
+        ossl_rand_get_nonce            OSSL_FUNC_GET_NONCE
+        ossl_rand_cleanup_nonce        OSSL_FUNC_CLEANUP_NONCE
+        provider_register_child_cb     OSSL_FUNC_PROVIDER_REGISTER_CHILD_CB
+        provider_deregister_child_cb   OSSL_FUNC_PROVIDER_DEREGISTER_CHILD_CB
+        provider_name                  OSSL_FUNC_PROVIDER_NAME
+        provider_get0_provider_ctx     OSSL_FUNC_PROVIDER_GET0_PROVIDER_CTX
+        provider_get0_dispatch         OSSL_FUNC_PROVIDER_GET0_DISPATCH
+        provider_up_ref                OSSL_FUNC_PROVIDER_UP_REF
+        provider_free                  OSSL_FUNC_PROVIDER_FREE
+
+       For _*_o_u_t (the OOSSSSLL__DDIISSPPAATTCCHH(3) array passed from the provider to
+       _l_i_b_c_r_y_p_t_o):
+
+        provider_teardown              OSSL_FUNC_PROVIDER_TEARDOWN
+        provider_gettable_params       OSSL_FUNC_PROVIDER_GETTABLE_PARAMS
+        provider_get_params            OSSL_FUNC_PROVIDER_GET_PARAMS
+        provider_query_operation       OSSL_FUNC_PROVIDER_QUERY_OPERATION
+        provider_unquery_operation     OSSL_FUNC_PROVIDER_UNQUERY_OPERATION
+        provider_get_reason_strings    OSSL_FUNC_PROVIDER_GET_REASON_STRINGS
+        provider_get_capabilities      OSSL_FUNC_PROVIDER_GET_CAPABILITIES
+        provider_self_test             OSSL_FUNC_PROVIDER_SELF_TEST
+
+   CCoorree ffuunnccttiioonnss
+       ccoorree__ggeettttaabbllee__ppaarraammss(()) returns a constant array of descriptor
+       OOSSSSLL__PPAARRAAMM(3), for parameters that ccoorree__ggeett__ppaarraammss(()) can handle.
+
+       ccoorree__ggeett__ppaarraammss(()) retrieves parameters from the core for the given
+       _h_a_n_d_l_e.  See "Core parameters" below for a description of currently
+       known parameters.
+
+       The ccoorree__tthhrreeaadd__ssttaarrtt(()) function informs the core that the provider has
+       stated an interest in the current thread. The core will inform the
+       provider when the thread eventually stops. It must be passed the _h_a_n_d_l_e
+       for this provider, as well as a callback _h_a_n_d_f_n which will be called
+       when the thread stops. The callback will subsequently be called, with
+       the supplied argument _a_r_g, from the thread that is stopping and gets
+       passed the provider context as an argument. This may be useful to
+       perform thread specific clean up such as freeing thread local
+       variables.
+
+       ccoorree__ggeett__lliibbccttxx(()) retrieves the core context in which the library
+       object for the current provider is stored, accessible through the
+       _h_a_n_d_l_e.  This function is useful only for built‐in providers such as
+       the default provider. Never cast this to OSSL_LIB_CTX in a provider
+       that is not built‐in as the OSSL_LIB_CTX of the library loading the
+       provider might be a completely different structure than the
+       OSSL_LIB_CTX of the library the provider is linked to. Use
+       OOSSSSLL__LLIIBB__CCTTXX__nneeww__cchhiilldd(3) instead to obtain a proper library context
+       that is linked to the application library context.
+
+       ccoorree__nneeww__eerrrroorr(()), ccoorree__sseett__eerrrroorr__ddeebbuugg(()) and ccoorree__vvsseett__eerrrroorr(()) are
+       building blocks for reporting an error back to the core, with reference
+       to the _h_a_n_d_l_e.
+
+       ccoorree__nneeww__eerrrroorr(())
+           allocates a new thread specific error record.
+
+           This corresponds to the OpenSSL function EERRRR__nneeww(3).
+
+       ccoorree__sseett__eerrrroorr__ddeebbuugg(())
+           sets  debugging  information  in  the current thread specific error
+           record.  The debugging information includes the name  of  the  file
+           _f_i_l_e,  the  line  _l_i_n_e  and  the function name _f_u_n_c where the error
+           occurred.
+
+           This corresponds to the OpenSSL function EERRRR__sseett__ddeebbuugg(3).
+
+       ccoorree__vvsseett__eerrrroorr(())
+           sets the _r_e_a_s_o_n for the error, along with any addition  data.   The
+           _r_e_a_s_o_n  is  a  number defined by the provider and used to index the
+           reason      strings      table       that’s       returned       by
+           pprroovviiddeerr__ggeett__rreeaassoonn__ssttrriinnggss(()).   The  additional data is given as a
+           format string _f_m_t and a set of arguments _a_r_g_s, which are treated in
+           the same manner as with BBIIOO__vvssnnpprriinnttff(()).  _f_i_l_e and _l_i_n_e may also be
+           passed  to  indicate  exactly  where  the  error  occurred  or  was
+           reported.
+
+           This corresponds to the OpenSSL function EERRRR__vvsseett__eerrrroorr(3).
+
+       The ccoorree__oobbjj__ccrreeaattee(()) function registers a new OID and associated short
+       name  _s_n  and  long  name _l_n for the given _h_a_n_d_l_e. It is similar to the
+       OpenSSL function OOBBJJ__ccrreeaattee(3) except that it returns 1 on success or 0
+       on failure.  It will treat as success the case where  the  OID  already
+       exists (even if the short name _s_n or long name _l_n provided as arguments
+       differ  from  those associated with the existing OID, in which case the
+       new names are not associated).  This function is not thread safe.
+
+       The ccoorree__oobbjj__aadddd__ssiiggiidd(()) function registers a new  composite  signature
+       algorithm  (_s_i_g_n___n_a_m_e)  consisting of an underlying signature algorithm
+       (_p_k_e_y___n_a_m_e) and digest algorithm (_d_i_g_e_s_t___n_a_m_e) for the given _h_a_n_d_l_e. It
+       assumes that the OIDs for the composite signature algorithm as well  as
+       for  the  underlying signature and digest algorithms are either already
+       known  to  OpenSSL  or   have   been   registered   via   a   call   to
+       ccoorree__oobbjj__ccrreeaattee(()).    It    corresponds   to   the   OpenSSL   function
+       OOBBJJ__aadddd__ssiiggiidd(3), except that the objects are identified by name rather
+       than a numeric NID. Any name (OID, short name or long name) can be used
+       to identify the object. It will treat as success  the  case  where  the
+       composite  signature  algorithm  already  exists  (even  if  registered
+       against a different underlying  signature  or  digest  algorithm).  For
+       _d_i_g_e_s_t___n_a_m_e,  NULL  or  an  empty  string  is permissible for signature
+       algorithms that do not need a digest to operate correctly. The function
+       returns 1 on success or 0 on failure.   This  function  is  not  thread
+       safe.
+
+       CCRRYYPPTTOO__mmaalllloocc(()),  CCRRYYPPTTOO__zzaalllloocc(()),  CCRRYYPPTTOO__ffrreeee(()), CCRRYYPPTTOO__cclleeaarr__ffrreeee(()),
+       CCRRYYPPTTOO__rreeaalllloocc(()),    CCRRYYPPTTOO__cclleeaarr__rreeaalllloocc(()),    CCRRYYPPTTOO__sseeccuurree__mmaalllloocc(()),
+       CCRRYYPPTTOO__sseeccuurree__zzaalllloocc(()),                           CCRRYYPPTTOO__sseeccuurree__ffrreeee(()),
+       CCRRYYPPTTOO__sseeccuurree__cclleeaarr__ffrreeee(()), CCRRYYPPTTOO__sseeccuurree__aallllooccaatteedd(()),  BBIIOO__nneeww__ffiillee(()),
+       BBIIOO__nneeww__mmeemm__bbuuff(()),    BBIIOO__rreeaadd__eexx(()),    BBIIOO__wwrriittee__eexx(()),   BBIIOO__uupp__rreeff(()),
+       BBIIOO__ffrreeee(()),  BBIIOO__vvpprriinnttff(()),  BBIIOO__vvssnnpprriinnttff(()),  BBIIOO__ggeettss(()),  BBIIOO__ppuuttss(()),
+       BBIIOO__ccttrrll(()),   OOPPEENNSSSSLL__cclleeaannssee(())   and  OOPPEENNSSSSLL__hheexxssttrr22bbuuff(())  correspond
+       exactly to the public functions with the same name.   As  a  matter  of
+       fact,  the  pointers in the OOSSSSLL__DDIISSPPAATTCCHH(3) array are typically direct
+       pointers to those public functions. Note that the BIO functions take an
+       OOSSSSLL__CCOORREE__BBIIOO type rather than the standard BBIIOO type. This is to ensure
+       that a provider does not mix BIOs from the core with BIOs used  on  the
+       provider      side      (the      two      are     not     compatible).
+       OOSSSSLL__SSEELLFF__TTEESSTT__sseett__ccaallllbbaacckk(()) is used to set an optional callback  that
+       can be passed into a provider. This may be ignored by a provider.
+
+       ggeett__eennttrrooppyy(())  retrieves  seeding  material  from the operating system.
+       The seeding material will have at least _e_n_t_r_o_p_y bytes of randomness and
+       the output will have at least _m_i_n___l_e_n and at most _m_a_x___l_e_n  bytes.   The
+       buffer  address is stored in _*_p_o_u_t and the buffer length is returned to
+       the caller.  On error, zero is returned.
+
+       cclleeaannuupp__eennttrrooppyy(()) is used to clean up and free the buffer  returned  by
+       ggeett__eennttrrooppyy(()).  The entropy pointer returned by ggeett__eennttrrooppyy(()) is passed
+       in bbuuff and its length in lleenn.
+
+       ggeett__nnoonnccee(()) retrieves a nonce using the passed _s_a_l_t parameter of length
+       _s_a_l_t___l_e_n  and  operating  system specific information.  The _s_a_l_t should
+       contain uniquely identifying information and this is  included,  in  an
+       unspecified  manner,  as part of the output.  The output is stored in a
+       buffer which contains at least _m_i_n___l_e_n and at most _m_a_x___l_e_n bytes.   The
+       buffer address is stored in _*_p_o_u_t and the buffer length returned to the
+       caller.  On error, zero is returned.
+
+       cclleeaannuupp__nnoonnccee(())  is  used  to  clean up and free the buffer returned by
+       ggeett__nnoonnccee(()).  The nonce pointer returned by ggeett__nnoonnccee(())  is  passed  in
+       bbuuff and its length in lleenn.
+
+       pprroovviiddeerr__rreeggiisstteerr__cchhiilldd__ccbb(())  registers  callbacks  for  being informed
+       about the loading and  unloading  of  providers  in  the  application’s
+       library  context.   _h_a_n_d_l_e is this provider’s handle and _c_b_d_a_t_a is this
+       provider’s data that will be passed back to the callbacks. It returns 1
+       on success or 0 otherwise. These callbacks may be called while  holding
+       locks   in   libcrypto.  In  order  to  avoid  deadlocks  the  callback
+       implementation must not be long running and must not call other OpenSSL
+       API functions or upcalls.
+
+       _c_r_e_a_t_e___c_b is a callback that will be called  when  a  new  provider  is
+       loaded  into  the  application’s library context. It is also called for
+       any providers that are already loaded at the point that  this  callback
+       is registered. The callback is passed the handle being used for the new
+       provider  being  loadded  and this provider’s data in _c_b_d_a_t_a. It should
+       return 1 on success or 0 on failure.
+
+       _r_e_m_o_v_e___c_b is a callback that will be called  when  a  new  provider  is
+       unloaded  from  the  application’s  library  context.  It is passed the
+       handle being used for the provider being unloaded and  this  provider’s
+       data in _c_b_d_a_t_a. It should return 1 on success or 0 on failure.
+
+       _g_l_o_b_a_l___p_r_o_p_s___c_b  is  a  callback  that  will  be called when the global
+       properties from the parent  library  context  are  changed.  It  should
+       return 1 on success or 0 on failure.
+
+       pprroovviiddeerr__ddeerreeggiisstteerr__cchhiilldd__ccbb(())    unregisters    callbacks   previously
+       registered         via         pprroovviiddeerr__rreeggiisstteerr__cchhiilldd__ccbb(()).         If
+       pprroovviiddeerr__rreeggiisstteerr__cchhiilldd__ccbb(())       has       been      called      then
+       pprroovviiddeerr__ddeerreeggiisstteerr__cchhiilldd__ccbb(()) should be called at or before the  point
+       that this provider’s teardown function is called.
+
+       pprroovviiddeerr__nnaammee(())  returns  a  string  giving  the  name  of the provider
+       identified by _h_a_n_d_l_e.
+
+       pprroovviiddeerr__ggeett00__pprroovviiddeerr__ccttxx(())  returns  the  provider  context  that  is
+       associated with the provider identified by _p_r_o_v.
+
+       pprroovviiddeerr__ggeett00__ddiissppaattcchh(())  gets  the  dispatch  table  registered by the
+       provider identified by _p_r_o_v when it initialised.
+
+       pprroovviiddeerr__uupp__rreeff(()) increments the reference count on the provider  _p_r_o_v.
+       If  _a_c_t_i_v_a_t_e  is  nonzero then the provider is also loaded if it is not
+       already loaded. It returns 1 on success or 0 on failure.
+
+       pprroovviiddeerr__ffrreeee(()) decrements the reference count on the provider _p_r_o_v. If
+       _d_e_a_c_t_i_v_a_t_e is nonzero then the provider is also unloaded if it  is  not
+       already loaded. It returns 1 on success or 0 on failure.
+
+   PPrroovviiddeerr ffuunnccttiioonnss
+       pprroovviiddeerr__tteeaarrddoowwnn(())  is called when a provider is shut down and removed
+       from the core’s provider store.  It must free the passed _p_r_o_v_c_t_x.
+
+       pprroovviiddeerr__ggeettttaabbllee__ppaarraammss(()) should return a constant array of descriptor
+       OOSSSSLL__PPAARRAAMM(3), for parameters that pprroovviiddeerr__ggeett__ppaarraammss(()) can handle.
+
+       pprroovviiddeerr__ggeett__ppaarraammss(()) should process the  OOSSSSLL__PPAARRAAMM(3)  array  _p_a_r_a_m_s,
+       setting the values of the parameters it understands.
+
+       pprroovviiddeerr__qquueerryy__ooppeerraattiioonn(())  should  return a constant OOSSSSLL__AALLGGOORRIITTHHMM(3)
+       that corresponds to the given _o_p_e_r_a_t_i_o_n___i_d.  It should indicate if  the
+       core  may  store  a  reference  to this array by setting _*_n_o___s_t_o_r_e to 0
+       (core may store a reference) or 1 (core may not store a reference).
+
+       pprroovviiddeerr__uunnqquueerryy__ooppeerraattiioonn(()) informs the provider that the result of  a
+       pprroovviiddeerr__qquueerryy__ooppeerraattiioonn(())  is no longer directly required and that the
+       function pointers have been copied.  The _o_p_e_r_a_t_i_o_n___i_d should match that
+       passed to pprroovviiddeerr__qquueerryy__ooppeerraattiioonn(()) and  _a_l_g_s  should  be  its  return
+       value.
+
+       pprroovviiddeerr__ggeett__rreeaassoonn__ssttrriinnggss(())  should  return  a  constant OOSSSSLL__IITTEEMM(3)
+       array that provides reason strings for reason codes  the  provider  may
+       use when reporting errors using ccoorree__ppuutt__eerrrroorr(()).
+
+       The  pprroovviiddeerr__ggeett__ccaappaabbiilliittiieess(())  function  should call the callback _c_b
+       passing it a set of OOSSSSLL__PPAARRAAMM(3)s and  the  caller  supplied  argument
+       _a_r_g.  The  OOSSSSLL__PPAARRAAMM(3)s  should  provide details about the capability
+       with the name  given  in  the  _c_a_p_a_b_i_l_i_t_y  argument  relevant  for  the
+       provider  context _p_r_o_v_c_t_x. If a provider supports multiple capabilities
+       with the given name then it may call the callback multiple  times  (one
+       for  each  capability).  Capabilities  can be useful for describing the
+       services that a  provider  can  offer.  For  further  details  see  the
+       "CAPABILITIES"  section  below.  It  should return 1 on success or 0 on
+       error.
+
+       The pprroovviiddeerr__sseellff__tteesstt(()) function should perform known answer tests  on
+       a  subset  of  the  algorithms  that  it  uses, and may also verify the
+       integrity of the provider module. It should return 1 on success or 0 on
+       error. It will return 1 if this function is not used.
+
+       None of these functions are mandatory, but a provider is fairly useless
+       without      at       least       pprroovviiddeerr__qquueerryy__ooppeerraattiioonn(()),       and
+       pprroovviiddeerr__ggeettttaabbllee__ppaarraammss(())  is  fairly  useless  if  not accompanied by
+       pprroovviiddeerr__ggeett__ppaarraammss(()).
+
+   PPrroovviiddeerr ppaarraammeetteerrss
+       pprroovviiddeerr__ggeett__ppaarraammss(()) can return the following provider  parameters  to
+       the core:
+
+       "name" (OOSSSSLL__PPRROOVV__PPAARRAAMM__NNAAMMEE) <UTF8 ptr>
+           This  points  to  a  string  that should give a unique name for the
+           provider.
+
+       "version" (OOSSSSLL__PPRROOVV__PPAARRAAMM__VVEERRSSIIOONN) <UTF8 ptr>
+           This points to a string that is a version  number  associated  with
+           this provider.  OpenSSL in‐built providers use OPENSSL_VERSION_STR,
+           but this may be different for any third party provider. This string
+           is for informational purposes only.
+
+       "buildinfo" (OOSSSSLL__PPRROOVV__PPAARRAAMM__BBUUIILLDDIINNFFOO) <UTF8 ptr>
+           This points to a string that is a build information associated with
+           this      provider.      OpenSSL     in‐built     providers     use
+           OPENSSL_FULL_VERSION_STR, but this may be different for  any  third
+           party provider.
+
+       "status" (OOSSSSLL__PPRROOVV__PPAARRAAMM__SSTTAATTUUSS) <unsigned integer>
+           This  returns  0  if  the  provider  has  entered  an  error state,
+           otherwise it returns 1.
+
+       pprroovviiddeerr__ggeettttaabbllee__ppaarraammss(()) should return the above parameters.
+
+   CCoorree ppaarraammeetteerrss
+       ccoorree__ggeett__ppaarraammss(()) can retrieve the following core parameters  for  each
+       provider:
+
+       "openssl‐version" (OOSSSSLL__PPRROOVV__PPAARRAAMM__CCOORREE__VVEERRSSIIOONN) <UTF8 string ptr>
+           This points to the OpenSSL libraries’ full version string, i.e. the
+           string expanded from the macro OOPPEENNSSSSLL__VVEERRSSIIOONN__SSTTRR.
+
+       "provider‐name" (OOSSSSLL__PPRROOVV__PPAARRAAMM__CCOORREE__PPRROOVV__NNAAMMEE) <UTF8 string ptr>
+           This  points  to  the  OpenSSL  libraries’ idea of what the calling
+           provider is named.
+
+       "module‐filename" (OOSSSSLL__PPRROOVV__PPAARRAAMM__CCOORREE__MMOODDUULLEE__FFIILLEENNAAMMEE) <UTF8 string
+       ptr>
+           This points to  a  string  containing  the  full  filename  of  the
+           providers module file.
+
+       Additionally,  provider  specific  configuration  parameters  from  the
+       config file are available, in dotted name form.  The dotted  name  form
+       is  a  concatenation  of  section  names  and final config command name
+       separated by periods.
+
+       For example, let’s say we have the following config example:
+
+        config_diagnostics = 1
+        openssl_conf = openssl_init
+
+        [openssl_init]
+        providers = providers_sect
+
+        [providers_sect]
+        foo = foo_sect
+
+        [foo_sect]
+        activate = 1
+        data1 = 2
+        data2 = str
+        more = foo_more
+
+        [foo_more]
+        data3 = foo,bar
+
+       The provider will have these additional parameters available:
+
+       "activate"
+           pointing at the string "1"
+
+       "data1"
+           pointing at the string "2"
+
+       "data2"
+           pointing at the string "str"
+
+       "more.data3"
+           pointing at the string "foo,bar"
+
+       For more information  on  handling  parameters,  see  OOSSSSLL__PPAARRAAMM(3)  as
+       OOSSSSLL__PPAARRAAMM__iinntt(3).
+
+CCAAPPAABBIILLIITTIIEESS
+       Capabilities  describe  some of the services that a provider can offer.
+       Applications can query the capabilities to discover those services.
+
+       _"_T_L_S_‐_G_R_O_U_P_" _C_a_p_a_b_i_l_i_t_y
+
+       The "TLS‐GROUP" capability can be queried by  libssl  to  discover  the
+       list  of  TLS  groups that a provider can support. Each group supported
+       can be used for _k_e_y _e_x_c_h_a_n_g_e (KEX) or _k_e_y  _e_n_c_a_p_s_u_l_a_t_i_o_n  _m_e_t_h_o_d  (KEM)
+       during  a  TLS  handshake.   TLS  clients can advertise the list of TLS
+       groups they support in the supported_groups extension, and TLS  servers
+       can  select  a  group  from the offered list that they also support. In
+       this way a provider can add to the list of groups that  libssl  already
+       supports with additional ones.
+
+       Each  TLS  group  that  a provider supports should be described via the
+       callback passed in through the provider_get_capabilities function. Each
+       group should have the following details supplied  (all  are  mandatory,
+       except OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__IISS__KKEEMM):
+
+       "tls‐group‐name" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__NNAAMMEE) <UTF8 string>
+           The  name  of  the  group as given in the IANA TLS Supported Groups
+           registry
+           <https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-8>.
+
+       "tls‐group‐name‐internal" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__NNAAMMEE__IINNTTEERRNNAALL)
+       <UTF8 string>
+           The name of the group as known by the provider. This could  be  the
+           same as the "tls‐group‐name", but does not have to be.
+
+       "tls‐group‐id" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__IIDD) <unsigned integer>
+           The  TLS  group  id value as given in the IANA TLS Supported Groups
+           registry.
+
+       "tls‐group‐alg" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__AALLGG) <UTF8 string>
+           The name of a Key Management algorithm that the provider offers and
+           that should be used with this group. Keys created should be able to
+           support _k_e_y _e_x_c_h_a_n_g_e or _k_e_y _e_n_c_a_p_s_u_l_a_t_i_o_n _m_e_t_h_o_d (KEM), as  implied
+           by   the   optional   OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__IISS__KKEEMM  flag.   The
+           algorithm must support key and parameter generation as well as  the
+           key/parameter generation parameter, OOSSSSLL__PPKKEEYY__PPAARRAAMM__GGRROOUUPP__NNAAMMEE. The
+           group name given via "tls‐group‐name‐internal" above will be passed
+           via  OOSSSSLL__PPKKEEYY__PPAARRAAMM__GGRROOUUPP__NNAAMMEE  when  libssl  wishes  to  generate
+           keys/parameters.
+
+       "tls‐group‐sec‐bits" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__SSEECCUURRIITTYY__BBIITTSS)
+       <unsigned integer>
+           The number of bits of security offered by keys in this  group.  The
+           number  of bits should be comparable with the ones given in table 2
+           and 3 of the NIST SP800-57 document.
+
+       "tls‐group‐is‐kem" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__IISS__KKEEMM) <unsigned
+       integer>
+           Boolean flag to describe  if  the  group  should  be  used  in  _k_e_y
+           _e_x_c_h_a_n_g_e  (KEX)  mode  (0,  default) or in _k_e_y _e_n_c_a_p_s_u_l_a_t_i_o_n _m_e_t_h_o_d
+           (KEM) mode (1).
+
+           This parameter is optional: if not specified, KEX mode  is  assumed
+           as the default mode for the group.
+
+           In  KEX  mode,  in  a  typical  Diffie‐Hellman  fashion, both sides
+           execute _k_e_y_g_e_n then _d_e_r_i_v_e against the peer public key. To  operate
+           in  KEX  mode,  the  group implementation must support the provider
+           functions as described in pprroovviiddeerr--kkeeyyeexxcchh(7).
+
+           In KEM mode, the client executes _k_e_y_g_e_n and sends its  public  key,
+           the  server  executes _e_n_c_a_p_s_u_l_a_t_e using the client’s public key and
+           sends back the resulting _c_i_p_h_e_r_t_e_x_t, finally  the  client  executes
+           _d_e_c_a_p_s_u_l_a_t_e  to  retrieve  the  same _s_h_a_r_e_d _s_e_c_r_e_t generated by the
+           server’s  _e_n_c_a_p_s_u_l_a_t_e.  To  operate  in   KEM   mode,   the   group
+           implementation  must support the provider functions as described in
+           pprroovviiddeerr--kkeemm(7).
+
+           Both in KEX and KEM mode, the resulting _s_h_a_r_e_d _s_e_c_r_e_t is then  used
+           according to the protocol specification.
+
+       "tls‐min‐tls" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__MMIINN__TTLLSS) <integer>
+       "tls‐max‐tls" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__MMAAXX__TTLLSS) <integer>
+       "tls‐min‐dtls" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__MMIINN__DDTTLLSS) <integer>
+       "tls‐max‐dtls" (OOSSSSLL__CCAAPPAABBIILLIITTYY__TTLLSS__GGRROOUUPP__MMAAXX__DDTTLLSS) <integer>
+           These  parameters  can  be used to describe the minimum and maximum
+           TLS and DTLS versions supported by the group. The values equate  to
+           the  on‐the‐wire  encoding of the various TLS versions. For example
+           TLSv1.3 is  0x0304  (772  decimal),  and  TLSv1.2  is  0x0303  (771
+           decimal).  A  0  indicates  that  there  is  no  defined minimum or
+           maximum. A -1 indicates that the group should not be used  in  that
+           protocol.
+
+EEXXAAMMPPLLEESS
+       This is an example of a simple provider made available as a dynamically
+       loadable  module.  It implements the fictitious algorithm "FOO" for the
+       fictitious operation "BAR".
+
+        #include <malloc.h>
+        #include <openssl/core.h>
+        #include <openssl/core_dispatch.h>
+
+        /* Errors used in this provider */
+        #define E_MALLOC       1
+
+        static const OSSL_ITEM reasons[] = {
+            { E_MALLOC, "memory allocation failure" }.
+            { 0, NULL } /* Termination */
+        };
+
+        /*
+         * To ensure we get the function signature right, forward declare
+         * them using function types provided by openssl/core_dispatch.h
+         */
+        OSSL_FUNC_bar_newctx_fn foo_newctx;
+        OSSL_FUNC_bar_freectx_fn foo_freectx;
+        OSSL_FUNC_bar_init_fn foo_init;
+        OSSL_FUNC_bar_update_fn foo_update;
+        OSSL_FUNC_bar_final_fn foo_final;
+
+        OSSL_FUNC_provider_query_operation_fn p_query;
+        OSSL_FUNC_provider_get_reason_strings_fn p_reasons;
+        OSSL_FUNC_provider_teardown_fn p_teardown;
+
+        OSSL_provider_init_fn OSSL_provider_init;
+
+        OSSL_FUNC_core_put_error *c_put_error = NULL;
+
+        /* Provider context */
+        struct prov_ctx_st {
+            OSSL_CORE_HANDLE *handle;
+        }
+
+        /* operation context for the algorithm FOO */
+        struct foo_ctx_st {
+            struct prov_ctx_st *provctx;
+            int b;
+        };
+
+        static void *foo_newctx(void *provctx)
+        {
+            struct foo_ctx_st *fooctx = malloc(sizeof(*fooctx));
+
+            if (fooctx != NULL)
+                fooctx->provctx = provctx;
+            else
+                c_put_error(provctx->handle, E_MALLOC, __FILE__, __LINE__);
+            return fooctx;
+        }
+
+        static void foo_freectx(void *fooctx)
+        {
+            free(fooctx);
+        }
+
+        static int foo_init(void *vfooctx)
+        {
+            struct foo_ctx_st *fooctx = vfooctx;
+
+            fooctx->b = 0x33;
+        }
+
+        static int foo_update(void *vfooctx, unsigned char *in, size_t inl)
+        {
+            struct foo_ctx_st *fooctx = vfooctx;
+
+            /* did you expect something serious? */
+            if (inl == 0)
+                return 1;
+            for (; inl-- > 0; in++)
+                *in ˆ= fooctx->b;
+            return 1;
+        }
+
+        static int foo_final(void *vfooctx)
+        {
+            struct foo_ctx_st *fooctx = vfooctx;
+
+            fooctx->b = 0x66;
+        }
+
+        static const OSSL_DISPATCH foo_fns[] = {
+            { OSSL_FUNC_BAR_NEWCTX, (void (*)(void))foo_newctx },
+            { OSSL_FUNC_BAR_FREECTX, (void (*)(void))foo_freectx },
+            { OSSL_FUNC_BAR_INIT, (void (*)(void))foo_init },
+            { OSSL_FUNC_BAR_UPDATE, (void (*)(void))foo_update },
+            { OSSL_FUNC_BAR_FINAL, (void (*)(void))foo_final },
+            { 0, NULL }
+        };
+
+        static const OSSL_ALGORITHM bars[] = {
+            { "FOO", "provider=chumbawamba", foo_fns },
+            { NULL, NULL, NULL }
+        };
+
+        static const OSSL_ALGORITHM *p_query(void *provctx, int operation_id,
+                                             int *no_store)
+        {
+            switch (operation_id) {
+            case OSSL_OP_BAR:
+                return bars;
+            }
+            return NULL;
+        }
+
+        static const OSSL_ITEM *p_reasons(void *provctx)
+        {
+            return reasons;
+        }
+
+        static void p_teardown(void *provctx)
+        {
+            free(provctx);
+        }
+
+        static const OSSL_DISPATCH prov_fns[] = {
+            { OSSL_FUNC_PROVIDER_TEARDOWN, (void (*)(void))p_teardown },
+            { OSSL_FUNC_PROVIDER_QUERY_OPERATION, (void (*)(void))p_query },
+            { OSSL_FUNC_PROVIDER_GET_REASON_STRINGS, (void (*)(void))p_reasons },
+            { 0, NULL }
+        };
+
+        int OSSL_provider_init(const OSSL_CORE_HANDLE *handle,
+                               const OSSL_DISPATCH *in,
+                               const OSSL_DISPATCH **out,
+                               void **provctx)
+        {
+            struct prov_ctx_st *pctx = NULL;
+
+            for (; in->function_id != 0; in++)
+                switch (in->function_id) {
+                case OSSL_FUNC_CORE_PUT_ERROR:
+                    c_put_error = OSSL_FUNC_core_put_error(in);
+                    break;
+                }
+
+            *out = prov_fns;
+
+            if ((pctx = malloc(sizeof(*pctx))) == NULL) {
+                /*
+                 * ALEA IACTA EST, if the core retrieves the reason table
+                 * regardless, that string will be displayed, otherwise not.
+                 */
+                c_put_error(handle, E_MALLOC, __FILE__, __LINE__);
+                return 0;
+            }
+            pctx->handle = handle;
+            return 1;
+        }
+
+       This relies on a few things existing in _o_p_e_n_s_s_l_/_c_o_r_e___d_i_s_p_a_t_c_h_._h:
+
+        #define OSSL_OP_BAR            4711
+
+        #define OSSL_FUNC_BAR_NEWCTX      1
+        typedef void *(OSSL_FUNC_bar_newctx_fn)(void *provctx);
+        static ossl_inline OSSL_FUNC_bar_newctx(const OSSL_DISPATCH *opf)
+        { return (OSSL_FUNC_bar_newctx_fn *)opf->function; }
+
+        #define OSSL_FUNC_BAR_FREECTX     2
+        typedef void (OSSL_FUNC_bar_freectx_fn)(void *ctx);
+        static ossl_inline OSSL_FUNC_bar_freectx(const OSSL_DISPATCH *opf)
+        { return (OSSL_FUNC_bar_freectx_fn *)opf->function; }
+
+        #define OSSL_FUNC_BAR_INIT        3
+        typedef void *(OSSL_FUNC_bar_init_fn)(void *ctx);
+        static ossl_inline OSSL_FUNC_bar_init(const OSSL_DISPATCH *opf)
+        { return (OSSL_FUNC_bar_init_fn *)opf->function; }
+
+        #define OSSL_FUNC_BAR_UPDATE      4
+        typedef void *(OSSL_FUNC_bar_update_fn)(void *ctx,
+                                              unsigned char *in, size_t inl);
+        static ossl_inline OSSL_FUNC_bar_update(const OSSL_DISPATCH *opf)
+        { return (OSSL_FUNC_bar_update_fn *)opf->function; }
+
+        #define OSSL_FUNC_BAR_FINAL       5
+        typedef void *(OSSL_FUNC_bar_final_fn)(void *ctx);
+        static ossl_inline OSSL_FUNC_bar_final(const OSSL_DISPATCH *opf)
+        { return (OSSL_FUNC_bar_final_fn *)opf->function; }
+
+SSEEEE AALLSSOO
+       pprroovviiddeerr(7)
+
+HHIISSTTOORRYY
+       The concept of providers and everything surrounding them was introduced
+       in OpenSSL 3.0.
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2019-2023 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in   the   file   LICENSE   in   the   source   distribution   or    at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐31                  _P_R_O_V_I_D_E_R_‐_B_A_S_E(7)

@@ -1,0 +1,215 @@
+q.   The  function  reads directory entries and returns their at‐
+tributes (that is, metadata).  You can think of it as a  combina‐
+tion  of  and iterates over the items in a directory like and re‐
+turns information about each directory entry like Note: when  re‐
+turns information about a symbolic link, the information returned
+is  about the link itself, not the target of the link.  The func‐
+tion reads directory entries from the directory referenced by the
+file descriptor Attributes of those directory entries are  placed
+into  the  buffer  specified by and The parameter determines what
+attributes are returned for each entry.  The  parameter  contains
+the  number of directory entries requested and returned.  The pa‐
+rameter returns the directory offset in a manner similar  to  The
+parameter allows you to check whether the directory has been mod‐
+ified  while you were reading it.  The parameter lets you control
+specific aspects of the function’s behaviour.   The  function  is
+only  supported  by  certain  volume format implementations.  For
+maximum compatibility, client programs should use high‐level APIs
+(such as the Carbon File Manager) to access file  system  attrib‐
+utes.  These high‐level APIs include logic to emulate file system
+attributes  on volumes that don’t support The parameter must be a
+file descriptor that references a directory that you have  opened
+for  reading.   The  parameter is a pointer to an structure.  You
+are responsible for filling out all fields of this structure  be‐
+fore  calling  the  function.  See the discussion of the function
+for a detailed description of this  structure.   To  get  an  at‐
+tribute  you  must  set  the corresponding bit in the appropriate
+field of the structure.  You must not request volume  attributes.
+The  and  parameters  specify  a  buffer  into which the function
+places attribute values.  The attributes for any given  directory
+entry  are grouped together and packed in exactly the same way as
+they are returned from These groups  are  then  placed  into  the
+buffer,  one  after another.  As each group starts with a leading
+that contains the overall length of the group, you can step  from
+one  group  to  the  next  by  simply  adding this length to your
+pointer.  The sample code (below) shows how to do this.  The ini‐
+tial contents of this buffer are ignored.  The  parameter  points
+to an or variable.  You should initialise this variable to be the
+number of directory entries for which you wish to get attributes.
+On return, this variable contains the number of directory entries
+whose  attributes  have  been  placed  into the attribute buffer.
+This may be smaller than the number that you requested.  The  pa‐
+rameter returns the offset of the last directory entry read, in a
+manner  identical  to You can use this value to reset a directory
+iteration to a known position using However, since  the  variable
+is  too  small  to  hold an you should use to get the directory’s
+current position instead of using this  parameter.   The  initial
+value  of the variable is ignored.  The parameter returns a value
+that changes if the directory has been modified.  If you’re iter‐
+ating through the directory by making repeated calls to  you  can
+compare  subsequent  values of to determine whether the directory
+has been modified (and thus restart your iteration at the  begin‐
+ning).   The initial value of the variable is ignored.  The para‐
+meter is a bit set that controls the behaviour of  The  following
+option  bits are defined.  This tells to return the directory en‐
+tries from disk rather than taking the extra step of  looking  at
+data  structures in‐memory which may contain changes that haven’t
+been flushed to disk.  This option allowed for  specific  perfor‐
+mance  optimizations  for  specific clients on older systems.  We
+currently recommend that clients not set  this  option  and  that
+file  system implementations ignore it.  It is typical to ask for
+a combination of common, file, and directory attributes and  then
+use  the  value of the attribute to parse the resulting attribute
+buffer.  As of Mac OS X 10.10, is deprecated. It is  replaced  by
+Continued use of is strongly discouraged as comprehensive results
+are not guaranteed.  Upon successful completion a value of 0 or 1
+is  returned.   The  value 0 indicates that the routine completed
+successfully.  The value 1 indicates that the  routine  completed
+successfully  and  has  returned the last entry in the directory.
+On error, a value of ‐1 is returned and is set  to  indicate  the
+error.   Not  all  volumes  support You can test whether a volume
+supports by using to get the volume  capabilities  attribute  and
+then  testing  the  flag.  The function has been undocumented for
+more than two years.  In that time a number of volume format  im‐
+plementations  have  been  created without a proper specification
+for the behaviour of this routine.  You may encounter volume for‐
+mat implementations with slightly different behaviour  than  what
+is  described  here.   Your program is expected to be tolerant of
+this variant behaviour.  If you’re implementing a  volume  format
+that  supports  you  should  be  careful to support the behaviour
+specified by this document.  If the directory  contains  a  mount
+point,  then will be set in the for that entry; all other attrib‐
+utes for that entry, however, will be  for  the  underlying  file
+system  (as  opposed to the mounted file system).  should be used
+to get the attributes for the mount point.  A directory which  is
+a firmlink will have the flag set in its ATTR_CMN_FLAGS attribute
+entry.  However the attributes returned by will be those from the
+firmlink,  not  the  firmlink’s target.  To get the attributes of
+the firmlink’s target, call on the firmlink.  will fail  if:  The
+volume  does not support is not a valid file descriptor for a di‐
+rectory open for reading.  or points to an invalid address.   The
+field  of  is  not  You  requested an invalid attribute.  You re‐
+quested volume attributes.  The  parameter  contains  an  invalid
+flag.  An I/O error occurred while reading from or writing to the
+file  system.   The following code lists the contents of a direc‐
+tory using The listing includes the file  type  and  creator  for
+files.   #include  <assert.h>  #include  <stdio.h> #include <std‐
+def.h>  #include  <string.h>   #include   <sys/attr.h>   #include
+<sys/errno.h> #include <unistd.h> #include <sys/vnode.h> #include
+<stdbool.h>   #include  <fcntl.h>  typedef  struct  attrlist  at‐
+trlist_t; struct FInfoAttrBuf {
+    u_int32_t       length;
+    attrreference_t name;
+    fsobj_type_t    objType;
+    char            finderInfo[32];
+    u_int32_t         dirStatus;   }   __attribute__((aligned(4),
+packed)); typedef struct FInfoAttrBuf FInfoAttrBuf; enum {
+    kEntriesPerCall  =  10  };  static  int  FInfoDemo(const char
+*dirPath) {
+    int             err;
+    int             junk;
+    int             dirFD;
+    attrlist_t      attrList; #ifdef __LP64__
+    unsigned int    index;
+    unsigned int    count;
+    unsigned int    junkBaseP;
+    unsigned int    oldState;
+    unsigned int    newState; #else
+    unsigned long   index;
+    unsigned long   count;
+    unsigned long   junkBaseP;
+    unsigned long   oldState;
+    unsigned long   newState; #endif
+    bool            oldStateValid;
+    bool            done;
+    FInfoAttrBuf *  thisEntry;
+    char            attrBuf[kEntriesPerCall *  (sizeof(FInfoAttr‐
+Buf) + 64)];
+    //  attrBuf is big enough for kEntriesPerCall entries, assum‐
+ing that
+    // the average name length is less than 64.
+    memset(&attrList, 0, sizeof(attrList));
+    attrList.bitmapcount = ATTR_BIT_MAP_COUNT;
+    attrList.commonattr  =    ATTR_CMN_NAME
+                            | ATTR_CMN_OBJTYPE
+                            | ATTR_CMN_FNDRINFO;
+    attrList.dirattr     = ATTR_DIR_MOUNTSTATUS;
+
+    err = 0;
+    dirFD = open(dirPath, O_RDONLY, 0);
+    if (dirFD < 0) {
+        err = errno;
+    }
+    if (err == 0) {
+        oldStateValid = false;
+        done = false;
+        do {
+            count = kEntriesPerCall;
+            err = getdirentriesattr(
+                dirFD,
+                &attrList,
+                &attrBuf,
+                sizeof(attrBuf),
+                &count,
+                &junkBaseP,
+                &newState,
+                0
+            );
+            if (err < 0) {
+                err = errno;
+            } else {
+                done = err;
+                err = 0;
+            }
+            if (err == 0) {
+                if (oldStateValid) {
+                    if (newState != oldState) {
+                        printf("*** Directory has changed\n");
+                        oldState = newState;
+                    }
+                } else {
+                    oldState = newState;
+                    oldStateValid = true;
+                }
+                thisEntry = (FInfoAttrBuf *) attrBuf;
+                for (index = 0; index < count; index++) {
+                    switch (thisEntry‐>objType) {
+                        case VREG:
+                            printf(
+                                "’%4.4s’ ’%4.4s’ ",
+                                &thisEntry‐>finderInfo[0],
+                                &thisEntry‐>finderInfo[4]
+                            );
+                            break;
+                        case VDIR:
+                            if      (thisEntry‐>dirStatus       &
+DIR_MNTSTATUS_MNTPOINT)
+                                printf("mount‐point   ");
+                            else
+                                printf("directory     ");
+                            break;
+                        default:
+                            printf(
+                                "objType = %‐2d  ",
+                                thisEntry‐>objType
+                            );
+                            break;
+                    }
+                    printf(
+                        "%s\n",
+                        ((char *) &thisEntry‐>name)
+                            + thisEntry‐>name.attr_dataoffset
+                    );
+                    // Advance to the next entry.
+                    thisEntry  = (FInfoAttrBuf*)((char*)thisEntry
++ thisEntry‐>length);
+                }
+            }
+        } while ( err == 0 && ! done );
+    }
+    if (dirFD != ‐1) {
+        junk = close(dirFD);
+        assert(junk == 0);
+    }
+    return err; } A function call appeared in Darwin  1.3.1  (Mac
+OS X version 10.0).

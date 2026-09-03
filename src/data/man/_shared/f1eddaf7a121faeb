@@ -1,0 +1,128 @@
+PPPCTL(8)                 BSD System Manager's Manual                PPPCTL(8)
+
+NNAAMMEE
+     ppppppccttll — PPP control program
+
+SSYYNNOOPPSSIISS
+     ppppppccttll [--vv] [--tt _n] [--pp _p_a_s_s_w_d] [_h_o_s_t:]_P_o_r_t | _L_o_c_a_l_S_o_c_k_e_t
+            [_c_o_m_m_a_n_d[;_c_o_m_m_a_n_d]_._._.]
+
+DDEESSCCRRIIPPTTIIOONN
+     This utility provides command line control of the ppp(8) daemon.  Its
+     primary use is to facilitate simple scripts that control a running dae‐
+     mon.
+
+     The ppppppccttll utility is passed at least one argument, specifying the socket
+     on which pppppp is listening.  Refer to the ‘set server’ command of pppppp for
+     details.  If the socket contains a leading '/', it is taken as an
+     AF_LOCAL socket.  If it contains a colon, it is treated as a _h_o_s_t:_p_o_r_t
+     pair, otherwise it is treated as a TCP port specification on the local
+     machine (127.0.0.1).  Both the _h_o_s_t and _p_o_r_t may be specified numerically
+     if you wish to avoid a DNS lookup or do not have an entry for the given
+     port in _/_e_t_c_/_s_e_r_v_i_c_e_s.
+
+     All remaining arguments are concatenated to form the _c_o_m_m_a_n_d(s) that will
+     be sent to the pppppp daemon.  If any semi-colon characters are found, they
+     are treated as _c_o_m_m_a_n_d delimiters, allowing more than one _c_o_m_m_a_n_d in a
+     given ‘session’.  For example:
+
+           pppctl 3000 set timeout 300\; show timeout
+
+     Do not forget to escape or quote the ';' as it is a special character for
+     most shells.
+
+     If no _c_o_m_m_a_n_d arguments are given, ppppppccttll enters interactive mode, where
+     commands are read from standard input.  When reading commands, the
+     editline(3) library is used, allowing command-line editing (with
+     editrc(5) defining editing behaviour).  The history size defaults to _2_0
+     _l_i_n_e_s.
+
+     The following command line options are available:
+
+     --vv      Display all data sent to and received from the pppppp daemon.  Nor‐
+             mally, ppppppccttll displays only non-prompt lines received.  This op‐
+             tion is ignored in interactive mode.
+
+     --tt _n    Use a timeout of _n instead of the default 2 seconds when connect‐
+             ing.  This may be required if you wish to control a daemon over a
+             slow (or even a dialup) link.
+
+     --pp _p_a_s_s_w_d
+             Specify the password required by the pppppp daemon.  If this switch
+             is not used, ppppppccttll will prompt for a password once it has suc‐
+             cessfully connected to pppppp.
+
+EENNVVIIRROONNMMEENNTT
+     The following environment variables are understood by ppppppccttll when in in‐
+     teractive mode:
+
+     EL_SIZE     The number of history lines.  The default is 20.
+
+     EL_EDITOR   The edit mode.  Only values of "emacs" and "vi" are accepted.
+                 Other values are silently ignored.  This environment variable
+                 will override the _b_i_n_d _-_v and _b_i_n_d _-_e commands in _~_/_._e_d_i_t_r_c.
+
+EEXXAAMMPPLLEESS
+     If you run pppppp in --aauuttoo mode, ppppppccttll can be used to automate many fre‐
+     quent tasks (you can actually control pppppp in any mode except interactive
+     mode).  Use of the --pp option is discouraged (even in scripts that are not
+     readable by others) as a ps(1) listing may reveal your secret.
+
+     The best way to allow easy, secure ppppppccttll access is to create a local
+     server socket in _/_e_t_c_/_p_p_p_/_p_p_p_._c_o_n_f (in the correct section) like this:
+
+           set server /var/run/internet "" 0177
+
+     This will instruct pppppp to create a local domain socket, with srw-------
+     permissions and no password, allowing access only to the user that in‐
+     voked pppppp.  Refer to the ppp(8) man page for further details.
+
+     You can now create some easy-access scripts.  To connect to the internet:
+
+           #! /bin/sh
+           test $# -eq 0 && time=300 || time=$1
+           exec pppctl /var/run/internet set timeout $time\; dial
+
+     To disconnect:
+
+           #! /bin/sh
+           exec pppctl /var/run/internet set timeout 300\; close
+
+     To check if the line is up:
+
+           #! /bin/sh
+           pppctl -p '' -v /var/run/internet quit | grep ^PPP >/dev/null
+           if [ $? -eq 0 ]; then
+             echo Link is up
+           else
+             echo Link is down
+           fi
+
+     You can even make a generic script:
+
+           #! /bin/sh
+           exec pppctl /var/run/internet "$@"
+
+     You could also use ppppppccttll to control when dial-on-demand works.  Suppose
+     you want pppppp to run all the time, but you want to prevent dial-out be‐
+     tween 8pm and 8am each day.  However, any connections active at 8pm
+     should continue to remain active until they are closed or naturally time
+     out.
+
+     A cron(8) entry for 8pm which runs
+
+           pppctl /var/run/internet set filter dial 0 deny 0 0
+
+     will block all further dial requests, and the corresponding 8am entry
+
+           pppctl /var/run/internet set filter dial -1
+
+     will allow them again.
+
+SSEEEE AALLSSOO
+     ps(1), editline(3), editrc(5), services(5), ppp(8)
+
+HHIISSTTOORRYY
+     The ppppppccttll utility first appeared in FreeBSD 2.2.5.
+
+BSD                              June 26, 1997                             BSD

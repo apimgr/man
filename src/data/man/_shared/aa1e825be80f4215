@@ -1,0 +1,321 @@
+_s_i_g_n_a_l_f_d(2)                   System Calls Manual                  _s_i_g_n_a_l_f_d(2)
+
+NNAAMMEE
+       signalfd - create a file descriptor for accepting signals
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssiiggnnaallffdd..hh>>
+
+       iinntt ssiiggnnaallffdd((iinntt _f_d,, ccoonnsstt ssiiggsseett__tt **_m_a_s_k,, iinntt _f_l_a_g_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       ssiiggnnaallffdd() creates a file descriptor that can be used to accept signals
+       targeted  at  the caller.  This provides an alternative to the use of a
+       signal handler or ssiiggwwaaiittiinnffoo(2), and has the advantage that  the  file
+       descriptor may be monitored by sseelleecctt(2), ppoollll(2), and eeppoollll(7).
+
+       The  _m_a_s_k  argument specifies the set of signals that the caller wishes
+       to accept via the file descriptor.  This argument is a signal set whose
+       contents can be initialized using the macros described in ssiiggsseettooppss(3).
+       Normally, the set of signals to be received  via  the  file  descriptor
+       should  be  blocked  using ssiiggpprrooccmmaasskk(2), to prevent the signals being
+       handled according to their default dispositions.  It is not possible to
+       receive SSIIGGKKIILLLL or SSIIGGSSTTOOPP signals  via  a  signalfd  file  descriptor;
+       these signals are silently ignored if specified in _m_a_s_k.
+
+       If  the  _f_d argument is -1, then the call creates a new file descriptor
+       and associates the signal set specified in _m_a_s_k with that file descrip‐
+       tor.  If _f_d is not -1, then it must specify a valid  existing  signalfd
+       file  descriptor, and _m_a_s_k is used to replace the signal set associated
+       with that file descriptor.
+
+       Starting with Linux 2.6.27, the following values may be bitwise ORed in
+       _f_l_a_g_s to change the behavior of ssiiggnnaallffdd():
+
+       SSFFDD__NNOONNBBLLOOCCKK  Set the OO__NNOONNBBLLOOCCKK file status flag on the open file  de‐
+                     scription  (see  ooppeenn(2)) referred to by the new file de‐
+                     scriptor.  Using this flag saves extra calls to  ffccnnttll(2)
+                     to achieve the same result.
+
+       SSFFDD__CCLLOOEEXXEECC   Set  the  close‐on‐exec (FFDD__CCLLOOEEXXEECC) flag on the new file
+                     descriptor.  See the description of the OO__CCLLOOEEXXEECC flag in
+                     ooppeenn(2) for reasons why this may be useful.
+
+       Up to Linux 2.6.26, the _f_l_a_g_s argument is unused, and must be specified
+       as zero.
+
+       ssiiggnnaallffdd() returns a file descriptor that supports the following opera‐
+       tions:
+
+       rreeaadd(2)
+              If one or more of the signals specified in _m_a_s_k is  pending  for
+              the  process, then the buffer supplied to rreeaadd(2) is used to re‐
+              turn one or more _s_i_g_n_a_l_f_d___s_i_g_i_n_f_o structures  (see  below)  that
+              describe  the  signals.   The rreeaadd(2) returns information for as
+              many signals as are pending and will fit in the supplied buffer.
+              The buffer must  be  at  least  _s_i_z_e_o_f_(_s_t_r_u_c_t  _s_i_g_n_a_l_f_d___s_i_g_i_n_f_o_)
+              bytes.   The  return value of the rreeaadd(2) is the total number of
+              bytes read.
+
+              As a consequence of the rreeaadd(2), the signals  are  consumed,  so
+              that  they are no longer pending for the process (i.e., will not
+              be caught by signal handlers, and cannot be accepted using  ssiigg‐‐
+              wwaaiittiinnffoo(2)).
+
+              If  none of the signals in _m_a_s_k is pending for the process, then
+              the rreeaadd(2) either blocks until one of the signals  in  _m_a_s_k  is
+              generated for the process, or fails with the error EEAAGGAAIINN if the
+              file descriptor has been made nonblocking.
+
+       ppoollll(2)
+       sseelleecctt(2)
+       (and similar)
+              The file descriptor is readable (the sseelleecctt(2) _r_e_a_d_f_d_s argument;
+              the  ppoollll(2)  PPOOLLLLIINN flag) if one or more of the signals in _m_a_s_k
+              is pending for the process.
+
+              The signalfd file descriptor also supports  the  other  file‐de‐
+              scriptor multiplexing APIs: ppsseelleecctt(2), ppppoollll(2), and eeppoollll(7).
+
+       cclloossee(2)
+              When  the  file  descriptor  is  no longer required it should be
+              closed.  When all file descriptors associated with the same sig‐
+              nalfd object have been closed,  the  resources  for  object  are
+              freed by the kernel.
+
+   TThhee ssiiggnnaallffdd__ssiiggiinnffoo ssttrruuccttuurree
+       The  format  of  the _s_i_g_n_a_l_f_d___s_i_g_i_n_f_o structure(s) returned by rreeaadd(2)s
+       from a signalfd file descriptor is as follows:
+
+           struct signalfd_siginfo {
+               uint32_t ssi_signo;    /* Signal number */
+               int32_t  ssi_errno;    /* Error number (unused) */
+               int32_t  ssi_code;     /* Signal code */
+               uint32_t ssi_pid;      /* PID of sender */
+               uint32_t ssi_uid;      /* Real UID of sender */
+               int32_t  ssi_fd;       /* File descriptor (SIGIO) */
+               uint32_t ssi_tid;      /* Kernel timer ID (POSIX timers)
+               uint32_t ssi_band;     /* Band event (SIGIO) */
+               uint32_t ssi_overrun;  /* POSIX timer overrun count */
+               uint32_t ssi_trapno;   /* Trap number that caused signal */
+               int32_t  ssi_status;   /* Exit status or signal (SIGCHLD) */
+               int32_t  ssi_int;      /* Integer sent by sigqueue(3) */
+               uint64_t ssi_ptr;      /* Pointer sent by sigqueue(3) */
+               uint64_t ssi_utime;    /* User CPU time consumed (SIGCHLD) */
+               uint64_t ssi_stime;    /* System CPU time consumed
+                                         (SIGCHLD) */
+               uint64_t ssi_addr;     /* Address that generated signal
+                                         (for hardware-generated signals) */
+               uint16_t ssi_addr_lsb; /* Least significant bit of address
+                                         (SIGBUS; since Linux 2.6.37) */
+               uint8_t  pad[_X];       /* Pad size to 128 bytes (allow for
+                                         additional fields in the future) */
+           };
+
+       Each of the fields in this structure  is  analogous  to  the  similarly
+       named field in the _s_i_g_i_n_f_o___t structure.  The _s_i_g_i_n_f_o___t structure is de‐
+       scribed  in ssiiggaaccttiioonn(2).  Not all fields in the returned _s_i_g_n_a_l_f_d___s_i_g_‐
+       _i_n_f_o structure will be valid for a specific signal; the  set  of  valid
+       fields can be determined from the value returned in the _s_s_i___c_o_d_e field.
+       This  field  is  the  analog of the _s_i_g_i_n_f_o___t _s_i___c_o_d_e field; see ssiiggaacc‐‐
+       ttiioonn(2) for details.
+
+   ffoorrkk((22)) sseemmaannttiiccss
+       After a ffoorrkk(2), the child inherits a copy of  the  signalfd  file  de‐
+       scriptor.   A rreeaadd(2) from the file descriptor in the child will return
+       information about signals queued to the child.
+
+   SSeemmaannttiiccss ooff ffiillee ddeessccrriippttoorr ppaassssiinngg
+       As with other file descriptors, signalfd file descriptors can be passed
+       to another process via a UNIX domain socket (see uunniixx(7)).  In the  re‐
+       ceiving  process,  a rreeaadd(2) from the received file descriptor will re‐
+       turn information about signals queued to that process.
+
+   eexxeeccvvee((22)) sseemmaannttiiccss
+       Just like any other file descriptor, a signalfd file descriptor remains
+       open across an eexxeeccvvee(2), unless it has been marked  for  close‐on‐exec
+       (see ffccnnttll(2)).  Any signals that were available for reading before the
+       eexxeeccvvee(2) remain available to the newly loaded program.  (This is anal‐
+       ogous  to  traditional signal semantics, where a blocked signal that is
+       pending remains pending across an eexxeeccvvee(2).)
+
+   TThhrreeaadd sseemmaannttiiccss
+       The semantics of signalfd file descriptors in a  multithreaded  program
+       mirror  the  standard  semantics  for  signals.  In other words, when a
+       thread reads from a signalfd file descriptor, it will read the  signals
+       that  are  directed  to  the thread itself and the signals that are di‐
+       rected to the process (i.e., the entire thread group).  (A thread  will
+       not  be  able to read signals that are directed to other threads in the
+       process.)
+
+   eeppoollll((77)) sseemmaannttiiccss
+       If a process adds (via eeppoollll__ccttll(2)) a signalfd file descriptor  to  an
+       eeppoollll(7)  instance,  then eeppoollll__wwaaiitt(2) returns events only for signals
+       sent to that process.  In particular, if the process then uses  ffoorrkk(2)
+       to  create a child process, then the child will be able to rreeaadd(2) sig‐
+       nals that are sent to  it  using  the  signalfd  file  descriptor,  but
+       eeppoollll__wwaaiitt(2)  will  nnoott  indicate that the signalfd file descriptor is
+       ready.  In this scenario, a  possible  workaround  is  that  after  the
+       ffoorrkk(2),  the child process can close the signalfd file descriptor that
+       it inherited from the parent process and then create  another  signalfd
+       file  descriptor  and add it to the epoll instance.  Alternatively, the
+       parent and the child could delay  creating  their  (separate)  signalfd
+       file  descriptors and adding them to the epoll instance until after the
+       call to ffoorrkk(2).
+
+RREETTUURRNN VVAALLUUEE
+       On success, ssiiggnnaallffdd() returns a signalfd file descriptor; this is  ei‐
+       ther a new file descriptor (if _f_d was -1), or _f_d if _f_d was a valid sig‐
+       nalfd  file  descriptor.   On error, -1 is returned and _e_r_r_n_o is set to
+       indicate the error.
+
+EERRRROORRSS
+       EEBBAADDFF  The _f_d file descriptor is not a valid file descriptor.
+
+       EEIINNVVAALL _f_d is not a valid signalfd file descriptor.
+
+       EEIINNVVAALL _f_l_a_g_s is invalid; or, in  Linux  2.6.26  or  earlier,  _f_l_a_g_s  is
+              nonzero.
+
+       EEMMFFIILLEE The per‐process limit on the number of open file descriptors has
+              been reached.
+
+       EENNFFIILLEE The system‐wide limit on the total number of open files has been
+              reached.
+
+       EENNOODDEEVV Could not mount (internal) anonymous inode device.
+
+       EENNOOMMEEMM There  was insufficient memory to create a new signalfd file de‐
+              scriptor.
+
+VVEERRSSIIOONNSS
+   CC lliibbrraarryy//kkeerrnneell ddiiffffeerreenncceess
+       The underlying Linux  system  call  requires  an  additional  argument,
+       _s_i_z_e___t  _s_i_z_e_m_a_s_k,  which  specifies the size of the _m_a_s_k argument.  The
+       glibc ssiiggnnaallffdd() wrapper function does not include this argument, since
+       it provides the required value for the underlying system call.
+
+       There are two underlying Linux system calls: ssiiggnnaallffdd()  and  the  more
+       recent  ssiiggnnaallffdd44().  The former system call does not implement a _f_l_a_g_s
+       argument.  The latter system call implements the _f_l_a_g_s values described
+       above.  Starting with glibc 2.9, the ssiiggnnaallffdd() wrapper  function  will
+       use ssiiggnnaallffdd44() where it is available.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       ssiiggnnaallffdd()
+              Linux 2.6.22, glibc 2.8.
+
+       ssiiggnnaallffdd44()
+              Linux 2.6.27.
+
+NNOOTTEESS
+       A process can create multiple signalfd file descriptors.  This makes it
+       possible  to  accept  different  signals on different file descriptors.
+       (This may be useful if monitoring the file descriptors using sseelleecctt(2),
+       ppoollll(2), or eeppoollll(7): the arrival of different signals will  make  dif‐
+       ferent  file  descriptors  ready.)   If a signal appears in the _m_a_s_k of
+       more than one of the file descriptors, then occurrences of that  signal
+       can be read (once) from any one of the file descriptors.
+
+       Attempts to include SSIIGGKKIILLLL and SSIIGGSSTTOOPP in _m_a_s_k are silently ignored.
+
+       The  signal  mask  employed by a signalfd file descriptor can be viewed
+       via the entry for the corresponding file descriptor  in  the  process’s
+       _/_p_r_o_c_/pid_/_f_d_i_n_f_o directory.  See pprroocc(5) for further details.
+
+   LLiimmiittaattiioonnss
+       The  signalfd  mechanism can’t be used to receive signals that are syn‐
+       chronously generated, such as the SSIIGGSSEEGGVV signal that results from  ac‐
+       cessing  an  invalid  memory  address or the SSIIGGFFPPEE signal that results
+       from an arithmetic error.  Such signals can be caught only  via  signal
+       handler.
+
+       As described above, in normal usage one blocks the signals that will be
+       accepted  via  ssiiggnnaallffdd().   If  spawning  a child process to execute a
+       helper program (that does not need the signalfd file descriptor), then,
+       after the call to ffoorrkk(2), you will normally want to unblock those sig‐
+       nals before calling eexxeeccvvee(2), so that the helper program can  see  any
+       signals  that it expects to see.  Be aware, however, that this won’t be
+       possible in the case of a helper program spawned behind the  scenes  by
+       any  library  function  that  the program may call.  In such cases, one
+       must fall back to using a traditional signal handler that writes  to  a
+       file descriptor monitored by sseelleecctt(2), ppoollll(2), or eeppoollll(7).
+
+BBUUGGSS
+       Before  Linux  2.6.25, the _s_s_i___p_t_r and _s_s_i___i_n_t fields are not filled in
+       with the data accompanying a signal sent by ssiiggqquueeuuee(3).
+
+EEXXAAMMPPLLEESS
+       The program below accepts the signals SSIIGGIINNTT and SSIIGGQQUUIITT via a signalfd
+       file descriptor.  The program terminates after accepting a SSIIGGQQUUIITT sig‐
+       nal.  The following shell session demonstrates the use of the program:
+
+           $ ..//ssiiggnnaallffdd__ddeemmoo
+           ^^CC                   # Control-C generates SIGINT
+           Got SIGINT
+           ^^CC
+           Got SIGINT
+           ^^\\                    # Control-\ generates SIGQUIT
+           Got SIGQUIT
+           $
+
+   PPrrooggrraamm ssoouurrccee
+
+       #include <err.h>
+       #include <signal.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/signalfd.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       int
+       main(void)
+       {
+           int                      sfd;
+           ssize_t                  s;
+           sigset_t                 mask;
+           struct signalfd_siginfo  fdsi;
+
+           sigemptyset(&mask);
+           sigaddset(&mask, SIGINT);
+           sigaddset(&mask, SIGQUIT);
+
+           /* Block signals so that they aren't handled
+              according to their default dispositions.  */
+
+           if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1)
+               err(EXIT_FAILURE, "sigprocmask");
+
+           sfd = signalfd(-1, &mask, 0);
+           if (sfd == -1)
+               err(EXIT_FAILURE, "signalfd");
+
+           for (;;) {
+               s = read(sfd, &fdsi, sizeof(fdsi));
+               if (s != sizeof(fdsi))
+                   err(EXIT_FAILURE, "read");
+
+               if (fdsi.ssi_signo == SIGINT) {
+                   printf("Got SIGINT\n");
+               } else if (fdsi.ssi_signo == SIGQUIT) {
+                   printf("Got SIGQUIT\n");
+                   exit(EXIT_SUCCESS);
+               } else {
+                   printf("Read unexpected signal\n");
+               }
+           }
+       }
+
+SSEEEE AALLSSOO
+       eevveennttffdd(2), ppoollll(2), rreeaadd(2), sseelleecctt(2), ssiiggaaccttiioonn(2),  ssiiggpprrooccmmaasskk(2),
+       ssiiggwwaaiittiinnffoo(2),  ttiimmeerrffdd__ccrreeaattee(2), ssiiggsseettooppss(3), ssiiggwwaaiitt(3), eeppoollll(7),
+       ssiiggnnaall(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                       _s_i_g_n_a_l_f_d(2)

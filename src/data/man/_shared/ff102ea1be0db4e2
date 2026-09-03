@@ -1,0 +1,408 @@
+_M_S_G_O_P(2)                      System Calls Manual                     _M_S_G_O_P(2)
+
+NNAAMMEE
+       msgrcv, msgsnd - System V message queue operations
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//mmssgg..hh>>
+
+       ssssiizzee__tt mmssggrrccvv((size_t msgsz;
+                      iinntt _m_s_q_i_d,, vvooiidd _m_s_g_p[[_m_s_g_s_z]],, ssiizzee__tt _m_s_g_s_z,, lloonngg _m_s_g_t_y_p,,
+                      iinntt _m_s_g_f_l_g));;
+
+       iinntt mmssggssnndd((size_t msgsz;
+                      iinntt _m_s_q_i_d,, ccoonnsstt vvooiidd _m_s_g_p[[_m_s_g_s_z]],, ssiizzee__tt _m_s_g_s_z,,
+                      iinntt _m_s_g_f_l_g));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  mmssggssnndd()  and  mmssggrrccvv() system calls are used to send messages to,
+       and receive messages from,  a  System V  message  queue.   The  calling
+       process  must  have  write  permission on the message queue in order to
+       send a message, and read permission to receive a message.
+
+       The _m_s_g_p argument is a pointer to a  caller‐defined  structure  of  the
+       following general form:
+
+           struct msgbuf {
+               long mtype;       /* message type, must be > 0 */
+               char mtext[1];    /* message data */
+           };
+
+       The  _m_t_e_x_t  field is an array (or other structure) whose size is speci‐
+       fied by _m_s_g_s_z, a nonnegative integer value.  Messages  of  zero  length
+       (i.e.,  no  _m_t_e_x_t  field)  are  permitted.  The _m_t_y_p_e field must have a
+       strictly positive integer value.  This value can be used by the receiv‐
+       ing process for message selection (see the description of mmssggrrccvv()  be‐
+       low).
+
+   mmssggssnndd(())
+       The  mmssggssnndd()  system  call appends a copy of the message pointed to by
+       _m_s_g_p to the message queue whose identifier is specified by _m_s_q_i_d.
+
+       If sufficient space is available in the queue, mmssggssnndd() succeeds  imme‐
+       diately.  The queue capacity is governed by the _m_s_g___q_b_y_t_e_s field in the
+       associated data structure for the message queue.  During queue creation
+       this  field is initialized to MMSSGGMMNNBB bytes, but this limit can be modi‐
+       fied using mmssggccttll(2).  A message queue is considered to be full if  ei‐
+       ther of the following conditions is true:
+
+       •  Adding  a  new  message to the queue would cause the total number of
+          bytes  in  the  queue  to  exceed  the  queue’s  maximum  size  (the
+          _m_s_g___q_b_y_t_e_s field).
+
+       •  Adding  another message to the queue would cause the total number of
+          messages in the queue  to  exceed  the  queue’s  maximum  size  (the
+          _m_s_g___q_b_y_t_e_s  field).  This check is necessary to prevent an unlimited
+          number of zero‐length messages being placed on the queue.   Although
+          such  messages  contain  no data, they nevertheless consume (locked)
+          kernel memory.
+
+       If insufficient space is available in the queue, then the  default  be‐
+       havior  of  mmssggssnndd()  is  to  block  until space becomes available.  If
+       IIPPCC__NNOOWWAAIITT is specified in _m_s_g_f_l_g, then the call instead fails with the
+       error EEAAGGAAIINN.
+
+       A blocked mmssggssnndd() call may also fail if:
+
+       •  the queue is removed, in which case the system call fails with _e_r_r_n_o
+          set to EEIIDDRRMM; or
+
+       •  a signal is caught, in which case the system call fails  with  _e_r_r_n_o
+          set  to  EEIINNTTRR;  see  ssiiggnnaall(7).   (mmssggssnndd()  is never automatically
+          restarted after being interrupted by a signal handler, regardless of
+          the setting of the SSAA__RREESSTTAARRTT flag when establishing a  signal  han‐
+          dler.)
+
+       Upon  successful completion the message queue data structure is updated
+       as follows:
+
+       •  _m_s_g___l_s_p_i_d is set to the process ID of the calling process.
+
+       •  _m_s_g___q_n_u_m is incremented by 1.
+
+       •  _m_s_g___s_t_i_m_e is set to the current time.
+
+   mmssggrrccvv(())
+       The mmssggrrccvv() system call removes a message from the queue specified  by
+       _m_s_q_i_d and places it in the buffer pointed to by _m_s_g_p.
+
+       The  argument  _m_s_g_s_z specifies the maximum size in bytes for the member
+       _m_t_e_x_t of the structure pointed to by the _m_s_g_p argument.  If the message
+       text has length greater  than  _m_s_g_s_z,  then  the  behavior  depends  on
+       whether  MMSSGG__NNOOEERRRROORR  is specified in _m_s_g_f_l_g.  If MMSSGG__NNOOEERRRROORR is speci‐
+       fied, then the message text will be truncated (and the  truncated  part
+       will  be lost); if MMSSGG__NNOOEERRRROORR is not specified, then the message isn’t
+       removed from the queue and the system call fails returning -1 with  _e_r_‐
+       _r_n_o set to EE22BBIIGG.
+
+       Unless MMSSGG__CCOOPPYY is specified in _m_s_g_f_l_g (see below), the _m_s_g_t_y_p argument
+       specifies the type of message requested, as follows:
+
+       •  If _m_s_g_t_y_p is 0, then the first message in the queue is read.
+
+       •  If  _m_s_g_t_y_p is greater than 0, then the first message in the queue of
+          type _m_s_g_t_y_p is read, unless MMSSGG__EEXXCCEEPPTT was specified in  _m_s_g_f_l_g,  in
+          which  case the first message in the queue of type not equal to _m_s_g_‐
+          _t_y_p will be read.
+
+       •  If _m_s_g_t_y_p is less than 0, then the first message in the  queue  with
+          the  lowest  type less than or equal to the absolute value of _m_s_g_t_y_p
+          will be read.
+
+       The _m_s_g_f_l_g argument is a bit mask constructed by ORing together zero or
+       more of the following flags:
+
+       IIPPCC__NNOOWWAAIITT
+              Return immediately if no message of the requested type is in the
+              queue.  The system call fails with _e_r_r_n_o set to EENNOOMMSSGG.
+
+       MMSSGG__CCOOPPYY (since Linux 3.8)
+              Nondestructively fetch a copy of the message at the ordinal  po‐
+              sition in the queue specified by _m_s_g_t_y_p (messages are considered
+              to be numbered starting at 0).
+
+              This flag must be specified in conjunction with IIPPCC__NNOOWWAAIITT, with
+              the  result  that, if there is no message available at the given
+              position, the call fails immediately with the error EENNOOMMSSGG.  Be‐
+              cause they alter the  meaning  of  _m_s_g_t_y_p  in  orthogonal  ways,
+              MMSSGG__CCOOPPYY and MMSSGG__EEXXCCEEPPTT may not both be specified in _m_s_g_f_l_g.
+
+              The MMSSGG__CCOOPPYY flag was added for the implementation of the kernel
+              checkpoint‐restore  facility and is available only if the kernel
+              was built with the CCOONNFFIIGG__CCHHEECCKKPPOOIINNTT__RREESSTTOORREE option.
+
+       MMSSGG__EEXXCCEEPPTT
+              Used with _m_s_g_t_y_p greater than 0 to read the first message in the
+              queue with message type that differs from _m_s_g_t_y_p.
+
+       MMSSGG__NNOOEERRRROORR
+              To truncate the message text if longer than _m_s_g_s_z bytes.
+
+       If no message of the requested type is available and  IIPPCC__NNOOWWAAIITT  isn’t
+       specified  in  _m_s_g_f_l_g,  the calling process is blocked until one of the
+       following conditions occurs:
+
+       •  A message of the desired type is placed in the queue.
+
+       •  The message queue is removed from the system.   In  this  case,  the
+          system call fails with _e_r_r_n_o set to EEIIDDRRMM.
+
+       •  The calling process catches a signal.  In this case, the system call
+          fails  with  _e_r_r_n_o  set  to EEIINNTTRR.  (mmssggrrccvv() is never automatically
+          restarted after being interrupted by a signal handler, regardless of
+          the setting of the SSAA__RREESSTTAARRTT flag when establishing a  signal  han‐
+          dler.)
+
+       Upon  successful completion the message queue data structure is updated
+       as follows:
+
+              _m_s_g___l_r_p_i_d is set to the process ID of the calling process.
+
+              _m_s_g___q_n_u_m is decremented by 1.
+
+              _m_s_g___r_t_i_m_e is set to the current time.
+
+RREETTUURRNN VVAALLUUEE
+       On success, mmssggssnndd() returns 0 and mmssggrrccvv() returns the number of bytes
+       actually copied into the _m_t_e_x_t array.  On failure, both  functions  re‐
+       turn -1, and set _e_r_r_n_o to indicate the error.
+
+EERRRROORRSS
+       mmssggssnndd() can fail with the following errors:
+
+       EEAACCCCEESS The  calling  process does not have write permission on the mes‐
+              sage queue, and does not have the  CCAAPP__IIPPCC__OOWWNNEERR  capability  in
+              the user namespace that governs its IPC namespace.
+
+       EEAAGGAAIINN The  message  can’t  be sent due to the _m_s_g___q_b_y_t_e_s limit for the
+              queue and IIPPCC__NNOOWWAAIITT was specified in _m_s_g_f_l_g.
+
+       EEFFAAUULLTT The address pointed to by _m_s_g_p isn’t accessible.
+
+       EEIIDDRRMM  The message queue was removed.
+
+       EEIINNTTRR  Sleeping on a full message queue condition, the process caught a
+              signal.
+
+       EEIINNVVAALL Invalid _m_s_q_i_d value, or nonpositive _m_t_y_p_e value, or invalid  _m_s_‐
+              _g_s_z value (less than 0 or greater than the system value MMSSGGMMAAXX).
+
+       EENNOOMMEEMM The  system  does  not  have enough memory to make a copy of the
+              message pointed to by _m_s_g_p.
+
+       mmssggrrccvv() can fail with the following errors:
+
+       EE22BBIIGG  The message text length is greater than  _m_s_g_s_z  and  MMSSGG__NNOOEERRRROORR
+              isn’t specified in _m_s_g_f_l_g.
+
+       EEAACCCCEESS The calling process does not have read permission on the message
+              queue,  and  does  not  have the CCAAPP__IIPPCC__OOWWNNEERR capability in the
+              user namespace that governs its IPC namespace.
+
+       EEFFAAUULLTT The address pointed to by _m_s_g_p isn’t accessible.
+
+       EEIIDDRRMM  While the process was sleeping to receive a message, the message
+              queue was removed.
+
+       EEIINNTTRR  While the process was sleeping to receive a message, the process
+              caught a signal; see ssiiggnnaall(7).
+
+       EEIINNVVAALL _m_s_q_i_d was invalid, or _m_s_g_s_z was less than 0.
+
+       EEIINNVVAALL (since Linux 3.14)
+              _m_s_g_f_l_g specified MMSSGG__CCOOPPYY, but not IIPPCC__NNOOWWAAIITT.
+
+       EEIINNVVAALL (since Linux 3.14)
+              _m_s_g_f_l_g specified both MMSSGG__CCOOPPYY and MMSSGG__EEXXCCEEPPTT.
+
+       EENNOOMMSSGG IIPPCC__NNOOWWAAIITT was specified in _m_s_g_f_l_g and no  message  of  the  re‐
+              quested type existed on the message queue.
+
+       EENNOOMMSSGG IIPPCC__NNOOWWAAIITT  and  MMSSGG__CCOOPPYY were specified in _m_s_g_f_l_g and the queue
+              contains fewer than _m_s_g_t_y_p messages.
+
+       EENNOOSSYYSS (since Linux 3.8)
+              Both MMSSGG__CCOOPPYY and IIPPCC__NNOOWWAAIITT were specified in _m_s_g_f_l_g, and  this
+              kernel was configured without CCOONNFFIIGG__CCHHEECCKKPPOOIINNTT__RREESSTTOORREE.
+
+SSTTAANNDDAARRDDSS
+       POSIX.1‐2024.
+
+       The MMSSGG__EEXXCCEEPPTT and MMSSGG__CCOOPPYY flags are Linux‐specific; their definitions
+       can be obtained by defining the __GGNNUU__SSOOUURRCCEE feature test macro.
+
+HHIISSTTOORRYY
+       POSIX.1‐2001, SVr4.
+
+       The  _m_s_g_p argument is declared as _s_t_r_u_c_t _m_s_g_b_u_f _* in glibc 2.0 and 2.1.
+       It is declared as _v_o_i_d _* in glibc 2.2 and later, as required  by  SUSv2
+       and SUSv3.
+
+NNOOTTEESS
+       The  following  limits  on  message queue resources affect the mmssggssnndd()
+       call:
+
+       MMSSGGMMAAXX Maximum size of a message text, in bytes  (default  value:  8192
+              bytes).   On  Linux,  this  limit  can  be read and modified via
+              _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_m_s_g_m_a_x.
+
+       MMSSGGMMNNBB Maximum number of bytes that can be held in a message queue (de‐
+              fault value: 16384 bytes).  On Linux, this limit can be read and
+              modified  via  _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_m_s_g_m_n_b.   A  privileged  process
+              (Linux:  a process with the CCAAPP__SSYYSS__RREESSOOUURRCCEE capability) can in‐
+              crease the size of a message queue beyond MMSSGGMMNNBB using  the  mmss‐‐
+              ggccttll(2) IIPPCC__SSEETT operation.
+
+       The implementation has no intrinsic system‐wide limits on the number of
+       message  headers  (MMSSGGTTQQLL)  and the number of bytes in the message pool
+       (MMSSGGPPOOOOLL).
+
+BBUUGGSS
+       In Linux 3.13 and earlier, if mmssggrrccvv() was  called  with  the  MMSSGG__CCOOPPYY
+       flag, but without IIPPCC__NNOOWWAAIITT, and the message queue contained less than
+       _m_s_g_t_y_p  messages,  then  the call would block until the next message is
+       written to the queue.  At that point, the call would return a  copy  of
+       the  message, _r_e_g_a_r_d_l_e_s_s of whether that message was at the ordinal po‐
+       sition _m_s_g_t_y_p.  This bug is fixed in Linux 3.14.
+
+       Specifying both MMSSGG__CCOOPPYY and MMSSCC__EEXXCCEEPPTT in _m_s_g_f_l_g is  a  logical  error
+       (since  these  flags  impose  different interpretations on _m_s_g_t_y_p).  In
+       Linux 3.13 and earlier, this error was not diagnosed by mmssggrrccvv().  This
+       bug is fixed in Linux 3.14.
+
+EEXXAAMMPPLLEESS
+       The program below demonstrates the use of mmssggssnndd() and mmssggrrccvv().
+
+       The example program is first run with the --ss option to send  a  message
+       and then run again with the --rr option to receive a message.
+
+       The following shell session shows a sample run of the program:
+
+           $ ..//aa..oouutt --ss
+           sent: a message at Wed Mar  4 16:25:45 2015
+
+       $ ..//aa..oouutt --rr
+       message received: a message at Wed Mar  4 16:25:45 2015
+
+   PPrrooggrraamm ssoouurrccee
+
+       #include <errno.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/ipc.h>
+       #include <sys/msg.h>
+       #include <time.h>
+       #include <unistd.h>
+
+       struct msgbuf {
+           long mtype;
+           char mtext[80];
+       };
+
+       static void
+       usage(char *prog_name, char *msg)
+       {
+           if (msg != NULL)
+               fputs(msg, stderr);
+
+           fprintf(stderr, "Usage: %s [options]\n", prog_name);
+           fprintf(stderr, "Options are:\n");
+           fprintf(stderr, "-s        send message using msgsnd()\n");
+           fprintf(stderr, "-r        read message using msgrcv()\n");
+           fprintf(stderr, "-t        message type (default is 1)\n");
+           fprintf(stderr, "-k        message queue key (default is 1234)\n");
+           exit(EXIT_FAILURE);
+       }
+
+       static void
+       send_msg(int qid, int msgtype)
+       {
+           time_t         t;
+           struct msgbuf  msg;
+
+           msg.mtype = msgtype;
+
+           time(&t);
+           snprintf(msg.mtext, sizeof(msg.mtext), "a message at %s",
+                    ctime(&t));
+
+           if (msgsnd(qid, &msg, sizeof(msg.mtext),
+                      IPC_NOWAIT) == -1)
+           {
+               perror("msgsnd error");
+               exit(EXIT_FAILURE);
+           }
+           printf("sent: %s\n", msg.mtext);
+       }
+
+       static void
+       get_msg(int qid, int msgtype)
+       {
+           struct msgbuf msg;
+
+           if (msgrcv(qid, &msg, sizeof(msg.mtext), msgtype,
+                      MSG_NOERROR | IPC_NOWAIT) == -1) {
+               if (errno != ENOMSG) {
+                   perror("msgrcv");
+                   exit(EXIT_FAILURE);
+               }
+               printf("No message available for msgrcv()\n");
+           } else {
+               printf("message received: %s\n", msg.mtext);
+           }
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           int  qid, opt;
+           int  mode = 0;               /* 1 = send, 2 = receive */
+           int  msgtype = 1;
+           int  msgkey = 1234;
+
+           while ((opt = getopt(argc, argv, "srt:k:")) != -1) {
+               switch (opt) {
+               case 's':
+                   mode = 1;
+                   break;
+               case 'r':
+                   mode = 2;
+                   break;
+               case 't':
+                   msgtype = atoi(optarg);
+                   if (msgtype <= 0)
+                       usage(argv[0], "-t option must be greater than 0\n");
+                   break;
+               case 'k':
+                   msgkey = atoi(optarg);
+                   break;
+               default:
+                   usage(argv[0], "Unrecognized option\n");
+               }
+           }
+
+           if (mode == 0)
+               usage(argv[0], "must use either -s or -r option\n");
+
+           qid = msgget(msgkey, IPC_CREAT | 0666);
+
+           if (qid == -1) {
+               perror("msgget");
+               exit(EXIT_FAILURE);
+           }
+
+           if (mode == 2)
+               get_msg(qid, msgtype);
+           else
+               send_msg(qid, msgtype);
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       mmssggccttll(2), mmssggggeett(2), ccaappaabbiilliittiieess(7), mmqq__oovveerrvviieeww(7), ssyyssvviippcc(7)
+
+Linux man‐pages (unreleased)      2025‐10‐29                          _M_S_G_O_P(2)

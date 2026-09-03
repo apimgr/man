@@ -1,0 +1,228 @@
+BGPD(8)                   BSD System Manager's Manual                  BGPD(8)
+
+NNAAMMEE
+     bbggppdd — Border Gateway Protocol (BGP) routing daemon
+
+SSYYNNOOPPSSIISS
+     bbggppdd [--ccddnnvvVV] [--DD _m_a_c_r_o=_v_a_l_u_e] [--ff _f_i_l_e]
+
+DDEESSCCRRIIPPTTIIOONN
+     bbggppdd is a Border Gateway Protocol (BGP) daemon which manages the network
+     routing tables.  Its main purpose is to exchange information concerning
+     "network reachability" with other BGP systems.  bbggppdd uses the Border
+     Gateway Protocol, Version 4, as described in RFC 4271.
+
+     BGP is an exterior gateway protocol using a multiple step decision
+     process to find the best path.  Advanced filtering can be used to influ‐
+     ence the route decision for traffic engineering.  The session engine of
+     bbggppdd is responsible for maintaining the TCP session with each neighbor.
+     Updates are passed to the Route Decision Engine (RDE) where the paths are
+     filtered and used to compute a Routing Information Base (RIB).  The par‐
+     ent process is responsible for keeping the RIB in sync with the kernel
+     routing table.
+
+     The route decision process selects the best path by evaluating all paths
+     to the same destination.  The decision process continues to the next step
+     if paths have equal attributes.  Paths that are less preferred are taken
+     out of consideration until there is only one path left.
+
+         1.  All paths with errors or loops are not eligible.
+
+         2.  Paths with an unreachable nexthop are not eligible.  After this
+             step all remaining paths are valid.
+
+         3.  The path with the highest _L_O_C_A_L___P_R_E_F is selected.
+
+         4.  The path with the shortest _A_S _p_a_t_h attribute is selected.
+
+         5.  The _O_R_I_G_I_N attribute is compared.  The order is IGP before EGP
+             before incomplete origins.
+
+         6.  The path with the lowest _M_U_L_T_I___E_X_I_T___D_I_S_C metric is selected.
+             Normally, this value is only considered when choosing between
+             multiple routes sent by the same neighbouring AS.  However, if
+             “rde med compare always” is set in the configuration, the metric
+             is compared for routes sent by any AS.
+
+         7.  Comparison of the BGP session type.  Paths learned over an exter‐
+             nal (EBGP) session are preferred over those learned via an inter‐
+             nal (IBGP) session.
+
+         8.  The path with the highest local _w_e_i_g_h_t is selected.
+
+         9.  If “rde route-age evaluate” is set then the oldest path is se‐
+             lected.
+
+         10. The path coming from the neighbor with the lowest _B_G_P _I_D wins.
+             If the _O_R_I_G_I_N_A_T_O_R___I_D attribute is present, that value will be
+             used in the comparison instead.
+
+         11. The path with the shortest _C_L_U_S_T_E_R___L_I_S_T attribute is selected.
+             If it is not present then a length of 0 is used in the compari‐
+             son.
+
+         12. The path coming from the peer with the lowest IP address is se‐
+             lected.  IPv4 sessions will be preferred over IPv6 ones.
+
+     Attributes set by filters can be used to tip the decision process to pre‐
+     fer particular paths over others.  This can be achieved by changing the
+     _l_o_c_a_l_p_r_e_f, _m_e_d, or _w_e_i_g_h_t attributes.  AS path prepending or changing the
+     _m_e_d or _o_r_i_g_i_n attribute can be used to influence the routing behaviour on
+     remote systems.
+
+     To have bbggppdd enabled at boot time, use “rcctl enable bgpd”, which sets
+
+           bgpd_flags=""
+
+     in rc.conf.local(8).
+
+     When bbggppdd starts up, it reads settings from a configuration file, typi‐
+     cally bgpd.conf(5).  A running bbggppdd process can be controlled using the
+     bgpctl(8) utility.
+
+     The options are as follows:
+
+     --cc          Force bbggppdd to do carp(4) demotion at startup when the _d_e_m_o_t_e
+                 functionality is used.  Normally, bbggppdd will only do demotion
+                 at startup when the demotion counter for the group in ques‐
+                 tion is already greater than 0.  bbggppdd will start handling de‐
+                 motion after all sessions with demotion configured for the
+                 given group have been successfully established.  At system
+                 startup, rc(8) has the demotion counter for the group _c_a_r_p
+                 increased until after bbggppdd is started, so this option should
+                 _n_o_t be used in rc.conf(8).
+
+     --DD _m_a_c_r_o=_v_a_l_u_e
+                 Define _m_a_c_r_o to be set to _v_a_l_u_e on the command line.  Over‐
+                 rides the definition of _m_a_c_r_o in the configuration file.
+
+     --dd          Do not daemonize.  If this option is specified, bbggppdd will run
+                 in the foreground and log to _s_t_d_e_r_r.
+
+     --ff _f_i_l_e     Use _f_i_l_e as the configuration file, instead of the default
+                 _/_e_t_c_/_b_g_p_d_._c_o_n_f.
+
+     --nn          Configtest mode.  Only check the configuration file for va‐
+                 lidity.
+
+     --vv          Produce more verbose output.
+
+     --VV          Show the version and exit.
+
+FFIILLEESS
+     /etc/bgpd.conf                Default bbggppdd configuration file.
+     /var/run/bgpd.sock.<rdomain>  Default bbggppdd control socket, where
+                                   _<_r_d_o_m_a_i_n_> is the routing domain in which
+                                   bbggppdd has been started.
+
+SSEEEE AALLSSOO
+     bgpd.conf(5), bgpctl(8), bgplg(8), bgplgsh(8)
+
+SSTTAANNDDAARRDDSS
+     _B_G_P _C_o_m_m_u_n_i_t_i_e_s _A_t_t_r_i_b_u_t_e, RFC 1997, August 1996.
+
+     _P_r_o_t_e_c_t_i_o_n _o_f _B_G_P _S_e_s_s_i_o_n_s _v_i_a _t_h_e _T_C_P _M_D_5 _S_i_g_n_a_t_u_r_e _O_p_t_i_o_n, RFC 2385,
+     August 1998.
+
+     _U_s_e _o_f _B_G_P_-_4 _M_u_l_t_i_p_r_o_t_o_c_o_l _E_x_t_e_n_s_i_o_n_s _f_o_r _I_P_v_6 _I_n_t_e_r_-_D_o_m_a_i_n _R_o_u_t_i_n_g, RFC
+     2545, March 1999.
+
+     _R_o_u_t_e _R_e_f_r_e_s_h _C_a_p_a_b_i_l_i_t_y _f_o_r _B_G_P_-_4, RFC 2918, September 2000.
+
+     _N_O_P_E_E_R _C_o_m_m_u_n_i_t_y _f_o_r _B_o_r_d_e_r _G_a_t_e_w_a_y _P_r_o_t_o_c_o_l _(_B_G_P_) _R_o_u_t_e _S_c_o_p_e _C_o_n_t_r_o_l,
+     RFC 3765, April 2004.
+
+     _A _B_o_r_d_e_r _G_a_t_e_w_a_y _P_r_o_t_o_c_o_l _4 _(_B_G_P_-_4_), RFC 4271, January 2006.
+
+     _B_G_P _E_x_t_e_n_d_e_d _C_o_m_m_u_n_i_t_i_e_s _A_t_t_r_i_b_u_t_e, RFC 4360, February 2006.
+
+     _B_G_P_/_M_P_L_S _I_P _V_i_r_t_u_a_l _P_r_i_v_a_t_e _N_e_t_w_o_r_k_s _(_V_P_N_s_), RFC 4364, February 2006.
+
+     _B_G_P _R_o_u_t_e _R_e_f_l_e_c_t_i_o_n_: _A_n _A_l_t_e_r_n_a_t_i_v_e _t_o _F_u_l_l _M_e_s_h _I_n_t_e_r_n_a_l _B_G_P _(_I_B_G_P_),
+     RFC 4456, April 2006.
+
+     _S_u_b_c_o_d_e_s _f_o_r _B_G_P _C_e_a_s_e _N_o_t_i_f_i_c_a_t_i_o_n _M_e_s_s_a_g_e, RFC 4486, April 2006.
+
+     _G_r_a_c_e_f_u_l _R_e_s_t_a_r_t _M_e_c_h_a_n_i_s_m _f_o_r _B_G_P, RFC 4724, January 2007.
+
+     _M_u_l_t_i_p_r_o_t_o_c_o_l _E_x_t_e_n_s_i_o_n_s _f_o_r _B_G_P_-_4, RFC 4760, January 2007.
+
+     _T_h_e _G_e_n_e_r_a_l_i_z_e_d _T_T_L _S_e_c_u_r_i_t_y _M_e_c_h_a_n_i_s_m _(_G_T_S_M_), RFC 5082, October 2007.
+
+     _C_a_p_a_b_i_l_i_t_i_e_s _A_d_v_e_r_t_i_s_e_m_e_n_t _w_i_t_h _B_G_P_-_4, RFC 5492, February 2009.
+
+     _4_-_O_c_t_e_t _A_S _S_p_e_c_i_f_i_c _B_G_P _E_x_t_e_n_d_e_d _C_o_m_m_u_n_i_t_y, RFC 5668, October 2009.
+
+     _A_u_t_o_n_o_m_o_u_s_-_S_y_s_t_e_m_-_W_i_d_e _U_n_i_q_u_e _B_G_P _I_d_e_n_t_i_f_i_e_r _f_o_r _B_G_P_-_4, RFC 6286, June
+     2011.
+
+     _S_u_b_c_o_d_e_s _f_o_r _B_G_P _F_i_n_i_t_e _S_t_a_t_e _M_a_c_h_i_n_e _E_r_r_o_r, RFC 6608, May 2012.
+
+     _B_G_P _S_u_p_p_o_r_t _f_o_r _F_o_u_r_-_O_c_t_e_t _A_u_t_o_n_o_m_o_u_s _S_y_s_t_e_m _(_A_S_) _N_u_m_b_e_r _S_p_a_c_e, RFC 6793,
+     Dec 2012.
+
+     _R_e_v_i_s_e_d _E_r_r_o_r _H_a_n_d_l_i_n_g _f_o_r _B_G_P _U_P_D_A_T_E _M_e_s_s_a_g_e_s, RFC 7606, August 2015.
+
+     _M_u_l_t_i_-_T_h_r_e_a_d_e_d _R_o_u_t_i_n_g _T_o_o_l_k_i_t _(_M_R_T_) _R_o_u_t_i_n_g _I_n_f_o_r_m_a_t_i_o_n _E_x_p_o_r_t _F_o_r_m_a_t,
+     RFC 6396, October 2011.
+
+     _S_u_b_c_o_d_e_s _f_o_r _B_G_P _F_i_n_i_t_e _S_t_a_t_e _M_a_c_h_i_n_e _E_r_r_o_r, RFC 6608, May 2012.
+
+     _E_n_h_a_n_c_e_d _R_o_u_t_e _R_e_f_r_e_s_h _C_a_p_a_b_i_l_i_t_y _f_o_r _B_G_P_-_4, RFC 7313, July 2014.
+
+     _C_o_d_i_f_i_c_a_t_i_o_n _o_f _A_S _0 _P_r_o_c_e_s_s_i_n_g, RFC 7607, August 2015.
+
+     _A_d_v_e_r_t_i_s_e_m_e_n_t _o_f _M_u_l_t_i_p_l_e _P_a_t_h_s _i_n _B_G_P, RFC 7911, July 2016.
+
+     _I_n_t_e_r_n_e_t _E_x_c_h_a_n_g_e _B_G_P _R_o_u_t_e _S_e_r_v_e_r, RFC 7947, September 2016.
+
+     _M_u_l_t_i_-_T_h_r_e_a_d_e_d _R_o_u_t_i_n_g _T_o_o_l_k_i_t _(_M_R_T_) _R_o_u_t_i_n_g _I_n_f_o_r_m_a_t_i_o_n _E_x_p_o_r_t _F_o_r_m_a_t
+     _w_i_t_h _B_G_P _A_d_d_i_t_i_o_n_a_l _P_a_t_h _E_x_t_e_n_s_i_o_n_s, RFC 8050, May 2017.
+
+     _B_G_P _L_a_r_g_e _C_o_m_m_u_n_i_t_i_e_s _A_t_t_r_i_b_u_t_e, RFC 8092, February 2017.
+
+     _B_G_P _P_r_e_f_i_x _O_r_i_g_i_n _V_a_l_i_d_a_t_i_o_n _S_t_a_t_e _E_x_t_e_n_d_e_d _C_o_m_m_u_n_i_t_y, RFC 8097, March
+     2017.
+
+     _B_G_P _A_d_m_i_n_i_s_t_r_a_t_i_v_e _S_h_u_t_d_o_w_n _C_o_m_m_u_n_i_c_a_t_i_o_n, RFC 8203, July 2017.
+
+     _T_h_e _R_e_s_o_u_r_c_e _P_u_b_l_i_c _K_e_y _I_n_f_r_a_s_t_r_u_c_t_u_r_e _(_R_P_K_I_) _t_o _R_o_u_t_e_r _P_r_o_t_o_c_o_l_, _V_e_r_s_i_o_n
+     _1, RFC 8210, September 2017.
+
+     _D_e_f_a_u_l_t _E_x_t_e_r_n_a_l _B_G_P _(_E_B_G_P_) _R_o_u_t_e _P_r_o_p_a_g_a_t_i_o_n _B_e_h_a_v_i_o_r _w_i_t_h_o_u_t _P_o_l_i_c_i_e_s,
+     RFC 8212, July 2017.
+
+     _G_r_a_c_e_f_u_l _B_G_P _S_e_s_s_i_o_n _S_h_u_t_d_o_w_n, RFC 8326, March 2018.
+
+     _N_o_t_i_f_i_c_a_t_i_o_n _M_e_s_s_a_g_e _S_u_p_p_o_r_t _f_o_r _B_G_P _G_r_a_c_e_f_u_l _R_e_s_t_a_r_t, RFC 8538, March
+     2019.
+
+     _E_x_t_e_n_d_e_d _M_e_s_s_a_g_e _S_u_p_p_o_r_t _f_o_r _B_G_P, RFC 8654, October 2019.
+
+     _A_d_v_e_r_t_i_s_i_n_g _I_P_v_4 _N_e_t_w_o_r_k _L_a_y_e_r _R_e_a_c_h_a_b_i_l_i_t_y _I_n_f_o_r_m_a_t_i_o_n _(_N_L_R_I_) _w_i_t_h _a_n
+     _I_P_v_6 _N_e_x_t _H_o_p, RFC 8950, November 2020.
+
+     _D_i_s_s_e_m_i_n_a_t_i_o_n _o_f _F_l_o_w _S_p_e_c_i_f_i_c_a_t_i_o_n _R_u_l_e_s, RFC 8955, December 2020.
+
+     _D_i_s_s_e_m_i_n_a_t_i_o_n _o_f _F_l_o_w _S_p_e_c_i_f_i_c_a_t_i_o_n _R_u_l_e_s _f_o_r _I_P_v_6, RFC 8956, December
+     2020.
+
+     _E_x_t_e_n_d_e_d _O_p_t_i_o_n_a_l _P_a_r_a_m_e_t_e_r_s _L_e_n_g_t_h _f_o_r _B_G_P _O_P_E_N _M_e_s_s_a_g_e, RFC 9072, July
+     2021.
+
+     _R_o_u_t_e _L_e_a_k _P_r_e_v_e_n_t_i_o_n _a_n_d _D_e_t_e_c_t_i_o_n _U_s_i_n_g _R_o_l_e_s _i_n _U_P_D_A_T_E _a_n_d _O_P_E_N
+     _M_e_s_s_a_g_e_s, RFC 9234, May 2022.
+
+     _B_o_r_d_e_r _G_a_t_e_w_a_y _P_r_o_t_o_c_o_l _4 _(_B_G_P_-_4_) _S_e_n_d _H_o_l_d _T_i_m_e_r, RFC 9687, November
+     2024.
+
+     _D_e_p_r_e_c_a_t_i_o_n _o_f _A_S___S_E_T _a_n_d _A_S___C_O_N_F_E_D___S_E_T _i_n _B_G_P, RFC 9774, May 2025.
+
+     _B_G_P _A_S___P_A_T_H _V_e_r_i_f_i_c_a_t_i_o_n _B_a_s_e_d _o_n _R_e_s_o_u_r_c_e _P_u_b_l_i_c _K_e_y _I_n_f_r_a_s_t_r_u_c_t_u_r_e
+     _(_R_P_K_I_) _A_u_t_o_n_o_m_o_u_s _S_y_s_t_e_m _P_r_o_v_i_d_e_r _A_u_t_h_o_r_i_z_a_t_i_o_n _(_A_S_P_A_) _O_b_j_e_c_t_s, draft-
+     ietf-sidrops-aspa-verification, October 2022.
+
+HHIISSTTOORRYY
+     The bbggppdd program first appeared in OpenBSD 3.5.
+
+BSD                              May 22, 2025                              BSD

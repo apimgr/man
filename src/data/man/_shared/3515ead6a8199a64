@@ -1,0 +1,201 @@
+_c_l_o_s_e___r_a_n_g_e(2)                System Calls Manual               _c_l_o_s_e___r_a_n_g_e(2)
+
+NNAAMMEE
+       close_range - close all file descriptors in a given range
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##ddeeffiinnee __GGNNUU__SSOOUURRCCEE         /* See feature_test_macros(7) */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       ##iinncclluuddee <<lliinnuuxx//cclloossee__rraannggee..hh>> /* Definition of CCLLOOSSEE__RRAANNGGEE__**
+                                         constants */
+
+       iinntt cclloossee__rraannggee((uunnssiiggnneedd iinntt _f_i_r_s_t,, uunnssiiggnneedd iinntt _l_a_s_t,, iinntt _f_l_a_g_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  cclloossee__rraannggee()  system  call  closes all open file descriptors from
+       _f_i_r_s_t to _l_a_s_t (included).
+
+       Errors closing a given file descriptor are currently ignored.
+
+       _f_l_a_g_s is a bit mask containing 0 or more of the following:
+
+       CCLLOOSSEE__RRAANNGGEE__CCLLOOEEXXEECC (since Linux 5.11)
+              Set the close‐on‐exec flag on the  specified  file  descriptors,
+              rather than immediately closing them.
+
+       CCLLOOSSEE__RRAANNGGEE__UUNNSSHHAARREE
+              Unshare  the specified file descriptors from any other processes
+              before closing them, avoiding races with other  threads  sharing
+              the file descriptor table.
+
+RREETTUURRNN VVAALLUUEE
+       On  success, cclloossee__rraannggee() returns 0.  On error, -1 is returned and _e_r_‐
+       _r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEIINNVVAALL _f_l_a_g_s is not valid, or _f_i_r_s_t is greater than _l_a_s_t.
+
+       The following can occur with CCLLOOSSEE__RRAANNGGEE__UUNNSSHHAARREE (when constructing the
+       new descriptor table):
+
+       EEMMFFIILLEE The number of open file descriptors exceeds the limit  specified
+              in  _/_p_r_o_c_/_s_y_s_/_f_s_/_n_r___o_p_e_n (see pprroocc(5)).  This error can occur in
+              situations where  that  limit  was  lowered  before  a  call  to
+              cclloossee__rraannggee() where the CCLLOOSSEE__RRAANNGGEE__UUNNSSHHAARREE flag is specified.
+
+       EENNOOMMEEMM Insufficient kernel memory was available.
+
+SSTTAANNDDAARRDDSS
+       None.
+
+HHIISSTTOORRYY
+       FreeBSD.  Linux 5.9, glibc 2.34.
+
+NNOOTTEESS
+   CClloossiinngg aallll ooppeenn ffiillee ddeessccrriippttoorrss
+       To avoid blindly closing file descriptors in the range of possible file
+       descriptors,  this  is sometimes implemented (on Linux) by listing open
+       file descriptors in _/_p_r_o_c_/_s_e_l_f_/_f_d_/ and calling cclloossee(2)  on  each  one.
+       cclloossee__rraannggee()  can take care of this without requiring _/_p_r_o_c and within
+       a single system call, which provides significant performance benefits.
+
+   CClloossiinngg ffiillee ddeessccrriippttoorrss bbeeffoorree eexxeecc
+       File descriptors can be closed safely using
+
+           /* we don’t want anything past stderr here */
+           close_range(3, ~0U, CLOSE_RANGE_UNSHARE);
+           execve(....);
+
+       CCLLOOSSEE__RRAANNGGEE__UUNNSSHHAARREE is conceptually equivalent to
+
+           unshare(CLONE_FILES);
+           close_range(first, last, 0);
+
+       but can be more efficient: if the unshared range extends past the  cur‐
+       rent  maximum number of file descriptors allocated in the caller’s file
+       descriptor table (the common case when _l_a_s_t is ~0U),  the  kernel  will
+       unshare a new file descriptor table for the caller up to _f_i_r_s_t, copying
+       as  few  file descriptors as possible.  This avoids subsequent cclloossee(2)
+       calls entirely; the whole operation is complete once the table  is  un‐
+       shared.
+
+   CClloossiinngg ffiilleess oonn _ee_xx_ee_cc
+       This  is  particularly  useful  in  cases where multiple pre‐eexxeecc setup
+       steps risk conflicting with each other.  For example, setting up a sseecc‐‐
+       ccoommpp(2) profile can conflict with a cclloossee__rraannggee() call: if the file de‐
+       scriptors are closed before the sseeccccoommpp(2) profile is set up, the  pro‐
+       file setup can’t use them itself, or control their closure; if the file
+       descriptors  are closed afterwards, the seccomp profile can’t block the
+       cclloossee__rraannggee() call or any fallbacks.  Using CCLLOOSSEE__RRAANNGGEE__CCLLOOEEXXEECC  avoids
+       this:  the  descriptors  can be marked before the sseeccccoommpp(2) profile is
+       set up, and the profile can control access to cclloossee__rraannggee() without af‐
+       fecting the calling process.
+
+EEXXAAMMPPLLEESS
+       The program shown below opens the files named in its command‐line argu‐
+       ments, displays the list of files that  it  has  opened  (by  iterating
+       through  the  entries in _/_p_r_o_c_/_P_I_D_/_f_d), uses cclloossee__rraannggee() to close all
+       file descriptors greater than or equal to 3, and then  once  more  dis‐
+       plays  the  process’s list of open files.  The following example demon‐
+       strates the use of the program:
+
+           $ ttoouucchh //ttmmpp//aa //ttmmpp//bb //ttmmpp//cc;
+           $ ..//aa..oouutt //ttmmpp//aa //ttmmpp//bb //ttmmpp//cc;
+           /tmp/a opened as FD 3
+           /tmp/b opened as FD 4
+           /tmp/c opened as FD 5
+           /proc/self/fd/0 ==> /dev/pts/1
+           /proc/self/fd/1 ==> /dev/pts/1
+           /proc/self/fd/2 ==> /dev/pts/1
+           /proc/self/fd/3 ==> /tmp/a
+           /proc/self/fd/4 ==> /tmp/b
+           /proc/self/fd/5 ==> /tmp/c
+           /proc/self/fd/6 ==> /proc/9005/fd
+           ========= About to call close_range() =======
+           /proc/self/fd/0 ==> /dev/pts/1
+           /proc/self/fd/1 ==> /dev/pts/1
+           /proc/self/fd/2 ==> /dev/pts/1
+           /proc/self/fd/3 ==> /proc/9005/fd
+
+       Note that the lines showing the pathname _/_p_r_o_c_/_9_0_0_5_/_f_d result from  the
+       calls to ooppeennddiirr(3).
+
+   PPrrooggrraamm ssoouurrccee
+
+       #define _GNU_SOURCE
+       #include <dirent.h>
+       #include <fcntl.h>
+       #include <limits.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       /* Show the contents of the symbolic links in /proc/self/fd */
+
+       static void
+       show_fds(void)
+       {
+           DIR            *dirp;
+           char           path[PATH_MAX], target[PATH_MAX];
+           ssize_t        len;
+           struct dirent  *dp;
+
+           dirp = opendir("/proc/self/fd");
+           if (dirp  == NULL) {
+               perror("opendir");
+               exit(EXIT_FAILURE);
+           }
+
+           for (;;) {
+               dp = readdir(dirp);
+               if (dp == NULL)
+                   break;
+
+               if (dp->d_type == DT_LNK) {
+                   snprintf(path, sizeof(path), "/proc/self/fd/%s",
+                            dp->d_name);
+
+                   len = readlink(path, target, sizeof(target));
+                   printf("%s ==> %.*s\n", path, (int) len, target);
+               }
+           }
+
+           closedir(dirp);
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           int  fd;
+
+           for (size_t j = 1; j < argc; j++) {
+               fd = open(argv[j], O_RDONLY);
+               if (fd == -1) {
+                   perror(argv[j]);
+                   exit(EXIT_FAILURE);
+               }
+               printf("%s opened as FD %d\n", argv[j], fd);
+           }
+
+           show_fds();
+
+           printf("========= About to call close_range() =======\n");
+
+           if (close_range(3, ~0U, 0) == -1) {
+               perror("close_range");
+               exit(EXIT_FAILURE);
+           }
+
+           show_fds();
+           exit(EXIT_FAILURE);
+       }
+
+SSEEEE AALLSSOO
+       cclloossee(2)
+
+Linux man‐pages (unreleased)      2025‐05‐17                    _c_l_o_s_e___r_a_n_g_e(2)

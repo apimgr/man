@@ -1,0 +1,583 @@
+is  designed  to be a compact representation of the C programming
+language’s type information focused on serving the needs  of  dy‐
+namic  tracing,  debuggers, and other in‐situ and post‐mortem in‐
+trospection tools.  data is generally included in objects and  is
+tagged  as  to  ensure  that  the data is accessible in a running
+process and in subsequent core dumps,  if  generated.   The  data
+contained in each file has information about the layout and sizes
+of  C types, including intrinsic types, enumerations, structures,
+typedefs, and unions, that are used by the corresponding  object.
+The  data  may also include information about the types of global
+objects and the return type and arguments  of  functions  in  the
+symbol  table.   Because  a file is often embedded inside a file,
+rather than being a standalone file itself, it may  also  be  re‐
+ferred  to  as a On illumos systems, data is consumed by multiple
+programs.  It can be used by Programmatic access to data  can  be
+obtained  through  The file format is broken down into seven dif‐
+ferent sections.  The first section is the  and  which  describes
+the  version  of  the  file, links it has to other files, and the
+sizes of the other sections.  The next section  is  the  section,
+which provides a way of identifying similar groups of data across
+multiple  files.   This  is  followed by the information section,
+which describes the type of global symbols.  The subsequent  sec‐
+tion is the information section, which describes the return types
+and  arguments of functions.  The next section is the information
+section, which describes the format and layout  of  the  C  types
+themselves,  and  finally  the last section is the section, which
+contains the names of types, enumerations, members,  and  labels.
+While  strictly  speaking, only the and are required, to be actu‐
+ally useful, both the type and string sections are necessary.   A
+file may contain all of the type information that it requires, or
+it may optionally refer to another file which holds the remaining
+types.   When a file refers to another file, it is called the and
+the file it refers to is called the A given file may  only  refer
+to  one  parent.   This process is called because it ensures each
+child only has type information that is unique to it.   A  common
+example  of  this  is  that  most  kernel  modules in illumos are
+uniquified against the kernel module  and  the  type  information
+that  comes  from  the module.  This means that a module only has
+types that are unique to itself and the most common types in  the
+kernel  are  not  duplicated.  This documents version of the file
+format.  All applications and tools currently produce and operate
+on this version.  The file format can be summarized with the fol‐
+lowing image, the following sections will cover this in more  de‐
+tail.
+
+         +‐‐‐‐‐‐‐‐‐‐‐‐‐+    0t0   +‐‐‐‐‐‐‐‐|   Preamble      |  |
++‐‐‐‐‐‐‐‐‐‐‐‐‐+     0t4    |+‐‐‐‐‐‐‐|    Header          |     ||
++‐‐‐‐‐‐‐‐‐‐‐‐‐+   0t36  + cth_lbloff ||+‐‐‐‐‐‐| Labels      | |||
++‐‐‐‐‐‐‐‐‐‐‐‐‐+  0t36 + cth_objtoff |||+‐‐‐‐‐| Objects     | ||||
++‐‐‐‐‐‐‐‐‐‐‐‐‐+  0t36  +  cth_funcoff  ||||+‐‐‐‐|  Functions    |
+|||||     +‐‐‐‐‐‐‐‐‐‐‐‐‐+   0t36  +  cth_typeoff |||||+‐‐‐| Types
+| ||||||   +‐‐‐‐‐‐‐‐‐‐‐‐‐+  0t36 + cth_stroff ||||||+‐‐|  Strings
+|  |||||||   +‐‐‐‐‐‐‐‐‐‐‐‐‐+   0t36  +  cth_stroff  +  cth_strlen
+||||||| ||||||| ||||||| |||||||    +‐‐  magic  ‐    vers    flags
+|||||||         |               |        |          |     |||||||
++‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐‐| 0xcf | 0xf1  |  0x02  |
+0x00 |
+ ||||||   +‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+
+ ||||||   0      1      2      3      4
+ ||||||
+ ||||||    + parent label        + objects
+ ||||||    |       + parent name |     + functions    + strings
+ ||||||     |        |     + label |     |      + types |       +
+strlen
+ ||||||    |       |     |       |     |      |       |       |
+ ||||||
++‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐‐+‐‐‐‐‐‐‐+‐‐‐‐‐‐‐+
+ +‐‐‐‐‐‐‐‐| 0x00 | 0x00 | 0x00 | 0x08 | 0x36 | 0x110  |  0x5f4  |
+0x611 |
+  |||||
++‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐‐+‐‐‐‐‐‐‐+‐‐‐‐‐‐‐+
+  |||||    0x04    0x08    0x0c    0x10    0x14     0x18     0x1c
+0x20   0x24
+  |||||
+  |||||         + Label name
+  |||||         |       + Label type
+  |||||         |       |       + Next label
+  |||||         |       |       |
+  |||||       +‐‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐+
+  +‐‐‐‐‐‐‐‐‐‐‐| 0x01  | 0x42 | ... |
+   ||||       +‐‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐+
+   ||||  cth_lbloff   +0x4   +0x8  cth_objtoff
+   ||||
+   ||||
+   |||| Symidx  0t15   0t43   0t44
+   ||||       +‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐+
+   +‐‐‐‐‐‐‐‐‐‐| 0x00 | 0x42 | 0x36 | ... |
+    |||       +‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐+
+    ||| cth_objtoff  +0x2   +0x4   +0x6   cth_funcoff
+    |||
+    |||        + CTF_TYPE_INFO         + CTF_TYPE_INFO
+    |||        |        + Return type  |
+    |||        |        |       + arg0 |
+    |||       +‐‐‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐+
+    +‐‐‐‐‐‐‐‐‐| 0x2c10 | 0x08 | 0x0c | ... |
+     ||       +‐‐‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐‐+‐‐‐‐‐+
+     || cth_funcff     +0x2   +0x4   +0x6  cth_typeoff
+     ||
+     ||         + ctf_stype_t for type 1
+     ||         |  integer           + integer encoding
+     ||         |                    |          + ctf_stype_t for
+type 2
+     ||         |                    |          |
+     ||       +‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐+‐‐‐‐‐‐‐‐‐‐‐+‐‐‐‐‐+
+     +‐‐‐‐‐‐‐‐| 0x19 * 0xc01 * 0x0 | 0x1000000 | ... |
+      |       +‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐+‐‐‐‐‐‐‐‐‐‐‐+‐‐‐‐‐+
+      | cth_typeoff               +0x08      +0x0c  cth_stroff
+      |
+      |     +‐‐‐ str 0
+      |     |    +‐‐‐ str 1       + str 2
+      |     |    |                |
+      |     v    v                v
+      |   +‐‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐‐+
+      +‐‐‐| \0 | i | n | t | \0 | f | o | o | _ | t | \0 |
+          +‐‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐+‐‐‐‐+
+          0    1   2   3   4    5   6   7   8   9   10   11 Every
+file begins with a followed by a The is defined as follows: type‐
+def  struct  ctf_preamble  {          ushort_t  ctp_magic;     /*
+magic  number  (CTF_MAGIC)  */         uchar_t ctp_version;    /*
+data  format  version  number  (CTF_VERSION)  */          uchar_t
+ctp_flags;      /*  flags (see below) */ } ctf_preamble_t; The is
+four bytes long and must be four byte aligned.  This defines  the
+version  of  the file which defines the format of the rest of the
+header.  While the header may change in subsequent versions,  the
+preamble  will not change across versions, though the interpreta‐
+tion of its flags may change from version to version.  The member
+defines the magic number for the file format.  This  must  always
+be  If  another value is encountered, then the file should not be
+treated as a file.  The member defines the version of  the  file.
+The current version is It is possible to encounter an unsupported
+version.  In that case, software should not try to parse the for‐
+mat,  as  it may have changed.  Finally, the member describes as‐
+pects of the file which modify its interpretation.  The following
+flags are currently defined: #define CTF_F_COMPRESS          0x01
+The flag indicates that the body of the file, all the  data  fol‐
+lowing  the has been compressed through the library and its algo‐
+rithm.  If this flag is not present, then the body has  not  been
+compressed  and no special action is needed to interpret it.  All
+offsets into the data as described by always refer to  the  data.
+In version two of the file format, the denotes whether whether or
+not this file is the child of another file and also indicates the
+size  of the remaining sections.  The structure for the logically
+contains a copy of the and the two have a  combined  size  of  36
+bytes.    typedef   struct  ctf_header  {          ctf_preamble_t
+cth_preamble;         uint_t cth_parlabel;    /* ref to  name  of
+parent  lbl  uniq’d against */         uint_t cth_parname;     /*
+ref to basename of parent */          uint_t  cth_lbloff;      /*
+offset  of  label  section  */         uint_t cth_objtoff;     /*
+offset of object section  */          uint_t  cth_funcoff;     /*
+offset  of function section */         uint_t cth_typeoff;     /*
+offset of type section */         uint_t cth_stroff;      /* off‐
+set  of  string  section  */          uint_t  cth_strlen;      /*
+length  of  string  section in bytes */ } ctf_header_t; After the
+the next two members and are used to identify  the  parent.   The
+value of both members are offsets into the section which point to
+the  start  of a null‐terminated string.  For more information on
+the encoding of strings, see the subsection on If  the  value  of
+either  is  zero, then there is no entry for that member.  If the
+member is set, then the member must be set, otherwise it will not
+be possible to find the parent.  If is set, it is  not  necessary
+to  define as the parent may not have a label.  For more informa‐
+tion on labels and their interpretation, see The  remaining  mem‐
+bers  (excepting describe the beginning of the corresponding sec‐
+tions.  These offsets are relative to the end of  the  Therefore,
+something with an offset of 0 is at an offset of thirty‐six bytes
+relative  to  the start of the file.  The difference between mem‐
+bers indicates the size of the section itself.  Different offsets
+have different alignment requirements.  The start of the and must
+be two byte aligned, while the sections  and  must  be  four‐byte
+aligned.   The  section has no alignment requirements.  To calcu‐
+late the size of a given  section,  excepting  the  section,  one
+should subtract the offset of the section from the following one.
+For  example,  the  size of the section can be calculated by sub‐
+tracting from Finally, the member describes  the  length  of  the
+string  section itself.  From it, you can also calculate the size
+of the entire file by adding together the size of the the  offset
+of  the  string  section in and the size of the string section in
+Through the data, types are referred to by identifiers.  A  given
+file  supports  up to 32767 (0x7fff) types.  The first valid type
+identifier is 0x1.  When a given file is a child, indicated by  a
+non‐zero  entry  for  the then the first valid type identifier is
+0x8000 and the last is 0xffff.  In this  case,  type  identifiers
+0x1  through 0x7fff are references to the parent.  The type iden‐
+tifier zero is a sentinel value used to indicate that there is no
+type information available or it is an unknown type.   Throughout
+the file format, the identifier is stored in different sized val‐
+ues; however, the minimum size to represent a given identifier is
+a Other consumers of information may use larger or opaque identi‐
+fiers.   String  identifiers  are always encoded as four byte un‐
+signed integers which are an offset into  a  string  table.   The
+format supports two different string tables which have an identi‐
+fier of zero or one.  This identifier is stored in the high‐order
+bit  of  the  unsigned  four byte offset.  Therefore, the maximum
+supported offset into one of these tables is 0x7ffffffff.   Table
+identifier zero, always refers to the section in the CTF file it‐
+self.   String  table identifier one refers to an external string
+table which is the ELF string table for the ELF symbol table  as‐
+sociated with the container.  Every type begins with metadata en‐
+coded  into  a  This encoded information tells us three different
+pieces of information: The kind of the type Whether this type  is
+a  root  type  or not The length of the variable data The 16 bits
+that make up the encoding are broken down such that you have five
+bits for the kind, one bit for indicating whether or not it is  a
+root type, and 10 bits for the variable length.  This is laid out
+as  follows:  +‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐+  |  kind  |  root  |  vlen |
++‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐+ 15   11   10   9    0 The current  version
+of  the  file format defines 14 different kinds.  The interpreta‐
+tion of these different kinds will be discussed in the section If
+a kind is encountered that is not listed below, then it is not  a
+valid  file.  The kinds are defined as follows: #define CTF_K_UN‐
+KNOWN   0   #define CTF_K_INTEGER   1   #define CTF_K_FLOAT     2
+#define CTF_K_POINTER   3      #define CTF_K_ARRAY     4     #de‐
+fine CTF_K_FUNCTION  5       #define CTF_K_STRUCT    6       #de‐
+fine CTF_K_UNION     7       #define CTF_K_ENUM      8       #de‐
+fine CTF_K_FORWARD   9      #define CTF_K_TYPEDEF   10       #de‐
+fine CTF_K_VOLATILE  11      #define CTF_K_CONST     12      #de‐
+fine CTF_K_RESTRICT  13 Programs directly reference  many  types;
+however,  other  types are referenced indirectly because they are
+part of some other structure.  These types  that  are  referenced
+directly  and used are called types.  Other types may be used in‐
+directly, for example, a program may reference  a  structure  di‐
+rectly,  but  not one of its members which has a type.  That type
+is not considered a type.  If a type is a type, then it will have
+bit 10 set.  The variable length section is specific to each kind
+and is discussed in the section The following macros  are  useful
+for constructing and deconstructing the encoded type information:
+
+#define CTF_MAX_VLEN    0x3ff                                #de‐
+fine CTF_INFO_KIND(info)     (((info)  &  0xf800)  >>  11)   #de‐
+fine CTF_INFO_ISROOT(info)   (((info)   &  0x0400)  >>  10)  #de‐
+fine CTF_INFO_VLEN(info)     (((info) & CTF_MAX_VLEN))
+
+#define CTF_TYPE_INFO(kind, isroot, vlen) \          (((kind)  <<
+11)  | (((isroot) ? 1 : 0) << 10) | ((vlen) & CTF_MAX_VLEN)) When
+consuming data, it is often useful to know whether two  different
+containers come from the same source base and version.  For exam‐
+ple,  when  building  illumos, there are many kernel modules that
+are built against a single collection of source code.  A label is
+encoded into the  files  that  corresponds  with  the  particular
+build.   This  ensures that if files on the system were to become
+mixed up from multiple releases, that they are not used  together
+by  tools,  particularly when a child needs to refer to a type in
+the parent.  Because they are linked used the  type  identifiers,
+if  the  wrong parent is used then the wrong type will be encoun‐
+tered.  Each label is encoded in the file format using  the  fol‐
+lowing   eight   byte  structure:  typedef  struct  ctf_lblent  {
+        uint_t  ctl_label;       /*  ref  to  name  of  label  */
+        uint_t  ctl_typeidx;       /*  last  type associated with
+this label */ } ctf_lblent_t; Each label has two different compo‐
+nents, a name and a type identifier.  The name is encoded in  the
+member  which  is in the format defined in the section Generally,
+the names of all labels are found in the internal string section.
+The type identifier encoded in the member refers to the last type
+identifier that a label refers to in the  current  file.   Labels
+only  refer to types in the current file, if the file is a child,
+then it will have the same label as its parent; however, its  la‐
+bel  will  only  refer to its types, not its parents.  It is also
+possible, though rather uncommon, for a file to have multiple la‐
+bels.  Labels are placed one after another,  every  eight  bytes.
+When multiple labels are present, types may only belong to a sin‐
+gle  label.   The object section provides a mapping from ELF sym‐
+bols of type in the symbol table to a type identifier.  Every en‐
+try in this section is a which contains a type identifier as  de‐
+scribed  in the section If there is no information for an object,
+then the type identifier 0x0 is stored for that entry.   To  walk
+the  object  section, you need to have a corresponding in the ELF
+object that contains the data.  Not every object is  included  in
+this  section.   Specifically, when walking the symbol table.  An
+entry is skipped if it matches any of the  following  conditions:
+The symbol type is not The symbol’s section index is The symbol’s
+name  offset  is zero The symbol’s section index is and the value
+of the symbol is zero.  The symbol’s name is or These are skipped
+because they are used for scoping local symbols in ELF.  The fol‐
+lowing sample code shows an example of iterating the object  sec‐
+tion and skipping the correct symbols: #include <gelf.h> #include
+<stdio.h>
+
+/*
+ *  Given  the  start  of the object section in the CTF file, the
+number of symbols,
+ * and the ELF Data sections for the symbol table and the  string
+table, this
+ *  prints the type identifiers that correspond to objects. Note,
+a more robust
+ * implementation should ensure that they don’t walk  beyond  the
+end of the CTF
+ * object section.
+ */ static int walk_symbols(uint16_t *objtoff, Elf_Data *symdata,
+Elf_Data *strdata,
+    long  nsyms)  {          long  i;         uintptr_t strbase =
+strdata‐>d_buf;
+
+        for  (i  =   1;   i   <   nsyms;   i++,   objftoff++)   {
+                const char *name;                 GElf_Sym sym;
+
+                if   (gelf_getsym(symdata,   i,  &sym)  ==  NULL)
+                        return (1);
+
+                if  (GELF_ST_TYPE(sym.st_info)   !=   STT_OBJECT)
+                        continue;                              if
+(sym.st_shndx    ==    SHN_UNDEF    ||    sym.st_name    ==    0)
+                        continue;                              if
+(sym.st_shndx    ==    SHN_ABS    &&    sym.st_value    ==     0)
+                        continue;                  name  = (const
+char *)(strbase + sym.st_name);                 if  (strcmp(name,
+"_START_")    ==    0    ||    strcmp(name,    "_END_")   ==   0)
+                        continue;
+
+                (void) printf("Symbol %d has type  %d0,  i,  *ob‐
+jtoff);         }
+
+        return  (0);  }  The function section of the file encodes
+the types of both the function’s arguments and the function’s re‐
+turn type.  Similar to the function section  encodes  information
+for  all symbols of type excepting those that fit specific crite‐
+ria.  Unlike with objects, because functions have a variable num‐
+ber of arguments, they start with a type encoding as  defined  in
+which  is the size of a For functions which have no type informa‐
+tion available, they are encoded as Functions with arguments  are
+encoded  differently.   Here,  the variable length is turned into
+the number of arguments in the function.  If a function is a type
+function, then the number  of  arguments  is  increased  by  one.
+Functions  with  type  information  are encoded as: For functions
+that have no type information, nothing else is encoded,  and  the
+next  function  is encoded.  For functions with type information,
+the next is encoded with the type identifier of the  return  type
+of  the function.  It is followed by each of the type identifiers
+of the arguments, if any exist, in the order that they appear  in
+the function.  Therefore, argument 0 is the first type identifier
+and so on.  When a function has a final varargs argument, that is
+encoded with the type identifier of zero.  Like the function sec‐
+tion  is  encoded in the order of the symbol table.  It has simi‐
+lar, but slightly different considerations from  objects.   While
+iterating  the  symbol  table, if any of the following conditions
+are true, then the entry is skipped and no corresponding entry is
+written: The symbol type is not The symbol’s section index is The
+symbol’s name offset is zero The symbol’s name is  or  These  are
+skipped  because  they are used for scoping local symbols in ELF.
+The type section is the heart of the data.  It encodes all of the
+information about the types themselves.  The base of the type in‐
+formation comes in two forms, a short form and a long form,  each
+of  which may be followed by a variable number of arguments.  The
+following definitions describe the short  and  long  forms:  #de‐
+fine CTF_MAX_SIZE    0xfffe  /*  max  size  of a type in bytes */
+#define CTF_LSIZE_SENT  0xffff  /* sentinel for ctt_size */  #de‐
+fine CTF_MAX_LSIZE   UINT64_MAX
+
+typedef  struct  ctf_stype  {          uint_t ctt_name;        /*
+reference  to  name   in   string   table   */           ushort_t
+ctt_info;      /* encoded kind, variant length */         union {
+                ushort_t  _size;  /* size of entire type in bytes
+*/                 ushort_t _type; /* reference to  another  type
+*/         } _u; } ctf_stype_t;
+
+typedef struct ctf_type {         uint_t ctt_name;        /* ref‐
+erence    to   name   in   string   table   */           ushort_t
+ctt_info;      /* encoded kind, variant length */         union {
+                ushort_t  _size;  /*  always  CTF_LSIZE_SENT   */
+                ushort_t  _type;  /*  do not use */         } _u;
+        uint_t ctt_lsizehi;   /* high 32 bits  of  type  size  in
+bytes  */          uint_t ctt_lsizelo;     /* low 32 bits of type
+size in bytes */ } ctf_type_t;
+
+#define ctt_size _u._size       /*  for  fundamental  types  that
+have  a size */ #define ctt_type _u._type       /* for types that
+reference another type */ Type sizes  are  stored  in  The  basic
+small form uses a to store the number of bytes.  If the number of
+bytes  in  a  structure  would  exceed 0xfffe, then the alternate
+form, the is used instead.  To indicate that the larger  form  is
+being  used, the member is set to value of (0xffff).  In general,
+when going through the type section, consumers use the structure,
+but pay attention to the value of the member to determine whether
+they should increment their scan by the size of the  or  Not  all
+kinds of types use Those which do not, will always use the struc‐
+ture.   The  individual sections for each kind have more informa‐
+tion.  Types are written out in order.  Therefore the first entry
+encountered has a type id of 0x1, or 0x8000 if a child.  The mem‐
+ber is encoded as described in the section  The  string  that  it
+points  to  is the name of the type.  If the identifier points to
+an empty string (one that consists solely of a  null  terminator)
+then the type does not have a name, this is common with anonymous
+structures  and  unions that only have a typedef to name them, as
+well as, pointers and qualifiers.  The next member,  the  is  en‐
+coded  as described in the section The types kind tells us how to
+interpret the remaining data in the and any variable length  data
+that  may  exist.   The  rest of this section will be broken down
+into the interpretation of the various  kinds.   Integers,  which
+are of type have no variable length arguments.  Instead, they are
+followed  by a four byte which describes their encoding.  All in‐
+tegers must be encoded with a variable length of zero.  The  mem‐
+ber  describes  the  length of the integer in bytes.  In general,
+integer sizes will be rounded up to the  closest  power  of  two.
+The  integer encoding contains three different pieces of informa‐
+tion: The encoding of the integer The offset in of the  type  The
+size  in  of  the type This encoding can be expressed through the
+following  macros:   #define CTF_INT_ENCODING(data)  (((data)   &
+0xff000000)  >>  24)  #define CTF_INT_OFFSET(data)    (((data)  &
+0x00ff0000)  >>  16)  #define CTF_INT_BITS(data)      (((data)  &
+0x0000ffff))
+
+#define CTF_INT_DATA(encoding,  offset, bits) \         (((encod‐
+ing) << 24) | ((offset) << 16) | (bits)) The following flags  are
+defined     for    the    encoding    at    this    time:    #de‐
+fine CTF_INT_SIGNED          0x01                            #de‐
+fine CTF_INT_CHAR            0x02                            #de‐
+fine CTF_INT_BOOL            0x04                            #de‐
+fine CTF_INT_VARARGS         0x08  By default, an integer is con‐
+sidered to be unsigned, unless it has the flag set.  If the  flag
+is  set, that indicates that the integer is of a type that stores
+character data, for example the intrinsic C type would  have  the
+flag  set.   If  the flag is set, that indicates that the integer
+represents a boolean type.  For example,  the  intrinsic  C  type
+would  have  the  flag set.  Finally, the flag indicates that the
+integer is used as part of a variable number of arguments.   This
+encoding is rather uncommon.  Floats, which are of type are simi‐
+lar  to their integer counterparts.  They have no variable length
+arguments and are followed by a  four  byte  encoding  which  de‐
+scribes  the  kind of float that exists.  The member is the size,
+in bytes, of the float.  The float encoding has  three  different
+pieces  of  information  inside of it: The specific kind of float
+that exists The offset in of the float The size in of  the  float
+This encoding can be expressed through the following macros: #de‐
+fine CTF_FP_ENCODING(data)   (((data)  &  0xff000000) >> 24) #de‐
+fine CTF_FP_OFFSET(data)     (((data) & 0x00ff0000) >>  16)  #de‐
+fine CTF_FP_BITS(data)       (((data) & 0x0000ffff))
+
+#define CTF_FP_DATA(encoding,  offset,  bits) \         (((encod‐
+ing) << 24) | ((offset) << 16) | (bits)) Where  as  the  encoding
+for  integers was a series of flags, the encoding for floats maps
+to a specific kind of float.  It is not a flag‐based value.   The
+kinds  of floats correspond to both their size, and the encoding.
+This covers all of the basic C intrinsic  floating  point  types.
+The  following  are  the different kinds of floats represented in
+the  encoding:  #define CTF_FP_SINGLE   1       /*  IEEE   32‐bit
+float  encoding */ #define CTF_FP_DOUBLE   2       /* IEEE 64‐bit
+float encoding */ #define CTF_FP_CPLX     3       /* Complex  en‐
+coding  */  #define CTF_FP_DCPLX    4       /* Double complex en‐
+coding */ #define CTF_FP_LDCPLX   5       /* Long double  complex
+encoding */ #define CTF_FP_LDOUBLE  6       /* Long double encod‐
+ing */ #define CTF_FP_INTRVL   7       /* Interval (2x32‐bit) en‐
+coding   */  #define CTF_FP_DINTRVL  8       /*  Double  interval
+(2x64‐bit) encoding  */  #define CTF_FP_LDINTRVL 9       /*  Long
+double   interval  (2x128‐bit)  encoding  */  #define CTF_FP_IMA‐
+GRY   10      /*   Imaginary   (32‐bit)    encoding    */    #de‐
+fine CTF_FP_DIMAGRY  11      /*  Long imaginary (64‐bit) encoding
+*/  #define CTF_FP_LDIMAGRY 12      /*  Long   double   imaginary
+(128‐bit)  encoding */ Arrays, which are of type have no variable
+length arguments.  They are followed by  a  structure  which  de‐
+scribes  the number of elements in the array, the type identifier
+of the elements in the array, and the type identifier of the  in‐
+dex  of  the array.  With arrays, the member is set to zero.  The
+structure that follows an array is  defined  as:  typedef  struct
+ctf_array  {         ushort_t cta_contents;  /* reference to type
+of array contents */         ushort_t cta_index;     /* reference
+to type of array index */         uint_t cta_nelems;      /* num‐
+ber of elements */ } ctf_array_t; The and members of the are type
+identifiers which are encoded as per the section The member is  a
+simple  four byte unsigned count of the number of elements.  This
+count may be zero when encountering C99’s flexible array members.
+Function types, which are of type use the variable length list to
+be the number of arguments in the function.   When  the  function
+has a final member which is a varargs, then the argument count is
+incremented  by  one to account for the variable argument.  Here,
+the member is encoded with the type identifier of the return type
+of the function.  Note that the member is  not  used  here.   The
+variable  argument list contains the type identifiers for the ar‐
+guments of the function, if any.  Each one is  represented  by  a
+and encoded according to the section.  If the function’s last ar‐
+gument  is  of type varargs, then it is also written out, but the
+type identifier is zero.  This is included in the  count  of  the
+function’s  arguments.   Structures and Unions, which are encoded
+with and respectively,  are very similar constructs  in  C.   The
+main  difference  between them is the fact that every member of a
+structure follows one another, where as in a union,  all  members
+share  the  same  memory.  They are also very similar in terms of
+their encoding in The variable length argument for structures and
+unions represents the number of  members  that  they  have.   The
+value  of  the  member  is  the  size of the structure and union.
+There are two different structures which are used to encode  mem‐
+bers in the variable list.  When the size of a structure or union
+is  greater  than  or  equal to the large member threshold, 8192,
+then a different structure is used to encode the member, all mem‐
+bers are encoded using the same  structure.   The  structure  for
+members is as follows: typedef struct ctf_member {         uint_t
+ctm_name;        /*   reference   to  name  in  string  table  */
+        ushort_t ctm_type;      /* reference to type of member */
+        ushort_t ctm_offset;     /* offset of this member in bits
+*/ } ctf_member_t;
+
+typedef struct ctf_lmember {          uint_t  ctlm_name;       /*
+reference   to   name   in   string   table  */          ushort_t
+ctlm_type;     /* reference to type of member */         ushort_t
+ctlm_pad;      /* padding */          uint_t  ctlm_offsethi;   /*
+high 32 bits of member offset in bits */         uint_t ctlm_off‐
+setlo;   /*  low  32 bits of member offset in bits */ } ctf_lmem‐
+ber_t; Both the and refer to the name of the member.  The name is
+encoded as an offset into the string table as  described  by  the
+section  The  members  and  both refer to the type of the member.
+They are encoded as per the section The last piece of information
+that is present is the offset which describes the offset in  mem‐
+ory  that  the member begins at.  For unions, this value will al‐
+ways be zero because the start of  unions  in  memory  is  always
+zero.   For structures, this is the offset in that the member be‐
+gins at.  Note that a compiler may lay out a type  with  padding.
+This  means that the difference in offset between two consecutive
+members may be larger than the size of the member.  When the size
+of the overall structure is strictly less than  8192  bytes,  the
+normal structure, is used and the offset in bits is stored in the
+member However, when the size of the structure is greater than or
+equal  to  8192  bytes, then the number of bits is split into two
+32‐bit quantities.  One member, represents the upper 32  bits  of
+the  offset, while the other member, represents the lower 32 bits
+of the offset.  These can be joined  together  to  get  a  64‐bit
+sized offset in bits by shifting the member to the left by thirty
+two and then doing a binary or of Enumerations, noted by the type
+are similar to structures.  Enumerations use the variable list to
+note  the  number  of values that the enumeration contains, which
+we’ll term enumerators.  In C, an enumeration is  always  equiva‐
+lent to the intrinsic type thus the value of the member is always
+the  size  of an integer which is determined based on the current
+model.  For illumos systems, this will always be 4, as an integer
+is always defined to be 4 bytes large in both and  regardless  of
+the architecture.  The enumerators encoded in an enumeration have
+the  following  structure  in  the  variable list: typedef struct
+ctf_enum {         uint_t cte_name;        /* reference  to  name
+in string table */         int cte_value;          /* value asso‐
+ciated  with  this name */ } ctf_enum_t; The member refers to the
+name of the enumerator’s value, it is encoded  according  to  the
+rules  in  the  section  The member contains the integer value of
+this enumerator.  Forward references, types of kind in a file re‐
+fer to types which may not have a definition at all, only a name.
+If the file is a child, then it may be that the  forward  is  re‐
+solved  to an actual type in the parent, otherwise the definition
+may be in another container or may not be known at all.  The only
+member of the that matters for a forward declaration is the which
+points to the name of the forward reference in the  string  table
+as described earlier.  There is no other information recorded for
+forward references.  Pointers, typedefs, volatile, const, and re‐
+strict are all similar in They all refer to another type.  In the
+case of typedefs, they provide an alternate name, while volatile,
+const,  and  restrict change how the type is interpreted in the C
+programming language.  This covers the kinds and These types have
+no variable list entries and use the member to refer to the  base
+type  that they modify.  Types with the kind are used to indicate
+gaps in the type identifier  space.   These  entries  consume  an
+identifier,  but do not define anything.  Nothing should refer to
+these gap identifiers.  C types can be imagined  as  a  directed,
+cyclic,  graph.  Structures and unions may refer to each other in
+a way that creates a cyclic dependency.  In cases such as  these,
+the entire type section must be read in and processed.  Consumers
+must not assume that every type can be laid out in dependency or‐
+der;  they  cannot.  The last section of the file is the section.
+This section encodes all of the strings  that  appear  throughout
+the  other  sections.   It  is laid out as a series of characters
+followed by a null terminator.  Generally, all names are  written
+out  in ASCII, as most C compilers do not allow and characters to
+appear in identifiers outside of a subset of ASCII.  However, any
+extended characters sets should be written out  as  a  series  of
+UTF‐8  bytes.  The first entry in the section, at offset zero, is
+a single null terminator to reference the empty string.   Follow‐
+ing that, each C string should be written out, including the null
+terminator.   Offsets  that  refer  to  something in this section
+should refer to the first byte which begins a string.  Beyond the
+first byte in the section being the null terminator, the order of
+strings is unimportant.  data is generally included  in  ELF  ob‐
+jects  which specify information to identify the architecture and
+endianness of the file.  A container inside such an  object  must
+match  the endianness of the ELF object.  Aside from the question
+of the endian encoding of data, there should be no other  differ‐
+ences  between  architectures.   While  many of the types in this
+document refer to non‐fixed  size  C  integral  types,  they  are
+equivalent  in  the  models  and If any other model is being used
+with data that has different sizes, then  it  must  not  use  the
+model’s  sizes for those integral types and instead use the fixed
+size equivalents based on an environment.  When  placing  a  con‐
+tainer  inside  of  an  ELF object, there are certain conventions
+that are expected for the purposes of tooling being able to  find
+the  data.  In particular, a given ELF object should only contain
+a single section.  Multiple containers should be merged  together
+into  a  single  one.  The file should be included in its own ELF
+section.  The section’s name must be The type of the section must
+be The section should have a link set to the symbol table and its
+address alignment must be 4.

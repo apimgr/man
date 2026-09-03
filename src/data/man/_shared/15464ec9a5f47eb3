@@ -1,0 +1,126 @@
+KASSERT(9)               BSD Kernel Developer's Manual              KASSERT(9)
+
+NNAAMMEE
+     KKAASSSSEERRTT — kernel expression verification macros
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss IINNVVAARRIIAANNTTSS
+
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//ssyyssttmm..hh>>
+
+     KKAASSSSEERRTT(_e_x_p_r_e_s_s_i_o_n, _m_s_g);
+
+     MMPPAASSSS(_e_x_p_r_e_s_s_i_o_n);
+
+DDEESSCCRRIIPPTTIIOONN
+     Assertions are widely used within the FreeBSD kernel to verify program‐
+     matic assumptions.  For violations of run-time assumptions and invari‐
+     ants, it is desirable to fail as soon and as loudly as possible.  Asser‐
+     tions are optional code; for non-recoverable error conditions an explicit
+     call to panic(9) is usually preferred.
+
+     The KKAASSSSEERRTT() macro tests the given boolean _e_x_p_r_e_s_s_i_o_n.  If _e_x_p_r_e_s_s_i_o_n
+     evaluates to false, and the kernel is compiled with ooppttiioonnss IINNVVAARRIIAANNTTSS,
+     the panic(9) function is called.  This terminates the running system at
+     the point of the error, possibly dropping into the kernel debugger or
+     initiating a kernel core dump.  The second argument, _m_s_g, is a printf(9)
+     format string and its arguments, enclosed in parentheses.  The formatted
+     string will become the panic string.
+
+     In a kernel that is built without ooppttiioonnss IINNVVAARRIIAANNTTSS, the assertion
+     macros are defined to be no-ops.  This eliminates the runtime overhead of
+     widespread assertions from release builds of the kernel.  Therefore,
+     checks which can be performed in a constant amount of time can be added
+     as assertions without concern about their performance impact.  More ex‐
+     pensive checks, such as those that output to console, or verify the in‐
+     tegrity of a chain of objects are generally best hidden behind the
+     DDIIAAGGNNOOSSTTIICC kernel option.
+
+     The MMPPAASSSS() macro (read as: "must-pass") is a convenience wrapper around
+     KKAASSSSEERRTT() that automatically generates a simple assertion message includ‐
+     ing file and line information.
+
+   AAsssseerrttiioonn GGuuiiddeelliinneess
+     When adding new assertions, keep in mind their primary purpose: to aid in
+     identifying and debugging of complex error conditions.
+
+     The panic messages resulting from assertion failures should be useful
+     without the resulting kernel dump; the message may be included in a bug
+     report, and should contain the relevant information needed to discern how
+     the assertion was violated.  This is especially important when the error
+     condition is difficult or impossible for the developer to reproduce lo‐
+     cally.
+
+     Therefore, assertions should adhere to the following guidelines:
+
+     1.   Whenever possible, the value of a runtime variable checked by an as‐
+          sertion condition should appear in its message.
+
+     2.   Unrelated conditions must appear in separate assertions.
+
+     3.   Multiple related conditions should be distinguishable (e.g. by
+          value), or split into separate assertions.
+
+     4.   When in doubt, print more information, not less.
+
+     Combined, this gives greater clarity into the exact cause of an assertion
+     panic; see _E_X_A_M_P_L_E_S below.
+
+EEXXAAMMPPLLEESS
+     A hypothetical _s_t_r_u_c_t _f_o_o object must not have its 'active' flag set when
+     calling ffoooo__ddeeaalllloocc():
+
+           void
+           foo_dealloc(struct foo *fp)
+           {
+
+                   KASSERT((fp->foo_flags & FOO_ACTIVE) == 0,
+                       ("%s: fp %p is still active, flags=%x", __func__, fp,
+                       fp->foo_flags));
+                   ...
+           }
+
+     This assertion provides the full flag set for the object, as well as the
+     memory pointer, which may be used by a debugger to examine the object in
+     detail (for example with a 'show foo' command in ddb(4)).
+
+     The assertion
+
+           MPASS(td == curthread);
+
+     located on line 87 of a file named foo.c would generate the following
+     panic message:
+
+           panic: Assertion td == curthread failed at foo.c:87
+
+     This is a simple condition, and the message provides enough information
+     to investigate the failure.
+
+     The assertion
+
+           MPASS(td == curthread && (sz >= SIZE_MIN && sz <= SIZE_MAX));
+
+     is _N_O_T useful enough.  The message doesn't indicate which part of the as‐
+     sertion was violated, nor does it report the value of sz, which may be
+     critical to understanding _w_h_y the assertion failed.
+
+     According to the guidelines above, this would be correctly expressed as:
+
+           MPASS(td == curthread);
+           KASSERT(sz >= SIZE_MIN && sz <= SIZE_MAX,
+               ("invalid size argument: %u", sz));
+
+HHIISSTTOORRYY
+     The MMPPAASSSS macro first appeared in BSD/OS and was imported into
+     FreeBSD 5.0.  The name originates as an acronym of "multi-processor as‐
+     sert", but has evolved to mean "must pass", or "must-pass assert".
+
+SSEEEE AALLSSOO
+     panic(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Jonathan M. Bresler <_j_m_b_@_F_r_e_e_B_S_D_._o_r_g> and
+     Mitchell Horne <_m_h_o_r_n_e_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             March 19, 2024                             BSD

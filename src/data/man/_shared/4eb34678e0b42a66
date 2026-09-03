@@ -1,0 +1,132 @@
+POLLING(4)               BSD Kernel Interfaces Manual               POLLING(4)
+
+NNAAMMEE
+     ppoolllliinngg — device polling support
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss DDEEVVIICCEE__PPOOLLLLIINNGG
+
+DDEESSCCRRIIPPTTIIOONN
+     Device polling (ppoolllliinngg for brevity) refers to a technique that lets the
+     operating system periodically poll devices, instead of relying on the de‐
+     vices to generate interrupts when they need attention.  This might seem
+     inefficient and counterintuitive, but when done properly, ppoolllliinngg gives
+     more control to the operating system on when and how to handle devices,
+     with a number of advantages in terms of system responsiveness and perfor‐
+     mance.
+
+     In particular, ppoolllliinngg reduces the overhead for context switches which is
+     incurred when servicing interrupts, and gives more control on the sched‐
+     uling of the CPU between various tasks (user processes, software inter‐
+     rupts, device handling) which ultimately reduces the chances of livelock
+     in the system.
+
+   PPrriinncciipplleess ooff OOppeerraattiioonn
+     In the normal, interrupt-based mode, devices generate an interrupt when‐
+     ever they need attention.  This in turn causes a context switch and the
+     execution of an interrupt handler which performs whatever processing is
+     needed by the device.  The duration of the interrupt handler is poten‐
+     tially unbounded unless the device driver has been programmed with real-
+     time concerns in mind (which is generally not the case for FreeBSD driv‐
+     ers).  Furthermore, under heavy traffic load, the system might be persis‐
+     tently processing interrupts without being able to complete other work,
+     either in the kernel or in userland.
+
+     Device polling disables interrupts by polling devices at appropriate
+     times, i.e., on clock interrupts and within the idle loop.  This way, the
+     context switch overhead is removed.  Furthermore, the operating system
+     can control accurately how much work to spend in handling device events,
+     and thus prevent livelock by reserving some amount of CPU to other tasks.
+
+     Enabling ppoolllliinngg also changes the way software network interrupts are
+     scheduled, so there is never the risk of livelock because packets are not
+     processed to completion.
+
+   EEnnaabblliinngg ppoolllliinngg
+     Currently only network interface drivers support the ppoolllliinngg feature.  It
+     is turned on and off with help of ifconfig(8) command.
+
+     The historic _k_e_r_n_._p_o_l_l_i_n_g_._e_n_a_b_l_e, which enabled polling for all inter‐
+     faces, can be replaced with the following code:
+
+     for i in `ifconfig -l` ;
+       do ifconfig $i polling; # use -polling to disable
+     done
+
+   MMIIBB VVaarriiaabblleess
+     The operation of ppoolllliinngg is controlled by the following sysctl(8) MIB
+     variables:
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._u_s_e_r___f_r_a_c
+             When ppoolllliinngg is enabled, and provided that there is some work to
+             do, up to this percent of the CPU cycles is reserved to userland
+             tasks, the remaining fraction being available for ppoolllliinngg pro‐
+             cessing.  Default is 50.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._b_u_r_s_t
+             Maximum number of packets grabbed from each network interface in
+             each timer tick.  This number is dynamically adjusted by the ker‐
+             nel, according to the programmed _u_s_e_r___f_r_a_c, _b_u_r_s_t___m_a_x, CPU speed,
+             and system load.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._e_a_c_h___b_u_r_s_t
+             The burst above is split into smaller chunks of this number of
+             packets, going round-robin among all interfaces registered for
+             ppoolllliinngg.  This prevents the case that a large burst from a single
+             interface can saturate the IP interrupt queue
+             (_n_e_t_._i_n_e_t_._i_p_._i_n_t_r___q_u_e_u_e___m_a_x_l_e_n).  Default is 5.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._b_u_r_s_t___m_a_x
+             Upper bound for _k_e_r_n_._p_o_l_l_i_n_g_._b_u_r_s_t.  Note that when ppoolllliinngg is
+             enabled, each interface can receive at most (_H_Z * _b_u_r_s_t___m_a_x)
+             packets per second unless there are spare CPU cycles available
+             for ppoolllliinngg in the idle loop.  This number should be tuned to
+             match the expected load (which can be quite high with GigE
+             cards).  Default is 150 which is adequate for 100Mbit network and
+             HZ=1000.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._i_d_l_e___p_o_l_l
+             Controls if ppoolllliinngg is enabled in the idle loop.  There are no
+             reasons (other than power saving or bugs in the scheduler's han‐
+             dling of idle priority kernel threads) to disable this.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._r_e_g___f_r_a_c
+             Controls how often (every _r_e_g___f_r_a_c / _H_Z seconds) the status reg‐
+             isters of the device are checked for error conditions and the
+             like.  Increasing this value reduces the load on the bus, but
+             also delays the error detection.  Default is 20.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._h_a_n_d_l_e_r_s
+             How many active devices have registered for ppoolllliinngg.
+
+     _k_e_r_n_._p_o_l_l_i_n_g_._s_h_o_r_t___t_i_c_k_s
+     _k_e_r_n_._p_o_l_l_i_n_g_._l_o_s_t___p_o_l_l_s
+     _k_e_r_n_._p_o_l_l_i_n_g_._p_e_n_d_i_n_g___p_o_l_l_s
+     _k_e_r_n_._p_o_l_l_i_n_g_._r_e_s_i_d_u_a_l___b_u_r_s_t
+     _k_e_r_n_._p_o_l_l_i_n_g_._p_h_a_s_e
+     _k_e_r_n_._p_o_l_l_i_n_g_._s_u_s_p_e_c_t
+     _k_e_r_n_._p_o_l_l_i_n_g_._s_t_a_l_l_e_d
+             Debugging variables.
+
+SSUUPPPPOORRTTEEDD DDEEVVIICCEESS
+     Device polling requires explicit modifications to the device drivers.  As
+     of this writing, the bge(4), dc(4), em(4), fwe(4), fwip(4), fxp(4),
+     igb(4), nfe(4), nge(4), re(4), rl(4), sis(4), ste(4), stge(4), vge(4),
+     vr(4), and xl(4) devices are supported, with others in the works.  The
+     modifications are rather straightforward, consisting in the extraction of
+     the inner part of the interrupt service routine and writing a callback
+     function, **__ppoollll(), which is invoked to probe the device for events and
+     process them.  (See the conditionally compiled sections of the devices
+     mentioned above for more details.)
+
+     As in the worst case the devices are only polled on clock interrupts, in
+     order to reduce the latency in processing packets, it is not advisable to
+     decrease the frequency of the clock below 1000 Hz.
+
+HHIISSTTOORRYY
+     Device polling first appeared in FreeBSD 4.6 and FreeBSD 5.0.
+
+AAUUTTHHOORRSS
+     Device polling was written by Luigi Rizzo <_l_u_i_g_i_@_i_e_t_._u_n_i_p_i_._i_t>.
+
+BSD                            December 26, 2020                           BSD

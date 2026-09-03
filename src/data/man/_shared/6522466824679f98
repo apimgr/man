@@ -1,0 +1,215 @@
+OPENSSL.CNF(5)              BSD File Formats Manual             OPENSSL.CNF(5)
+
+NNAAMMEE
+     ooppeennssssll..ccnnff — OpenSSL configuration files
+
+DDEESSCCRRIIPPTTIIOONN
+     The OpenSSL CONF library can be used to read configuration files; see
+     CONF_modules_load_file(3).  It is used for the OpenSSL master configura‐
+     tion file _/_e_t_c_/_s_s_l_/_o_p_e_n_s_s_l_._c_n_f and in a few other places such as certifi‐
+     cate extension files for the openssl(1) xx550099 utility.  OpenSSL applica‐
+     tions can also use the CONF library for their own purposes.
+
+     A configuration file is divided into a number of sections.  Each section
+     starts with a line [_s_e_c_t_i_o_n___n_a_m_e] and ends when a new section is started
+     or the end of the file is reached.  A section name can consist of al‐
+     phanumeric characters and underscores.
+
+     The first section of a configuration file is special and is referred to
+     as the “default section”.  It is usually unnamed and extends from the
+     start of file to the first named section.  When a name is being looked
+     up, it is first looked up in a named section (if any) and then in the de‐
+     fault section.
+
+     The environment is mapped onto a section called EENNVV.
+
+     Comments can be included by preceding them with the ‘#’ character.
+
+     Each section in a configuration file consists of a number of name and
+     value pairs of the form _n_a_m_e=_v_a_l_u_e.
+
+     The _n_a_m_e string can contain any alphanumeric characters as well as a few
+     punctuation symbols such as ‘.’ ‘,’ ‘;’ and ‘_’.
+
+     The _v_a_l_u_e string consists of the string following the ‘=’ character until
+     the end of the line with any leading and trailing whitespace removed.
+
+     The value string undergoes variable expansion.  This can be done by in‐
+     cluding substrings of the form $_n_a_m_e or ${_n_a_m_e}: this will substitute the
+     value of the named variable in the current section.  It is also possible
+     to substitute a value from another section using the syntax
+     $_s_e_c_t_i_o_n::_n_a_m_e or ${_s_e_c_t_i_o_n::_n_a_m_e}.  By using the form $EENNVV::_n_a_m_e, envi‐
+     ronment variables can be substituted.  It is also possible to assign val‐
+     ues to environment variables by using the name EENNVV::_n_a_m_e.  This will work
+     if the program looks up environment variables using the CONF library in‐
+     stead of calling getenv(3) directly.  The value string must not exceed
+     64k in length after variable expansion or an error will occur.
+
+     It is possible to escape certain characters by using any kind of quote or
+     the ‘\’ character.  By making the last character of a line a ‘\’, a _v_a_l_u_e
+     string can be spread across multiple lines.  In addition the sequences
+     ‘\n’, ‘\r’, ‘\b’, and ‘\t’ are recognized.
+
+OOPPEENNSSSSLL LLIIBBRRAARRYY CCOONNFFIIGGUURRAATTIIOONN
+     Applications can automatically configure certain aspects of OpenSSL using
+     the master OpenSSL configuration file, or optionally an alternative con‐
+     figuration file.  The openssl(1) utility includes this functionality: any
+     sub command uses the master OpenSSL configuration file unless an option
+     is used in the sub command to use an alternative configuration file.
+
+     To enable library configuration, the default section needs to contain an
+     appropriate line which points to the main configuration section.  The de‐
+     fault name is ooppeennssssll__ccoonnff, which is used by the openssl(1) utility.
+     Other applications may use an alternative name such as
+     mmyyaapppplliiccaattiioonn__ccoonnff.  All library configuration lines appear in the de‐
+     fault section at the start of the configuration file.
+
+     The configuration section should consist of a set of name value pairs
+     which contain specific module configuration information.  The _n_a_m_e repre‐
+     sents the name of the configuration module.  The meaning of the _v_a_l_u_e is
+     module specific: it may, for example, represent a further configuration
+     section containing configuration module specific information.  For exam‐
+     ple:
+
+           # The following line must be in the default section.
+           openssl_conf = openssl_init
+
+           [openssl_init]
+           oid_section = new_oids
+
+           [new_oids]
+           ... new oids here ...
+
+     The features of each configuration module are described below.
+
+   AASSNN11 OObbjjeecctt CCoonnffiigguurraattiioonn MMoodduullee
+     This module has the name ooiidd__sseeccttiioonn.  The value of this variable points
+     to a section containing name value pairs of OIDs: the name is the OID
+     short and long name, and the value is the numerical form of the OID.  Al‐
+     though some of the openssl(1) utility subcommands already have their own
+     ASN1 OBJECT section functionality, not all do.  By using the ASN1 OBJECT
+     configuration module, all the openssl(1) utility subcommands can see the
+     new objects as well as any compliant applications.  For example:
+
+           [new_oids]
+           some_new_oid = 1.2.3.4
+           some_other_oid = 1.2.3.5
+
+     It is also possible to set the value to the long name followed by a comma
+     and the numerical OID form.  For example:
+
+           shortName = some object long name, 1.2.3.4
+
+FFIILLEESS
+     /etc/ssl/openssl.cnf  standard configuration file
+
+EEXXAAMMPPLLEESS
+     Here is a sample configuration file using some of the features mentioned
+     above:
+
+           # This is the default section.
+           HOME=/temp
+           RANDFILE= ${ENV::HOME}/.rnd
+           configdir=$ENV::HOME/config
+
+           [ section_one ]
+           # We are now in section one.
+
+           # Quotes permit leading and trailing whitespace
+           any = " any variable name "
+
+           other = A string that can \
+           cover several lines \
+           by including \\ characters
+
+           message = Hello World\n
+
+           [ section_two ]
+           greeting = $section_one::message
+
+     This next example shows how to expand environment variables safely.
+
+     Suppose you want a variable called ttmmppffiillee to refer to a temporary file‐
+     name.  The directory it is placed in can determined by the TEMP or TMP
+     environment variables but they may not be set to any value at all.  If
+     you just include the environment variable names and the variable doesn't
+     exist then this will cause an error when an attempt is made to load the
+     configuration file.  By making use of the default section both values can
+     be looked up with TEMP taking priority and _/_t_m_p used if neither is de‐
+     fined:
+
+           TMP=/tmp
+           # The above value is used if TMP isn't in the environment
+           TEMP=$ENV::TMP
+           # The above value is used if TEMP isn't in the environment
+           tmpfile=${ENV::TEMP}/tmp.filename
+
+     More complex OpenSSL library configuration.  Add OID:
+
+           # Default appname: should match "appname" parameter (if any)
+           # supplied to CONF_modules_load_file et al.
+           openssl_conf = openssl_conf_section
+
+           [openssl_conf_section]
+           # Configuration module list
+           oid_section = new_oids
+
+           [new_oids]
+           # New OID, just short name
+           newoid1 = 1.2.3.4.1
+           # New OID shortname and long name
+           newoid2 = New OID 2 long name, 1.2.3.4.2
+
+     The above examples can be used with any application supporting library
+     configuration if "openssl_conf" is modified to match the appropriate
+     "appname".
+
+     For example if the second sample file above is saved to "example.cnf"
+     then the command line:
+
+           OPENSSL_CONF=example.cnf openssl asn1parse -genstr OID:1.2.3.4.1
+
+     will output:
+           0:d=0 hl=2 l= 4 prim: OBJECT :newoid1
+
+     showing that the OID "newoid1" has been added as "1.2.3.4.1".
+
+SSEEEE AALLSSOO
+     openssl(1), CONF_modules_load_file(3), OPENSSL_config(3), x509v3.cnf(5)
+
+CCAAVVEEAATTSS
+     If a configuration file attempts to expand a variable that doesn't exist,
+     then an error is flagged and the file will not load.  This can also hap‐
+     pen if an attempt is made to expand an environment variable that doesn't
+     exist.  For example, in a previous version of OpenSSL the default OpenSSL
+     master configuration file used the value of HOME which may not be defined
+     on non Unix systems and would cause an error.
+
+     This can be worked around by including a default section to provide a de‐
+     fault value: then if the environment lookup fails, the default value will
+     be used instead.  For this to work properly, the default value must be
+     defined earlier in the configuration file than the expansion.  See the
+     _E_X_A_M_P_L_E_S section for an example of how to do this.
+
+     If the same variable is defined more than once in the same section, then
+     all but the last value will be silently ignored.  In certain circum‐
+     stances such as with DNs, the same field may occur multiple times.  This
+     is usually worked around by ignoring any characters before an initial
+     ‘.’, for example:
+
+           1.OU="My first OU"
+           2.OU="My Second OU"
+
+BBUUGGSS
+     Currently there is no way to include characters using the octal \_n_n_n
+     form.  Strings are all NUL terminated, so NUL bytes cannot form part of
+     the value.
+
+     The escaping isn't quite right: if you want to use sequences like ‘\n’,
+     you can't use any quote escaping on the same line.
+
+     Files are loaded in a single pass.  This means that a variable expansion
+     will only work if the variables referenced are defined earlier in the
+     file.
+
+BSD                              July 8, 2024                              BSD

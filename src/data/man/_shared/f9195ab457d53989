@@ -1,0 +1,291 @@
+NG_PPP(4)                BSD Kernel Interfaces Manual                NG_PPP(4)
+
+NNAAMMEE
+     nngg__pppppp — PPP protocol netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__pppppp..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The pppppp node type performs multiplexing for the PPP protocol.  It handles
+     only packets that contain data, and forwards protocol negotiation and
+     control packets to a separate controlling entity (e.g., a user-land dae‐
+     mon).  This approach combines the fast dispatch of kernel implementations
+     with the configuration flexibility of a user-land implementations.  The
+     PPP node type directly supports multi-link PPP, Van Jacobson compression,
+     PPP compression, PPP encryption, and the IP, IPX, and AppleTalk proto‐
+     cols.  A single PPP node corresponds to one PPP multi-link bundle.
+
+     There is a separate hook for each PPP link in the bundle, plus several
+     hooks corresponding to the directly supported protocols.  For compression
+     and encryption, separate attached nodes are required to do the actual
+     work.  The node type used will of course depend on the algorithm negoti‐
+     ated.  There is also a bypass hook which is used to handle any protocol
+     not directly supported by the node.  This includes all of the control
+     protocols: LCP, IPCP, CCP, etc.  Typically this node is connected to a
+     user-land daemon via a ng_socket(4) type node.
+
+EENNAABBLLIINNGG FFUUNNCCTTIIOONNAALLIITTYY
+     In general, the PPP node enables a specific link or functionality when
+     (a) a NGM_PPP_SET_CONFIG message has been received which enables it, and
+     (b) the corresponding hook(s) are connected.  This allows the controlling
+     entity to use either method (a) or (b) (or both) to control the node's
+     behavior.  When a link is connected but disabled, traffic can still flow
+     on the link via the bypass hook (see below).
+
+LLIINNKK HHOOOOKKSS
+     During normal operation, the individual PPP links are connected to hooks
+     link0, link1, etc.  Up to NG_PPP_MAX_LINKS links are supported.  These
+     device-independent hooks transmit and receive full PPP frames, which in‐
+     clude the PPP protocol, address, control, and information fields, but no
+     checksum or other link-specific fields.
+
+     On outgoing frames, when protocol compression has been enabled and the
+     protocol number is suitable for compression, the protocol field will be
+     compressed (i.e., sent as one byte instead of two).  Either compressed or
+     uncompressed protocol fields are accepted on incoming frames.  Similarly,
+     if address and control field compression has been enabled for the link,
+     the address and control fields will be omitted (except for LCP frames as
+     required by the standards).  Incoming frames have the address and control
+     fields stripped automatically if present.
+
+     Since all negotiation is handled outside the PPP node, the links should
+     not be connected and enabled until the corresponding link has reached the
+     network phase (i.e., LCP negotiation and authentication have completed
+     successfully) and the PPP node has been informed of the link parameters
+     via the NGM_PPP_LINK_CONFIG message.
+
+     When a link is connected but disabled, all received frames are forwarded
+     directly out the bypass hook, and conversely, frames may be transmitted
+     via the bypass hook as well.  This mode is appropriate for the link au‐
+     thentication phase.  As soon as the link is enabled, the PPP node will
+     begin processing frames received on the link.
+
+CCOOMMPPRREESSSSIIOONN AANNDD EENNCCRRYYPPTTIIOONN
+     Compression is supported via two hooks, compress and decompress.  Com‐
+     pression and decompression can be enabled by toggling the
+     _e_n_a_b_l_e_C_o_m_p_r_e_s_s_i_o_n and _e_n_a_b_l_e_D_e_c_o_m_p_r_e_s_s_i_o_n fields of the node configura‐
+     tion structure.  (See below.)  If _e_n_a_b_l_e_C_o_m_p_r_e_s_s_i_o_n is set to
+     NG_PPP_COMPRESS_SIMPLE, then all outgoing frames are sent to the compress
+     hook and all packets received on this hook are expected to be compressed,
+     so the COMPD tag is put on them unconditionally.  If _e_n_a_b_l_e_C_o_m_p_r_e_s_s_i_o_n is
+     set to NG_PPP_COMPRESS_FULL, then packets received on the compress hook
+     are resent as is.  The compressor node should put the tag, if the packet
+     was compressed.  If _e_n_a_b_l_e_D_e_c_o_m_p_r_e_s_s_i_o_n is set to
+     NG_PPP_DECOMPRESS_SIMPLE, then the node will sent to the decompress hook
+     only those frames, that are marked with the COMPD tag.  If
+     _e_n_a_b_l_e_D_e_c_o_m_p_r_e_s_s_i_o_n is set to NG_PPP_DECOMPRESS_FULL, then the node will
+     sent all incoming packets to the decompress hook.  Compression and decom‐
+     pression can be completely disabled by setting the _e_n_a_b_l_e_C_o_m_p_r_e_s_s_i_o_n and
+     _e_n_a_b_l_e_D_e_c_o_m_p_r_e_s_s_i_o_n fields to the NG_PPP_COMPRESS_NONE and
+     NG_PPP_DECOMPRESS_NONE, respectively.
+
+     Encryption works exactly analogously via the encrypt and decrypt nodes.
+     Data is always compressed before being encrypted, and decrypted before
+     being decompressed.
+
+     Only bundle-level compression and encryption is directly supported; link-
+     level compression and encryption can be handled transparently by down‐
+     stream nodes.
+
+VVAANN JJAACCOOBBSSOONN CCOOMMPPRREESSSSIIOONN
+     When all of the vjc_ip, vjc_vjcomp, vjc_vjuncomp, and vjc_vjip hooks are
+     connected, and the corresponding configuration flag is enabled, Van Ja‐
+     cobson compression and/or decompression will become active.  Normally
+     these hooks connect to the corresponding hooks of a single ng_vjc(4)
+     node.  The PPP node is compatible with the “pass through” modes of the
+     ng_vjc(4) node type.
+
+BBYYPPAASSSS HHOOOOKK
+     When a frame is received on a link with an unsupported protocol, or a
+     protocol which is disabled or for which the corresponding hook is uncon‐
+     nected, the PPP node forwards the frame out the bypass hook, prepended
+     with a four byte prefix.  This first two bytes of the prefix indicate the
+     link number on which the frame was received (in network order).  For such
+     frames received over the bundle (i.e., encapsulated in the multi-link
+     protocol), the special link number NG_PPP_BUNDLE_LINKNUM is used.  After
+     the two byte link number is the two byte PPP protocol number (also in
+     network order).  The PPP protocol number is two bytes long even if the
+     original frame was protocol compressed.
+
+     Conversely, any data written to the bypass hook is assumed to be in this
+     same format.  The four byte header is stripped off, the PPP protocol num‐
+     ber is prepended (possibly compressed), and the frame is delivered over
+     the desired link.  If the link number is NG_PPP_BUNDLE_LINKNUM the frame
+     will be delivered over the multi-link bundle; or, if multi-link is dis‐
+     abled, over the (single) PPP link.
+
+     Typically when the controlling entity receives an unexpected packet on
+     the bypass hook it responds either by dropping the frame (if it is not
+     ready for the protocol) or with an LCP protocol reject (if it does not
+     recognize or expect the protocol).
+
+MMUULLTTIILLIINNKK OOPPEERRAATTIIOONN
+     To enable multi-link PPP, the corresponding configuration flag must be
+     set and at least one link connected.  The PPP node will not allow more
+     than one link to be connected if multi-link is not enabled, nor will it
+     allow certain multi-link settings to be changed while multi-link opera‐
+     tion is active (e.g., short sequence number header format).
+
+     Since packets are sent as fragments across multiple individual links, it
+     is important that when a link goes down the PPP node is notified immedi‐
+     ately, either by disconnecting the corresponding hook or disabling the
+     link via the NGM_PPP_SET_CONFIG control message.
+
+     Each link has configuration parameters for latency (specified in mil‐
+     liseconds) and bandwidth (specified in tens of bytes per second).  The
+     PPP node can be configured for _r_o_u_n_d_-_r_o_b_i_n or _o_p_t_i_m_i_z_e_d packet delivery.
+
+     When configured for round-robin delivery, the latency and bandwidth val‐
+     ues are ignored and the PPP node simply sends each frame as a single
+     fragment, alternating frames across all the links in the bundle.  This
+     scheme has the advantage that even if one link fails silently, some pack‐
+     ets will still get through.  It has the disadvantage of sub-optimal over‐
+     all bundle latency, which is important for interactive response time, and
+     sub-optimal overall bundle bandwidth when links with different bandwidths
+     exist in the same bundle.
+
+     When configured for optimal delivery, the PPP node distributes the packet
+     across the links in a way that minimizes the time it takes for the com‐
+     pleted packet to be received by the far end.  This involves taking into
+     account each link's latency, bandwidth, and current queue length.  There‐
+     fore these numbers should be configured as accurately as possible.  The
+     algorithm does require some computation, so may not be appropriate for
+     very slow machines and/or very fast links.
+
+     As a special case, if all links have identical latency and bandwidth,
+     then the above algorithm is disabled (because it is unnecessary) and the
+     PPP node simply fragments frames into equal sized portions across all of
+     the links.
+
+HHOOOOKKSS
+     This node type supports the following hooks:
+
+     _l_i_n_k_<_N_>       Individual PPP link number <N>
+
+     _c_o_m_p_r_e_s_s      Connection to compression engine
+
+     _d_e_c_o_m_p_r_e_s_s    Connection to decompression engine
+
+     _e_n_c_r_y_p_t       Connection to encryption engine
+
+     _d_e_c_r_y_p_t       Connection to decryption engine
+
+     _v_j_c___i_p        Connection to ng_vjc(4) ip hook
+
+     _v_j_c___v_j_c_o_m_p    Connection to ng_vjc(4) vjcomp hook
+
+     _v_j_c___v_j_u_n_c_o_m_p  Connection to ng_vjc(4) vjuncomp hook
+
+     _v_j_c___v_j_i_p      Connection to ng_vjc(4) vjip hook
+
+     _i_n_e_t          IP packet data
+
+     _i_p_v_6          IPv6 packet data
+
+     _a_t_a_l_k         AppleTalk packet data
+
+     _i_p_x           IPX packet data
+
+     _b_y_p_a_s_s        Bypass hook; frames have a four byte header consisting of a
+                   link number and a PPP protocol number.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_PPP_SET_CONFIG (sseettccoonnffiigg)
+          This command configures all aspects of the node.  This includes en‐
+          abling multi-link PPP, encryption, compression, Van Jacobson com‐
+          pression, and IP, IPv6, AppleTalk, and IPX packet delivery.  It in‐
+          cludes per-link configuration, including enabling the link, setting
+          latency and bandwidth parameters, and enabling protocol field com‐
+          pression.  Note that no link or functionality is active until the
+          corresponding hook is also connected.  This command takes a struct
+          ng_ppp_node_conf as an argument:
+
+          /* Per-link config structure */
+          struct ng_ppp_link_conf {
+            u_char    enableLink;     /* enable this link */
+            u_char    enableProtoComp;/* enable protocol field compression */
+            u_char    enableACFComp;  /* enable addr/ctrl field compression */
+            uint16_t  mru;            /* peer MRU */
+            uint32_t  latency;        /* link latency (in milliseconds) */
+            uint32_t  bandwidth;      /* link bandwidth (in bytes/sec/10) */
+          };
+
+          /* Bundle config structure */
+          struct ng_ppp_bund_conf {
+            uint16_t  mrru;                   /* multilink peer MRRU */
+            u_char    enableMultilink;        /* enable multilink */
+            u_char    recvShortSeq;           /* recv multilink short seq # */
+            u_char    xmitShortSeq;           /* xmit multilink short seq # */
+            u_char    enableRoundRobin;       /* xmit whole packets */
+            u_char    enableIP;               /* enable IP data flow */
+            u_char    enableIPv6;             /* enable IPv6 data flow */
+            u_char    enableAtalk;            /* enable AppleTalk data flow */
+            u_char    enableIPX;              /* enable IPX data flow */
+            u_char    enableCompression;      /* enable PPP compression */
+            u_char    enableDecompression;    /* enable PPP decompression */
+            u_char    enableEncryption;       /* enable PPP encryption */
+            u_char    enableDecryption;       /* enable PPP decryption */
+            u_char    enableVJCompression;    /* enable VJ compression */
+            u_char    enableVJDecompression;  /* enable VJ decompression */
+          };
+
+          struct ng_ppp_node_conf {
+            struct ng_ppp_bund_conf   bund;
+            struct ng_ppp_link_conf   links[NG_PPP_MAX_LINKS];
+          };
+
+     NGM_PPP_GET_CONFIG (ggeettccoonnffiigg)
+          Returns the current configuration as a struct ng_ppp_node_conf.
+
+     NGM_PPP_GET_LINK_STATS (ggeettssttaattss)
+          This command takes a two byte link number as an argument and returns
+          a struct ng_ppp_link_stat containing statistics for the correspond‐
+          ing link.  Here NG_PPP_BUNDLE_LINKNUM is a valid link number corre‐
+          sponding to the multi-link bundle.
+
+     NGM_PPP_GET_LINK_STATS64 (ggeettssttaattss6644)
+          Same as NGM_PPP_GET_LINK_STATS but returns struct ng_ppp_link_stat64
+          containing 64bit counters.
+
+     NGM_PPP_CLR_LINK_STATS (ccllrrssttaattss)
+          This command takes a two byte link number as an argument and clears
+          the statistics for that link.
+
+     NGM_PPP_GETCLR_LINK_STATS (ggeettccllrrssttaattss)
+          Same as NGM_PPP_GET_LINK_STATS, but also atomically clears the sta‐
+          tistics as well.
+
+     NGM_PPP_GETCLR_LINK_STATS64 (ggeettccllrrssttaattss6644)
+          Same as NGM_PPP_GETCLR_LINK_STATS but returns struct
+          ng_ppp_link_stat64 containing 64bit counters.
+
+     This node type also accepts the control messages accepted by the
+     ng_vjc(4) node type.  When received, these messages are simply forwarded
+     to the adjacent ng_vjc(4) node, if any.  This is particularly useful when
+     the individual PPP links are able to generate NGM_VJC_RECV_ERROR messages
+     (see ng_vjc(4) for a description).
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_async(4), ng_iface(4), ng_mppc(4), ng_pppoe(4),
+     ng_vjc(4), ngctl(8)
+
+     W. Simpson, _T_h_e _P_o_i_n_t_-_t_o_-_P_o_i_n_t _P_r_o_t_o_c_o_l _(_P_P_P_), RFC 1661.
+
+     K. Sklower, B. Lloyd, G. McGregor, D. Carr, and T. Coradetti, _T_h_e _P_P_P
+     _M_u_l_t_i_l_i_n_k _P_r_o_t_o_c_o_l _(_M_P_), RFC 1990.
+
+HHIISSTTOORRYY
+     The nngg__pppppp node type was implemented in FreeBSD 4.0.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                            November 13, 2012                           BSD

@@ -1,0 +1,200 @@
+The  driver provides RAID 0, 1, 4, and 5 (and more!) capabilities
+to This document assumes that the reader has at least some famil‐
+iarity with RAID and RAID concepts.  The reader is  also  assumed
+to  know  how to configure disks and pseudo‐devices into kernels,
+how to generate kernels, and how to partition  disks.   RAIDframe
+provides  a  number  of different RAID levels including: provides
+simple data striping across the components.  provides  mirroring.
+provides  data striping across the components, with parity stored
+on a dedicated drive (in this case, the  last  component).   pro‐
+vides  data  striping across the components, with parity distrib‐
+uted across all the components.  There  are  a  wide  variety  of
+other RAID levels supported by RAIDframe.  The configuration file
+options  to  enable  them are briefly outlined at the end of this
+section.  Depending on the parity level  configured,  the  device
+driver  can  support the failure of component drives.  The number
+of failures allowed depends on the parity level selected.  If the
+driver is able to handle drive failures, and a drive  does  fail,
+then  the  system is operating in "degraded mode".  In this mode,
+all missing data must be reconstructed from the data  and  parity
+present  on  the  other  components.  This results in much slower
+data accesses, but does mean that a failure need  not  bring  the
+system to a complete halt.  The RAID driver supports and enforces
+the  use of A contains important information about the component,
+including a user‐specified serial number, the row and  column  of
+that component in the RAID set, and whether the data (and parity)
+on  the  component  is The component label currently lives at the
+half‐way point of the located at the beginning of each component.
+This is RF_PROTECTED_SECTORS in length (64  blocks  or  32Kbytes)
+and the component label is currently 1Kbyte in size.  If the dri‐
+ver  determines  that  the component labels are very inconsistent
+with respect to each other (e.g. two or more  serial  numbers  do
+not match) or that the component label is not consistent with its
+assigned  place  in  the set (e.g. the component label claims the
+component should be the 3rd one in a 6‐disk set, but the RAID set
+has it as the 3rd component in a 5‐disk set) then the device will
+fail to configure.  If the driver  determines  that  exactly  one
+component  label seems to be incorrect, and the RAID set is being
+configured as a set that supports a single failure, then the RAID
+set will be allowed to configure,  but  the  incorrectly  labeled
+component will be marked as and the RAID set will begin operation
+in  degraded mode.  If all of the components are consistent among
+themselves, the RAID set will configure normally.  Component  la‐
+bels are also used to support the auto‐detection and autoconfigu‐
+ration  of  RAID  sets.  A RAID set can be flagged as autoconfig‐
+urable, in which case it will be configured automatically  during
+the  kernel  boot process.  RAID file systems which are automati‐
+cally configured are also eligible to be the  root  file  system.
+There  is  currently  only  limited  support (alpha, amd64, i386,
+pmax, sparc, sparc64, and vax architectures) for booting a kernel
+directly from a RAID 1 set, and no support for booting  from  any
+other  RAID  sets.   To use a RAID set as the root file system, a
+kernel is usually obtained from a small non‐RAID partition, after
+which any autoconfiguring RAID set can be used for the root  file
+system.   See  for  more information on autoconfiguration of RAID
+sets.  Note that with autoconfiguration of RAID sets,  it  is  no
+longer  necessary  to hard‐code SCSI IDs of drives.  The autocon‐
+figuration code will correctly configure a device even after  any
+number of the components have had their device IDs changed or de‐
+vice names changed.  The driver supports disks which are on‐line,
+but  are  not actively used in an existing file system.  Should a
+disk fail, the driver is capable  of  reconstructing  the  failed
+disk  onto  a hot spare or back onto a replacement drive.  If the
+components are hot swappable, the failed disk  can  then  be  re‐
+moved, a new disk put in its place, and a copyback operation per‐
+formed.  The copyback operation, as its name indicates, will copy
+the  reconstructed  data  from  the  hot  spare to the previously
+failed (and now replaced) disk.  Hot spares can also be hot‐added
+using If a component cannot be detected when the RAID  device  is
+configured,  that  component  will  be simply marked as ’failed’.
+The user‐land utility for doing all configuration and other oper‐
+ations is Most importantly, must be used with the option to  ini‐
+tialize  all  RAID  sets.  In particular, this initialization in‐
+cludes re‐building the parity data.  This  rebuilding  of  parity
+data is also required when either a) a new RAID device is brought
+up  for the first time or b) after an un‐clean shutdown of a RAID
+device.  By using the option to and performing this on‐demand re‐
+computation of all parity before doing a or  a  file  system  in‐
+tegrity  and parity integrity can be ensured.  It bears repeating
+again that parity recomputation is before any  file  systems  are
+created  or  used  on the RAID device.  If the parity is not cor‐
+rect, then missing data cannot be correctly recovered.  RAID lev‐
+els may be combined in a hierarchical fashion.   For  example,  a
+RAID  0  device  can be constructed out of a number of RAID 5 de‐
+vices (which, in turn, may be constructed  out  of  the  physical
+disks,  or  of  other RAID devices).  The first step to using the
+driver is to ensure that it is suitably configured in the kernel.
+This is done by adding a line similar  to:  pseudo‐device    raid
+#  RAIDframe  disk  device to the kernel configuration file.  The
+RAIDframe drivers are configured dynamically as needed.  To  turn
+on  component  auto‐detection and autoconfiguration of RAID sets,
+simply add: options RAID_AUTOCONFIG to the  kernel  configuration
+file.  All component partitions must be of the type (e.g. 4.2BSD)
+or  The use of the latter is strongly encouraged, and is required
+if autoconfiguration of the RAID set is desired.  Since RAIDframe
+leaves room for disklabels, RAID components  can  be  simply  raw
+disks,  or  partitions which use an entire disk.  A more detailed
+treatment of actually using a device is found  in  It  is  highly
+recommended  that the steps to reconstruct, copyback, and re‐com‐
+pute parity are well understood by the system administrator(s)  a
+component  failure.  Doing the wrong thing when a component fails
+may result in data loss.  Additional internal consistency  check‐
+ing  can  be enabled by specifying: options RAID_DIAGNOSTIC These
+assertions are disabled by default in order  to  improve  perfor‐
+mance.   RAIDframe supports an access tracing facility for track‐
+ing both requests made and performance of various  parts  of  the
+RAID systems as the request is processed.  To enable this tracing
+the following option may be specified: options RF_ACC_TRACE=1 For
+extensive  debugging  there  are a number of kernel options which
+will aid in performing extra diagnosis of various  parts  of  the
+RAIDframe  sub‐systems.   Note  that in order to make full use of
+these options it is often necessary to enable one or more  debug‐
+ging  options  as  listed in As well, these options are also only
+typically useful for people who wish to debug  various  parts  of
+RAIDframe.   The  options  include:  For debugging the code which
+maps RAID addresses to physical addresses: options RF_DEBUG_MAP=1
+Parity stripe status debugging is enabled  with:  options  RF_DE‐
+BUG_PSS=1  Additional  debugging for queuing is enabled with: op‐
+tions RF_DEBUG_QUEUE=1 Problems with non‐quiescent  file  systems
+should  be  easier  to debug if the following is enabled: options
+RF_DEBUG_QUIESCE=1 Stripelock debugging is enabled with:  options
+RF_DEBUG_STRIPELOCK=1  Additional diagnostic checks during recon‐
+struction are enabled with: options  RF_DEBUG_RECON=1  Validation
+of the DAGs (Directed Acyclic Graphs) used to describe an I/O ac‐
+cess  can  be  performed  when  the following is enabled: options
+RF_DEBUG_VALIDATE_DAG=1 Additional diagnostics during parity ver‐
+ification are enabled with: options RF_DEBUG_VERIFYPARITY=1 There
+are a number of less commonly used RAID levels supported by RAID‐
+frame.  These additional RAID types should be considered  experi‐
+mental,  and  may  not  be ready for production use.  The various
+types and the options to enable them are shown here: For Even‐Odd
+parity: options RF_INCLUDE_EVENODD=1 For RAID level  5  with  ro‐
+tated  sparing:  options RF_INCLUDE_RAID5_RS=1 For Parity Logging
+(highly  experimental):  options  RF_INCLUDE_PARITYLOGGING=1  For
+Chain  Declustering:  options RF_INCLUDE_CHAINDECLUSTER=1 For In‐
+terleaved Declustering: options  RF_INCLUDE_INTERDECLUSTER=1  For
+Parity Declustering: options RF_INCLUDE_PARITY_DECLUSTERING=1 For
+Parity  Declustering  with  Distributed  Spares:  options  RF_IN‐
+CLUDE_PARITY_DECLUSTERING_DS=1 The  reader  is  referred  to  the
+RAIDframe  documentation mentioned in the section for more detail
+on these various RAID configurations.  Certain RAID levels (1, 4,
+5, 6, and others) can protect against some data loss due to  com‐
+ponent  failure.   However the loss of two components of a RAID 4
+or 5 system, or the loss of a single component of a RAID  0  sys‐
+tem,  will  result in the entire file systems on that RAID device
+being lost.  RAID is a substitute for good backup practices.  Re‐
+computation of parity be performed whenever  there  is  a  chance
+that  it  may  have been compromised.  This includes after system
+crashes, or before a RAID device has  been  used  for  the  first
+time.  Failure to keep parity correct will be catastrophic should
+a  component  ever  fail — it is better to use RAID 0 and get the
+additional space and speed, than it is to  use  parity,  but  not
+keep  the  parity correct.  At least with RAID 0 there is no per‐
+ception of increased data security.  device special  files.   The
+driver in is a port of RAIDframe, a framework for rapid prototyp‐
+ing  of  RAID  structures  developed by the folks at the Parallel
+Data Laboratory at Carnegie Mellon University (CMU).   RAIDframe,
+as originally distributed by CMU, provides a RAID simulator for a
+number of different architectures, and a user‐level device driver
+and  a  kernel  device  driver for Digital Unix.  The driver is a
+kernelized version of RAIDframe v1.1.  A more  complete  descrip‐
+tion  of the internals and functionality of RAIDframe is found in
+the paper "RAIDframe: A Rapid Prototyping Tool for RAID Systems",
+by William V. Courtright II, Garth Gibson,  Mark  Holland,  LeAnn
+Neal  Reilly, and Jim Zelenka, and published by the Parallel Data
+Laboratory of Carnegie Mellon University.  The driver  first  ap‐
+peared  in RAIDframe was ported to by Greg Oster in 1998, who has
+maintained it since.  In 1999, component  labels,  spares,  auto‐
+matic rebuilding of parity, and autoconfiguration of volumes were
+added.   In 2000, root on RAID support was added (initially, with
+no support for loading kernels from RAID volumes, which has  been
+added  to  many  ports since.)  In 2009, support for parity bimap
+was added, reducing parity resync time after a crash.   In  2010,
+support  for  larger  than  2TiB  and  non‐512 sector devices was
+added.  In 2018, support for 32‐bit  userland  compatibility  was
+added.   In 2021, support for autoconfiguration from other‐endian
+raid sets was added.  Support for loading  kernels  from  RAID  1
+partitions  was added for the pmax, alpha, i386, and vax ports in
+2000, the sgimips port in 2001, the sparc64 and  amd64  ports  in
+2002, the arc port in 2005, the sparc, and landisk ports in 2006,
+the  cobalt  port in 2007, the ofppc port in 2008, the bebox port
+in 2010, the emips port in 2011, and the sandpoint port in  2012.
+The  RAIDframe  Copyright  is as follows: Copyright (c) 1994‐1996
+Carnegie‐Mellon University.  All rights reserved.  Permission  to
+use, copy, modify and distribute this software and its documenta‐
+tion  is  hereby granted, provided that both the copyright notice
+and this permission notice appear in all copies of the  software,
+derivative  works or modified versions, and any portions thereof,
+and  that  both  notices  appear  in  supporting   documentation.
+CARNEGIE  MELLON  ALLOWS FREE USE OF THIS SOFTWARE IN ITS "AS IS"
+CONDITION.  CARNEGIE MELLON DISCLAIMS ANY LIABILITY OF  ANY  KIND
+FOR  ANY  DAMAGES WHATSOEVER RESULTING FROM THE USE OF THIS SOFT‐
+WARE.  Carnegie Mellon requests users of this software to  return
+to
+ Software   Distribution   Coordinator    or   Software.Distribu‐
+tion@CS.CMU.EDU
+ School of Computer Science
+ Carnegie Mellon University
+ Pittsburgh PA 15213‐3890 any  improvements  or  extensions  that
+they  make  and  grant  Carnegie the rights to redistribute these
+changes.

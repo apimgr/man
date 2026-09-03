@@ -1,0 +1,80 @@
+PANIC(9)                 BSD Kernel Developer's Manual                PANIC(9)
+
+NNAAMMEE
+     ppaanniicc — bring down system on fatal error
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssyyssttmm..hh>>
+
+     _e_x_t_e_r_n _c_h_a_r _*_p_a_n_i_c_s_t_r_;
+
+     _v_o_i_d
+     ppaanniicc(_c_o_n_s_t _c_h_a_r _*_f_m_t, _._._.);
+
+     _v_o_i_d
+     vvppaanniicc(_c_o_n_s_t _c_h_a_r _*_f_m_t, _v_a___l_i_s_t _a_p);
+
+     KKEERRNNEELL__PPAANNIICCKKEEDD();
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppaanniicc() and vvppaanniicc() functions terminate the running system.  The
+     message _f_m_t is a printf(3) style format string.  The message is printed
+     to the console and _p_a_n_i_c_s_t_r is set pointing to the address of the message
+     text.  This can be retrieved from a core dump at a later time.
+
+     Upon entering the ppaanniicc() function the panicking thread disables inter‐
+     rupts and calls critical_enter(9).  This prevents the thread from being
+     preempted or interrupted while the system is still in a running state.
+     Next, it will instruct the other CPUs in the system to stop.  This syn‐
+     chronizes with other threads to prevent concurrent panic conditions from
+     interfering with one another.  In the unlikely event of concurrent pan‐
+     ics, only one panicking thread will proceed.
+
+     Control will be passed to the kernel debugger via kkddbb__eenntteerr().  This is
+     conditional on a debugger being installed and enabled by the
+     _d_e_b_u_g_g_e_r___o_n___p_a_n_i_c variable; see ddb(4) and gdb(4).  The debugger may ini‐
+     tiate a system reset, or it may eventually return.
+
+     Finally, kern_reboot(9) is called to restart the system, and a kernel
+     dump will be requested.  If ppaanniicc() is called recursively (from the disk
+     sync routines, for example), kkeerrnn__rreebboooott() will be instructed not to sync
+     the disks.
+
+     The vvppaanniicc() function implements the main body of ppaanniicc().  It is suit‐
+     able to be called by functions which perform their own variable-length
+     argument processing.  In all other cases, ppaanniicc() is preferred.
+
+     The KKEERRNNEELL__PPAANNIICCKKEEDD() macro is the preferred way to determine if the sys‐
+     tem has panicked.  It returns a boolean value.  Most often this is used
+     to avoid taking an action that cannot possibly succeed in a panic con‐
+     text.
+
+EEXXEECCUUTTIIOONN CCOONNTTEEXXTT
+     Once the panic has been initiated, code executing in a panic context is
+     subject to the following restrictions:
+
+     ••   Single-threaded execution.  The scheduler is disabled, and other CPUs
+         are stopped/forced idle.  Functions that manipulate the scheduler
+         state must be avoided.  This includes, but is not limited to,
+         wakeup(9) and sleepqueue(9) functions.
+
+     ••   Interrupts are disabled.  Device I/O (e.g. to the console) must be
+         achieved with polling.
+
+     ••   Dynamic memory allocation cannot be relied on, and must be avoided.
+
+     ••   Lock acquisition/release will be ignored, meaning these operations
+         will appear to succeed.
+
+     ••   Sleeping on a resource is not strictly prohibited, but will result in
+         an immediate return from the sleep function.  Time-based sleeps such
+         as pause(9) may be performed as a busy-wait.
+
+RREETTUURRNN VVAALLUUEESS
+     The ppaanniicc() and vvppaanniicc() functions do not return.
+
+SSEEEE AALLSSOO
+     printf(3), ddb(4), gdb(4), KASSERT(9), kern_reboot(9)
+
+BSD                             March 17, 2023                             BSD

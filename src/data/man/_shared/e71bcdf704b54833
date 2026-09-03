@@ -1,0 +1,71 @@
+The driver implements collection of code coverage inside the ker‐
+nel.   It can be enabled on a per thread basis from userland, al‐
+lowing the kernel program counter to be collected during syscalls
+triggered by the same thread.  The descriptors (KD) are allocated
+during and are associated with a file descriptor.  A  thread  can
+enable  the  device.   When this happens, this thread becomes the
+owner of the descriptors (KD), and no thread can disable this  KD
+except  the  owner.  A descriptor (KD) is freed when its file de‐
+scriptor is closed iff the KD is not active on a thread.   If  it
+is,  we  ask  the thread to free it when it exits.  The collected
+coverage can be accessed by mapping the device using The  buffers
+are  mapped  without  risk  that  the kernel frees a buffer still
+mapped in a process.  By default, is not enabled but requires the
+compile‐time configuration to be present, see The following calls
+are provided: Allocate a coverage buffer with a capacity  of  The
+buffer can be accessed using whereas the returned pointer must be
+interpreted  as  an  array  of  entries.  Note that kcov_int_t is
+volatile.  The first entry contains the number of entries in  the
+array,  excluding  the first entry.  Enable code coverage tracing
+for the current thread.  The must be one  of  the  following:  No
+trace  selected.   This  option is useful for testing the device.
+Trace the kernel program counter.  Trace comparison  instructions
+and  switch  statements.   For  switch  statements, the number of
+traced comparison instructions is equal to the number  of  switch
+cases.   Each  traced  comparison instruction is represented by 4
+entries in the coverage buffer: A mask where the  least  signifi‐
+cant  bit  is set if one of the comparison operands is a compile‐
+time constant, which is always true for switch  statements.   The
+remaining  bits represents the log2 size of the operands, ranging
+from 0 to 3.  First comparison operand.  For  switch  statements,
+this  operand  corresponds  to the case value.  Second comparison
+operand.  For switch statements, this operand corresponds to  the
+value passed to switch.  Kernel program counter where the compar‐
+ison  instruction  took  place.  In this mode, the first entry in
+the coverage buffer reflects the number of traced comparison  in‐
+structions.   Thus, the effective number of entries in the cover‐
+age buffer is given by multiplying the first entry by 4.  Disable
+code coverage tracing for the  current  thread.   Default  device
+node.   In  the  following example, the syscall is traced and the
+coverage displayed, which in turn can be passed to  in  order  to
+translate  the kernel program counter into the file name and line
+number it corresponds to.  #include  <err.h>  #include  <fcntl.h>
+#include <stdio.h> #include <stdlib.h> #include <unistd.h>
+
+#include    <sys/ioccom.h>    #include   <sys/ioctl.h>   #include
+<sys/mman.h>
+
+#include <sys/kcov.h>
+
+int   main(void)   {            kcov_int_t    *cover,    i,    n;
+        uint64_t  size  = 1024 * 100;         int fd;         int
+mode;
+
+        fd = open("/dev/kcov", O_RDWR);          if  (fd  ==  ‐1)
+                err(1,     "open");             if     (ioctl(fd,
+KCOV_IOC_SETBUFSIZE, &size) == ‐1)                 err(1, "ioctl:
+KCOV_IOC_SETBUFSIZE");         cover = mmap(NULL, size * KCOV_EN‐
+TRY_SIZE,             PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        if (cover == MAP_FAILED)                 err(1,  "mmap");
+        mode    =   KCOV_MODE_TRACE_PC;           if   (ioctl(fd,
+KCOV_IOC_ENABLE, &mode)  ==  ‐1)                  err(1,  "ioctl:
+KCOV_IOC_ENABLE");          cover[0]  = 0;         read(‐1, NULL,
+0); /* syscall paths  to  be  traced  */          n  =  cover[0];
+        if      (ioctl(fd,      KCOV_IOC_DISABLE)      ==     ‐1)
+                err(1, "ioctl: KCOV_IOC_DISABLE");         for (i
+= 0; i < n; i++)                 printf("%p\n", (void *)cover[i +
+1]);         if (munmap(cover, size  *  KCOV_ENTRY_SIZE)  ==  ‐1)
+                err(1, "munmap");         close(fd);
+
+        return  0; } The driver was initially developed in Linux.
+A driver based on the same concept was then implemented in

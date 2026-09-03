@@ -1,0 +1,238 @@
+The driver gives user‐mode applications access to hardware‐accel‐
+erated  cryptographic transforms, as implemented by the in‐kernel
+interface.  The driver is a software‐only implementation  of  the
+interface,  and  must  be  included  to use the interface without
+hardware acceleration.  The special device provides an based  in‐
+terface.   User‐mode applications should open the special device,
+then issue calls on the descriptor.  User‐mode access to is  gen‐
+erally  controlled by three variables, and See for additional de‐
+tails.  The device provides two distinct modes of operation:  one
+mode  for  symmetric‐keyed  cryptographic  requests, and a second
+mode for both asymmetric‐key  (public‐key/private‐key)  requests,
+and  for  modular arithmetic (for Diffie‐Hellman key exchange and
+other cryptographic protocols).  The two modes are described sep‐
+arately below.  Regardless of whether symmetric‐key  or  asymmet‐
+ric‐key  operations  are  to  be performed, use of the device re‐
+quires a basic series of steps: Open a file  descriptor  for  the
+device.  See If any symmetric operation will be performed, create
+one  session,  with  or multiple sessions, with Most applications
+will require at least one symmetric session.   Since  cipher  and
+MAC  keys  are  tied  to sessions, many applications will require
+more.  Asymmetric operations do not  use  sessions.   Submit  re‐
+quests,  synchronously  with (symmetric) or (asymmetric) or asyn‐
+chronously with (symmetric) or  (asymmetric).   The  asynchronous
+interface allows multiple requests to be submitted in one call if
+the user so desires.  If the asynchronous interface is used, wait
+for results with or then collect them with (a particular request)
+or (multiple requests).  Destroy one session with or many at once
+with  Close the device with The symmetric‐key operation mode pro‐
+vides a context‐based API to traditional symmetric‐key encryption
+(or privacy) algorithms, or to keyed  and  unkeyed  one‐way  hash
+(HMAC  and  MAC) algorithms.  The symmetric‐key mode also permits
+fused operation, where the hardware performs both a privacy algo‐
+rithm and an integrity‐check algorithm in a single pass over  the
+data:  either a fused encrypt/HMAC‐generate operation, or a fused
+HMAC‐verify/decrypt operation.  To use symmetric mode,  you  must
+first  create a session specifying the algorithm(s) and key(s) to
+use; then issue encrypt or decrypt requests against the  session.
+Contingent  upon device drivers for installed cryptographic hard‐
+ware registering with as providers of a given algorithm, some  or
+all  of  the  following  symmetric‐key  privacy algorithms may be
+available: Contingent upon hardware support, some or all  of  the
+following keyed one‐way hash algorithms may be available: The and
+algorithms  are actually unkeyed, but should be requested as sym‐
+metric‐key hash algorithms with a zero‐length key.   This  opera‐
+tion is deprecated and will be removed after It clones the fd ar‐
+gument to yielding a new file descriptor for the creation of ses‐
+sions.   Because the device now clones on open, this operation is
+unnecessary.  struct session_op {
+    u_int32_t cipher;   /* e.g. CRYPTO_DES_CBC */
+    u_int32_t mac;      /* e.g. CRYPTO_MD5_HMAC */
+
+    u_int32_t keylen;   /* cipher key */
+    void * key;
+    int mackeylen;      /* mac key */
+    void * mackey;
+
+    u_int32_t ses;      /* returns: ses # */ };
+
+Create a new cryptographic session on a file descriptor  for  the
+device;  that is, a persistent object specific to the chosen pri‐
+vacy algorithm, integrity algorithm, and keys  specified  in  The
+special  value  0  for either privacy or integrity is reserved to
+indicate that the indicated operation (privacy or  integrity)  is
+not  desired for this session.  Multiple sessions may be bound to
+a single file descriptor.  The session ID returned in is supplied
+as a required field in the symmetric‐operation structure for  fu‐
+ture  encryption  or  hashing requests.  This implementation will
+never return a session ID of 0 for a  successful  creation  of  a
+session,  which  is a extension.  For non‐zero symmetric‐key pri‐
+vacy algorithms, the privacy algorithm must be specified  in  the
+key  length  in  and the key value in the octets addressed by For
+keyed one‐way hash algorithms, the one‐way hash must be specified
+in the key length in and the key value in the octets addressed by
+Support for a specific combination  of  fused  privacy   and  in‐
+tegrity‐check  algorithms depends on whether the underlying hard‐
+ware supports that combination.  Not all  combinations  are  sup‐
+ported by all hardware, even if the hardware supports each opera‐
+tion as a stand‐alone non‐fused operation.  struct crypt_sgop {
+    size_t      count;                  /* how many */
+    struct session_n_op * sessions; /* where to get them */ };
+
+struct session_n_op {
+    u_int32_t cipher;           /* e.g. CRYPTO_DES_CBC */
+    u_int32_t mac;              /* e.g. CRYPTO_MD5_HMAC */
+
+    u_int32_t keylen;           /* cipher key */
+    void * key;
+    u_int32_t mackeylen;        /* mac key */
+    void * mackey;
+
+    u_int32_t ses;              /* returns: session # */
+    int status; };
+
+Create one or more sessions.  Takes a counted array of structures
+in For each requested session (array element n), the session num‐
+ber  is  returned  in and the status for that session creation in
+struct crypt_op {
+    u_int32_t ses;
+    u_int16_t op;       /* e.g. COP_ENCRYPT */
+    u_int16_t flags;
+    u_int len;
+    void * src, *dst;
+    void * mac;         /* must be large enough for result */
+    void * iv; };
+
+Request a symmetric‐key (or hash) operation.  The file descriptor
+argument to must have been bound to a valid session.  To encrypt,
+set to To decrypt, set to The field supplies the  length  of  the
+input  buffer;  the  fields  supply  the  addresses  of the input
+buffer, output buffer, one‐way hash, and  initialization  vector,
+respectively.  struct crypt_mop {
+    size_t count;               /* how many */
+    struct crypt_n_op * reqs;   /* where to get them */ };
+
+struct crypt_n_op {
+    u_int32_t ses;
+    u_int16_t op;               /* e.g. COP_ENCRYPT */
+    u_int16_t flags;
+    u_int len;
+
+    u_int32_t reqid;            /* request id */
+    int status;                 /* accepted or not */
+
+    void *opaque;               /* opaque pointer ret to user */
+    u_int32_t keylen;           /* cipher key ‐ optional */
+    void * key;
+    u_int32_t mackeylen;        /* mac key ‐ optional */
+    void * mackey;
+
+    void * src, * dst;
+    void * mac;
+    void * iv; };
+
+This  is the asynchronous version of CIOCCRYPT, which allows mul‐
+tiple symmetric‐key (or  hash)  operations  to  be  started  (see
+CIOCRYPT  above  for  the details for each operation).  The field
+specifies the number of operations provided in  the  cr_mop‐>reqs
+array.   Each  operation is assigned a unique request id returned
+in the field.  Each operation can accept an opaque value from the
+user to be passed back to the user when the  operation  completes
+(e.g., to track context for the request).  The opaque field is If
+a  problem  occurs  with starting any of the operations then that
+operation’s field is filled with the error code.  The failure  of
+an  operation  does  not  prevent the other operations from being
+started.  The or functions must be used on the  device  file  de‐
+scriptor to detect that some operation has completed; results are
+then retrieved with The and fields of the operation structure are
+currently unused.  They are intended for use to immediately rekey
+an  existing  session  before processing a new request.  Destroys
+the /dev/crypto session associated with the file‐descriptor argu‐
+ment.  struct crypt_sfop {
+    size_t count;
+    u_int32_t *sesid; };
+
+Destroys the sessions specified by the array of  session  identi‐
+fiers.   Contingent upon hardware support, the following asymmet‐
+ric (public‐key/private‐key; or key‐exchange  subroutine)  opera‐
+tions  may also be available: See below for discussion of the in‐
+put and output parameter counts.  Returns a bitmask of  supported
+asymmetric‐key  operations.   Each of the above‐listed asymmetric
+operations is present if and only if the bit position numbered by
+the code for that operation is set.  For example, is available if
+and only if the bit is set.  struct crypt_kop {
+    u_int crk_op;               /* e.g. CRK_MOD_EXP */
+    u_int crk_status;           /* return status */
+    u_short crk_iparams;        /* # of input params */
+    u_short crk_oparams;        /* # of output params */
+    u_int crk_pad1;
+    struct crparam crk_param[CRK_MAXPARAM]; };
+
+/* Bignum parameter, in packed bytes. */ struct crparam {
+    void * crp_p;
+    u_int crp_nbits; };
+
+Performs an asymmetric‐key operation from the  list  above.   The
+specific  operation is supplied in final status for the operation
+is returned in The number of input arguments and  the  number  of
+output  arguments  is  specified  in and respectively.  The field
+must be filled in with exactly arguments, each encoded as a  (ad‐
+dress,  bitlength)  pair.   The  semantics of these arguments are
+currently undocumented.  struct crypt_mkop {
+    size_t count;               /* how many */
+    struct crypt_n_op * reqs;   /* where to get them */ };
+
+struct crypt_n_kop {
+    u_int crk_op;               /* e.g. CRK_MOD_EXP */
+    u_int crk_status;           /* accepted or not */
+    u_short crk_iparams;        /* # of input params */
+    u_short crk_oparams;        /* # of output params */
+    u_int32_t crk_reqid;        /* request id */
+    struct crparam crk_param[CRK_MAXPARAM];
+    void *crk_opaque;           /* opaque pointer ret to user  */
+};
+
+This  is the asynchronous version of which starts one or more key
+operations.  See above and below  for  descriptions  of  the  and
+fields of the argument structure, and result retrieval.  When re‐
+quests  are  submitted  with the or commands, result retrieval is
+asynchronous (the submit ioctls return immediately).  Use the  or
+functions to determine when the file descriptor has completed op‐
+erations ready to be retrieved.  struct crypt_result {
+    u_int32_t reqid;    /* request ID */
+    u_int32_t status;   /* 0 if successful */
+    void * opaque;      /* pointer from user */ };
+
+Check  for the status of the request specified by This requires a
+linear search through all completed requests and should  be  used
+with  extreme care if the number of requests pending on this file
+descriptor may be large.  The field is set as  follows:  The  re‐
+quest  has completed, and its results have been copied out to the
+original structure used to start the request.  The copyout occurs
+during this ioctl, so the calling process  must  be  the  process
+that  started  the  request.   The request has not yet completed.
+The request was not found.  Other values indicate a problem  dur‐
+ing the processing of the request.  struct cryptret {
+    size_t count;                       /* space for how many */
+    struct  crypt_result  * results;      /* where to put them */
+};
+
+Retrieve a number of completed requests.  This  ioctl  accepts  a
+count  and an array (each array element is a structure as used by
+above) and fills the array with up to results  of  completed  re‐
+quests.   This  ioctl  fills in the so that the request which has
+completed may be identified by the application.   Note  that  the
+results  may  include  requests  submitted  both as symmetric and
+asymmetric operations.  The driver  is  derived  from  a  version
+which  appeared  in which in turn is based on code which appeared
+in The "new API" for asynchronous operation with  multiple  basic
+operations  per  system  call  (the  "N" ioctl variants) was con‐
+tributed by Coyote Point Systems, Inc. and first appeared in  Er‐
+ror  checking  and  reporting  is weak.  The values specified for
+symmetric‐key key sizes to must exactly match the values expected
+by The output buffer and MAC  buffers  supplied  to  must  follow
+whether  privacy  or integrity algorithms were specified for ses‐
+sion: if you request a algorithm, you  must  supply  a  suitably‐
+sized  buffer.   The  scheme for passing arguments for asymmetric
+requests is baroque.  The naming inconsistency  between  and  the
+various names is an unfortunate historical artifact.

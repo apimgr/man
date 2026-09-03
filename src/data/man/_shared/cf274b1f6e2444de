@@ -1,0 +1,195 @@
+TUN(4)                   BSD Kernel Interfaces Manual                   TUN(4)
+
+NNAAMMEE
+     ttuunn, ttaapp — network tunnel pseudo-device
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee ttuunn
+
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneett//iiff__ttuunn..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ttuunn pseudo-device driver provides character special devices for com‐
+     municating with the kernel network stack via the ttuunn and ttaapp network in‐
+     terfaces.  Packets sent to these interfaces can be read from the device
+     special file by a userland process and processed as desired.  Packets
+     written to the device special file by the userland process are injected
+     back into the kernel networking subsystem.
+
+     ttuunn and ttaapp interfaces can be created at runtime using the iiffccoonnffiigg
+     iiffaaccee_N ccrreeaattee command, or by opening the character special devices
+     _/_d_e_v_/_t_u_n_N or _/_d_e_v_/_t_a_p_N respectively.
+
+     The minor number of the device special files are associated with the unit
+     number of the network interfaces.
+
+     Each device has an exclusive open property: it cannot be opened if it is
+     already open and in use by another process.  On the last close of the de‐
+     vice all queued packets are discarded.  If the device was created by
+     opening a device special file it will be automatically destroyed.  The
+     last close of a device special file associated with an interface created
+     via ifconfig(8) will be marked as not running and traffic sent out the
+     will be dropped.
+
+     Each read returns at most one packet; if insufficient buffer space is
+     provided, the packet is truncated.  Each write supplies exactly one
+     packet.  Writes never block.  If the protocol queue is full, the packet
+     is dropped, a “collision” is counted, and ENOBUFS is returned.
+
+     The following ioctl(2) special commands defined in <_n_e_t_/_i_f___t_u_n_._h> are
+     supported:
+
+     TUNGIFINFO _s_t_r_u_c_t _t_u_n_i_n_f_o _*
+     TUNSIFINFO _s_t_r_u_c_t _t_u_n_i_n_f_o _*
+             Get or set the interface characteristics.
+
+             /* iface info */
+             struct tuninfo {
+                     u_int   mtu;
+                     u_short type;
+                     u_short flags;
+                     u_int   baudrate;
+             };
+
+             _f_l_a_g_s and _t_y_p_e are set by the kernel when an interface is cre‐
+             ated, and must be set to the same values that the kernel pro‐
+             vided.
+
+     TUNSIFMODE _i_n_t _*
+             Provided for backwards compatibility.  The flags set must match
+             what the kernel initialised them to.
+
+     TUNSCAP _s_t_r_u_c_t _t_u_n___c_a_p_a_b_i_l_i_t_i_e_s _*
+             Enable the prepending of network packets with a _s_t_r_u_c_t _t_u_n___h_d_r
+             offload header, and set which interface offload capabilities
+             userland can handle on behalf of the kernel.
+
+             struct tun_capabilities {
+                     uint32_t        tun_if_capabilities;
+             };
+
+             The _t_u_n___i_f___c_a_p_a_b_i_l_i_t_i_e_s field is set with IFCAP values from
+             <_n_e_t_/_i_f_._h>.  It is acceptable to enable the offload header with‐
+             out enabling any interface offload capabilities.
+
+             The prepending of network packets with a _s_t_r_u_c_t _t_u_n___h_d_r offload
+             header is disabled, and the interface offload capabilities are
+             reset when the device special file is closed.
+
+     TUNGCAP _s_t_r_u_c_t _t_u_n___c_a_p_a_b_i_l_i_t_i_e_s _*
+             Get which interface offload capabilities are currently enabled.
+             If the interface has not been configured with TUNSCAP this com‐
+             mand will fail with ENODEV.
+
+     TUNDCAP
+             Disable the prepending of network packets with the _s_t_r_u_c_t _t_u_n___h_d_r
+             offload header, and clear interface offload capabilities.
+
+     The generic ioctls FIONREAD, FIONBIO, FIOASYNC, FIOSETOWN, FIOGETOWN are
+     also supported.
+
+   PPooiinntt--ttoo--PPooiinntt LLaayyeerr 33 ttuunnnneell iinntteerrffaaccee ((ttuunn))
+     Each packet read from or written to a ttuunn interface is prefixed with a
+     tunnel header consisting of a 4-byte network byte order integer contain‐
+     ing the address family of the packet.  ttuunn supports AF_INET, AF_INET6,
+     and AF_MPLS packets.
+
+   EEtthheerrnneett ttuunnnneell iinntteerrffaaccee ((ttaapp))
+     Each packet read from or written to a ttaapp interface is an Ethernet
+     packet.  The Ethernet CRC at the end of the frame is not required.
+
+     The device special files for ttaapp interfaces support the following addi‐
+     tional ioctl(2) commands:
+
+     SIOCGIFADDR _u_i_n_t_8___t[ETHER_ADDR_LEN]
+     SIOCSIFADDR _u_i_n_t_8___t[ETHER_ADDR_LEN]
+             Get or set the link layer address (MAC address) of the interface.
+
+   NNeettwwoorrkk ooffffllooaadd ssuuppppoorrtt
+     When network offload support has been enabled with the TUNSCAP ioctl(2)
+     command, _s_t_r_u_c_t _t_u_n___h_d_r is prepended to packets read from and written to
+     the device special file.
+
+     The kernel will populate the offload header for reads from the device
+     special file depending on which interface offload capabilities are en‐
+     abled.  A program may use any offload feature when writing to the device
+     special file regardless of which interface offload capabilities are en‐
+     abled.  The offload header can be read from one device special file and
+     written directly to another without interpretation or modification.
+
+     struct tun_hdr {
+             uint16_t        th_flags;
+             uint16_t        th_pad;
+             uint16_t        th_vtag;
+             uint16_t        th_mss;
+     };
+
+     The fields in the _s_t_r_u_c_t _t_u_n___h_d_r are in host native byte order.
+
+     The following flags can be set in _t_h___f_l_a_g_s to specify which offloads are
+     requested for the current packet:
+
+     TUN_H_VTAG       _t_h___v_t_a_g is set.
+     TUN_H_TCP_MSS    TCP segmentation offload is requested for the current
+                      packet.  The maximum segment size is specified in
+                      _t_h___m_s_s.
+     TUN_H_IPV4_CSUM  IPv4 header checksum calculation requested.
+     TUN_H_TCP_CSUM   TCP checksum calculation requested.
+     TUN_H_UDP_CSUM   UDP checksum calculation requested.
+     TUN_H_ICMP_CSUM  ICMP checksum calculation requested.
+
+     Only one of TUN_H_TCP_CSUM, TUN_H_UDP_CSUM, and TUN_H_ICMP_CSUM can be
+     specified at a time.  TUN_H_VTAG can only be used with ttaapp interfaces.
+
+     _t_h___p_a_d should be set to 0 when writing to the device special file, and
+     ignored when reading from the device special file.
+
+FFIILLEESS
+     /dev/tun*
+     /dev/tap*
+
+EERRRROORRSS
+     If open fails, errno(2) may be set to one of:
+
+     [ENXIO]            Not that many devices configured.
+
+     [EBUSY]            Device was already open.
+
+     If a write(2) call fails, errno(2) is set to one of:
+
+     [EMSGSIZE]         The packet supplied was too small or too large.  The
+                        maximum sized packet allowed is currently 16384 bytes.
+
+     [ENOMEM]           There were no mbufs.
+
+     ioctl(2) commands may fail with:
+
+     [EINVAL]           Invalid parameters were specified.
+
+     [ENOTTY]           Unrecognized ioctl command.
+
+     A read(2) call may fail because of:
+
+     [EIO]              The associated interface has been destroyed.
+
+     [EWOULDBLOCK]      Non-blocking I/O was selected and no packets were
+                        available.
+
+SSEEEE AALLSSOO
+     ioctl(2), inet(4), intro(4), netintro(4), hostname.if(5), ifconfig(8),
+     netstart(8)
+
+HHIISSTTOORRYY
+     ttuunn interfaces originally supported both Layer 3 and Ethernet packets by
+     reconfiguring the type of interface with TUNSIFINFO.  Ethernet packet
+     support was split into the separate ttaapp interface in OpenBSD 5.9.
+
+AAUUTTHHOORRSS
+     ttuunn was written by Julian Onions <_J_u_l_i_a_n_._O_n_i_o_n_s_@_n_e_x_o_r_._c_o_._u_k> at Notting‐
+     ham University.
+
+     The ttaapp interface functionality was written by
+     Claudio Jeker <_c_l_a_u_d_i_o_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BSD                            November 18, 2024                           BSD

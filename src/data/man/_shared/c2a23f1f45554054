@@ -1,0 +1,165 @@
+DA(4)                    BSD Kernel Interfaces Manual                    DA(4)
+
+NNAAMMEE
+     ddaa — SCSI Direct Access device driver
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ddaa
+
+DDEESSCCRRIIPPTTIIOONN
+     The ddaa driver provides support for all SCSI devices of the direct access
+     class that are attached to the system through a supported SCSI Host
+     Adapter.  The direct access class includes disk, magneto-optical, and
+     solid-state devices.
+
+     A SCSI Host adapter must also be separately configured into the system
+     before a SCSI direct access device can be configured.
+
+CCAACCHHEE EEFFFFEECCTTSS
+     Many direct access devices are equipped with read and/or write caches.
+     Parameters affecting the device's cache are stored in mode page 8, the
+     caching control page.  Mode pages can be examined and modified via the
+     camcontrol(8) utility.
+
+     The read cache is used to store data from device-initiated read ahead op‐
+     erations as well as frequently used data.  The read cache is transparent
+     to the user and can be enabled without any adverse effect.  Most devices
+     with a read cache come from the factory with it enabled.  The read cache
+     can be disabled by setting the RCD (Read Cache Disable) bit in the
+     caching control mode page.
+
+     The write cache can greatly decrease the latency of write operations and
+     allows the device to reorganize writes to increase efficiency and perfor‐
+     mance.  This performance gain comes at a price.  Should the device lose
+     power while its cache contains uncommitted write operations, these writes
+     will be lost.  The effect of a loss of write transactions on a file sys‐
+     tem is non-deterministic and can cause corruption.  Most devices age
+     write transactions to limit vulnerability to a few transactions recently
+     reported as complete, but it is none-the-less recommended that systems
+     with write cache enabled devices reside on an Uninterruptible Power Sup‐
+     ply (UPS).  The ddaa device driver ensures that the cache and media are
+     synchronized upon final close of the device or an unexpected shutdown
+     (panic) event.  This ensures that it is safe to disconnect power once the
+     operating system has reported that it has halted.  The write cache can be
+     enabled by setting the WCE (Write Cache Enable) bit in the caching con‐
+     trol mode page.
+
+TTAAGGGGEEDD QQUUEEUUIINNGG
+     The ddaa device driver will take full advantage of the SCSI feature known
+     as tagged queueing.  Tagged queueing allows the device to process multi‐
+     ple transactions concurrently, often re-ordering them to reduce the num‐
+     ber and length of seeks.  To ensure that transactions to distant portions
+     of the media, which may be deferred indefinitely by servicing requests
+     nearer the current head position, are completed in a timely fashion, an
+     ordered tagged transaction is sent every 15 seconds during continuous de‐
+     vice operation.
+
+BBAADD BBLLOOCCKK RREECCOOVVEERRYY
+     Direct Access devices have the capability of mapping out portions of de‐
+     fective media.  Media recovery parameters are located in mode page 1, the
+     Read-Write Error Recovery mode page.  The most important media remapping
+     features are 'Auto Write Reallocation' and 'Auto Read Reallocation' which
+     can be enabled via the AWRE and ARRE bits, respectively, of the Read-
+     Write Error Recovery page.  Many devices do not ship from the factory
+     with these feature enabled.  Mode pages can be examined and modified via
+     the camcontrol(8) utility.
+
+KKEERRNNEELL CCOONNFFIIGGUURRAATTIIOONN
+     It is only necessary to explicitly configure one ddaa device; data struc‐
+     tures are dynamically allocated as disks are found on the SCSI bus.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     The following variables are available as both sysctl(8) variables and
+     loader(8) tunables:
+
+     _k_e_r_n_._c_a_m_._d_a_._d_e_f_a_u_l_t___t_i_m_e_o_u_t
+         This variable determines how long the ddaa driver will wait before tim‐
+         ing out an outstanding command.  The units for this value are sec‐
+         onds, and the default is currently 60 seconds.
+
+     _k_e_r_n_._c_a_m_._d_a_._d_i_s_a_b_l_e___w_p___p_r_o_t_e_c_t_i_o_n
+         Disable detection of write-protected disks.  Default is disabled.
+         (detection of write-protected disks is enabled).
+
+     _k_e_r_n_._c_a_m_._d_a_._e_n_a_b_l_e___b_i_o_s_p_e_e_d_u_p
+         Enable BIO_SPEEDUP processing.  Default is enabled.
+
+     _k_e_r_n_._c_a_m_._d_a_._e_n_a_b_l_e___u_m_a___c_c_b_s
+         Use UMA for CCBs.  Default is enabled.
+
+     _k_e_r_n_._c_a_m_._d_a_._p_o_l_l___p_e_r_i_o_d
+         Media polling period in seconds.  Default is 3 seconds.
+
+     _k_e_r_n_._c_a_m_._d_a_._r_e_t_r_y___c_o_u_n_t
+         This variable determines how many times the ddaa driver will retry a
+         READ or WRITE command.  This does not affect the number of retries
+         used during probe time or for the ddaa driver dump routine.  This value
+         currently defaults to 4.
+
+     _k_e_r_n_._c_a_m_._d_a_._s_e_n_d___o_r_d_e_r_e_d
+         Send Ordered Tags.  On shutdown, step through all the ddaa peripheral
+         drivers, and if the device is still open, sync the disk to physical
+         media.  Default is enabled.
+
+     _k_e_r_n_._c_a_m_._s_o_r_t___i_o___q_u_e_u_e
+
+     _k_e_r_n_._c_a_m_._d_a._X_._s_o_r_t___i_o___q_u_e_u_e
+         These variables determine whether request queue should be sorted try‐
+         ing to optimize head seeks.  Set to 1 to enable sorting, 0 to dis‐
+         able, -1 to leave it as-is.  The default is sorting enabled for HDDs
+         and disabled for SSDs.
+
+     _k_e_r_n_._c_a_m_._d_a._X_._d_e_l_e_t_e___m_e_t_h_o_d
+         This variable specifies method to handle BIO_DELETE requests:
+
+         ATA_TRIM  ATA TRIM via ATA COMMAND PASS THROUGH command,
+
+         UNMAP     UNMAP command,
+
+         WS16      WRITE SAME(16) command with UNMAP flag,
+
+         WS10      WRITE SAME(10) command with UNMAP flag,
+
+         ZERO      WRITE SAME(10) command without UNMAP flag,
+
+         DISABLE   disable BIO_DELETE support.
+
+     _k_e_r_n_._c_a_m_._d_a._X_._m_i_n_i_m_u_m___c_m_d___s_i_z_e
+         This variable determines what the minimum READ/WRITE CDB size is for
+         a given ddaa unit.  Valid minimum command size values are 6, 10, 12 and
+         16 bytes.  The default is 6 bytes.
+
+         The ddaa driver issues a CAM Path Inquiry CCB at probe time to deter‐
+         mine whether the protocol the device in question speaks (e.g. ATAPI)
+         typically does not allow 6 byte commands.  If it does not, the ddaa
+         driver will default to using at least 10 byte CDBs.  If a 6 byte READ
+         or WRITE fails with an ILLEGAL REQUEST error, the ddaa driver will then
+         increase the default CDB size for the device to 10 bytes and retry
+         the command.  CDB size is always chosen as the smallest READ/WRITE
+         CDB that will satisfy the specified minimum command size, and the LBA
+         and length of the READ or WRITE in question.  (e.g., a write to an
+         LBA larger than 2^32 will require a 16 byte CDB.)
+
+NNOOTTEESS
+     If a device becomes invalidated (media is removed, device becomes unre‐
+     sponsive) the disklabel and information held within the kernel about the
+     device will be invalidated.  To avoid corruption of a newly inserted
+     piece of media or a replacement device, all accesses to the device will
+     be discarded until the last file descriptor referencing the old device is
+     closed.  During this period, all new open attempts will be rejected.
+
+FFIILLEESS
+     /dev/da*  SCSI disk device nodes
+
+DDIIAAGGNNOOSSTTIICCSS
+     None.
+
+SSEEEE AALLSSOO
+     ada(4), cam(4), geom(4), nda(4), gpart(8)
+
+HHIISSTTOORRYY
+     The ddaa driver was written for the CAM SCSI subsystem by Justin T. Gibbs.
+     Many ideas were gleaned from the ssdd device driver written and ported from
+     Mach 2.5 by Julian Elischer.
+
+BSD                           September 10, 2022                           BSD

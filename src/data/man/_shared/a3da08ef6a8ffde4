@@ -1,0 +1,330 @@
+DHCPD(8)                  BSD System Manager's Manual                 DHCPD(8)
+
+NNAAMMEE
+     ddhhccppdd — Dynamic Host Configuration Protocol (DHCP) daemon
+
+SSYYNNOOPPSSIISS
+     ddhhccppdd [--ddffnnvv] [--AA _a_b_a_n_d_o_n_e_d___i_p___t_a_b_l_e] [--CC _c_h_a_n_g_e_d___i_p___t_a_b_l_e]
+           [--cc _c_o_n_f_i_g_-_f_i_l_e] [--LL _l_e_a_s_e_d___i_p___t_a_b_l_e] [--ll _l_e_a_s_e_-_f_i_l_e]
+           [--uu[_b_i_n_d___a_d_d_r_e_s_s]] [--YY _s_y_n_c_t_a_r_g_e_t] [--yy _s_y_n_c_l_i_s_t_e_n] [_i_n_t_e_r_f_a_c_e _._._.]
+
+DDEESSCCRRIIPPTTIIOONN
+     ddhhccppdd implements the Dynamic Host Configuration Protocol (DHCP) and the
+     Internet Bootstrap Protocol (BOOTP).  DHCP allows hosts on a TCP/IP net‐
+     work to request and be assigned IP addresses, and also to discover infor‐
+     mation about the network to which they are attached.  BOOTP provides sim‐
+     ilar functionality, with certain restrictions.
+
+     The DHCP protocol allows a host which is unknown to the network adminis‐
+     trator to be automatically assigned a new IP address out of a pool of IP
+     addresses for its network.  In order for this to work, the network admin‐
+     istrator allocates address pools in each subnet and enters them into the
+     dhcpd.conf(5) file.
+
+     On startup, ddhhccppdd reads the _d_h_c_p_d_._c_o_n_f file and stores a list of avail‐
+     able addresses on each subnet in memory.  When a client requests an ad‐
+     dress using the DHCP protocol, ddhhccppdd allocates an address for it.  Each
+     client is assigned a lease, which expires after an amount of time chosen
+     by the administrator (by default, one day).  When a leased IP address is
+     assigned to a new hardware address, ddhhccppdd may delete the leased address
+     from certain pf(4) tables.  Before leases expire, the clients to which
+     leases are assigned are expected to renew them in order to continue to
+     use the addresses.  Once a lease has expired, the client to which that
+     lease was assigned is no longer permitted to use the leased IP address.
+
+     Whenever changes are made to the _d_h_c_p_d_._c_o_n_f file, ddhhccppdd must be
+     restarted.
+
+     In order to keep track of leases across system reboots and server
+     restarts, ddhhccppdd keeps a list of leases it has assigned in the
+     dhcpd.leases(5) file.  Before ddhhccppdd grants a lease to a host, it records
+     the lease in this file and makes sure that the contents of the file are
+     flushed to disk.  This ensures that even in the event of a system crash,
+     ddhhccppdd will not forget about a lease that it has assigned.  On startup,
+     after reading the _d_h_c_p_d_._c_o_n_f file, ddhhccppdd reads the _d_h_c_p_d_._l_e_a_s_e_s file to
+     refresh its memory about what leases have been assigned.
+
+     When ddhhccppdd starts up, it identifies all network interfaces, eliminating
+     non-broadcast interfaces if possible, and listens for DHCP broadcasts on
+     each interface.  The names of the network interfaces on which ddhhccppdd
+     should listen for broadcasts may also be specified on the command line on
+     systems where ddhhccppdd is unable to identify non-broadcast interfaces.
+
+     DHCP traffic always bypasses IPsec.  Otherwise there could be situations
+     when a server has an IPsec SA for the client and sends replies over that,
+     which a newly booted client would not be able to grasp.
+
+     The options are as follows:
+
+     --AA _a_b_a_n_d_o_n_e_d___i_p___t_a_b_l_e
+             When an address is abandoned for some reason, add it to the pf(4)
+             table named _a_b_a_n_d_o_n_e_d___i_p___t_a_b_l_e.  This can be used to defend
+             against machines "camping" on an address without obtaining a
+             lease.  When an address is properly leased, ddhhccppdd will remove the
+             address from this table.
+
+     --CC _c_h_a_n_g_e_d___i_p___t_a_b_l_e
+             When an address is leased to a different hardware address, delete
+             it from the pf(4) table named _c_h_a_n_g_e_d___i_p___t_a_b_l_e.  This feature
+             complements the overload table in a stateful pf(4) rule.  If a
+             host appears to be misbehaving, it can be quarantined by using
+             the overload feature.  When the address is leased to a different
+             machine, ddhhccppdd can remove the address from the overload table,
+             thus allowing a well-behaved machine to reuse the address.
+
+     --cc _c_o_n_f_i_g_-_f_i_l_e
+             Use an alternate configuration file, _c_o_n_f_i_g_-_f_i_l_e.  Because of the
+             importance of using the same lease database at all times when
+             running ddhhccppdd in production, this option should be used _o_n_l_y for
+             testing database files in a non-production environment.
+
+     --dd      Do not daemonize.  If this option is specified, ddhhccppdd will run in
+             the foreground and log to _s_t_d_e_r_r.
+
+     --ff      An alias for --dd.
+
+     --LL _l_e_a_s_e_d___i_p___t_a_b_l_e
+             When an address is leased, ddhhccppdd will insert it into the pf(4)
+             table named _l_e_a_s_e_d___i_p___t_a_b_l_e.  Addresses are removed from the ta‐
+             ble when the lease expires.  Combined with the table of abandoned
+             addresses, this can help enforce a requirement to use DHCP on a
+             network, or can place DHCP users in a different class of service.
+             Users are cautioned against placing much trust in Ethernet or IP
+             addresses; ifconfig(8) can be used to trivially change the inter‐
+             face's address, and on a busy DHCP network, IP addresses will
+             likely be quickly recycled.
+
+     --ll _l_e_a_s_e_-_f_i_l_e
+             Use an alternate lease file, _l_e_a_s_e_-_f_i_l_e.  Because of the impor‐
+             tance of using the same lease database at all times when running
+             ddhhccppdd in production, this option should be used _o_n_l_y for testing
+             lease files in a non-production environment.
+
+     --nn      Only test configuration, do not run ddhhccppdd.
+
+     --uu[_b_i_n_d___a_d_d_r_e_s_s]
+             Use a UDP socket instead of BPF for receiving and sending pack‐
+             ets.  Only DHCPINFORM messages can be handled on this socket;
+             other messages are discarded.  With this option, ddhhccppdd can answer
+             DHCPINFORM from clients on non Ethernet interfaces such as tun(4)
+             or pppx(4).  If _b_i_n_d___a_d_d_r_e_s_s is specified, ddhhccppdd will bind to
+             that address; otherwise the limited broadcast address
+             (255.255.255.255) is used as the default.
+
+     --vv      Produce more verbose output.
+
+     --YY _s_y_n_c_t_a_r_g_e_t
+             Add target _s_y_n_c_t_a_r_g_e_t to receive synchronisation messages.
+             _s_y_n_c_t_a_r_g_e_t can be either an IPv4 address for unicast messages or
+             a network interface name followed optionally by a colon and a nu‐
+             meric TTL value for multicast messages to the group 224.0.1.240.
+             If the multicast TTL is not specified, a default value of 1 is
+             used.  This option can be specified multiple times.  See also
+             _S_Y_N_C_H_R_O_N_I_S_A_T_I_O_N below.
+
+     --yy _s_y_n_c_l_i_s_t_e_n
+             Listen on _s_y_n_c_l_i_s_t_e_n for incoming synchronisation messages.  The
+             format for _s_y_n_c_l_i_s_t_e_n is the same as for _s_y_n_c_t_a_r_g_e_t, above.  This
+             option can be specified only once.  See also _S_Y_N_C_H_R_O_N_I_S_A_T_I_O_N be‐
+             low.
+
+BBOOOOTTPP
+     ddhhccppdd also provides BOOTP support.  Unlike DHCP, the BOOTP protocol does
+     not provide a protocol for recovering dynamically-assigned addresses once
+     they are no longer needed.  It is still possible to dynamically assign
+     addresses to BOOTP clients, but some administrative process for reclaim‐
+     ing addresses is required.  By default, leases are granted to BOOTP
+     clients in perpetuity, although the network administrator may set an ear‐
+     lier cutoff date or a shorter lease length for BOOTP leases if that makes
+     sense.
+
+     BOOTP clients may also be served in the old standard way, which is simply
+     to provide a declaration in the _d_h_c_p_d_._c_o_n_f file for each BOOTP client,
+     permanently assigning an address to each client.
+
+CCOONNFFIIGGUURRAATTIIOONN
+     The syntax of the dhcpd.conf(5) file is discussed separately.  This sec‐
+     tion should be used as an overview of the configuration process, and the
+     dhcpd.conf(5) documentation should be consulted for detailed reference
+     information.
+
+     Subnets
+          ddhhccppdd needs to know the subnet numbers and netmasks of all subnets
+          for which it will be providing service.  In addition, in order to
+          dynamically allocate addresses, it must be assigned one or more
+          ranges of addresses on each subnet which it can in turn assign to
+          client hosts as they boot.  Thus, a very simple configuration pro‐
+          viding DHCP support might look like this:
+
+                subnet 239.252.197.0 netmask 255.255.255.0 {
+                  range 239.252.197.10 239.252.197.250;
+                }
+
+          Multiple address ranges may be specified like this:
+
+                subnet 239.252.197.0 netmask 255.255.255.0 {
+                  range 239.252.197.10 239.252.197.107;
+                  range 239.252.197.113 239.252.197.250;
+                }
+
+          If a subnet will only be provided with BOOTP service and no dynamic
+          address assignment, the range clause can be left out entirely, but
+          the subnet statement must appear.
+
+     Lease Lengths
+          DHCP leases can be assigned almost any length from zero seconds to
+          infinity.  What lease length makes sense for any given subnet, or
+          for any given installation, will vary depending on the kinds of
+          hosts being served.
+
+          For example, in an office environment where systems are added from
+          time to time and removed from time to time, but move relatively in‐
+          frequently, it might make sense to allow lease times of a month or
+          more.  In a final test environment on a manufacturing floor, it may
+          make more sense to assign a maximum lease length of 30 minutes -
+          enough time to go through a simple test procedure on a network ap‐
+          pliance before packaging it up for delivery.
+
+          It is possible to specify two lease lengths: the default length that
+          will be assigned if a client doesn't ask for any particular lease
+          length, and a maximum lease length.  These are specified as clauses
+          to the subnet command:
+
+                subnet 239.252.197.0 netmask 255.255.255.0 {
+                  range 239.252.197.10 239.252.197.107;
+                  default-lease-time 600;
+                  max-lease-time 7200;
+                }
+
+          This particular subnet declaration specifies a default lease time of
+          600 seconds (ten minutes), and a maximum lease time of 7200 seconds
+          (two hours).  Other common values would be 86400 (one day), 604800
+          (one week) and 2592000 (30 days).
+
+          Each subnet need not have the same lease - in the case of an office
+          environment and a manufacturing environment served by the same DHCP
+          server, it might make sense to have widely disparate values for de‐
+          fault and maximum lease times on each subnet.
+
+     BOOTP Support
+          Each BOOTP client must be explicitly declared in the dhcpd.conf(5)
+          file.  A very basic client declaration will specify the client net‐
+          work interface's hardware address and the IP address to assign to
+          that client.  If the client needs to be able to load a boot file
+          from the server, that file's name must be specified.  A simple BOOTP
+          client declaration might look like this:
+
+                host haagen {
+                  hardware ethernet 08:00:2b:4c:59:23;
+                  fixed-address 239.252.197.9;
+                  filename "haagen.boot";
+                }
+
+     Options
+          DHCP (and also BOOTP with Vendor Extensions) provides a mechanism
+          whereby the server can provide the client with information about how
+          to configure its network interface (e.g., subnet mask), and also how
+          the client can access various network services (e.g., DNS, IP
+          routers, and so on).
+
+          These options can be specified on a per-subnet basis and, for BOOTP
+          clients, also on a per-client basis.  In the event that a BOOTP
+          client declaration specifies options that are also specified in its
+          subnet declaration, the options specified in the client declaration
+          take precedence.  A reasonably complete DHCP configuration might
+          look something like this:
+
+                subnet 239.252.197.0 netmask 255.255.255.0 {
+                  range 239.252.197.10 239.252.197.250;
+                  default-lease-time 600;
+                  max-lease-time 7200;
+                  option subnet-mask 255.255.255.0;
+                  option broadcast-address 239.252.197.255;
+                  option routers 239.252.197.1;
+                  option domain-name-servers 239.252.197.2, 239.252.197.3;
+                  option domain-name "isc.org";
+                }
+
+          A BOOTP host on that subnet that needs to be in a different domain
+          and use a different name server might be declared as follows:
+
+                host haagen {
+                  hardware ethernet 08:00:2b:4c:59:23;
+                  fixed-address 239.252.197.9;
+                  filename "haagen.boot";
+                  option domain-name-servers 192.5.5.1;
+                  option domain-name "vix.com";
+                }
+
+     A more complete description of the _d_h_c_p_d_._c_o_n_f file syntax is provided in
+     dhcpd.conf(5).
+
+SSYYNNCCHHRROONNIISSAATTIIOONN
+     ddhhccppdd supports realtime synchronisation of the lease allocations to a
+     number of ddhhccppdd daemons running on multiple machines, using the --YY and --yy
+     options.
+
+     The following example will accept incoming multicast and unicast synchro‐
+     nisation messages, and send outgoing multicast messages through the net‐
+     work interface _e_m_0:
+
+           # /usr/sbin/dhcpd -y em0 -Y em0
+
+     The second example will increase the multicast TTL to a value of 2, add
+     the unicast targets _f_o_o_._s_o_m_e_w_h_e_r_e_._o_r_g and _b_a_r_._s_o_m_e_w_h_e_r_e_._o_r_g, and accept
+     incoming unicast messages sent to _e_x_a_m_p_l_e_._s_o_m_e_w_h_e_r_e_._o_r_g only.
+
+           # /usr/sbin/dhcpd -y example.somewhere.org -Y em0:2 \
+                   -Y foo.somewhere.org -Y bar.somewhere.org
+
+     If the file _/_v_a_r_/_d_b_/_d_h_c_p_d_._k_e_y exists, ddhhccppdd will calculate the message-
+     digest fingerprint (checksum) for the file and use it as a shared key to
+     authenticate the synchronisation messages.  The file itself can contain
+     any data.  For example, to create a secure random key:
+
+           # dd if=/dev/random of=/var/db/dhcpd.key bs=2048 count=1
+
+     The file needs to be copied to all hosts sending or receiving synchroni‐
+     sation messages.
+
+     All hosts using synchronisation must use the same configuration in the
+     _/_e_t_c_/_d_h_c_p_d_._c_o_n_f file.
+
+FFIILLEESS
+     /etc/dhcpd.conf          DHCPD configuration file.
+     /var/db/dhcpd.leases     DHCPD lease file.
+
+SSEEEE AALLSSOO
+     pf(4), dhcpd.conf(5), dhcpd.leases(5), dhcpleased(8), dhcrelay(8),
+     pxeboot(8)
+
+SSTTAANNDDAARRDDSS
+     R. Droms, _I_n_t_e_r_o_p_e_r_a_t_i_o_n _B_e_t_w_e_e_n _D_H_C_P _a_n_d _B_O_O_T_P, RFC 1534, October 1993.
+
+     R. Droms, _D_y_n_a_m_i_c _H_o_s_t _C_o_n_f_i_g_u_r_a_t_i_o_n _P_r_o_t_o_c_o_l, RFC 2131, March 1997.
+
+     S. Alexander and R. Droms, _D_H_C_P _O_p_t_i_o_n_s _a_n_d _B_O_O_T_P _V_e_n_d_o_r _E_x_t_e_n_s_i_o_n_s, RFC
+     2132, March 1997.
+
+     T. Lemon and S. Cheshire, _E_n_c_o_d_i_n_g _L_o_n_g _O_p_t_i_o_n_s _i_n _t_h_e _D_y_n_a_m_i_c _H_o_s_t
+     _C_o_n_f_i_g_u_r_a_t_i_o_n _P_r_o_t_o_c_o_l _(_D_H_C_P_v_4_), RFC 3396, November 2002.
+
+     T. Lemon, S. Cheshire, and B. Volz, _T_h_e _C_l_a_s_s_l_e_s_s _S_t_a_t_i_c _R_o_u_t_e _O_p_t_i_o_n _f_o_r
+     _D_y_n_a_m_i_c _H_o_s_t _C_o_n_f_i_g_u_r_a_t_i_o_n _P_r_o_t_o_c_o_l _(_D_H_C_P_) _v_e_r_s_i_o_n _4, RFC 3442, December
+     2002.
+
+AAUUTTHHOORRSS
+     ddhhccppdd is based on software from the Internet Software Consortium, written
+     by Ted Lemon <_m_e_l_l_o_n_@_v_i_x_._c_o_m> under a contract with Vixie Labs.  The cur‐
+     rent implementation was reworked for OpenBSD by Henning Brauer
+     <_h_e_n_n_i_n_g_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BBUUGGSS
+     We realize that it would be nice if one could send a SIGHUP to the server
+     and have it reload the database.  This is not technically impossible, but
+     it would require a great deal of work, our resources are extremely lim‐
+     ited, and they can be better spent elsewhere.  So please don't complain
+     about this on the mailing list unless you're prepared to fund a project
+     to implement this feature, or prepared to do it yourself.
+
+BSD                              June 14, 2025                             BSD

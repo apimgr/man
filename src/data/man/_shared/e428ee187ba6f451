@@ -1,0 +1,130 @@
+_E_V_P___M_A_C_‐_K_M_A_C(7)                     OpenSSL                    _E_V_P___M_A_C_‐_K_M_A_C(7)
+
+NNAAMMEE
+       EVP_MAC-KMAC, EVP_MAC-KMAC128, EVP_MAC-KMAC256 - The KMAC EVP_MAC
+       implementations
+
+DDEESSCCRRIIPPTTIIOONN
+       Support for computing KMAC MACs through the EEVVPP__MMAACC API.
+
+   IIddeennttiittyy
+       These implementations are identified with one of these names and
+       properties, to be used with EEVVPP__MMAACC__ffeettcchh(()):
+
+       "KMAC-128", "provider=default" or "provider=fips"
+       "KMAC-256", "provider=default" or "provider=fips"
+
+   SSuuppppoorrtteedd ppaarraammeetteerrss
+       The   general   description   of  these  parameters  can  be  found  in
+       "PARAMETERS" in EEVVPP__MMAACC(3).
+
+       All  these  parameters  can  be  set   with   EEVVPP__MMAACC__CCTTXX__sseett__ppaarraammss(()).
+       Furthermore,    the    "size"   parameter   can   be   retrieved   with
+       EEVVPP__MMAACC__CCTTXX__ggeett__ppaarraammss(()),  or  with  EEVVPP__MMAACC__CCTTXX__ggeett__mmaacc__ssiizzee(()).    The
+       length  of  the  "size"  parameter  should not exceed that of a ssiizzee__tt.
+       Likewise,  the   "block‐size"   parameter   can   be   retrieved   with
+       EEVVPP__MMAACC__CCTTXX__ggeett__ppaarraammss(()), or with EEVVPP__MMAACC__CCTTXX__ggeett__bblloocckk__ssiizzee(()).
+
+       "key" (OOSSSSLL__MMAACC__PPAARRAAMM__KKEEYY) <octet string>
+           Sets the MAC key.  Setting this parameter is identical to passing a
+           _k_e_y  to  EEVVPP__MMAACC__iinniitt(3).  The length of the key (in bytes) must be
+           in the range 4...512.
+
+       "custom" (OOSSSSLL__MMAACC__PPAARRAAMM__CCUUSSTTOOMM) <octet string>
+           Sets the custom value.  It is an optional value with a length of at
+           most 512 bytes, and is empty by default.
+
+       "size" (OOSSSSLL__MMAACC__PPAARRAAMM__SSIIZZEE) <unsigned integer>
+           Sets the MAC size.  By default, it is 16 for "KMAC-128" and 32  for
+           "KMAC-256".
+
+       "block‐size" (OOSSSSLL__MMAACC__PPAARRAAMM__SSIIZZEE) <unsigned integer>
+           Gets  the MAC block size.  By default, it is 168 for "KMAC-128" and
+           136 for "KMAC-256".
+
+       "xof" (OOSSSSLL__MMAACC__PPAARRAAMM__XXOOFF) <integer>
+           The "xof" parameter value is expected to be 1 or 0. Use 1 to enable
+           XOF mode.  The default value is 0.
+
+       The  "custom"  parameter  must  be  set  as  part  of  or  before   the
+       EEVVPP__MMAACC__iinniitt(()) call.  The "xof" and "size" parameters can be set at any
+       time before EEVVPP__MMAACC__ffiinnaall(()).  The "key" parameter is set as part of the
+       EEVVPP__MMAACC__iinniitt(()) call, but can be set before it instead.
+
+EEXXAAMMPPLLEESS
+         #include <openssl/evp.h>
+         #include <openssl/params.h>
+
+         static int do_kmac(const unsigned char *in, size_t in_len,
+                            const unsigned char *key, size_t key_len,
+                            const unsigned char *custom, size_t custom_len,
+                            int xof_enabled, unsigned char *out, int out_len)
+         {
+             EVP_MAC_CTX *ctx = NULL;
+             EVP_MAC *mac = NULL;
+             OSSL_PARAM params[4], *p;
+             int ret = 0;
+             size_t l = 0;
+
+             mac = EVP_MAC_fetch(NULL, "KMAC-128", NULL);
+             if (mac == NULL)
+                 goto err;
+             ctx = EVP_MAC_CTX_new(mac);
+             /* The mac can be freed after it is used by EVP_MAC_CTX_new */
+             EVP_MAC_free(mac);
+             if (ctx == NULL)
+                 goto err;
+
+             /*
+              * Setup parameters required before calling EVP_MAC_init()
+              * The parameters OSSL_MAC_PARAM_XOF and OSSL_MAC_PARAM_SIZE may also be
+              * used at this point.
+              */
+             p = params;
+             *p++ = OSSL_PARAM_construct_octet_string(OSSL_MAC_PARAM_KEY,
+                                                      (void *)key, key_len);
+             if (custom != NULL && custom_len != 0)
+               *p++ = OSSL_PARAM_construct_octet_string(OSSL_MAC_PARAM_CUSTOM,
+                                                        (void *)custom, custom_len);
+             *p = OSSL_PARAM_construct_end();
+             if (!EVP_MAC_CTX_set_params(ctx, params))
+                 goto err;
+
+             if (!EVP_MAC_init(ctx))
+                 goto err;
+
+             /*
+              * Note: the following optional parameters can be set any time
+              * before EVP_MAC_final().
+              */
+             p = params;
+             *p++ = OSSL_PARAM_construct_int(OSSL_MAC_PARAM_XOF, &xof_enabled);
+             *p++ = OSSL_PARAM_construct_int(OSSL_MAC_PARAM_SIZE, &out_len);
+             *p = OSSL_PARAM_construct_end();
+             if (!EVP_MAC_CTX_set_params(ctx, params))
+                 goto err;
+
+             /* The update may be called multiple times here for streamed input */
+             if (!EVP_MAC_update(ctx, in, in_len))
+                 goto err;
+             if (!EVP_MAC_final(ctx, out, &l, out_len))
+                 goto err;
+             ret = 1;
+         err:
+             EVP_MAC_CTX_free(ctx);
+             return ret;
+         }
+
+SSEEEE AALLSSOO
+       EEVVPP__MMAACC__CCTTXX__ggeett__ppaarraammss(3),  EEVVPP__MMAACC__CCTTXX__sseett__ppaarraammss(3),  "PARAMETERS" in
+       EEVVPP__MMAACC(3), OOSSSSLL__PPAARRAAMM(3)
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2018-2021 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in   the   file   LICENSE   in   the   source   distribution   or    at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐07                   _E_V_P___M_A_C_‐_K_M_A_C(7)

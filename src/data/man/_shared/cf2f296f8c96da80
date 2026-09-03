@@ -1,0 +1,110 @@
+SSL(8)                    BSD System Manager's Manual                   SSL(8)
+
+NNAAMMEE
+     ssssll — details for libssl and libcrypto
+
+DDEESSCCRRIIPPTTIIOONN
+     This document describes some of the issues relating to the use of the
+     OpenSSL libssl and libcrypto libraries.  This document is intended as an
+     overview of what the libraries do, and what uses them.
+
+     The libssl and libcrypto libraries implement the TLS version 1 protocol.
+     It is most commonly used by the HTTPS protocol for encrypted web transac‐
+     tions, as can be done with httpd(8).  The libcrypto library is also used
+     by various programs such as ssh(1), sshd(8), and isakmpd(8).
+
+SSEERRVVEERR CCEERRTTIIFFIICCAATTEESS
+     The most common uses of TLS will require you to generate a server cer‐
+     tificate, which is provided by your host as evidence of its identity when
+     clients make new connections.  The certificates reside in the _/_e_t_c_/_s_s_l
+     directory, with the keys in the _/_e_t_c_/_s_s_l_/_p_r_i_v_a_t_e directory.
+
+     Private keys can be encrypted using AES and a passphrase to protect their
+     integrity should the encrypted file be disclosed.  However, it is impor‐
+     tant to note that encrypted server keys mean that the passphrase needs to
+     be typed in every time the server is started.  If a passphrase is not
+     used, you will need to be absolutely sure your key file is kept secure.
+
+GGEENNEERRAATTIINNGG RRSSAA SSEERRVVEERR CCEERRTTIIFFIICCAATTEESS FFOORR WWEEBB SSEERRVVEERRSS
+     To support HTTPS transactions in httpd(8) you will need to generate an
+     RSA certificate.  Start by creating a private key of the desired length:
+
+           # openssl genrsa -out /etc/ssl/private/server.key 4096
+
+     Or, if you wish the key to be encrypted with a passphrase that you will
+     have to type in when starting servers
+
+           # openssl genrsa -aes256 -out /etc/ssl/private/server.key 4096
+
+     If you are only generating a private key to use with acme-client(1) (for
+     example, with a non-default key length) you may stop here.
+
+     Otherwise, the next step is to generate a Certificate Signing Request
+     (CSR) which is used to get a Certificate Authority (CA) to sign your cer‐
+     tificate.  To do this use the command:
+
+           # openssl req -new -key /etc/ssl/private/server.key \
+             -out /etc/ssl/private/server.csr
+
+     This _s_e_r_v_e_r_._c_s_r file can then be given to a Certificate Authority who
+     will sign the key.
+
+     You can also sign the key yourself, using the command:
+
+           # openssl x509 -sha256 -req -days 365 \
+             -in /etc/ssl/private/server.csr \
+             -signkey /etc/ssl/private/server.key \
+             -out /etc/ssl/server.crt
+
+     Note that standard web browsers do not use the common name of a subject,
+     but instead require that subject alt names are provided.  This requires
+     the use of _-_e_x_t_f_i_l_e _s_e_r_v_e_r_._e_x_t when self-signing.
+
+           # this is an example server.ext file
+           subjectAltName=DNS:example.com,DNS:www.example.com
+
+     With _/_e_t_c_/_s_s_l_/_s_e_r_v_e_r_._c_r_t and _/_e_t_c_/_s_s_l_/_p_r_i_v_a_t_e_/_s_e_r_v_e_r_._k_e_y in place, you
+     should be able to start httpd(8) with SSL configured, enabling HTTPS
+     transactions with your machine on port 443.
+
+     You will most likely want to generate a self-signed certificate in the
+     manner above along with your certificate signing request to test your
+     server's functionality even if you are going to have the certificate
+     signed by another Certificate Authority.  Once your Certificate Authority
+     returns the signed certificate to you, you can switch to using the new
+     certificate by replacing the self-signed _/_e_t_c_/_s_s_l_/_s_e_r_v_e_r_._c_r_t with the
+     certificate signed by your Certificate Authority, and then restarting
+     httpd(8).
+
+GGEENNEERRAATTIINNGG EECCDDSSAA SSEERRVVEERR CCEERRTTIIFFIICCAATTEESS
+     First, generate a private ECDSA key.  The following command will use a
+     NIST/SECG curve over a 384-bit prime field:
+
+           # openssl ecparam -name secp384r1 -genkey \
+             -noout -out /etc/ssl/private/eccert.key
+
+     Note that some Certificate Authorities will only issue certificates for
+     keys generated using prime256v1 parameters.
+
+     If you are only generating a private key to use with acme-client(1), you
+     may stop here.  Otherwise, the next step is to generate a Certificate
+     Signing Request (CSR) which is used to get a Certificate Authority (CA)
+     to sign your certificate.  To do this use the command:
+
+           # openssl req -key /etc/ssl/private/eccert.key -new \
+             -out /etc/ssl/private/eccert.csr
+
+     This _e_c_c_e_r_t_._c_s_r file can then be given to a CA who will sign the key.
+
+     You can also sign the key yourself, using the command:
+
+           # openssl x509 -sha256 -req -days 365 \
+             -in /etc/ssl/private/eccert.csr \
+             -signkey /etc/ssl/private/eccert.key \
+             -out /etc/ssl/eccert.crt
+
+SSEEEE AALLSSOO
+     acme-client(1), openssl(1), ssh(1), ssl(3), httpd(8), isakmpd(8), rc(8),
+     smtpd(8), sshd(8), starttls(8)
+
+BSD                              May 30, 2024                              BSD

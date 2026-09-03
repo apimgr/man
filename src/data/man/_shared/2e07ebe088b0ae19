@@ -1,0 +1,136 @@
+RADIUSD_IPCP(8)           BSD System Manager's Manual          RADIUSD_IPCP(8)
+
+NNAAMMEE
+     rraaddiiuussdd__iippccpp — provides IP configuration and manages IP address pool
+
+SSYYNNOOPPSSIISS
+     rraaddiiuussdd__iippccpp
+
+DDEESSCCRRIIPPTTIIOONN
+     The rraaddiiuussdd__iippccpp module is executed by radiusd(8) as a module to provide
+     IP configuration through RADIUS Access-Accept messages and manages the IP
+     address pool through RADIUS accounting messages.  The internal sessions
+     can be shown or monitored by radiusctl(8).  rraaddiiuussdd__iippccpp also provides
+     session timeouts and disconnects requested by radiusctl(8) through the
+     Dynamic Authorization Extension (DAE, RFC 5176).
+
+CCOONNFFIIGGUURRAATTIIOONNSS
+     To use the rraaddiiuussdd__iippccpp module, it should be configured as a decoration
+     module of the authentication and as an accounting module.
+
+           authenticate * by (any auth module) decorate-by ipcp
+           account      * to ipcp
+
+     The rraaddiiuussdd__iippccpp module supports the following configuration keys and
+     values:
+
+     aaddddrreessss ppooooll _a_d_d_r_e_s_s_-_s_p_a_c_e _._._.
+             Specify the IP address spaces that is pooled.  The _a_d_d_r_e_s_s_-_s_p_a_c_e
+             can be specified by an address range (e.g.
+             192.168.1.1-192.168.1.199) or an address mask (e.g.
+             192.168.1.0/24).  The pooled addresses are used for dynamic as‐
+             signment.
+
+     aaddddrreessss ssttaattiicc _a_d_d_r_e_s_s_-_s_p_a_c_e _._._.
+             Specify the IP address spaces that is pooled for static assign‐
+             ment.  The _a_d_d_r_e_s_s_-_s_p_a_c_e is the same syntax as aaddddrreessss ppooooll,
+             above.
+
+     nnaammee--sseerrvveerr _p_r_i_m_a_r_y_-_a_d_d_r_e_s_s [_s_e_c_o_n_d_a_r_y_-_a_d_d_r_e_s_s]
+             Specify the DNS servers' IP addresses.
+
+     nneettbbiiooss--sseerrvveerr _p_r_i_m_a_r_y_-_a_d_d_r_e_s_s [_s_e_c_o_n_d_a_r_y_-_a_d_d_r_e_s_s]
+             Specify the NetBIOS name servers' IP addresses.
+
+     sseessssiioonn--ttiimmeeoouutt _s_e_c_o_n_d_s | “radius”
+             Specify the session-timeout in seconds, or “radius”.
+             rraaddiiuussdd__iippccpp disconnects the session through DAE at the specified
+             time after starting.  When “radius” is specified, the value of
+             the Session-Timeout attribute in Access-Accept is used for the
+             timeout.  When the value is specified in seconds and the Session-
+             Timeout attribute is specified for a session, the Session-Timeout
+             attribute value is used to disconnect the session in preference.
+             Configure ddaaee sseerrvveerr to use this option.
+
+     ddaaee sseerrvveerr _a_d_d_r_e_s_s[_:_p_o_r_t] _s_e_c_r_e_t [_n_a_s_-_i_d]
+             Configure a DAE server which rraaddiiuussdd__iippccpp requests disconnection
+             for sessions.  Specify the _a_d_d_r_e_s_s, optionally the _p_o_r_t number,
+             and the _s_e_c_r_e_t.  If the optional _n_a_s_-_i_d is specified, the server
+             is selected only for the session which NAS-Identifier is matched
+             the specified value.  The default port number is 3799.
+
+     mmaaxx--sseessssiioonnss _n_u_m_b_e_r
+             Specify the maximum number of sessions.  ‘0’ means no limit.  The
+             default value is 0.
+
+     uusseerr--mmaaxx--sseessssiioonnss _n_u_m_b_e_r
+             Specify the maximum number of sessions per a user.  ‘0’ means no
+             limit.  The default value is 0.
+
+     ssttaarrtt--wwaaiitt _s_e_c_o_n_d_s
+             Specify the seconds waiting for the RADIUS Accounting Start for
+             the session after Access-Accept.  rraaddiiuussdd__iippccpp preserves the as‐
+             signed IP address for that period.  The default value is 60 sec‐
+             onds.
+
+FFIILLEESS
+     /usr/libexec/radiusd/radiusd_ipcp  “ipcp” module executable.
+
+EEXXAAMMPPLLEESS
+     An example with rraaddiiuussdd__iippccpp working with npppd(8):
+
+     _/_e_t_c_/_r_a_d_i_u_s_d_._c_o_n_f:
+
+           listen on 127.0.0.1
+           listen on 127.0.0.1 accounting
+
+           client 127.0.0.1/32 {
+                   secret "SECRET"
+           }
+
+           module radius {
+               set secret "SECRET2"
+               set server 192.168.0.4:1812
+           }
+
+           module ipcp {
+               set address pool      192.168.1.0/24
+               set name-server       192.168.0.4
+               set max-sessions      128
+               set user-max-sessions 2
+               set dae server        127.0.0.1 "SECRET3"
+               set session-timeout   radius
+           }
+
+           authenticate * by radius decorate-by ipcp
+           account      * to ipcp
+
+     _/_e_t_c_/_n_p_p_p_d_/_n_p_p_p_d_._c_o_n_f:
+
+           tunnel L2TP protocol l2tp {
+               listen on 192.0.2.51
+           }
+           ipcp IPCP {
+               pool-address 192.168.1.2-192.168.1.255 for dynamic
+           }
+           interface pppac0 address 192.168.1.1 ipcp IPCP
+           authentication RADIUS type radius {
+               authentication-server {
+                   address 127.0.0.1 secret "SECRET"
+               }
+               accounting-server {
+                   address 127.0.0.1 secret "SECRET"
+               }
+           }
+           bind tunnel from L2TP authenticated by RADIUS to pppac0
+
+           radius dae listen on 127.0.0.1
+           radius dae client 127.0.0.1 secret "SECRET3"
+
+SSEEEE AALLSSOO
+     authenticate(3), radiusd.conf(5), npppd(8), radiusctl(8), radiusd(8)
+
+HHIISSTTOORRYY
+     The rraaddiiuussdd__iippccpp module first appeared in OpenBSD 7.6.
+
+BSD                              June 23, 2025                             BSD

@@ -1,0 +1,138 @@
+RCORDER(8)                BSD System Manager's Manual               RCORDER(8)
+
+NNAAMMEE
+     rrccoorrddeerr — print a dependency ordering of interdependent files
+
+SSYYNNOOPPSSIISS
+     rrccoorrddeerr [--ggpp] [--kk _k_e_e_p] [--ss _s_k_i_p] _f_i_l_e _._._.
+
+DDEESSCCRRIIPPTTIIOONN
+     The rrccoorrddeerr utility is designed to print out a dependency ordering of a
+     set of interdependent files.  Typically it is used to find an execution
+     sequence for a set of shell scripts in which certain files must be exe‐
+     cuted before others.
+
+     Each file passed to rrccoorrddeerr must be annotated with special lines (which
+     look like comments to the shell) which indicate the dependencies the
+     files have upon certain points in the sequence, known as “conditions”,
+     and which indicate, for each file, which “conditions” may be expected to
+     be filled by that file.
+
+     Within each file, a block containing a series of ‘REQUIRE’, ‘PROVIDE’,
+     ‘BEFORE’ and ‘KEYWORD’ lines must appear.  The format of the lines is
+     rigid.  Each line must begin with a single ‘#’, followed by a single
+     space, followed by ‘PROVIDE:’, ‘REQUIRE:’, ‘BEFORE:’, or ‘KEYWORD:’.  No
+     deviation is permitted.  Each dependency line is then followed by a se‐
+     ries of conditions, separated by whitespace.  Multiple ‘PROVIDE’,
+     ‘REQUIRE’, ‘BEFORE’ and ‘KEYWORD’ lines may appear, but all such lines
+     must appear in a sequence without any intervening lines, as once a line
+     that does not follow the format is reached, parsing stops.
+
+     The options are as follows:
+
+     --gg       Produce a GraphViz (.dot) of the complete dependency graph in‐
+              stead of plaintext calling order list.
+
+     --kk _k_e_e_p  Add the specified keyword to the “keep list”.  If any --kk option
+              is given, only those files containing the matching keyword are
+              listed.  This option can be specified multiple times.
+
+     --pp       Generate ordering suitable for parallel startup, placing files
+              that can be executed simultaneously on the same line.
+
+     --ss _s_k_i_p  Add the specified keyword to the “skip list”.  If any --ss option
+              is given, files containing the matching keyword are not listed.
+              This option can be specified multiple times.
+
+     An example block follows:
+
+           # REQUIRE: networking syslog
+           # REQUIRE: usr
+           # PROVIDE: dns nscd
+
+     This block states that the file in which it appears depends upon the
+     ‘networking’, ‘syslog’, and ‘usr’ conditions, and provides the ‘dns’ and
+     ‘nscd’ conditions.
+
+     A file may contain zero ‘PROVIDE’ lines, in which case it provides no
+     conditions, and may contain zero ‘REQUIRE’ lines, in which case it has no
+     dependencies.  There must be at least one file with no dependencies in
+     the set of arguments passed to rrccoorrddeerr in order for it to find a starting
+     place in the dependency ordering.
+
+KKEEYYWWOORRDDSS
+     There are several _K_E_Y_W_O_R_D_s in use:
+
+           ffiirrssttbboooott, nnoojjaaiill, nnoojjaaiillvvnneett, nnoossttaarrtt
+                     Used by rc(8).
+
+           ssuussppeenndd, rreessuummee
+                     Used by //eettcc//rrcc..ssuussppeenndd and //eettcc//rrcc..rreessuummee (see
+                     acpiconf(8))
+
+           sshhuuttddoowwnn  Used by rc.shutdown(8).
+
+EEXXAAMMPPLLEESS
+     Print the dependency ordering of the services from the base system and
+     ports(7):
+
+           $ rcorder /etc/rc.d/* /usr/local/etc/rc.d/*
+
+     Count the number of services in the base system, which specify the
+     nnoossttaarrtt keyword, while skipping those with ffiirrssttbboooott and nnoojjaaiillvvnneett:
+
+           $ rcorder -k nostart -s firstboot -s nojailvnet /etc/rc.d/*  | wc -l
+                  3
+
+DDIIAAGGNNOOSSTTIICCSS
+     The rrccoorrddeerr utility may print one of the following error messages and
+     exit with a non-zero status if it encounters an error while processing
+     the file list.
+
+     RReeqquuiirreemmeenntt %%ss iinn ffiillee %%ss hhaass nnoo pprroovviiddeerrss..  No file has a ‘PROVIDE’ line
+     corresponding to a condition present in a ‘REQUIRE’ line in another file.
+
+     CCiirrccuullaarr ddeeppeennddeennccyy oonn pprroovviissiioonn %%ss iinn ffiillee %%ss..  A set of files has a
+     circular dependency which was detected while processing the stated condi‐
+     tion.  Loop visualization follows this message.
+
+     CCiirrccuullaarr ddeeppeennddeennccyy oonn ffiillee %%ss..  A set of files has a circular dependency
+     which was detected while processing the stated file.
+
+     %%ss wwaass sseeeenn iinn cciirrccuullaarr ddeeppeennddeenncciieess ffoorr %%dd ttiimmeess..  Each node that was a
+     part of circular dependency loops reports total number of such encoun‐
+     ters.  Start with files having biggest counter when fighting with broken
+     dependencies.
+
+DDIIAAGGNNOOSSTTIICCSS WWIITTHH GGRRAAPPHHVVIIZZ
+     Direct dependency is drawn with solid line, ‘BEFORE’ dependency is drawn
+     as a dashed line.  Each node of a graph represents an item from ‘PROVIDE’
+     lines.  In case there are more than one file providing an item, a list of
+     filenames shortened with basename(3) is shown.  Shortened filenames are
+     also shown in case ‘PROVIDE’ item does not match file name.
+
+     Edges and nodes where circular dependencies were detected are drawn bold
+     red.  If a file has an item in ‘REQUIRE’ or in ‘BEFORE’ that could not be
+     provided, this missing provider and the requirement will be drawn bold
+     red as well.
+
+SSEEEE AALLSSOO
+     acpiconf(8), rc(8), rc.shutdown(8), service(8)
+
+HHIISSTTOORRYY
+     The rrccoorrddeerr utility appeared in NetBSD 1.5.  rrccoorrddeerr utility first ap‐
+     peared in FreeBSD 5.0.
+
+AAUUTTHHOORRSS
+     Written by Perry E. Metzger <_p_e_r_r_y_@_p_i_e_r_m_o_n_t_._c_o_m> and Matthew R. Green
+     <_m_r_g_@_e_t_e_r_n_a_._c_o_m_._a_u>.
+
+BBUUGGSS
+     The ‘REQUIRE’ keyword is misleading: It does not describe which daemons
+     have to be running before a script will be started.  It describes which
+     scripts must be placed before it in the dependency ordering.  For exam‐
+     ple, if your script has a ‘REQUIRE’ on ‘sshd’, it means the script must
+     be placed after the ‘sshd’ script in the dependency ordering, not neces‐
+     sarily that it requires sssshhdd to be started or enabled.
+
+BSD                              June 10, 2023                             BSD

@@ -1,0 +1,170 @@
+TCPD(8)                     System Manager's Manual                    TCPD(8)
+
+
+
+NNAAMMEE
+       tcpd - access control facility for internet services
+
+DDEESSCCRRIIPPTTIIOONN
+       The _t_c_p_d program can be set up to monitor incoming requests for _t_e_l_n_e_t,
+       _f_i_n_g_e_r, _f_t_p, _e_x_e_c, _r_s_h, _r_l_o_g_i_n, _t_f_t_p, _t_a_l_k, _c_o_m_s_a_t and  other  services
+       that have a one-to-one mapping onto executable files.
+
+       The  program  supports  both  4.3BSD-style sockets and System V.4-style
+       TLI.  Functionality may be limited when the protocol underneath TLI  is
+       not an internet protocol.
+
+       Operation  is  as  follows: whenever a request for service arrives, the
+       _i_n_e_t_d daemon is tricked into running the _t_c_p_d program  instead  of  the
+       desired  server. _t_c_p_d logs the request and does some additional checks.
+       When all is well, _t_c_p_d runs the appropriate  server  program  and  goes
+       away.
+
+       Optional  features  are:  pattern-based access control, client username
+       lookups with the RFC 931 etc. protocol, protection against  hosts  that
+       pretend  to  have someone elses host name, and protection against hosts
+       that pretend to have someone elses network address.
+
+LLOOGGGGIINNGG
+       Connections that are monitored by _t_c_p_d are reported  through  the  _s_y_s_‐
+       _l_o_g(3)  facility.  Each  record  contains a time stamp, the client host
+       name and the name of the requested service.   The  information  can  be
+       useful  to detect unwanted activities, especially when logfile informa‐
+       tion from several hosts is merged.
+
+       In order to find out where your logs are going, examine the syslog con‐
+       figuration file, usually /etc/syslog.conf.
+
+AACCCCEESSSS CCOONNTTRROOLL
+       Optionally, _t_c_p_d supports a simple form of access control that is based
+       on pattern matching.  The access-control software  provides  hooks  for
+       the execution of shell commands when a pattern fires.  For details, see
+       the _h_o_s_t_s___a_c_c_e_s_s(5) manual page.
+
+HHOOSSTT NNAAMMEE VVEERRIIFFIICCAATTIIOONN
+       The authentication scheme of some protocols  (_r_l_o_g_i_n_,  _r_s_h)  relies  on
+       host  names.  Some  implementations believe the host name that they get
+       from any random name server; other implementations are more careful but
+       use a flawed algorithm.
+
+       _t_c_p_d  verifies  the  client  host  name  that  is  returned  by the ad‐
+       dress->name DNS server by looking at the host name and address that are
+       returned  by  the  name->address DNS server.  If any discrepancy is de‐
+       tected, _t_c_p_d concludes that it is dealing with a host that pretends  to
+       have someone elses host name.
+
+       If the sources are compiled with -DPARANOID, _t_c_p_d will drop the connec‐
+       tion in case of a host name/address mismatch.  Otherwise, the  hostname
+       can  be matched with the _P_A_R_A_N_O_I_D wildcard, after which suitable action
+       can be taken.
+
+HHOOSSTT AADDDDRREESSSS SSPPOOOOFFIINNGG
+       Optionally, _t_c_p_d disables source-routing socket options on  every  con‐
+       nection  that  it  deals with. This will take care of most attacks from
+       hosts that pretend to have an address that  belongs  to  someone  elses
+       network. UDP services do not benefit from this protection. This feature
+       must be turned on at compile time.
+
+RRFFCC 993311
+       When RFC 931 etc. lookups are enabled (compile-time option)  _t_c_p_d  will
+       attempt  to  establish  the  name of the client user. This will succeed
+       only if the client host runs an RFC 931-compliant daemon.  Client  user
+       name  lookups  will not work for datagram-oriented connections, and may
+       cause noticeable delays in the case of connections from PCs.
+
+EEXXAAMMPPLLEESS
+       The details of using _t_c_p_d depend on pathname information that was  com‐
+       piled into the program.
+
+EEXXAAMMPPLLEE 11
+       This  example  applies when _t_c_p_d expects that the original network dae‐
+       mons will be moved to an "other" place.
+
+       In order to monitor access to the _f_i_n_g_e_r  service,  move  the  original
+       finger daemon to the "other" place and install tcpd in the place of the
+       original finger daemon. No changes are required to configuration files.
+
+            # mkdir /other/place
+            # mv /usr/etc/in.fingerd /other/place
+            # cp tcpd /usr/etc/in.fingerd
+
+       The example assumes that the network daemons live in /usr/etc. On  some
+       systems,  network daemons live in /usr/sbin or in /usr/libexec, or have
+       no `in.´ prefix to their name.
+
+EEXXAAMMPPLLEE 22
+       This example applies when _t_c_p_d expects that  the  network  daemons  are
+       left in their original place.
+
+       In order to monitor access to the _f_i_n_g_e_r service, perform the following
+       edits on the  _i_n_e_t_d  configuration  file  (usually  _/_e_t_c_/_i_n_e_t_d_._c_o_n_f  or
+       _/_e_t_c_/_i_n_e_t_/_i_n_e_t_d_._c_o_n_f):
+
+            finger  stream  tcp  nowait  nobody  /usr/etc/in.fingerd  in.fingerd
+
+       becomes:
+
+            finger  stream  tcp  nowait  nobody  /some/where/tcpd     in.fingerd
+
+
+       The  example assumes that the network daemons live in /usr/etc. On some
+       systems, network daemons live in /usr/sbin or in /usr/libexec, the dae‐
+       mons have no `in.´ prefix to their name, or there is no userid field in
+       the inetd configuration file.
+
+       Similar changes will be needed for the other services that  are  to  be
+       covered  by  _t_c_p_d.   Send a `kill -HUP´ to the _i_n_e_t_d(8) process to make
+       the changes effective. AIX users may also have to execute the `inetimp´
+       command.
+
+EEXXAAMMPPLLEE 33
+       In the case of daemons that do not live in a common directory ("secret"
+       or otherwise), edit the _i_n_e_t_d configuration file so that  it  specifies
+       an absolute path name for the process name field. For example:
+
+           ntalk  dgram  udp  wait  root  /some/where/tcpd  /usr/local/lib/ntalkd
+
+
+       Only  the  last component (ntalkd) of the pathname will be used for ac‐
+       cess control and logging.
+
+BBUUGGSS
+       Some UDP (and RPC) daemons linger around for a while  after  they  have
+       finished  their  work,  in case another request comes in.  In the inetd
+       configuration file these services are registered with the _w_a_i_t  option.
+       Only the request that started such a daemon will be logged.
+
+       The  program  does  not work with RPC services over TCP. These services
+       are registered as _r_p_c_/_t_c_p in the inetd  configuration  file.  The  only
+       non-trivial  service that is affected by this limitation is _r_e_x_d, which
+       is used by the _o_n_(_1_) command. This is no great loss.  On most  systems,
+       _r_e_x_d is less secure than a wildcard in /etc/hosts.equiv.
+
+       RPC  broadcast requests (for example: _r_w_a_l_l_, _r_u_p_, _r_u_s_e_r_s) always appear
+       to come from the responding host.  What  happens  is  that  the  client
+       broadcasts  the  request  to  all  _p_o_r_t_m_a_p daemons on its network; each
+       _p_o_r_t_m_a_p daemon forwards the request to a local daemon. As  far  as  the
+       _r_w_a_l_l etc.  daemons know, the request comes from the local host.
+
+FFIILLEESS
+       The default locations of the host access control tables are:
+
+       /etc/hosts.allow
+       /etc/hosts.deny
+
+SSEEEE AALLSSOO
+       hosts_access(5), format of the tcpd access control tables.
+       syslog.conf(5), format of the syslogd control file.
+       inetd.conf(5), format of the inetd control file.
+
+AAUUTTHHOORRSS
+       Wietse Venema (wietse@wzv.win.tue.nl),
+       Department of Mathematics and Computing Science,
+       Eindhoven University of Technology
+       Den Dolech 2, P.O. Box 513,
+       5600 MB Eindhoven, The Netherlands
+
+
+
+
+                                                                       TCPD(8)

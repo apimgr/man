@@ -1,0 +1,655 @@
+_m_o_u_n_t___s_e_t_a_t_t_r(2)              System Calls Manual             _m_o_u_n_t___s_e_t_a_t_t_r(2)
+
+NNAAMMEE
+       mount_setattr - change properties of a mount or mount tree
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ffccnnttll..hh>>       /* Definition of AATT__** constants */
+       ##iinncclluuddee <<ssyyss//mmoouunntt..hh>>
+
+       iinntt mmoouunntt__sseettaattttrr((iinntt _d_i_r_f_d,, ccoonnsstt cchhaarr **_p_a_t_h,, uunnssiiggnneedd iinntt _f_l_a_g_s,,
+                         ssttrruucctt mmoouunntt__aattttrr **_a_t_t_r,, ssiizzee__tt _s_i_z_e));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  mmoouunntt__sseettaattttrr()  system call is part of the suite of file‐descrip‐
+       tor‐based mount facilities in Linux.
+
+       mmoouunntt__sseettaattttrr() changes the mount properties of a mount  or  an  entire
+       mount  tree.   If  _p_a_t_h is relative, then it is interpreted relative to
+       the directory referred to by the file descriptor _d_i_r_f_d.   If  _d_i_r_f_d  is
+       the  special  value  AATT__FFDDCCWWDD, then _p_a_t_h is interpreted relative to the
+       current working directory of the calling process.  If _p_a_t_h is the empty
+       string and AATT__EEMMPPTTYY__PPAATTHH is specified in _f_l_a_g_s, then the mount  proper‐
+       ties  of the mount identified by _d_i_r_f_d are changed.  (See ooppeennaatt(2) for
+       an explanation of why the _d_i_r_f_d argument is useful.)
+
+       The mmoouunntt__sseettaattttrr() system call uses an  extensible  structure  (_s_t_r_u_c_t
+       _m_o_u_n_t___a_t_t_r) to allow for future extensions.  Any non‐flag extensions to
+       mmoouunntt__sseettaattttrr()  will be implemented as new fields appended to the this
+       structure, with a zero value in a new field resulting in the kernel be‐
+       having as though that extension field was not present.  Therefore,  the
+       caller  _m_u_s_t  zero‐fill this structure on initialization.  See the "Ex‐
+       tensibility" subsection under NNOOTTEESS for more details.
+
+       The  _s_i_z_e  argument  should  usually  be  specified  as   _s_i_z_e_o_f_(_s_t_r_u_c_t
+       _m_o_u_n_t___a_t_t_r_).  However, if the caller is using a kernel that supports an
+       extended  _s_t_r_u_c_t _m_o_u_n_t___a_t_t_r, but the caller does not intend to make use
+       of these features, it is possible to pass the size of an  earlier  ver‐
+       sion  of  the structure together with the extended structure.  This al‐
+       lows the kernel to not copy later parts of the  structure  that  aren’t
+       used  anyway.   With  each  extension  that  changes the size of _s_t_r_u_c_t
+       _m_o_u_n_t___a_t_t_r,  the  kernel  will  expose  a  definition   of   the   form
+       MMOOUUNNTT__AATTTTRR__SSIIZZEE__VVEERR_n_u_m_b_e_r.   For example, the macro for the size of the
+       initial version of _s_t_r_u_c_t _m_o_u_n_t___a_t_t_r is MMOOUUNNTT__AATTTTRR__SSIIZZEE__VVEERR00.
+
+       The _f_l_a_g_s argument can be used to alter the pathname resolution  behav‐
+       ior.  The supported values are:
+
+       AATT__EEMMPPTTYY__PPAATTHH
+              If  _p_a_t_h  is  the  empty  string, change the mount properties on
+              _d_i_r_f_d itself.
+
+       AATT__RREECCUURRSSIIVVEE
+              Change the mount properties of the entire mount tree.
+
+       AATT__SSYYMMLLIINNKK__NNOOFFOOLLLLOOWW
+              Don’t follow trailing symbolic links.
+
+       AATT__NNOO__AAUUTTOOMMOOUUNNTT
+              Don’t trigger automounts.
+
+       The _a_t_t_r argument of mmoouunntt__sseettaattttrr()  is  a  pointer  to  a  _m_o_u_n_t___a_t_t_r
+       structure, described in mmoouunntt__aattttrr(2type).
+
+       The _a_t_t_r___s_e_t and _a_t_t_r___c_l_r members are used to specify the mount proper‐
+       ties  that are supposed to be set or cleared for a mount or mount tree.
+       Flags set in _a_t_t_r___s_e_t enable a property on a mount or mount  tree,  and
+       flags set in _a_t_t_r___c_l_r remove a property from a mount or mount tree.
+
+       When  changing  mount properties, the kernel will first clear the flags
+       specified in the _a_t_t_r___c_l_r field, and then set the  flags  specified  in
+       the _a_t_t_r___s_e_t field.  For example, these settings:
+
+           struct mount_attr attr = {
+               .attr_clr = MOUNT_ATTR_NOEXEC | MOUNT_ATTR_NODEV,
+               .attr_set = MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID,
+           };
+
+       are equivalent to the following steps:
+
+           unsigned int current_mnt_flags = mnt->mnt_flags;
+
+           /*
+            * Clear all flags set in .attr_clr,
+            * clearing MOUNT_ATTR_NOEXEC and MOUNT_ATTR_NODEV.
+            */
+           current_mnt_flags &= ~attr->attr_clr;
+
+           /*
+            * Now set all flags set in .attr_set,
+            * applying MOUNT_ATTR_RDONLY and MOUNT_ATTR_NOSUID.
+            */
+           current_mnt_flags |= attr->attr_set;
+
+           mnt->mnt_flags = current_mnt_flags;
+
+       As  a  result of this change, the mount or mount tree (a) is read‐only;
+       (b) blocks the execution of set‐user‐ID and set‐group‐ID programs;  (c)
+       allows execution of programs; and (d) allows access to devices.
+
+       Multiple  changes  with the same set of flags requested in _a_t_t_r___c_l_r and
+       _a_t_t_r___s_e_t are guaranteed to be idempotent after the  changes  have  been
+       applied.
+
+       The  following  mount  attributes  can  be specified in the _a_t_t_r___s_e_t or
+       _a_t_t_r___c_l_r fields:
+
+       MMOOUUNNTT__AATTTTRR__RRDDOONNLLYY
+              If set in _a_t_t_r___s_e_t,  makes  the  mount  read‐only.   If  set  in
+              _a_t_t_r___c_l_r, removes the read‐only setting if set on the mount.
+
+       MMOOUUNNTT__AATTTTRR__NNOOSSUUIIDD
+              If  set in _a_t_t_r___s_e_t, causes the mount not to honor the set‐user‐
+              ID and set‐group‐ID mode bits and file capabilities when execut‐
+              ing programs.  If set in _a_t_t_r___c_l_r, clears the set‐user‐ID,  set‐
+              group‐ID, and file capability restriction if set on this mount.
+
+       MMOOUUNNTT__AATTTTRR__NNOODDEEVV
+              If  set  in  _a_t_t_r___s_e_t, prevents access to devices on this mount.
+              If set in _a_t_t_r___c_l_r, removes the restriction that  prevented  ac‐
+              cessing devices on this mount.
+
+       MMOOUUNNTT__AATTTTRR__NNOOEEXXEECC
+              If  set  in _a_t_t_r___s_e_t, prevents executing programs on this mount.
+              If set in _a_t_t_r___c_l_r, removes the restriction that prevented  exe‐
+              cuting programs on this mount.
+
+       MMOOUUNNTT__AATTTTRR__NNOOSSYYMMFFOOLLLLOOWW
+              If  set  in  _a_t_t_r___s_e_t, prevents following symbolic links on this
+              mount.  If set in _a_t_t_r___c_l_r, removes the  restriction  that  pre‐
+              vented following symbolic links on this mount.
+
+       MMOOUUNNTT__AATTTTRR__NNOODDIIRRAATTIIMMEE
+              If  set  in _a_t_t_r___s_e_t, prevents updating access time for directo‐
+              ries on this mount.  If set in _a_t_t_r___c_l_r, removes the restriction
+              that prevented updating access time for directories.  Note  that
+              MMOOUUNNTT__AATTTTRR__NNOODDIIRRAATTIIMMEE  can  be  combined  with other access‐time
+              settings and is implied by the noatime setting.  All  other  ac‐
+              cess‐time settings are mutually exclusive.
+
+       MMOOUUNNTT__AATTTTRR____AATTIIMMEE ‐ changing access‐time settings
+              The  access‐time values listed below are an enumeration that in‐
+              cludes the value zero, expressed in the bits defined by the mask
+              MMOOUUNNTT__AATTTTRR____AATTIIMMEE.  Even though these bits  are  an  enumeration
+              (in    contrast    to    the   other   mount   flags   such   as
+              MMOOUUNNTT__AATTTTRR__NNOOEEXXEECC), they are nonetheless passed in _a_t_t_r___s_e_t  and
+              _a_t_t_r___c_l_r  for consistency with ffssmmoouunntt(2), which introduced this
+              behavior.
+
+              Note that, since  the  access‐time  values  are  an  enumeration
+              rather than bit values, a caller wanting to transition to a dif‐
+              ferent access‐time setting cannot simply specify the access‐time
+              setting  in _a_t_t_r___s_e_t, but must also include MMOOUUNNTT__AATTTTRR____AATTIIMMEE in
+              the   _a_t_t_r___c_l_r   field.    The   kernel   will    verify    that
+              MMOOUUNNTT__AATTTTRR____AATTIIMMEE  isn’t partially set in _a_t_t_r___c_l_r (i.e., either
+              all bits in the MMOOUUNNTT__AATTTTRR____AATTIIMMEE bit field are  either  set  or
+              clear),  and that _a_t_t_r___s_e_t doesn’t have any access‐time bits set
+              if MMOOUUNNTT__AATTTTRR____AATTIIMMEE isn’t set in _a_t_t_r___c_l_r.
+
+              MMOOUUNNTT__AATTTTRR__RREELLAATTIIMMEE
+                     When a file is accessed via this mount, update the file’s
+                     last access time (atime) only if  the  current  value  of
+                     atime  is less than or equal to the file’s last modifica‐
+                     tion time (mtime) or last status change time (ctime).
+
+                     To enable this access‐time setting on a  mount  or  mount
+                     tree,  MMOOUUNNTT__AATTTTRR__RREELLAATTIIMMEE  must  be  set in _a_t_t_r___s_e_t and
+                     MMOOUUNNTT__AATTTTRR____AATTIIMMEE must be set in the _a_t_t_r___c_l_r field.
+
+              MMOOUUNNTT__AATTTTRR__NNOOAATTIIMMEE
+                     Do not update access times for (all types  of)  files  on
+                     this mount.
+
+                     To  enable  this  access‐time setting on a mount or mount
+                     tree, MMOOUUNNTT__AATTTTRR__NNOOAATTIIMMEE must  be  set  in  _a_t_t_r___s_e_t  and
+                     MMOOUUNNTT__AATTTTRR____AATTIIMMEE must be set in the _a_t_t_r___c_l_r field.
+
+              MMOOUUNNTT__AATTTTRR__SSTTRRIICCTTAATTIIMMEE
+                     Always update the last access time (atime) when files are
+                     accessed on this mount.
+
+                     To  enable  this  access‐time setting on a mount or mount
+                     tree, MMOOUUNNTT__AATTTTRR__SSTTRRIICCTTAATTIIMMEE must be set in _a_t_t_r___s_e_t  and
+                     MMOOUUNNTT__AATTTTRR____AATTIIMMEE must be set in the _a_t_t_r___c_l_r field.
+
+       MMOOUUNNTT__AATTTTRR__IIDDMMAAPP
+              If  set in _a_t_t_r___s_e_t, creates an ID‐mapped mount.  The ID mapping
+              is taken from the user namespace specified in _u_s_e_r_n_s___f_d and  at‐
+              tached to the mount.
+
+              Since  it  is  not supported to change the ID mapping of a mount
+              after  it  has  been  ID  mapped,  it  is  invalid  to   specify
+              MMOOUUNNTT__AATTTTRR__IIDDMMAAPP in _a_t_t_r___c_l_r.
+
+              For further details, see the subsection "ID‐mapped mounts" under
+              NOTES.
+
+       The  _p_r_o_p_a_g_a_t_i_o_n  field  is used to specify the propagation type of the
+       mount or mount tree.  This field either has  the  value  zero,  meaning
+       leave  the  propagation  type unchanged, or it has one of the following
+       values:
+
+       MMSS__PPRRIIVVAATTEE
+              Turn all mounts into private mounts.
+
+       MMSS__SSHHAARREEDD
+              Turn all mounts into shared mounts.
+
+       MMSS__SSLLAAVVEE
+              Turn all mounts into dependent mounts.
+
+       MMSS__UUNNBBIINNDDAABBLLEE
+              Turn all mounts into unbindable mounts.
+
+       For further details on the above  propagation  types,  see  mmoouunntt__nnaammee‐‐
+       ssppaacceess(7).
+
+RREETTUURRNN VVAALLUUEE
+       On success, mmoouunntt__sseettaattttrr() returns zero.  On error, -1 is returned and
+       _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEBBAADDFF  _p_a_t_h  is relative but _d_i_r_f_d is neither AATT__FFDDCCWWDD nor a valid file
+              descriptor.
+
+       EEBBAADDFF  _u_s_e_r_n_s___f_d is not a valid file descriptor.
+
+       EEBBUUSSYY  The caller tried to change the mount to  MMOOUUNNTT__AATTTTRR__RRDDOONNLLYY,  but
+              the mount still holds files open for writing.
+
+       EEBBUUSSYY  The   caller   tried   to  create  an  ID‐mapped  mount  raising
+              MMOOUUNNTT__AATTTTRR__IIDDMMAAPP and specifying _u_s_e_r_n_s___f_d but  the  mount  still
+              holds files open for writing.
+
+       EEIINNVVAALL The  pathname  specified  via  the  _d_i_r_f_d  and _p_a_t_h arguments to
+              mmoouunntt__sseettaattttrr() isn’t a mount point.
+
+       EEIINNVVAALL An unsupported value was set in _f_l_a_g_s.
+
+       EEIINNVVAALL An unsupported value was specified  in  the  _a_t_t_r___s_e_t  field  of
+              _m_o_u_n_t___a_t_t_r.
+
+       EEIINNVVAALL An  unsupported  value  was  specified  in the _a_t_t_r___c_l_r field of
+              _m_o_u_n_t___a_t_t_r.
+
+       EEIINNVVAALL An unsupported value was specified in the _p_r_o_p_a_g_a_t_i_o_n  field  of
+              _m_o_u_n_t___a_t_t_r.
+
+       EEIINNVVAALL More  than one of MMSS__SSHHAARREEDD, MMSS__SSLLAAVVEE, MMSS__PPRRIIVVAATTEE, or MMSS__UUNNBBIINNDD‐‐
+              AABBLLEE was set in the _p_r_o_p_a_g_a_t_i_o_n field of _m_o_u_n_t___a_t_t_r.
+
+       EEIINNVVAALL An access‐time setting was specified in the _a_t_t_r___s_e_t field with‐
+              out MMOOUUNNTT__AATTTTRR____AATTIIMMEE being set in the _a_t_t_r___c_l_r field.
+
+       EEIINNVVAALL MMOOUUNNTT__AATTTTRR__IIDDMMAAPP was specified in _a_t_t_r___c_l_r.
+
+       EEIINNVVAALL A file descriptor value was specified in _u_s_e_r_n_s___f_d which exceeds
+              IINNTT__MMAAXX.
+
+       EEIINNVVAALL A valid file descriptor value was specified  in  _u_s_e_r_n_s___f_d,  but
+              the file descriptor did not refer to a user namespace.
+
+       EEIINNVVAALL The underlying filesystem does not support ID‐mapped mounts.
+
+       EEIINNVVAALL The  mount that is to be ID mapped is not a detached mount; that
+              is, the mount has not previously been visible in a  mount  name‐
+              space.
+
+       EEIINNVVAALL A  partial access‐time setting was specified in _a_t_t_r___c_l_r instead
+              of MMOOUUNNTT__AATTTTRR____AATTIIMMEE being set.
+
+       EEIINNVVAALL The mount is located outside the caller’s mount namespace.
+
+       EEIINNVVAALL The underlying filesystem has been mounted in a mount  namespace
+              that is owned by a noninitial user namespace
+
+       EENNOOEENNTT A pathname was empty or had a nonexistent component.
+
+       EENNOOMMEEMM When  changing  mount propagation to MMSS__SSHHAARREEDD, a new peer group
+              ID needs to be allocated for all mounts without a peer group  ID
+              set.  This allocation failed because there was not enough memory
+              to allocate the relevant internal structures.
+
+       EENNOOSSPPCC When  changing  mount propagation to MMSS__SSHHAARREEDD, a new peer group
+              ID needs to be allocated for all mounts without a peer group  ID
+              set.   This  allocation failed because the kernel has run out of
+              IDs.
+
+       EEPPEERRMM  One of the  mounts  had  at  least  one  of  MMOOUUNNTT__AATTTTRR__NNOOAATTIIMMEE,
+              MMOOUUNNTT__AATTTTRR__NNOODDEEVV,    MMOOUUNNTT__AATTTTRR__NNOODDIIRRAATTIIMMEE,   MMOOUUNNTT__AATTTTRR__NNOOEEXXEECC,
+              MMOOUUNNTT__AATTTTRR__NNOOSSUUIIDD, or MMOOUUNNTT__AATTTTRR__RRDDOONNLLYY  set  and  the  flag  is
+              locked.  Mount attributes become locked on a mount if:
+
+              •  A  new  mount or mount tree is created causing mount propaga‐
+                 tion across user namespaces (i.e.,  propagation  to  a  mount
+                 namespace  owned  by a different user namespace).  The kernel
+                 will lock the aforementioned flags to prevent these sensitive
+                 properties from being altered.
+
+              •  A new mount and user namespace pair is created.  This happens
+                 for example when specifying CCLLOONNEE__NNEEWWUUSSEERR  ||  CCLLOONNEE__NNEEWWNNSS  in
+                 uunnsshhaarree(2), cclloonnee(2), or cclloonnee33(2).  The aforementioned flags
+                 become locked in the new mount namespace to prevent sensitive
+                 mount properties from being altered.  Since the newly created
+                 mount namespace will be owned by the newly created user name‐
+                 space,  a  calling process that is privileged in the new user
+                 namespace would—in the absence of such locking—be able to al‐
+                 ter sensitive mount properties (e.g., to remount a mount that
+                 was marked read‐only as read‐write in  the  new  mount  name‐
+                 space).
+
+       EEPPEERRMM  A  valid  file  descriptor value was specified in _u_s_e_r_n_s___f_d, but
+              the file descriptor refers to the initial user namespace.
+
+       EEPPEERRMM  An attempt was made to add an ID mapping to a mount that is  al‐
+              ready ID mapped.
+
+       EEPPEERRMM  The caller does not have CCAAPP__SSYYSS__AADDMMIINN in the initial user name‐
+              space.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 5.12.  glibc 2.36.
+
+NNOOTTEESS
+   IIDD‐‐mmaappppeedd mmoouunnttss
+       Creating  an  ID‐mapped mount makes it possible to change the ownership
+       of all files located under a mount.  Thus,  ID‐mapped  mounts  make  it
+       possible to change ownership in a temporary and localized way.  It is a
+       localized  change  because the ownership changes are visible only via a
+       specific mount.  All other users and locations where the filesystem  is
+       exposed are unaffected.  It is a temporary change because the ownership
+       changes are tied to the lifetime of the mount.
+
+       Whenever  callers  interact  with  the  filesystem through an ID‐mapped
+       mount, the ID mapping of the mount will be applied to  user  and  group
+       IDs  associated with filesystem objects.  This encompasses the user and
+       group IDs associated with inodes and also the following xxaattttrr(7) keys:
+
+       •  _s_e_c_u_r_i_t_y_._c_a_p_a_b_i_l_i_t_y, whenever filesystem capabilities are stored  or
+          returned  in the VVFFSS__CCAAPP__RREEVVIISSIIOONN__33 format, which stores a root user
+          ID alongside the capabilities (see ccaappaabbiilliittiieess(7)).
+
+       •  _s_y_s_t_e_m_._p_o_s_i_x___a_c_l___a_c_c_e_s_s and _s_y_s_t_e_m_._p_o_s_i_x___a_c_l___d_e_f_a_u_l_t, whenever  user
+          IDs or group IDs are stored in AACCLL__UUSSEERR or AACCLL__GGRROOUUPP entries.
+
+       The  following  conditions  must be met in order to create an ID‐mapped
+       mount:
+
+       •  The caller must have the CCAAPP__SSYYSS__AADDMMIINN capability in the user  name‐
+          space the filesystem was mounted in.
+
+       •  The underlying filesystem must support ID‐mapped mounts.  Currently,
+          the following filesystems support ID‐mapped mounts:
+
+          •  xxffss(5) (since Linux 5.12)
+          •  eexxtt44(5) (since Linux 5.12)
+          •  FFAATT (since Linux 5.12)
+          •  bbttrrffss(5) (since Linux 5.15)
+          •  nnttffss33 (since Linux 5.15)
+          •  ff22ffss (since Linux 5.18)
+          •  eerrooffss (since Linux 5.19)
+          •  oovveerrllaayyffss (ID‐mapped lower and upper layers supported since Linux
+             5.19)
+          •  ssqquuaasshhffss (since Linux 6.2)
+          •  ttmmppffss (since Linux 6.3)
+          •  cceepphhffss (since Linux 6.7)
+          •  hhuuggeettllbbffss (since Linux 6.9)
+
+       •  The mount must not already be ID‐mapped.  This also implies that the
+          ID mapping of a mount cannot be altered.
+
+       •  The mount must not have any writers.
+
+       •  The  mount must be a detached mount; that is, it must have been cre‐
+          ated by calling ooppeenn__ttrreeee(2) with the OOPPEENN__TTRREEEE__CCLLOONNEE  flag  and  it
+          must  not  already  have been visible in a mount namespace.  (To put
+          things another way: the mount must not have  been  attached  to  the
+          filesystem hierarchy with a system call such as mmoovvee__mmoouunntt(2).)
+
+       ID  mappings  can  be created for user IDs, group IDs, and project IDs.
+       An ID mapping is essentially a mapping of a range of user or group  IDs
+       into  another  or the same range of user or group IDs.  ID mappings are
+       written to map files as three numbers separated by  white  space.   The
+       first  two numbers specify the starting user or group ID in each of the
+       two user namespaces.  The third number specifies the range  of  the  ID
+       mapping.   For  example,  a  mapping for user IDs such as "1000 1001 1"
+       would indicate that user ID 1000 in  the  caller’s  user  namespace  is
+       mapped  to  user ID 1001 in its ancestor user namespace.  Since the map
+       range is 1, only user ID 1000 is mapped.
+
+       It is possible to specify up to 340 ID mappings  for  each  ID  mapping
+       type.   If any user IDs or group IDs are not mapped, all files owned by
+       that unmapped user or group ID will appear as being owned by the  over‐
+       flow user ID or overflow group ID respectively.
+
+       Further  details  on  setting up ID mappings can be found in uusseerr__nnaammee‐‐
+       ssppaacceess(7).
+
+       In the common case, the user namespace passed  in  _u_s_e_r_n_s___f_d  (together
+       with MMOOUUNNTT__AATTTTRR__IIDDMMAAPP in _a_t_t_r___s_e_t) to create an ID‐mapped mount will be
+       the  user  namespace  of  a container.  In other scenarios it will be a
+       dedicated user namespace associated with a user’s login session  as  is
+       the  case  for  portable home directories in ssyysstteemmdd‐‐hhoommeedd..sseerrvviiccee(8)).
+       It is also perfectly fine to create a dedicated user namespace for  the
+       sake of ID mapping a mount.
+
+       ID‐mapped  mounts can be useful in the following and a variety of other
+       scenarios:
+
+       •  Sharing files or filesystems between multiple users or multiple  ma‐
+          chines,  especially  in  complex  scenarios.  For example, ID‐mapped
+          mounts are used to implement portable home directories  in  ssyysstteemmdd‐‐
+          hhoommeedd..sseerrvviiccee(8),  where  they allow users to move their home direc‐
+          tory to an external storage device and use it on multiple  computers
+          where  they are assigned different user IDs and group IDs.  This ef‐
+          fectively makes it possible to assign random user IDs and group  IDs
+          at login time.
+
+       •  Sharing  files  or  filesystems from the host with unprivileged con‐
+          tainers.  This allows a user to avoid  having  to  change  ownership
+          permanently through cchhoowwnn(2).
+
+       •  ID  mapping  a  container’s  root  filesystem.   Users don’t need to
+          change ownership permanently through cchhoowwnn(2).  Especially for large
+          root filesystems, using cchhoowwnn(2) can be prohibitively expensive.
+
+       •  Sharing files or filesystems between containers with non‐overlapping
+          ID mappings.
+
+       •  Implementing discretionary  access  (DAC)  permission  checking  for
+          filesystems lacking a concept of ownership.
+
+       •  Efficiently changing ownership on a per‐mount basis.  In contrast to
+          cchhoowwnn(2), changing ownership of large sets of files is instantaneous
+          with  ID‐mapped mounts.  This is especially useful when ownership of
+          an entire root filesystem of a virtual machine or container is to be
+          changed  as  mentioned  above.   With  ID‐mapped  mounts,  a  single
+          mmoouunntt__sseettaattttrr()  system call will be sufficient to change the owner‐
+          ship of all files.
+
+       •  Taking the current ownership into account.  ID mappings specify pre‐
+          cisely what a user or group ID is supposed to be  mapped  to.   This
+          contrasts  with the cchhoowwnn(2) system call which cannot by itself take
+          the current ownership of the files it changes into account.  It sim‐
+          ply changes the ownership to the specified user ID and group ID.
+
+       •  Locally and temporarily  restricted  ownership  changes.   ID‐mapped
+          mounts make it possible to change ownership locally, restricting the
+          ownership  changes to specific mounts, and temporarily as the owner‐
+          ship changes only apply as long as the mount exists.   By  contrast,
+          changing  ownership  via the cchhoowwnn(2) system call changes the owner‐
+          ship globally and permanently.
+
+   MMoouunntt aattttrriibbuutteess aanndd ffiilleessyysstteemm ppaarraammeetteerrss
+       Some mount attributes (traditionally associated with mmoouunntt(8)‐style op‐
+       tions) have a sibling filesystem parameter with  superficially  similar
+       user‐facing  behaviour.   For example, the _-_o _r_o option to mmoouunntt(8) can
+       refer to the "read‐only" filesystem parameter, or the "read‐only" mount
+       attribute.  Both of these result in mount objects  becoming  read‐only,
+       but they do have different behaviour.
+
+       The  distinction between these two kinds of option is that mount object
+       attributes are applied per‐mount‐object (allowing different  mount  ob‐
+       jects  derived  from  a given filesystem instance to have different at‐
+       tributes), while filesystem instance parameters ("superblock flags"  in
+       kernel‐developer  parlance) apply to all mount objects derived from the
+       same filesystem instance.
+
+       When using mmoouunntt(2), the line between these two types of mount  options
+       was  blurred.   However, with mmoouunntt__sseettaattttrr() and ffssccoonnffiigg(2), the dis‐
+       tinction is made much clearer.  Mount attributes  are  configured  with
+       mmoouunntt__sseettaattttrr(),  while  filesystem parameters are configured using ffss‐‐
+       ccoonnffiigg(2).
+
+   EExxtteennssiibbiilliittyy
+       In order to allow for future  extensibility,  mmoouunntt__sseettaattttrr()  requires
+       the user‐space application to specify the size of the _m_o_u_n_t___a_t_t_r struc‐
+       ture that it is passing.  By providing this information, it is possible
+       for mmoouunntt__sseettaattttrr() to provide both forwards‐ and backwards‐compatibil‐
+       ity,  with _s_i_z_e acting as an implicit version number.  (Because new ex‐
+       tension fields will always be appended, the structure size will  always
+       increase.)   This  extensibility design is very similar to other system
+       calls such as ppeerrff__sseettaattttrr(2), ppeerrff__eevveenntt__ooppeenn(2), cclloonnee33(2)  and  ooppee‐‐
+       nnaatt22(2).
+
+       Let  _u_s_i_z_e  be the size of the structure as specified by the user‐space
+       application, and let _k_s_i_z_e be the size of the structure which the  ker‐
+       nel supports, then there are three cases to consider:
+
+       •  If  _k_s_i_z_e  equals  _u_s_i_z_e, then there is no version mismatch and _a_t_t_r
+          can be used verbatim.
+
+       •  If _k_s_i_z_e is larger than _u_s_i_z_e, then there are some extension  fields
+          that the kernel supports which the user‐space application is unaware
+          of.   Because  a zero value in any added extension field signifies a
+          no‐op, the kernel treats all of the extension fields not provided by
+          the user‐space application as having  zero  values.   This  provides
+          backwards‐compatibility.
+
+       •  If _k_s_i_z_e is smaller than _u_s_i_z_e, then there are some extension fields
+          which  the  user‐space  application is aware of but which the kernel
+          does not support.  Because any extension field must  have  its  zero
+          values signify a no‐op, the kernel can safely ignore the unsupported
+          extension fields if they are all zero.  If any unsupported extension
+          fields  are non‐zero, then -1 is returned and _e_r_r_n_o is set to EE22BBIIGG.
+          This provides forwards‐compatibility.
+
+       Because the definition of _s_t_r_u_c_t _m_o_u_n_t___a_t_t_r may change  in  the  future
+       (with  new  fields  being added when system headers are updated), user‐
+       space applications should zero‐fill _s_t_r_u_c_t _m_o_u_n_t___a_t_t_r  to  ensure  that
+       recompiling  the  program  with new headers will not result in spurious
+       errors at run time.  The simplest way is to use a  designated  initial‐
+       izer:
+
+           struct mount_attr attr = {
+               .attr_set = MOUNT_ATTR_RDONLY,
+               .attr_clr = MOUNT_ATTR_NODEV
+           };
+
+       Alternatively, the structure can be zero‐filled using mmeemmsseett(3) or sim‐
+       ilar functions:
+
+           struct mount_attr attr;
+           memset(&attr, 0, sizeof(attr));
+           attr.attr_set = MOUNT_ATTR_RDONLY;
+           attr.attr_clr = MOUNT_ATTR_NODEV;
+
+       A  user‐space application that wishes to determine which extensions the
+       running kernel supports can do so by conducting a binary search on _s_i_z_e
+       with a structure which has every byte  nonzero  (to  find  the  largest
+       value which doesn’t produce an error of EE22BBIIGG).
+
+EEXXAAMMPPLLEESS
+       /*
+        * This program allows the caller to create a new detached mount
+        * and set various properties on it.
+        */
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <fcntl.h>
+       #include <getopt.h>
+       #include <sys/mount.h>
+       #include <sys/types.h>
+       #include <stdbool.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <string.h>
+       #include <unistd.h>
+
+       static const struct option longopts[] = {
+           {"map-mount",       required_argument,  NULL,  'a'},
+           {"recursive",       no_argument,        NULL,  'b'},
+           {"read-only",       no_argument,        NULL,  'c'},
+           {"block-setid",     no_argument,        NULL,  'd'},
+           {"block-devices",   no_argument,        NULL,  'e'},
+           {"block-exec",      no_argument,        NULL,  'f'},
+           {"no-access-time",  no_argument,        NULL,  'g'},
+           { NULL,             0,                  NULL,   0 },
+       };
+
+       int
+       main(int argc, char *argv[])
+       {
+           int                fd_userns = -1;
+           int                fd_tree;
+           int                index = 0;
+           int                ret;
+           bool               recursive = false;
+           const char         *source;
+           const char         *target;
+           struct mount_attr  *attr = &(struct mount_attr){};
+
+           while ((ret = getopt_long_only(argc, argv, "",
+                                          longopts, &index)) != -1) {
+               switch (ret) {
+               case 'a':
+                   fd_userns = open(optarg, O_RDONLY | O_CLOEXEC);
+                   if (fd_userns == -1)
+                       err(EXIT_FAILURE, "open(%s)", optarg);
+                   break;
+               case 'b':
+                   recursive = true;
+                   break;
+               case 'c':
+                   attr->attr_set |= MOUNT_ATTR_RDONLY;
+                   break;
+               case 'd':
+                   attr->attr_set |= MOUNT_ATTR_NOSUID;
+                   break;
+               case 'e':
+                   attr->attr_set |= MOUNT_ATTR_NODEV;
+                   break;
+               case 'f':
+                   attr->attr_set |= MOUNT_ATTR_NOEXEC;
+                   break;
+               case 'g':
+                   attr->attr_set |= MOUNT_ATTR_NOATIME;
+                   attr->attr_clr |= MOUNT_ATTR__ATIME;
+                   break;
+               default:
+                   errx(EXIT_FAILURE, "Invalid argument specified");
+               }
+           }
+
+           if ((argc - optind) < 2)
+               errx(EXIT_FAILURE, "Missing source or target mount point");
+
+           source = argv[optind];
+           target = argv[optind + 1];
+
+           /* In the following, -1 as the 'dirfd' argument ensures that
+              open_tree() fails if 'source' is not an absolute pathname.  */
+
+           fd_tree = open_tree(-1, source,
+                               OPEN_TREE_CLONE | OPEN_TREE_CLOEXEC |
+                               AT_EMPTY_PATH | (recursive ? AT_RECURSIVE : 0));
+           if (fd_tree == -1)
+               err(EXIT_FAILURE, "open(%s)", source);
+
+           if (fd_userns >= 0) {
+               attr->attr_set  |= MOUNT_ATTR_IDMAP;
+               attr->userns_fd = fd_userns;
+           }
+
+           ret = mount_setattr(fd_tree, "",
+                               AT_EMPTY_PATH | (recursive ? AT_RECURSIVE : 0),
+                               attr, sizeof(struct mount_attr));
+           if (ret == -1)
+               err(EXIT_FAILURE, "mount_setattr");
+
+           close(fd_userns);
+
+           /* In the following, -1 as the 'to_dirfd' argument ensures that
+              open_tree() fails if 'target' is not an absolute pathname.  */
+
+           ret = move_mount(fd_tree, "", -1, target,
+                            MOVE_MOUNT_F_EMPTY_PATH);
+           if (ret == -1)
+               err(EXIT_FAILURE, "move_mount() to %s", target);
+
+           close(fd_tree);
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       nneewwggiiddmmaapp(1),  nneewwuuiiddmmaapp(1),  cclloonnee(2),  mmoouunntt(2), uunnsshhaarree(2), pprroocc(5),
+       ccaappaabbiilliittiieess(7), mmoouunntt__nnaammeessppaacceess(7), uusseerr__nnaammeessppaacceess(7), xxaattttrr(7)
+
+Linux man‐pages (unreleased)      2025‐10‐01                  _m_o_u_n_t___s_e_t_a_t_t_r(2)

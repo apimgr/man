@@ -1,0 +1,209 @@
+DISK(9)                  BSD Kernel Developer's Manual                 DISK(9)
+
+NNAAMMEE
+     ddiisskk — kernel disk storage API
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ggeeoomm//ggeeoomm__ddiisskk..hh>>
+
+     _s_t_r_u_c_t _d_i_s_k _*
+     ddiisskk__aalllloocc(_v_o_i_d);
+
+     _v_o_i_d
+     ddiisskk__ccrreeaattee(_s_t_r_u_c_t _d_i_s_k _*_d_i_s_k, _i_n_t _v_e_r_s_i_o_n);
+
+     _v_o_i_d
+     ddiisskk__ggoonnee(_s_t_r_u_c_t _d_i_s_k _*_d_i_s_k);
+
+     _v_o_i_d
+     ddiisskk__ddeessttrrooyy(_s_t_r_u_c_t _d_i_s_k _*_d_i_s_k);
+
+     _i_n_t
+     ddiisskk__rreessiizzee(_s_t_r_u_c_t _d_i_s_k _*_d_i_s_k, _i_n_t _f_l_a_g_s);
+
+     _v_o_i_d
+     ddiisskk__aadddd__aalliiaass(_s_t_r_u_c_t _d_i_s_k _*_d_i_s_k, _c_o_n_s_t _c_h_a_r _*_a_l_i_a_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     The disk storage API permits kernel device drivers providing access to
+     disk-like storage devices to advertise the device to other kernel compo‐
+     nents, including GEOM(4) and devfs(5).
+
+     Each disk device is described by a _s_t_r_u_c_t _d_i_s_k structure, which contains
+     a variety of parameters for the disk device, function pointers for vari‐
+     ous methods that may be performed on the device, as well as private data
+     storage for the device driver.  In addition, some fields are reserved for
+     use by GEOM in managing access to the device and its statistics.
+
+     GEOM has the ownership of _s_t_r_u_c_t _d_i_s_k, and drivers must allocate storage
+     for it with the ddiisskk__aalllloocc() function, fill in the fields and call
+     ddiisskk__ccrreeaattee() when the device is ready to service requests.
+     ddiisskk__aadddd__aalliiaass() adds an alias for the disk and must be called before
+     ddiisskk__ccrreeaattee(), but may be called multiple times.  For each alias added, a
+     device node will be created with make_dev_alias(9) in the same way pri‐
+     mary device nodes are created with make_dev(9) for _d___n_a_m_e and _d___u_n_i_t.
+     Care should be taken to ensure that only one driver creates aliases for
+     any given name.  ddiisskk__rreessiizzee() can be called by the driver after modify‐
+     ing _d___m_e_d_i_a_s_i_z_e to notify GEOM about the disk capacity change.  The _f_l_a_g_s
+     field should be set to either M_WAITOK, or M_NOWAIT.  ddiisskk__ggoonnee() orphans
+     all of the providers associated with the drive, setting an error condi‐
+     tion of ENXIO in each one.  In addition, it prevents a re-taste on last
+     close for writing if an error condition has been set in the provider.
+     After calling ddiisskk__ddeessttrrooyy(), the device driver is not allowed to access
+     the contents of _s_t_r_u_c_t _d_i_s_k anymore.
+
+     The ddiisskk__ccrreeaattee() function takes a second parameter, _v_e_r_s_i_o_n, which must
+     always be passed DISK_VERSION.  If GEOM detects that the driver is com‐
+     piled against an unsupported version, it will ignore the device and print
+     a warning on the console.
+
+   DDeessccrriippttiivvee FFiieellddss
+     The following fields identify the disk device described by the structure
+     instance, and must be filled in prior to submitting the structure to
+     ddiisskk__ccrreeaattee() and may not be subsequently changed:
+
+     _u___i_n_t _d___f_l_a_g_s
+             Optional flags indicating to the storage framework what optional
+             features or descriptions the storage device driver supports.
+             Currently supported flags are DISKFLAG_OPEN (maintained by stor‐
+             age framework), DISKFLAG_CANDELETE (maintained by device driver),
+             and DISKFLAG_CANFLUSHCACHE (maintained by device driver).
+
+     _c_o_n_s_t _c_h_a_r _* _d___n_a_m_e
+             Holds the name of the storage device class, e.g., “ahd”.  This
+             value typically uniquely identifies a particular driver device,
+             and must not conflict with devices serviced by other device driv‐
+             ers.
+
+     _u___i_n_t _d___u_n_i_t
+             Holds the instance of the storage device class, e.g., “4”.  This
+             namespace is managed by the device driver, and assignment of unit
+             numbers might be a property of probe order, or in some cases
+             topology.  Together, the _d___n_a_m_e and _d___u_n_i_t values will uniquely
+             identify a disk storage device.
+
+   DDiisskk DDeevviiccee MMeetthhooddss
+     The following fields identify various disk device methods, if imple‐
+     mented:
+
+     _d_i_s_k___o_p_e_n___t _* _d___o_p_e_n
+             Optional: invoked when the disk device is opened.  If no method
+             is provided, open will always succeed.
+
+     _d_i_s_k___c_l_o_s_e___t _* _d___c_l_o_s_e
+             Optional: invoked when the disk device is closed.  Although an
+             error code may be returned, the call should always terminate any
+             state setup by the corresponding open method call.
+
+     _d_i_s_k___s_t_r_a_t_e_g_y___t _* _d___s_t_r_a_t_e_g_y
+             Mandatory: invoked when a new _s_t_r_u_c_t _b_i_o is to be initiated on
+             the disk device.
+
+     _d_i_s_k___i_o_c_t_l___t _* _d___i_o_c_t_l
+             Optional: invoked when an I/O control operation is initiated on
+             the disk device.  Please note that for security reasons these op‐
+             erations should not be able to affect other devices than the one
+             on which they are performed.
+
+     _d_u_m_p_e_r___t _* _d___d_u_m_p
+             Optional: if configured with dumpon(8), this function is invoked
+             from a very restricted system state after a kernel panic to
+             record a copy of the system RAM to the disk.
+
+     _d_i_s_k___g_e_t_a_t_t_r___t _* _d___g_e_t_a_t_t_r
+             Optional: if this method is provided, it gives the disk driver
+             the opportunity to override the default GEOM response to
+             BIO_GETATTR requests.  This function should return -1 if the at‐
+             tribute is not handled, 0 if the attribute is handled, or an er‐
+             rno to be passed to gg__iioo__ddeelliivveerr().
+
+     _d_i_s_k___g_o_n_e___t _* _d___g_o_n_e
+             Optional: if this method is provided, it will be called after
+             ddiisskk__ggoonnee() is called, once GEOM has finished its cleanup
+             process.  Once this callback is called, it is safe for the disk
+             driver to free all of its resources, as it will not be receiving
+             further calls from GEOM.
+
+   MMaannddaattoorryy MMeeddiiaa PPrrooppeerrttiieess
+     The following fields identify the size and granularity of the disk de‐
+     vice.  These fields must stay stable from return of the drivers open
+     method until the close method is called, but it is perfectly legal to
+     modify them in the open method before returning.
+
+     _u___i_n_t _d___s_e_c_t_o_r_s_i_z_e
+             The sector size of the disk device in bytes.
+
+     _o_f_f___t _d___m_e_d_i_a_s_i_z_e
+             The size of the disk device in bytes.
+
+     _u___i_n_t _d___m_a_x_s_i_z_e
+             The maximum supported size in bytes of an I/O request.  Requests
+             larger than this size will be chopped up by GEOM.
+
+   OOppttiioonnaall MMeeddiiaa PPrrooppeerrttiieess
+     These optional fields can provide extra information about the disk de‐
+     vice.  Do not initialize these fields if the field/concept does not ap‐
+     ply.  These fields must stay stable from return of the drivers open
+     method until the close method is called, but it is perfectly legal to
+     modify them in the open method before returning.
+
+     _u___i_n_t _d___f_w_s_e_c_t_o_r_s, _u___i_n_t _d___f_w_h_e_a_d_s
+             The number of sectors and heads advertised on the disk device by
+             the firmware or BIOS.  These values are almost universally bogus,
+             but on some architectures necessary for the correct calculation
+             of disk partitioning.
+
+     _u___i_n_t _d___s_t_r_i_p_e_o_f_f_s_e_t, _u___i_n_t _d___s_t_r_i_p_e_s_i_z_e
+             These two fields can be used to describe the width and location
+             of natural performance boundaries for most disk technologies.
+             Please see _s_r_c_/_s_y_s_/_g_e_o_m_/_n_o_t_e_s for details.
+
+     _c_h_a_r _d___i_d_e_n_t_[_D_I_S_K___I_D_E_N_T___S_I_Z_E_]
+             This field can and should be used to store disk's serial number
+             if the d_getattr method described above isn't implemented, or if
+             it does not support the GEOM::ident attribute.
+
+     _c_h_a_r _d___d_e_s_c_r_[_D_I_S_K___I_D_E_N_T___S_I_Z_E_]
+             This field can be used to store the disk vendor and product de‐
+             scription.
+
+     _u_i_n_t_1_6___t _d___h_b_a___v_e_n_d_o_r
+             This field can be used to store the PCI vendor ID for the HBA
+             connected to the disk.
+
+     _u_i_n_t_1_6___t _d___h_b_a___d_e_v_i_c_e
+             This field can be used to store the PCI device ID for the HBA
+             connected to the disk.
+
+     _u_i_n_t_1_6___t _d___h_b_a___s_u_b_v_e_n_d_o_r
+             This field can be used to store the PCI subvendor ID for the HBA
+             connected to the disk.
+
+     _u_i_n_t_1_6___t _d___h_b_a___s_u_b_d_e_v_i_c_e
+             This field can be used to store the PCI subdevice ID for the HBA
+             connected to the disk.
+
+   DDrriivveerr PPrriivvaattee DDaattaa
+     This field may be used by the device driver to store a pointer to private
+     data to implement the disk service.
+
+     _v_o_i_d _* _d___d_r_v_1
+             Private data pointer.  Typically used to store a pointer to the
+             drivers _s_o_f_t_c structure for this disk device.
+
+SSEEEE AALLSSOO
+     GEOM(4), devfs(5)
+
+HHIISSTTOORRYY
+     The kkeerrnneell ddiisskk ssttoorraaggee AAPPII first appeared in FreeBSD 4.9.
+
+AAUUTTHHOORRSS
+     This manual page was written by Robert Watson.
+
+BBUUGGSS
+     Disk aliases are not a general purpose aliasing mechanism, but are in‐
+     tended only to ease the transition from one name to another.  They can be
+     used to ensure that nvd0 and nda0 are the same thing.  They cannot be
+     used to implement the diskX concept from macOS.
+
+BSD                             April 30, 2020                             BSD

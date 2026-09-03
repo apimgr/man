@@ -1,0 +1,141 @@
+UNVIS(3)                 BSD Library Functions Manual                 UNVIS(3)
+
+NNAAMMEE
+     uunnvviiss, ssttrruunnvviiss, ssttrrnnuunnvviiss, ssttrruunnvviissxx, ssttrrnnuunnvviissxx — decode a visual rep‐
+     resentation of characters
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<vviiss..hh>>
+
+     _i_n_t
+     uunnvviiss(_c_h_a_r _*_c_p, _i_n_t _c, _i_n_t _*_a_s_t_a_t_e, _i_n_t _f_l_a_g);
+
+     _i_n_t
+     ssttrruunnvviiss(_c_h_a_r _*_d_s_t, _c_o_n_s_t _c_h_a_r _*_s_r_c);
+
+     _i_n_t
+     ssttrrnnuunnvviiss(_c_h_a_r _*_d_s_t, _s_i_z_e___t _d_l_e_n, _c_o_n_s_t _c_h_a_r _*_s_r_c);
+
+     _i_n_t
+     ssttrruunnvviissxx(_c_h_a_r _*_d_s_t, _c_o_n_s_t _c_h_a_r _*_s_r_c, _i_n_t _f_l_a_g);
+
+     _i_n_t
+     ssttrrnnuunnvviissxx(_c_h_a_r _*_d_s_t, _s_i_z_e___t _d_l_e_n, _c_o_n_s_t _c_h_a_r _*_s_r_c, _i_n_t _f_l_a_g);
+
+DDEESSCCRRIIPPTTIIOONN
+     The uunnvviiss(), ssttrruunnvviiss() and ssttrruunnvviissxx() functions are used to decode a
+     visual representation of characters, as produced by the vis(3) function,
+     back into the original form.
+
+     The uunnvviiss() function is called with successive characters in _c until a
+     valid sequence is recognized, at which time the decoded character is
+     available at the character pointed to by _c_p.
+
+     The ssttrruunnvviiss() function decodes the characters pointed to by _s_r_c into the
+     buffer pointed to by _d_s_t.  The ssttrruunnvviiss() function simply copies _s_r_c to
+     _d_s_t, decoding any escape sequences along the way, and returns the number
+     of characters placed into _d_s_t, or -1 if an invalid escape sequence was
+     detected.  The size of _d_s_t should be equal to the size of _s_r_c (that is,
+     no expansion takes place during decoding).
+
+     The ssttrruunnvviissxx() and ssttrrnnuunnvviissxx() functions do the same as the ssttrruunnvviiss()
+     and ssttrrnnuunnvviiss() functions, but take a flag that specifies the style the
+     string _s_r_c is encoded with.  The meaning of the flag is the same as ex‐
+     plained below for uunnvviiss().
+
+     The uunnvviiss() function implements a state machine that can be used to de‐
+     code an arbitrary stream of bytes.  All state associated with the bytes
+     being decoded is stored outside the uunnvviiss() function (that is, a pointer
+     to the state is passed in), so calls decoding different streams can be
+     freely intermixed.  To start decoding a stream of bytes, first initialize
+     an integer to zero.  Call uunnvviiss() with each successive byte, along with a
+     pointer to this integer, and a pointer to a destination character.  The
+     uunnvviiss() function has several return codes that must be handled properly.
+     They are:
+
+     0 (zero)         Another character is necessary; nothing has been recog‐
+                      nized yet.
+
+     UNVIS_VALID      A valid character has been recognized and is available
+                      at the location pointed to by _c_p.
+
+     UNVIS_VALIDPUSH  A valid character has been recognized and is available
+                      at the location pointed to by _c_p; however, the character
+                      currently passed in should be passed in again.
+
+     UNVIS_NOCHAR     A valid sequence was detected, but no character was pro‐
+                      duced.  This return code is necessary to indicate a log‐
+                      ical break between characters.
+
+     UNVIS_SYNBAD     An invalid escape sequence was detected, or the decoder
+                      is in an unknown state.  The decoder is placed into the
+                      starting state.
+
+     When all bytes in the stream have been processed, call uunnvviiss() one more
+     time with flag set to UNVIS_END to extract any remaining character (the
+     character passed in is ignored).
+
+     The _f_l_a_g argument is also used to specify the encoding style of the
+     source.  If set to VIS_NOESCAPE uunnvviiss() will not decode backslash es‐
+     capes.  If set to VIS_HTTPSTYLE or VIS_HTTP1808, uunnvviiss() will decode URI
+     strings as specified in RFC 1808.  If set to VIS_HTTP1866, uunnvviiss() will
+     decode entity references and numeric character references as specified in
+     RFC 1866.  If set to VIS_MIMESTYLE, uunnvviiss() will decode MIME Quoted-
+     Printable strings as specified in RFC 2045.  If set to VIS_NOESCAPE,
+     uunnvviiss() will not decode ‘\’ quoted characters.
+
+     The following code fragment illustrates a proper use of uunnvviiss().
+
+           int state = 0;
+           char out;
+
+           while ((ch = getchar()) != EOF) {
+           again:
+                   switch(unvis(&out, ch, &state, 0)) {
+                   case 0:
+                   case UNVIS_NOCHAR:
+                           break;
+                   case UNVIS_VALID:
+                           (void)putchar(out);
+                           break;
+                   case UNVIS_VALIDPUSH:
+                           (void)putchar(out);
+                           goto again;
+                   case UNVIS_SYNBAD:
+                           errx(EXIT_FAILURE, "Bad character sequence!");
+                   }
+           }
+           if (unvis(&out, '\0', &state, UNVIS_END) == UNVIS_VALID)
+                   (void)putchar(out);
+
+EERRRROORRSS
+     The functions ssttrruunnvviiss(), ssttrrnnuunnvviiss(), ssttrruunnvviissxx(), and ssttrrnnuunnvviissxx() will
+     return -1 on error and set _e_r_r_n_o to:
+
+     [EINVAL]           An invalid escape sequence was detected, or the de‐
+                        coder is in an unknown state.
+
+     In addition the functions ssttrrnnuunnvviiss() and ssttrrnnuunnvviissxx() will can also set
+     _e_r_r_n_o on error to:
+
+     [ENOSPC]           Not enough space to perform the conversion.
+
+SSEEEE AALLSSOO
+     unvis(1), vis(1), vis(3)
+
+     R. Fielding, _R_e_l_a_t_i_v_e _U_n_i_f_o_r_m _R_e_s_o_u_r_c_e _L_o_c_a_t_o_r_s, RFC1808.
+
+HHIISSTTOORRYY
+     The uunnvviiss() function first appeared in 4.4BSD.  The ssttrrnnuunnvviiss() and
+     ssttrrnnuunnvviissxx() functions appeared in NetBSD 6.0 and FreeBSD 9.2.
+
+BBUUGGSS
+     The names VIS_HTTP1808 and VIS_HTTP1866 are wrong.  Percent-encoding was
+     defined in RFC 1738, the original RFC for URL.  RFC 1866 defines HTML
+     2.0, an application of SGML, from which it inherits concepts of numeric
+     character references and entity references.
+
+BSD                               May 8, 2019                              BSD

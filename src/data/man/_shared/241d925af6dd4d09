@@ -1,0 +1,138 @@
+MOUNT.CONF(5)               BSD File Formats Manual              MOUNT.CONF(5)
+
+NNAAMMEE
+     mmoouunntt..ccoonnff — root file system mount configuration file
+
+SSYYNNOOPPSSIISS
+     _/_._m_o_u_n_t_._c_o_n_f
+
+DDEESSCCRRIIPPTTIIOONN
+     During the bootup process, the FreeBSD kernel will try to mount the root
+     file system using the logic in the vvffss__mmoouunnttrroooott() function in
+     _s_r_c_/_s_y_s_/_k_e_r_n_/_v_f_s___m_o_u_n_t_r_o_o_t_._c.  The root mount logic can be described as
+     follows:
+
+     1.   The kernel will synthesize in memory a config file with default di‐
+          rectives for mounting the root file system.  The logic for this is
+          in vvffss__mmoouunnttrroooott__ccoonnff00().
+
+     2.   The kernel will first mount devfs(5) as the root file system.
+
+     3.   Next, the kernel will parse the in-memory config file created in
+          step 1 and try to mount the actual root file system.  See _F_I_L_E
+          _F_O_R_M_A_T for the format of the config file.
+
+     4.   When the actual root file system is mounted, devfs(5) will be re-
+          mounted on the _/_d_e_v directory.
+
+     5.   If a _/_._m_o_u_n_t_._c_o_n_f file does not exist in the root file system which
+          was just mounted, the root mount logic stops here.
+
+     6.   If a _/_._m_o_u_n_t_._c_o_n_f file exists in the root file system which was just
+          mounted, this file will be parsed, and the kernel will use this new
+          config file to try to re-mount the root file system.  See _F_I_L_E
+          _F_O_R_M_A_T for the format of the config file.
+
+     7.   If the new root file system has a _/_._m_o_u_n_t directory, the old root
+          file system will be re-mounted on _/_._m_o_u_n_t.
+
+     8.   The root mount logic will go back to step 4.
+
+     The root mount logic is recursive, and step 8 will be repeated as long as
+     each new root file system which is mounted has a _/_._m_o_u_n_t_._c_o_n_f file.
+
+FFIILLEE FFOORRMMAATT
+     The kernel parses each line in _._m_o_u_n_t_._c_o_n_f and then tries to perform the
+     action specified on that line as soon as it is parsed.
+
+     ##           A line beginning with a # is a comment and is ignored.
+
+     {{FFSS}}::{{MMOOUUNNTTPPOOIINNTT}} {{OOPPTTIIOONNSS}}
+                 The kernel will try to mount this in an operation equivalent
+                 to:
+
+                       mount -t {FS} -o {OPTIONS} {MOUNTPOINT} /
+
+                 If this is successfully mounted, further lines in _._m_o_u_n_t_._c_o_n_f
+                 are ignored.  If all lines in _._m_o_u_n_t_._c_o_n_f have been processed
+                 and no root file system has been successfully mounted, then
+                 the action specified by ..oonnffaaiill is performed.
+
+     ..aasskk        When the kernel processes this line, a mountroot> command-
+                 line prompt is displayed.  At this prompt, the operator can
+                 enter the root mount.
+
+     ..mmdd _f_i_l_e    Create a memory backed md(4) virtual disk, using _f_i_l_e as the
+                 backing store.
+
+     ..oonnffaaiill _[_p_a_n_i_c_|_r_e_b_o_o_t_|_r_e_t_r_y_|_c_o_n_t_i_n_u_e_]
+                 If after parsing all the lines in _._m_o_u_n_t_._c_o_n_f the kernel is
+                 unable to mount a root file system, the ..oonnffaaiill directive
+                 tells the kernel what action to perform.
+
+     ..ttiimmeeoouutt _N  Before trying to mount a root file system, if the root mount
+                 device does not exist, wait at most _N seconds for the device
+                 to appear before trying to mount it.  If ..ttiimmeeoouutt is not
+                 specified, the default timeout is 3 seconds.
+
+EEXXAAMMPPLLEESS
+     The following example _._m_o_u_n_t_._c_o_n_f will direct the kernel to try mounting
+     the root file system first as an ISO CD9660 file system on _/_d_e_v_/_c_d_0, then
+     if that does not work, as an ISO CD9660 file system on _/_d_e_v_/_c_d_1, and then
+     if that does not work, as a UFS file system on _/_d_e_v_/_a_d_a_0_s_1_a.  If that
+     does not work, a mountroot> command-line prompt will be displayed where
+     the operator can manually enter the root file system to mount.  Finally
+     if that does not work, the kernel will panic.
+
+           .onfail panic
+           .timeout 3
+           cd9660:/dev/cd0 ro
+           .timeout 0
+           cd9660:/dev/cd1 ro
+           .timeout 3
+           ufs:/dev/ada0s1a
+           .ask
+
+     The following example _._m_o_u_n_t_._c_o_n_f will direct the kernel to create a
+     md(4) memory disk attached to the file _/_d_a_t_a_/_O_S_-_1_._0_._i_s_o and then mount
+     the ISO CD9660 file system on the md device which was just created.  The
+     last line is a comment which is ignored.
+
+           .timeout 3
+           .md /data/OS-1.0.iso
+           cd9600:/dev/md# ro
+           # Can also use cd9660:/dev/md0 ro
+
+     The following example _._m_o_u_n_t_._c_o_n_f will direct the kernel to create a
+     md(4) memory disk attached to the file _/_d_a_t_a_/_b_a_s_e_._u_f_s_._u_z_i_p and then mount
+     the UFS file system on the md uzip device which was just created by the
+     geom_uzip(4) driver.
+
+           .md /data/base.ufs.uzip
+           ufs:/dev/md#.uzip ro
+           # Can also use ufs:/dev/md0.uzip ro
+
+     The following example _._m_o_u_n_t_._c_o_n_f will direct the kernel to do a unionfs
+     mount on a directory _/_j_a_i_l_/_f_r_e_e_b_s_d_-_8_-_s_t_a_b_l_e which has a chroot(2) envi‐
+     ronment.
+
+           .timeout 3
+           unionfs:/jail/freebsd-8-stable
+
+NNOOTTEESS
+     For each root file system which is mounted, a _/_d_e_v directory _m_u_s_t exist
+     so that the root mount logic can properly re-mount devfs(5).  If this di‐
+     rectory does not exist, the system may hang during the bootup process.
+
+SSEEEE AALLSSOO
+     nmount(2), md(4), boot.config(5), fstab(5), boot(8), loader(8), mount(8)
+
+HHIISSTTOORRYY
+     The mmoouunntt..ccoonnff file first appeared in FreeBSD 9.0.
+
+AAUUTTHHOORRSS
+     The root mount logic in the FreeBSD kernel which parses _/_._m_o_u_n_t_._c_o_n_f was
+     written by Marcel Moolenaar <_m_a_r_c_e_l_@_F_r_e_e_B_S_D_._o_r_g>.  This man page was
+     written by Craig Rodrigues <_r_o_d_r_i_g_c_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            October 17, 2013                            BSD

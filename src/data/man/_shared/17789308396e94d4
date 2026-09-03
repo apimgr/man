@@ -1,0 +1,165 @@
+FIGPAR(3)                BSD Library Functions Manual                FIGPAR(3)
+
+NNAAMMEE
+     ffiiggppaarr, ppaarrssee__ccoonnffiigg, ggeett__ccoonnffiigg__ooppttiioonn — configuration file parsing li‐
+     brary
+
+LLIIBBRRAARRYY
+     library “libfigpar”
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ffiiggppaarr..hh>>
+
+     _i_n_t
+     ppaarrssee__ccoonnffiigg(_s_t_r_u_c_t _f_i_g_p_a_r___c_o_n_f_i_g _o_p_t_i_o_n_s_[_], _c_o_n_s_t _c_h_a_r _*_p_a_t_h,
+         _i_n_t (_*_u_n_k_n_o_w_n)(_s_t_r_u_c_t _f_i_g_p_a_r___c_o_n_f_i_g _*_o_p_t_i_o_n, _u_i_n_t_3_2___t _l_i_n_e,
+         _c_h_a_r _*_d_i_r_e_c_t_i_v_e, _c_h_a_r _*_v_a_l_u_e), _u_i_n_t_8___t _p_r_o_c_e_s_s_i_n_g___o_p_t_i_o_n_s);
+
+     _s_t_r_u_c_t _f_i_g_p_a_r___c_o_n_f_i_g _*
+     ggeett__ccoonnffiigg__ooppttiioonn(_s_t_r_u_c_t _f_i_g_p_a_r___c_o_n_f_i_g _o_p_t_i_o_n_s_[_], _c_o_n_s_t _c_h_a_r _*_d_i_r_e_c_t_i_v_e);
+
+     ##iinncclluuddee <<ssttrriinngg__mm..hh>>
+
+     _i_n_t
+     rreeppllaacceeaallll(_c_h_a_r _*_s_o_u_r_c_e, _c_o_n_s_t _c_h_a_r _*_f_i_n_d, _c_o_n_s_t _c_h_a_r _*_r_e_p_l_a_c_e);
+
+     _u_n_s_i_g_n_e_d _i_n_t
+     ssttrrccoouunntt(_c_o_n_s_t _c_h_a_r _*_s_o_u_r_c_e, _c_o_n_s_t _c_h_a_r _*_f_i_n_d);
+
+     _v_o_i_d
+     ssttrreexxppaanndd(_c_h_a_r _*_s_o_u_r_c_e);
+
+     _v_o_i_d
+     ssttrreexxppaannddnnll(_c_h_a_r _*_s_o_u_r_c_e);
+
+     _v_o_i_d
+     ssttrrttoolloowweerr(_c_h_a_r _*_s_o_u_r_c_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ffiiggppaarr library provides a light-weight, portable framework for pars‐
+     ing configuration files.  The library uses open(2), read(2), and lseek(2)
+     within the file pointed to by _p_a_t_h to find directives and values which
+     are then made available to the application.
+
+     Due to the fact that configuration files may have basic syntax differ‐
+     ences, the library does not attempt to impose any structure on the data
+     but instead provides raw data to a set of callback functions.  These
+     callback functions can in-turn initiate abort through their return value,
+     allowing custom syntax validation during parsing.
+
+     Configuration directives, types, and callback functions are provided
+     through data structures defined in <_f_i_g_p_a_r_._h>:
+
+           struct figpar_config {
+               enum figpar_cfgtype         type;           /* value type */
+               const char                  *directive;     /* keyword */
+               union figpar_cfgvalue       value;          /* value */
+
+               /* Pointer to function used when directive is found */
+               int (*action)(struct figpar_config *option, uint32_t line,
+                   char *directive, char *value);
+           };
+
+           enum figpar_cfgtype {
+               FIGPAR_TYPE_NONE      = 0x0000, /* directives with no value */
+               FIGPAR_TYPE_BOOL      = 0x0001, /* boolean */
+               FIGPAR_TYPE_INT       = 0x0002, /* signed 32 bit integer */
+               FIGPAR_TYPE_UINT      = 0x0004, /* unsigned 32 bit integer */
+               FIGPAR_TYPE_STR       = 0x0008, /* string pointer */
+               FIGPAR_TYPE_STRARRAY  = 0x0010, /* string array pointer */
+               FIGPAR_TYPE_DATA1     = 0x0020, /* void data type-1 (open) */
+               FIGPAR_TYPE_DATA2     = 0x0040, /* void data type-2 (open) */
+               FIGPAR_TYPE_DATA3     = 0x0080, /* void data type-3 (open) */
+               FIGPAR_TYPE_RESERVED1 = 0x0100, /* reserved data type-1 */
+               FIGPAR_TYPE_RESERVED2 = 0x0200, /* reserved data type-2 */
+               FIGPAR_TYPE_RESERVED3 = 0x0400, /* reserved data type-3 */
+           };
+
+           union figpar_cfgvalue {
+               void        *data;      /* Pointer to NUL-terminated string */
+               char        *str;       /* Pointer to NUL-terminated string */
+               char        **strarray; /* Pointer to an array of strings */
+               int32_t     num;        /* Signed 32-bit integer value */
+               uint32_t    u_num;      /* Unsigned 32-bit integer value */
+               uint32_t    boolean:1;  /* Boolean integer value (0 or 1) */
+           };
+
+     The _p_r_o_c_e_s_s_i_n_g___o_p_t_i_o_n_s argument to ppaarrssee__ccoonnffiigg() is a mask of bit fields
+     which indicate various processing options.  The possible flags are:
+
+     FIGPAR_BREAK_ON_EQUALS     An equals sign (‘=’) is normally considered
+                                part of the directive.  This flag enables ter‐
+                                minating the directive at the equals sign.
+                                Also makes equals sign optional and transient.
+
+     FIGPAR_BREAK_ON_SEMICOLON  A semicolon (‘;’) is normally considered part
+                                of the value.  This flag enables terminating
+                                the value at the semicolon.  Also allows mul‐
+                                tiple statements on a single line separated by
+                                semicolon.
+
+     FIGPAR_CASE_SENSITIVE      Normally directives are matched case insensi‐
+                                tively using fnmatch(3).  This flag enables
+                                directive matching to be case sensitive.
+
+     FIGPAR_REQUIRE_EQUALS      If a directive is not followed by an equals,
+                                processing is aborted.
+
+     FIGPAR_STRICT_EQUALS       Equals must be part of the directive to be
+                                considered a delimiter between directive and
+                                value.
+
+     The _o_p_t_i_o_n_s struct array pointer can be NULL and every directive will run
+     the uunnkknnoowwnn() function argument.
+
+     The directive for each figpar_config item in the ppaarrssee__ccoonnffiigg() options
+     argument is matched against each parsed directive using fnmatch(3) until
+     a match is found.  If a match is found, the aaccttiioonn() function for that
+     figpar_config directive is run with the line number, directive, and
+     value.  Otherwise if no match, the uunnkknnoowwnn() function is run (with the
+     same arguments).
+
+     If either _a_c_t_i_o_n or _u_n_k_n_o_w_n return non-zero, ppaarrssee__ccoonnffiigg() aborts read‐
+     ing the file and returns the error value to its caller.
+
+     ggeett__ccoonnffiigg__ooppttiioonn() traverses the options-array and returns the option
+     that matches via strcmp(3), or if no match a pointer to a static dummy
+     struct is returned (whose values are all zero or NULL).
+
+     The use of _s_t_r_u_c_t _f_i_g_p_a_r___c_o_n_f_i_g is entirely optional as-is the use of
+     _e_n_u_m _f_i_g_p_a_r___c_f_g_t_y_p_e or _u_n_i_o_n _f_i_g_p_a_r___c_f_g_v_a_l_u_e.  For example, a NULL
+     pointer can be passed to ppaarrssee__ccoonnffiigg() for the first argument while pro‐
+     viding a simple _u_n_k_n_o_w_n function based on queue(3) that populates a
+     singly-linked list of a struct containing the _d_i_r_e_c_t_i_v_e and _v_a_l_u_e.
+
+     In addition, miscellaneous string manipulation routines are provided by
+     <_s_t_r_i_n_g___m_._h>:
+
+     rreeppllaacceeaallll()   Replace all occurrences of _f_i_n_d in _s_o_u_r_c_e with _r_e_p_l_a_c_e.
+
+     ssttrrccoouunntt()     Count the number of occurrences of one string that appear
+                    in the _s_o_u_r_c_e string.  Return value is the total count.
+                    An example use would be to show how large a block of mem‐
+                    ory needs to be for a rreeppllaacceeaallll() series.
+
+     ssttrreexxppaanndd()    Expand escape sequences in a buffer pointed to by _s_o_u_r_c_e.
+
+     ssttrreexxppaannddnnll()  Expand only the escaped newlines in a buffer pointed to by
+                    _s_o_u_r_c_e.
+
+     ssttrrttoolloowweerr()   Convert a string to lower case.
+
+SSEEEE AALLSSOO
+     queue(3)
+
+HHIISSTTOORRYY
+     The ffiiggppaarr library first appeared in FreeBSD 10.2.
+
+AAUUTTHHOORRSS
+     Devin Teske <dteske@FreeBSD.org>
+
+BBUUGGSS
+     This is the first implementation of the library, and the interface may be
+     subject to refinement.
+
+BSD                             March 13, 2018                             BSD

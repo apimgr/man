@@ -1,0 +1,254 @@
+IPSEC(4)                 BSD Kernel Interfaces Manual                 IPSEC(4)
+
+NNAAMMEE
+     iippsseecc — Internet Protocol Security protocol
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss IIPPSSEECC
+     ooppttiioonnss IIPPSSEECC__SSUUPPPPOORRTT
+     ddeevviiccee ccrryyppttoo
+
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+     ##iinncclluuddee <<nneettiippsseecc//iippsseecc..hh>>
+     ##iinncclluuddee <<nneettiippsseecc//iippsseecc66..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     iippsseecc is a security protocol implemented within the Internet Protocol
+     layer of the networking stack.  iippsseecc is defined for both IPv4 and IPv6
+     (inet(4) and inet6(4)).  iippsseecc is a set of protocols, ESP (for Encapsu‐
+     lating Security Payload) AH (for Authentication Header), and IPComp (for
+     IP Payload Compression Protocol) that provide security services for IP
+     datagrams.  AH both authenticates and guarantees the integrity of an IP
+     packet by attaching a cryptographic checksum computed using one-way hash
+     functions.  ESP, in addition, prevents unauthorized parties from reading
+     the payload of an IP packet by also encrypting it.  IPComp tries to in‐
+     crease communication performance by compressing IP payload, thus reducing
+     the amount of data sent.  This will help nodes on slow links but with
+     enough computing power.  iippsseecc operates in one of two modes: transport
+     mode or tunnel mode.  Transport mode is used to protect peer-to-peer com‐
+     munication between end nodes.  Tunnel mode encapsulates IP packets within
+     other IP packets and is designed for security gateways such as VPN end‐
+     points.
+
+     System configuration requires the crypto(4) subsystem.
+
+     The packets can be passed to a virtual enc(4) interface, to perform
+     packet filtering before outbound encryption and after decapsulation in‐
+     bound.
+
+     To properly filter on the inner packets of an iippsseecc tunnel with fire‐
+     walls, you can change the values of the following sysctls
+
+     NNaammee                             DDeeffaauulltt    EEnnaabbllee
+     net.inet.ipsec.filtertunnel      0          1
+     net.inet6.ipsec6.filtertunnel    0          1
+
+   KKeerrnneell iinntteerrffaaccee
+     iippsseecc is controlled by a key management and policy engine, that reside in
+     the operating system kernel.  Key management is the process of associat‐
+     ing keys with security associations, also know as SAs.  Policy management
+     dictates when new security associations created or destroyed.
+
+     The key management engine can be accessed from userland by using PF_KEY
+     sockets.  The PF_KEY socket API is defined in RFC2367.
+
+     The policy engine is controlled by an extension to the PF_KEY API,
+     setsockopt(2) operations, and sysctl(3) interface.  The kernel implements
+     an extended version of the PF_KEY interface and allows the programmer to
+     define IPsec policies which are similar to the per-packet filters.  The
+     setsockopt(2) interface is used to define per-socket behavior, and
+     sysctl(3) interface is used to define host-wide default behavior.
+
+     The kernel code does not implement a dynamic encryption key exchange pro‐
+     tocol such as IKE (Internet Key Exchange).  Key exchange protocols are
+     beyond what is necessary in the kernel and should be implemented as dae‐
+     mon processes which call the AAPPIIss..
+
+   PPoolliiccyy mmaannaaggeemmeenntt
+     IPsec policies can be managed in one of two ways, either by configuring
+     per-socket policies using the setsockopt(2) system calls, or by configur‐
+     ing kernel level packet filter-based policies using the PF_KEY interface,
+     via the setkey(8) you can define IPsec policies against packets using
+     rules similar to packet filtering rules.  Refer to setkey(8) on how to
+     use it.
+
+     Depending on the socket's address family, IPPROTO_IP or IPPROTO_IPV6
+     transport level and IP_IPSEC_POLICY or IPV6_IPSEC_POLICY socket options
+     may be used to configure per-socket security policies.  A properly-formed
+     IPsec policy specification structure can be created using
+     ipsec_set_policy(3) function and used as socket option value for the
+     setsockopt(2) call.
+
+     When setting policies using the setkey(8) command, the “default” option
+     instructs the system to use its default policy, as explained below, for
+     processing packets.  The following sysctl variables are available for
+     configuring the system's IPsec behavior.  The variables can have one of
+     two values.  A 1 means “use”, which means that if there is a security as‐
+     sociation then use it but if there is not then the packets are not pro‐
+     cessed by IPsec.  The value 2 is synonymous with “require”, which re‐
+     quires that a security association must exist for the packets to move,
+     and not be dropped.  These terms are defined in ipsec_set_policy(3).
+
+     NNaammee                                 TTyyppee          CChhaannggeeaabbllee
+     net.inet.ipsec.esp_trans_deflev      integer       yes
+     net.inet.ipsec.esp_net_deflev        integer       yes
+     net.inet.ipsec.ah_trans_deflev       integer       yes
+     net.inet.ipsec.ah_net_deflev         integer       yes
+     net.inet6.ipsec6.esp_trans_deflev    integer       yes
+     net.inet6.ipsec6.esp_net_deflev      integer       yes
+     net.inet6.ipsec6.ah_trans_deflev     integer       yes
+     net.inet6.ipsec6.ah_net_deflev       integer       yes
+
+     If the kernel does not find a matching, system wide, policy then the de‐
+     fault value is applied.  The system wide default policy is specified by
+     the following sysctl(8) variables.  0 means “discard” which asks the ker‐
+     nel to drop the packet.  1 means “none”.
+
+     NNaammee                           TTyyppee          CChhaannggeeaabbllee
+     net.inet.ipsec.def_policy      integer       yes
+     net.inet6.ipsec6.def_policy    integer       yes
+
+   MMiisscceellllaanneeoouuss ssyyssccttll vvaarriiaabblleess
+     When the iippsseecc protocols are configured for use, all protocols are in‐
+     cluded in the system.  To selectively enable/disable protocols, use
+     sysctl(8).
+
+     NNaammee                             DDeeffaauulltt
+     net.inet.esp.esp_enable          On
+     net.inet.ah.ah_enable            On
+     net.inet.ipcomp.ipcomp_enable    On
+
+     In addition the following variables are accessible via sysctl(8), for
+     tweaking the kernel's IPsec behavior:
+
+     NNaammee                                 TTyyppee          CChhaannggeeaabbllee
+     net.inet.ipsec.ah_cleartos           integer       yes
+     net.inet.ipsec.ah_offsetmask         integer       yes
+     net.inet.ipsec.dfbit                 integer       yes
+     net.inet.ipsec.ecn                   integer       yes
+     net.inet.ipsec.debug                 integer       yes
+     net.inet.ipsec.natt_cksum_policy     integer       yes
+     net.inet.ipsec.check_policy_history  integer       yes
+     net.inet6.ipsec6.ecn                 integer       yes
+     net.inet6.ipsec6.debug               integer       yes
+
+     The variables are interpreted as follows:
+
+     ipsec.ah_cleartos
+             If set to non-zero, the kernel clears the type-of-service field
+             in the IPv4 header during AH authentication data computation.
+             This variable is used to get current systems to inter-operate
+             with devices that implement RFC1826 AH.  It should be set to non-
+             zero (clear the type-of-service field) for RFC2402 conformance.
+
+     ipsec.ah_offsetmask
+             During AH authentication data computation, the kernel will in‐
+             clude a 16bit fragment offset field (including flag bits) in the
+             IPv4 header, after computing logical AND with the variable.  The
+             variable is used for inter-operating with devices that implement
+             RFC1826 AH.  It should be set to zero (clear the fragment offset
+             field during computation) for RFC2402 conformance.
+
+     ipsec.dfbit
+             This variable configures the kernel behavior on IPv4 IPsec tunnel
+             encapsulation.  If set to 0, the DF bit on the outer IPv4 header
+             will be cleared while 1 means that the outer DF bit is set re‐
+             gardless from the inner DF bit and 2 indicates that the DF bit is
+             copied from the inner header to the outer one.  The variable is
+             supplied to conform to RFC2401 chapter 6.1.
+
+     ipsec.ecn
+             If set to non-zero, IPv4 IPsec tunnel encapsulation/decapsulation
+             behavior will be friendly to ECN (explicit congestion notifica‐
+             tion), as documented in draft-ietf-ipsec-ecn-02.txt.  gif(4)
+             talks more about the behavior.
+
+     ipsec.debug
+             If set to non-zero, debug messages will be generated via
+             syslog(3).
+
+     ipsec.natt_cksum_policy
+             Controls how the kernel handles TCP and UDP checksums when ESP in
+             UDP encapsulation is used for IPsec transport mode.  If set to a
+             non-zero value, the kernel fully recomputes checksums for inbound
+             TCP segments and UDP datagrams after they are decapsulated and
+             decrypted.  If set to 0 and original addresses were configured
+             for corresponding SA by the IKE daemon, the kernel incrementally
+             recomputes checksums for inbound TCP segments and UDP datagrams.
+             If addresses were not configured, the checksums are ignored.
+
+     ipsec.check_policy_history
+             Enables strict policy checking for inbound packets.  By default,
+             inbound security policies check that packets handled by IPsec
+             have been decrypted and authenticated.  If this variable is set
+             to a non-zero value, each packet handled by IPsec is checked
+             against the history of IPsec security associations.  The IPsec
+             security protocol, mode, and SA addresses must match.
+
+     Variables under the net.inet6.ipsec6 tree have similar meanings to those
+     described above.
+
+PPRROOTTOOCCOOLLSS
+     The iippsseecc protocol acts as a plug-in to the inet(4) and inet6(4) proto‐
+     cols and therefore supports most of the protocols defined upon those IP-
+     layer protocols.  The icmp(4) and icmp6(4) protocols may behave differ‐
+     ently with iippsseecc because iippsseecc can prevent icmp(4) or icmp6(4) routines
+     from looking into the IP payload.
+
+SSEEEE AALLSSOO
+     ioctl(2), socket(2), ipsec_set_policy(3), crypto(4), enc(4), icmp6(4),
+     if_ipsec(4), intro(4), ip6(4), setkey(8), sysctl(8)
+
+     S. Kent and R. Atkinson, _I_P _A_u_t_h_e_n_t_i_c_a_t_i_o_n _H_e_a_d_e_r, RFC 2404.
+
+     S. Kent and R. Atkinson, _I_P _E_n_c_a_p_s_u_l_a_t_i_n_g _S_e_c_u_r_i_t_y _P_a_y_l_o_a_d _(_E_S_P_), RFC
+     2406.
+
+SSTTAANNDDAARRDDSS
+     Daniel L. McDonald, Craig Metz, and Bao G. Phan, _P_F___K_E_Y _K_e_y _M_a_n_a_g_e_m_e_n_t
+     _A_P_I_, _V_e_r_s_i_o_n _2, RFC, 2367.
+
+     D. L. McDonald, _A _S_i_m_p_l_e _I_P _S_e_c_u_r_i_t_y _A_P_I _E_x_t_e_n_s_i_o_n _t_o _B_S_D _S_o_c_k_e_t_s,
+     internet draft, draft-mcdonald-simple-ipsec-api-03.txt, work in progress
+     material.
+
+HHIISSTTOORRYY
+     The original iippsseecc implementation appeared in the WIDE/KAME IPv6/IPsec
+     stack.
+
+     For FreeBSD 5.0 a fully locked IPsec implementation called fast_ipsec was
+     brought in.  The protocols drew heavily on the OpenBSD implementation of
+     the IPsec protocols.  The policy management code was derived from the
+     KAME implementation found in their IPsec protocols.  The fast_ipsec im‐
+     plementation lacked ip6(4) support but made use of the crypto(4) subsys‐
+     tem.
+
+     For FreeBSD 7.0 ip6(4) support was added to fast_ipsec.  After this the
+     old KAME IPsec implementation was dropped and fast_ipsec became what now
+     is the only iippsseecc implementation in FreeBSD.
+
+BBUUGGSS
+     There is no single standard for the policy engine API, so the policy en‐
+     gine API described herein is just for this implementation.
+
+     AH and tunnel mode encapsulation may not work as you might expect.  If
+     you configure inbound “require” policy with an AH tunnel or any IPsec en‐
+     capsulating policy with AH (like “esp/tunnel/A-B/use
+     ah/transport/A-B/require”), tunnelled packets will be rejected.  This is
+     because the policy check is enforced on the inner packet on reception,
+     and AH authenticates encapsulating (outer) packet, not the encapsulated
+     (inner) packet (so for the receiving kernel there is no sign of authen‐
+     ticity).  The issue will be solved when we revamp our policy engine to
+     keep all the packet decapsulation history.
+
+     When a large database of security associations or policies is present in
+     the kernel the SADB_DUMP and SADB_SPDDUMP operations on PF_KEY sockets
+     may fail due to lack of space.  Increasing the socket buffer size may al‐
+     leviate this problem.
+
+     The IPcomp protocol may occasionally error because of zlib(3) problems.
+
+     This documentation needs more review.
+
+BSD                            February 6, 2017                            BSD

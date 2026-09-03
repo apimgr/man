@@ -1,0 +1,90 @@
+GETINODE(3)              BSD Library Functions Manual              GETINODE(3)
+
+NNAAMMEE
+     ggeettiinnooddee, ppuuttiinnooddee — fetch and store inodes on a UFS file system
+
+LLIIBBRRAARRYY
+     UFS File System Access Library (libufs, -lufs)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<uuffss//uuffss//ddiinnooddee..hh>>
+     ##iinncclluuddee <<uuffss//ffffss//ffss..hh>>
+     ##iinncclluuddee <<lliibbuuffss..hh>>
+
+     _i_n_t
+     ggeettiinnooddee(_s_t_r_u_c_t _u_u_f_s_d _*_d_i_s_k, _u_n_i_o_n _d_i_n_o_d_e_p _*_d_p, _i_n_o___t _i_n_u_m_b_e_r);
+
+     _i_n_t
+     ppuuttiinnooddee(_s_t_r_u_c_t _u_u_f_s_d _*_d_i_s_k);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ggeettiinnooddee() and ppuuttiinnooddee() functions provide an inode fetch and store
+     API for libufs(3) consumers.  They operate on a userland UFS disk struc‐
+     ture.  The ggeettiinnooddee() function fetches the specified inode from the
+     filesystem.  The ppuuttiinnooddee() function stores the most recently fetched in‐
+     ode to the filesystem.
+
+     The _d_i_n_o_d_e_p union is defined as:
+
+           union dinodep {
+                   struct ufs1_dinode *dp1;
+                   struct ufs2_dinode *dp2;
+           };
+
+     Sample code to clear write permissions for inode number _i_n_u_m_b_e_r stored on
+     the filesystem described by _d_i_s_k_p.
+
+           #include <sys/stat.h>
+           #include <err.h>
+
+           #include <ufs/ufs/dinode.h>
+           #include <ufs/ffs/fs.h>
+           #include <libufs.h>
+
+           void
+           clearwrite(struct uufsd *diskp, ino_t inumber)
+           {
+                   union dinodep dp;
+
+                   if (getinode(diskp, &dp, inumber) == -1)
+                           err(1, "getinode: %s", diskp->d_error);
+                   switch (diskp->d_ufs) {
+                   case 1: /* UFS 1 filesystem */
+                           dp.dp1->di_mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
+                           break;
+                   case 2: /* UFS 2 filesystem */
+                           dp.dp2->di_mode &= ~(S_IWUSR | S_IWGRP | S_IWOTH);
+                           break;
+                   default:
+                           errx(1, "unknown filesystem type");
+                   }
+                   if (putinode(diskp) == -1)
+                           err(1, "putinode: %s", diskp->d_error);
+           }
+
+RREETTUURRNN VVAALLUUEESS
+     The ggeettiinnooddee() and ppuuttiinnooddee() functions return 0 on success, or -1 in
+     case of any error.  A string describing the error is stored in
+     _d_i_s_k_p_-_>_d___e_r_r_o_r.  The global _e_r_r_n_o often provides additional information.
+
+EERRRROORRSS
+     The function ggeettiinnooddee() may fail and set _e_r_r_n_o for any of the errors
+     specified for the library function pread(2).  It can also fail if the in‐
+     ode number is out of the range of inodes in the filesystem.
+
+     The function ppuuttiinnooddee() may fail and set _e_r_r_n_o for any of the errors
+     specified for the library functions ufs_disk_write(3) or pwrite(2).
+
+     Additionally both functions may follow the libufs(3) error methodologies
+     in case of a device error.
+
+SSEEEE AALLSSOO
+     pread(2), pwrite(2), libufs(3), ufs_disk_write(3)
+
+HHIISSTTOORRYY
+     These functions first appeared as part of libufs(3) in FreeBSD 13.0.
+
+AAUUTTHHOORRSS
+     Marshall Kirk McKusick <_m_c_k_u_s_i_c_k_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                            September 2, 2020                           BSD

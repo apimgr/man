@@ -1,0 +1,319 @@
+_s_e_m_c_t_l(2)                     System Calls Manual                    _s_e_m_c_t_l(2)
+
+NNAAMMEE
+       semctl - System V semaphore control operations
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//sseemm..hh>>
+
+       iinntt sseemmccttll((iinntt _s_e_m_i_d,, iinntt _s_e_m_n_u_m,, iinntt _o_p,, ......));;
+
+DDEESSCCRRIIPPTTIIOONN
+       sseemmccttll() performs the control operation specified by _o_p on the System V
+       semaphore  set  identified  by  _s_e_m_i_d, or on the _s_e_m_n_u_m‐th semaphore of
+       that set.  (The semaphores in a set are numbered starting at 0.)
+
+       This function has three or four arguments, depending on _o_p.  When there
+       are four, the fourth has the type _u_n_i_o_n  _s_e_m_u_n.   The  _c_a_l_l_i_n_g  _p_r_o_g_r_a_m
+       must define this union as follows:
+
+           union semun {
+               int              val;    /* Value for SETVAL */
+               struct semid_ds *buf;    /* Buffer for IPC_STAT, IPC_SET */
+               unsigned short  *array;  /* Array for GETALL, SETALL */
+               struct seminfo  *__buf;  /* Buffer for IPC_INFO
+                                           (Linux-specific) */
+           };
+
+       The _s_e_m_i_d___d_s data structure is defined in _<_s_y_s_/_s_e_m_._h_> as follows:
+
+           struct semid_ds {
+               struct ipc_perm sem_perm;  /* Ownership and permissions */
+               time_t          sem_otime; /* Last semop time */
+               time_t          sem_ctime; /* Creation time/time of last
+                                             modification via semctl() */
+               unsigned long   sem_nsems; /* # of semaphores in set */
+           };
+
+       The fields of the _s_e_m_i_d___d_s structure are as follows:
+
+       _s_e_m___p_e_r_m   This is an _i_p_c___p_e_r_m structure (see below) that specifies the
+                  access permissions on the semaphore set.
+
+       _s_e_m___o_t_i_m_e  Time of last sseemmoopp(2) system call.
+
+       _s_e_m___c_t_i_m_e  Time  of  creation of semaphore set or time of last sseemmccttll()
+                  IIPPCCSSEETT, SSEETTVVAALL, or SSEETTAALLLL operation.
+
+       _s_e_m___n_s_e_m_s  Number of semaphores in the set.  Each semaphore of the  set
+                  is  referenced  by  a  nonnegative integer ranging from 00 to
+                  _s_e_m___n_s_e_m_s_-_1.
+
+       The _i_p_c___p_e_r_m structure is defined as follows  (the  highlighted  fields
+       are settable using IIPPCC__SSEETT):
+
+           struct ipc_perm {
+               key_t          __key; /* Key supplied to semget(2) */
+               uid_t          uuiidd;   /* Effective UID of owner */
+               gid_t          ggiidd;   /* Effective GID of owner */
+               uid_t          cuid;  /* Effective UID of creator */
+               gid_t          cgid;  /* Effective GID of creator */
+               unsigned short mmooddee;  /* Permissions */
+               unsigned short __seq; /* Sequence number */
+           };
+
+       The  least  significant 9 bits of the _m_o_d_e field of the _i_p_c___p_e_r_m struc‐
+       ture define the access permissions for the shared memory segment.   The
+       permission  bits  are as follows: l l.  0400 Read by user 0200 Write by
+       user 0040 Read  by  group  0020 Write  by  group  0004 Read  by  others
+       0002 Write by others
+
+       In effect, "write" means "alter" for a semaphore set.  Bits 0100, 0010,
+       and 0001 (the execute bits) are unused by the system.
+
+       Valid values for _o_p are:
+
+       IIPPCC__SSTTAATT
+              Copy  information from the kernel data structure associated with
+              _s_e_m_i_d into the _s_e_m_i_d___d_s structure pointed to  by  _a_r_g_._b_u_f.   The
+              argument  _s_e_m_n_u_m is ignored.  The calling process must have read
+              permission on the semaphore set.
+
+       IIPPCC__SSEETT
+              Write the values of  some  members  of  the  _s_e_m_i_d___d_s  structure
+              pointed  to  by  _a_r_g_._b_u_f to the kernel data structure associated
+              with this semaphore set, updating also its _s_e_m___c_t_i_m_e member.
+
+              The  following   members   of   the   structure   are   updated:
+              _s_e_m___p_e_r_m_._u_i_d,  _s_e_m___p_e_r_m_._g_i_d,  and  (the least significant 9 bits
+              of) _s_e_m___p_e_r_m_._m_o_d_e.
+
+              The effective UID of the calling process must  match  the  owner
+              (_s_e_m___p_e_r_m_._u_i_d)  or creator (_s_e_m___p_e_r_m_._c_u_i_d) of the semaphore set,
+              or the caller must be privileged.  The argument  _s_e_m_n_u_m  is  ig‐
+              nored.
+
+       IIPPCC__RRMMIIDD
+              Immediately  remove  the  semaphore set, awakening all processes
+              blocked in sseemmoopp(2) calls on the set (with an error  return  and
+              _e_r_r_n_o  set  to  EEIIDDRRMM).   The  effective  user ID of the calling
+              process must match the creator or owner of the semaphore set, or
+              the caller must be privileged.  The argument _s_e_m_n_u_m is ignored.
+
+       IIPPCC__IINNFFOO (Linux-specific)
+              Return information about system‐wide semaphore limits and  para‐
+              meters in the structure pointed to by _a_r_g_._____b_u_f.  This structure
+              is  of  type  _s_e_m_i_n_f_o, defined in _<_s_y_s_/_s_e_m_._h_> if the __GGNNUU__SSOOUURRCCEE
+              feature test macro is defined:
+
+                  struct seminfo {
+                      int semmap;  /* Number of entries in semaphore
+                                      map; unused within kernel */
+                      int semmni;  /* Maximum number of semaphore sets */
+                      int semmns;  /* Maximum number of semaphores in all
+                                      semaphore sets */
+                      int semmnu;  /* System-wide maximum number of undo
+                                      structures; unused within kernel */
+                      int semmsl;  /* Maximum number of semaphores in a
+                                      set */
+                      int semopm;  /* Maximum number of operations for
+                                      semop(2) */
+                      int semume;  /* Maximum number of undo entries per
+                                      process; unused within kernel */
+                      int semusz;  /* Size of struct sem_undo */
+                      int semvmx;  /* Maximum semaphore value */
+                      int semaem;  /* Max. value that can be recorded for
+                                      semaphore adjustment (SEM_UNDO) */
+                  };
+
+              The _s_e_m_m_s_l, _s_e_m_m_n_s, _s_e_m_o_p_m, and _s_e_m_m_n_i settings can  be  changed
+              via _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_s_e_m; see pprroocc(5) for details.
+
+       SSEEMM__IINNFFOO (Linux‐specific)
+              Return  a  _s_e_m_i_n_f_o  structure containing the same information as
+              for IIPPCC__IINNFFOO, except that the following fields are returned with
+              information about system resources consumed by  semaphores:  the
+              _s_e_m_u_s_z field returns the number of semaphore sets that currently
+              exist on the system; and the _s_e_m_a_e_m field returns the total num‐
+              ber of semaphores in all semaphore sets on the system.
+
+       SSEEMM__SSTTAATT (Linux‐specific)
+              Return a _s_e_m_i_d___d_s structure as for IIPPCC__SSTTAATT.  However, the _s_e_m_i_d
+              argument  is  not  a  semaphore identifier, but instead an index
+              into the kernel’s  internal  array  that  maintains  information
+              about all semaphore sets on the system.
+
+       SSEEMM__SSTTAATT__AANNYY (Linux‐specific, since Linux 4.17)
+              Return   a   _s_e_m_i_d___d_s   structure  as  for  SSEEMM__SSTTAATT.   However,
+              _s_e_m___p_e_r_m_._m_o_d_e is not checked for read access for  _s_e_m_i_d  meaning
+              that  any  user  can employ this operation (just as any user may
+              read _/_p_r_o_c_/_s_y_s_v_i_p_c_/_s_e_m to obtain the same information).
+
+       GGEETTAALLLL Return sseemmvvaall (i.e., the current value) for  all  semaphores  of
+              the  set  into  _a_r_g_._a_r_r_a_y.  The argument _s_e_m_n_u_m is ignored.  The
+              calling process must have read permission on the semaphore set.
+
+       GGEETTNNCCNNTT
+              Return the sseemmnnccnntt value for the _s_e_m_n_u_m-th semaphore of the  set
+              (i.e., the number of processes waiting for the semaphore’s value
+              to  increase).  The calling process must have read permission on
+              the semaphore set.
+
+       GGEETTPPIIDD Return the sseemmppiidd value for the _s_e_m_n_u_m-th semaphore of the  set.
+              This  is the PID of the process that last performed an operation
+              on that semaphore (but see VERSIONS).  The calling process  must
+              have read permission on the semaphore set.
+
+       GGEETTVVAALL Return sseemmvvaall (i.e., the semaphore value) for the _s_e_m_n_u_m-th sem‐
+              aphore  of  the set.  The calling process must have read permis‐
+              sion on the semaphore set.
+
+       GGEETTZZCCNNTT
+              Return the sseemmzzccnntt value for the _s_e_m_n_u_m-th semaphore of the  set
+              (i.e.,  the  number of processes waiting for the semaphore value
+              to become 0).  The calling process must have read permission  on
+              the semaphore set.
+
+       SSEETTAALLLL Set  the  sseemmvvaall  values  for  all  semaphores  of the set using
+              _a_r_g_._a_r_r_a_y, updating also the _s_e_m___c_t_i_m_e member  of  the  _s_e_m_i_d___d_s
+              structure  associated with the set.  Undo entries (see sseemmoopp(2))
+              are cleared for altered semaphores in  all  processes.   If  the
+              changes  to semaphore values would permit blocked sseemmoopp(2) calls
+              in other processes to proceed, then those  processes  are  woken
+              up.   The  argument _s_e_m_n_u_m is ignored.  The calling process must
+              have alter (write) permission on the semaphore set.
+
+       SSEETTVVAALL Set the semaphore value (sseemmvvaall) to _a_r_g_._v_a_l  for  the  _s_e_m_n_u_m-th
+              semaphore  of the set, updating also the _s_e_m___c_t_i_m_e member of the
+              _s_e_m_i_d___d_s structure associated with the set.   Undo  entries  are
+              cleared for altered semaphores in all processes.  If the changes
+              to semaphore values would permit blocked sseemmoopp(2) calls in other
+              processes  to  proceed,  then those processes are woken up.  The
+              calling process must have alter permission on the semaphore set.
+
+RREETTUURRNN VVAALLUUEE
+       On success, sseemmccttll() returns a nonnegative value  depending  on  _o_p  as
+       follows:
+
+       GGEETTNNCCNNTT
+              the value of sseemmnnccnntt.
+
+       GGEETTPPIIDD the value of sseemmppiidd.
+
+       GGEETTVVAALL the value of sseemmvvaall.
+
+       GGEETTZZCCNNTT
+              the value of sseemmzzccnntt.
+
+       IIPPCC__IINNFFOO
+              the index of the highest used entry in the kernel’s internal ar‐
+              ray  recording  information about all semaphore sets.  (This in‐
+              formation can be used with repeated SSEEMM__SSTTAATT or SSEEMM__SSTTAATT__AANNYY op‐
+              erations to obtain information about all semaphore sets  on  the
+              system.)
+
+       SSEEMM__IINNFFOO
+              as for IIPPCC__IINNFFOO.
+
+       SSEEMM__SSTTAATT
+              the  identifier  of  the  semaphore set whose index was given in
+              _s_e_m_i_d.
+
+       SSEEMM__SSTTAATT__AANNYY
+              as for SSEEMM__SSTTAATT.
+
+       All other _o_p values return 0 on success.
+
+       On failure, sseemmccttll() returns -1 and sets _e_r_r_n_o to indicate the error.
+
+EERRRROORRSS
+       EEAACCCCEESS The argument _o_p has one of the values  GGEETTAALLLL,  GGEETTPPIIDD,  GGEETTVVAALL,
+              GGEETTNNCCNNTT,  GGEETTZZCCNNTT,  IIPPCC__SSTTAATT, SSEEMM__SSTTAATT, SSEEMM__SSTTAATT__AANNYY, SSEETTAALLLL, or
+              SSEETTVVAALL and the calling process does not have the  required  per‐
+              missions   on   the   semaphore   set  and  does  not  have  the
+              CCAAPP__IIPPCC__OOWWNNEERR capability in the user namespace that governs  its
+              IPC namespace.
+
+       EEFFAAUULLTT The address pointed to by _a_r_g_._b_u_f or _a_r_g_._a_r_r_a_y isn’t accessible.
+
+       EEIIDDRRMM  The semaphore set was removed.
+
+       EEIINNVVAALL Invalid  value  for  _o_p or _s_e_m_i_d.  Or: for a SSEEMM__SSTTAATT operation,
+              the index value specified in _s_e_m_i_d referred  to  an  array  slot
+              that is currently unused.
+
+       EEPPEERRMM  The argument _o_p has the value IIPPCC__SSEETT or IIPPCC__RRMMIIDD but the effec‐
+              tive user ID of the calling process is not the creator (as found
+              in _s_e_m___p_e_r_m_._c_u_i_d) or the owner (as found in _s_e_m___p_e_r_m_._u_i_d) of the
+              semaphore  set,  and the process does not have the CCAAPP__SSYYSS__AADDMMIINN
+              capability.
+
+       EERRAANNGGEE The argument _o_p has the value SSEETTAALLLL or SSEETTVVAALL and the value  to
+              which  sseemmvvaall  is  to  be set (for some semaphore of the set) is
+              less than 0 or greater than the implementation limit SSEEMMVVMMXX.
+
+VVEERRSSIIOONNSS
+       POSIX.1 specifies the _s_e_m___n_s_e_m_s field of the _s_e_m_i_d___d_s structure as hav‐
+       ing the type _u_n_s_i_g_n_e_d _s_h_o_r_t, and the field is so defined on most  other
+       systems.   It  was also so defined on Linux 2.2 and earlier, but, since
+       Linux 2.4, the field has the type _u_n_s_i_g_n_e_d _l_o_n_g.
+
+   TThhee sseemmppiidd vvaalluuee
+       POSIX.1 defines _s_e_m_p_i_d as the "process ID of [the] last operation" on a
+       semaphore, and explicitly notes that this value is set by a  successful
+       sseemmoopp(2) call, with the implication that no other interface affects the
+       _s_e_m_p_i_d value.
+
+       While  some  implementations  conform  to  the  behavior  specified  in
+       POSIX.1, others do not.  (The fault here  probably  lies  with  POSIX.1
+       inasmuch  as it likely failed to capture the full range of existing im‐
+       plementation behaviors.)  Various  other  implementations  also  update
+       _s_e_m_p_i_d  for  the other operations that update the value of a semaphore:
+       the SSEETTVVAALL and SSEETTAALLLL operations, as well as the semaphore  adjustments
+       performed  on  process  termination  as a consequence of the use of the
+       SSEEMM__UUNNDDOO flag (see sseemmoopp(2)).
+
+       Linux also updates _s_e_m_p_i_d for SSEETTVVAALL operations and  semaphore  adjust‐
+       ments.   However,  somewhat  inconsistently,  up to and including Linux
+       4.5, the kernel did not update _s_e_m_p_i_d for SSEETTAALLLL operations.  This  was
+       rectified in Linux 4.6.
+
+SSTTAANNDDAARRDDSS
+       POSIX.1‐2024.
+
+HHIISSTTOORRYY
+       POSIX.1‐2001, SVr4.
+
+       Various fields in a _s_t_r_u_c_t _s_e_m_i_d___d_s were typed as _s_h_o_r_t under Linux 2.2
+       and have become _l_o_n_g under Linux 2.4.  To take advantage of this, a re‐
+       compilation  under  glibc‐2.1.91  or later should suffice.  (The kernel
+       distinguishes old and new calls by an IIPPCC__6644 flag in _o_p.)
+
+       In some earlier versions of glibc,  the  _s_e_m_u_n  union  was  defined  in
+       _<_s_y_s_/_s_e_m_._h_>,  but  POSIX.1  requires that the caller define this union.
+       On versions of glibc  where  this  union  is  _n_o_t  defined,  the  macro
+       __SSEEMM__SSEEMMUUNN__UUNNDDEEFFIINNEEDD is defined in _<_s_y_s_/_s_e_m_._h_>.
+
+NNOOTTEESS
+       The IIPPCC__IINNFFOO, SSEEMM__SSTTAATT, and SSEEMM__IINNFFOO operations are used by the iippccss(1)
+       program  to  provide information on allocated resources.  In the future
+       these may modified or moved to a _/_p_r_o_c filesystem interface.
+
+       The following system limit on semaphore sets affects a sseemmccttll() call:
+
+       SSEEMMVVMMXX Maximum value for sseemmvvaall: implementation dependent (32767).
+
+       For greater portability, it is best to always call sseemmccttll()  with  four
+       arguments.
+
+EEXXAAMMPPLLEESS
+       See sshhmmoopp(2).
+
+SSEEEE AALLSSOO
+       iippcc(2),    sseemmggeett(2),   sseemmoopp(2),   ccaappaabbiilliittiieess(7),   sseemm__oovveerrvviieeww(7),
+       ssyyssvviippcc(7)
+
+Linux man‐pages (unreleased)      2025‐10‐29                         _s_e_m_c_t_l(2)

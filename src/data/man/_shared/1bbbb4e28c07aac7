@@ -1,0 +1,93 @@
+DEFINE_IFUNC(9)          BSD Kernel Developer's Manual         DEFINE_IFUNC(9)
+
+NNAAMMEE
+     DDEEFFIINNEE__IIFFUUNNCC — define a kernel function with an implementation selected
+     at run-time
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<mmaacchhiinnee//iiffuunncc..hh>>
+
+     DDEEFFIINNEE__IIFFUUNNCC(_q_u_a_l, _r_e_t___t_y_p_e, _n_a_m_e, _a_r_g_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     ifuncs are a linker feature which allows the programmer to define func‐
+     tions whose implementation is selected at boot-time or module load-time.
+     The DDEEFFIINNEE__IIFFUUNNCC macro can be used to define an ifunc.  The selection is
+     performed by a resolver function, which returns a pointer to the selected
+     function.  ifunc resolvers are invoked very early during the machine-de‐
+     pendent initialization routine, or at load time for dynamically loaded
+     modules.  Resolution must occur before the first call to an ifunc.  ifunc
+     resolution is performed after CPU features are enumerated and after the
+     kernel's environment is initialized.  The typical use-case for an ifunc
+     is a routine whose behavior depends on optional CPU features.  For exam‐
+     ple, newer generations of a given CPU architecture may provide an in‐
+     struction to optimize a common operation.  To avoid the overhead of test‐
+     ing for the CPU feature each time the operation is performed, an ifunc
+     can be used to provide two implementations for the operation: one target‐
+     ing platforms with the extra instruction, and one for older platforms.
+
+     Because DDEEFFIINNEE__IIFFUUNNCC is a macro that defines a dynamically typed func‐
+     tion, its usage looks somewhat unusual.  The _q_u_a_l parameter is a list of
+     zero or more C function qualifiers to be applied to the ifunc.  This pa‐
+     rameter is typically empty or the static qualifier.  _r_e_t___t_y_p_e is the re‐
+     turn type of the ifunc.  _n_a_m_e is the name of the ifunc.  _a_r_g_s is a paren‐
+     thesized, comma-separated list of the parameter types of the function, as
+     they would appear in a C function declaration.
+
+     The DDEEFFIINNEE__IIFFUUNNCC usage must be followed by the resolver function body.
+     The resolver must return a function with return type _r_e_t___t_y_p_e and parame‐
+     ter types _a_r_g_s.  The resolver function is defined with the ‘resolver’
+     gcc-style function attribute, causing the corresponding elf(5) function
+     symbol to be of type STT_GNU_IFUNC instead of STT_FUNC.  The kernel
+     linker invokes the resolver to process relocations targeting ifunc calls
+     and PLT entries referencing such symbols.
+
+EEXXAAMMPPLLEESS
+     ifunc resolvers are executed early during boot, before most kernel facil‐
+     ities are available.  They are effectively limited to checking CPU fea‐
+     ture flags and tunables.
+
+     static size_t
+     fast_strlen(const char *s __unused)
+     {
+             size_t len;
+
+             /* Fast, but may not be correct in all cases. */
+             __asm("movq $42,%0\n" : "=r" (len));
+             return (len);
+     }
+
+     static size_t
+     slow_strlen(const char *s)
+     {
+             const char *t;
+
+             for (t = s; *t != '\0'; t++);
+             return (t - s);
+     }
+
+     DEFINE_IFUNC(, size_t, strlen, (const char *))
+     {
+             int enabled;
+
+             enabled = 1;
+             TUNABLE_INT_FETCH("debug.use_fast_strlen", &enabled);
+             if (enabled && (cpu_features & CPUID_FAST_STRLEN) != 0)
+                     return (fast_strlen);
+             else
+                     return (slow_strlen);
+     }
+
+     This defines a ssttrrlleenn() function with an optimized implementation for
+     CPUs that advertise support.
+
+SSEEEE AALLSSOO
+     elf(5)
+
+NNOOTTEESS
+     ifuncs are not supported on all architectures.  They require both
+     toolchain support, to emit function symbols of type STT_GNU_IFUNC, and
+     kernel linker support to invoke ifunc resolvers during boot or during
+     module load.
+
+BSD                              May 18, 2019                              BSD

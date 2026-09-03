@@ -1,0 +1,856 @@
+NETMAP(4)                BSD Kernel Interfaces Manual                NETMAP(4)
+
+NNAAMMEE
+     nneettmmaapp — a framework for fast packet I/O
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee nneettmmaapp
+
+DDEESSCCRRIIPPTTIIOONN
+     nneettmmaapp is a framework for extremely fast and efficient packet I/O for
+     userspace and kernel clients, and for Virtual Machines.  It runs on
+     FreeBSD, Linux and some versions of Windows, and supports a variety of
+     nneettmmaapp ppoorrttss, including
+
+     pphhyyssiiccaall NNIICC ppoorrttss
+           to access individual queues of network interfaces;
+
+     hhoosstt ppoorrttss
+           to inject packets into the host stack;
+
+     VVAALLEE ppoorrttss
+           implementing a very fast and modular in-kernel software switch/dat‐
+           aplane;
+
+     nneettmmaapp ppiippeess
+           a shared memory packet transport channel;
+
+     nneettmmaapp mmoonniittoorrss
+           a mechanism similar to bpf(4) to capture traffic
+
+     All these nneettmmaapp ppoorrttss are accessed interchangeably with the same API,
+     and are at least one order of magnitude faster than standard OS mecha‐
+     nisms (sockets, bpf, tun/tap interfaces, native switches, pipes).  With
+     suitably fast hardware (NICs, PCIe buses, CPUs), packet I/O using nneettmmaapp
+     on supported NICs reaches 14.88 million packets per second (Mpps) with
+     much less than one core on 10 Gbit/s NICs; 35-40 Mpps on 40 Gbit/s NICs
+     (limited by the hardware); about 20 Mpps per core for VALE ports; and
+     over 100 Mpps for nneettmmaapp ppiippeess.  NICs without native nneettmmaapp support can
+     still use the API in emulated mode, which uses unmodified device drivers
+     and is 3-5 times faster than bpf(4) or raw sockets.
+
+     Userspace clients can dynamically switch NICs into nneettmmaapp mode and send
+     and receive raw packets through memory mapped buffers.  Similarly, VVAALLEE
+     switch instances and ports, nneettmmaapp ppiippeess and nneettmmaapp mmoonniittoorrss can be cre‐
+     ated dynamically, providing high speed packet I/O between processes, vir‐
+     tual machines, NICs and the host stack.
+
+     nneettmmaapp supports both non-blocking I/O through ioctl(2), synchronization
+     and blocking I/O through a file descriptor and standard OS mechanisms
+     such as select(2), poll(2), kqueue(2) and epoll(7).  All types of nneettmmaapp
+     ppoorrttss and the VVAALLEE sswwiittcchh are implemented by a single kernel module,
+     which also emulates the nneettmmaapp API over standard drivers.  For best per‐
+     formance, nneettmmaapp requires native support in device drivers.  A list of
+     such devices is at the end of this document.
+
+     In the rest of this (long) manual page we document various aspects of the
+     nneettmmaapp and VVAALLEE architecture, features and usage.
+
+AARRCCHHIITTEECCTTUURREE
+     nneettmmaapp supports raw packet I/O through a _p_o_r_t, which can be connected to
+     a physical interface (_N_I_C), to the host stack, or to a VVAALLEE switch.
+     Ports use preallocated circular queues of buffers (_r_i_n_g_s) residing in an
+     mmapped region.  There is one ring for each transmit/receive queue of a
+     NIC or virtual port.  An additional ring pair connects to the host stack.
+
+     After binding a file descriptor to a port, a nneettmmaapp client can send or
+     receive packets in batches through the rings, and possibly implement
+     zero-copy forwarding between ports.
+
+     All NICs operating in nneettmmaapp mode use the same memory region, accessible
+     to all processes who own _/_d_e_v_/_n_e_t_m_a_p file descriptors bound to NICs.  In‐
+     dependent VVAALLEE and nneettmmaapp ppiippee ports by default use separate memory re‐
+     gions, but can be independently configured to share memory.
+
+EENNTTEERRIINNGG AANNDD EEXXIITTIINNGG NNEETTMMAAPP MMOODDEE
+     The following section describes the system calls to create and control
+     nneettmmaapp ports (including VVAALLEE and nneettmmaapp ppiippee ports).  Simpler, higher
+     level functions are described in the _L_I_B_R_A_R_I_E_S section.
+
+     Ports and rings are created and controlled through a file descriptor,
+     created by opening a special device
+           fd = open("/dev/netmap");
+     and then bound to a specific port with an
+           ioctl(fd, NIOCREGIF, (struct nmreq *)arg);
+
+     nneettmmaapp has multiple modes of operation controlled by the _s_t_r_u_c_t _n_m_r_e_q ar‐
+     gument.  _a_r_g_._n_r___n_a_m_e specifies the netmap port name, as follows:
+
+     OS network interface name (e.g., 'em0', 'eth1', ...)
+           the data path of the NIC is disconnected from the host stack, and
+           the file descriptor is bound to the NIC (one or all queues), or to
+           the host stack;
+
+     valeSSS:PPP
+           the file descriptor is bound to port PPP of VALE switch SSS.
+           Switch instances and ports are dynamically created if necessary.
+
+           Both SSS and PPP have the form [0-9a-zA-Z_]+ , the string cannot
+           exceed IFNAMSIZ characters, and PPP cannot be the name of any ex‐
+           isting OS network interface.
+
+     On return, _a_r_g indicates the size of the shared memory region, and the
+     number, size and location of all the nneettmmaapp data structures, which can be
+     accessed by mmapping the memory
+           char *mem = mmap(0, arg.nr_memsize, fd);
+
+     Non-blocking I/O is done with special ioctl(2) select(2) and poll(2) on
+     the file descriptor permit blocking I/O.
+
+     While a NIC is in nneettmmaapp mode, the OS will still believe the interface is
+     up and running.  OS-generated packets for that NIC end up into a nneettmmaapp
+     ring, and another ring is used to send packets into the OS network stack.
+     A close(2) on the file descriptor removes the binding, and returns the
+     NIC to normal mode (reconnecting the data path to the host stack), or de‐
+     stroys the virtual port.
+
+DDAATTAA SSTTRRUUCCTTUURREESS
+     The data structures in the mmapped memory region are detailed in
+     <_s_y_s_/_n_e_t_/_n_e_t_m_a_p_._h>, which is the ultimate reference for the nneettmmaapp API.
+     The main structures and fields are indicated below:
+
+     struct netmap_if (one per interface)
+
+          struct netmap_if {
+              ...
+              const uint32_t   ni_flags;      /* properties              */
+              ...
+              const uint32_t   ni_tx_rings;   /* NIC tx rings            */
+              const uint32_t   ni_rx_rings;   /* NIC rx rings            */
+              uint32_t         ni_bufs_head;  /* head of extra bufs list */
+              ...
+          };
+
+          Indicates the number of available rings (_s_t_r_u_c_t _n_e_t_m_a_p___r_i_n_g_s) and
+          their position in the mmapped region.  The number of tx and rx rings
+          (_n_i___t_x___r_i_n_g_s, _n_i___r_x___r_i_n_g_s) normally depends on the hardware.  NICs
+          also have an extra tx/rx ring pair connected to the host stack.
+          _N_I_O_C_R_E_G_I_F can also request additional unbound buffers in the same
+          memory space, to be used as temporary storage for packets.  The num‐
+          ber of extra buffers is specified in the _a_r_g_._n_r___a_r_g_3 field.  On suc‐
+          cess, the kernel writes back to _a_r_g_._n_r___a_r_g_3 the number of extra buf‐
+          fers actually allocated (they may be less than the amount requested
+          if the memory space ran out of buffers).  _n_i___b_u_f_s___h_e_a_d contains the
+          index of the first of these extra buffers, which are connected in a
+          list (the first uint32_t of each buffer being the index of the next
+          buffer in the list).  A 0 indicates the end of the list.  The appli‐
+          cation is free to modify this list and use the buffers (i.e., bind‐
+          ing them to the slots of a netmap ring).  When closing the netmap
+          file descriptor, the kernel frees the buffers contained in the list
+          pointed by _n_i___b_u_f_s___h_e_a_d , irrespectively of the buffers originally
+          provided by the kernel on _N_I_O_C_R_E_G_I_F.
+
+     struct netmap_ring (one per ring)
+
+          struct netmap_ring {
+              ...
+              const uint32_t num_slots;   /* slots in each ring            */
+              const uint32_t nr_buf_size; /* size of each buffer           */
+              ...
+              uint32_t       head;        /* (u) first buf owned by user   */
+              uint32_t       cur;         /* (u) wakeup position           */
+              const uint32_t tail;        /* (k) first buf owned by kernel */
+              ...
+              uint32_t       flags;
+              struct timeval ts;          /* (k) time of last rxsync()     */
+              ...
+              struct netmap_slot slot[0]; /* array of slots                */
+          }
+
+          Implements transmit and receive rings, with read/write pointers,
+          metadata and an array of _s_l_o_t_s describing the buffers.
+
+     struct netmap_slot (one per buffer)
+
+          struct netmap_slot {
+              uint32_t buf_idx;           /* buffer index                 */
+              uint16_t len;               /* packet length                */
+              uint16_t flags;             /* buf changed, etc.            */
+              uint64_t ptr;               /* address for indirect buffers */
+          };
+
+          Describes a packet buffer, which normally is identified by an index
+          and resides in the mmapped region.
+
+     packet buffers
+          Fixed size (normally 2 KB) packet buffers allocated by the kernel.
+
+     The offset of the _s_t_r_u_c_t _n_e_t_m_a_p___i_f in the mmapped region is indicated by
+     the _n_r___o_f_f_s_e_t field in the structure returned by NIOCREGIF.  From there,
+     all other objects are reachable through relative references (offsets or
+     indexes).  Macros and functions in <_n_e_t_/_n_e_t_m_a_p___u_s_e_r_._h> help converting
+     them into actual pointers:
+
+           struct netmap_if *nifp = NETMAP_IF(mem, arg.nr_offset);
+           struct netmap_ring *txr = NETMAP_TXRING(nifp, ring_index);
+           struct netmap_ring *rxr = NETMAP_RXRING(nifp, ring_index);
+
+           char *buf = NETMAP_BUF(ring, buffer_index);
+
+RRIINNGGSS,, BBUUFFFFEERRSS AANNDD DDAATTAA II//OO
+     _R_i_n_g_s are circular queues of packets with three indexes/pointers (_h_e_a_d,
+     _c_u_r, _t_a_i_l); one slot is always kept empty.  The ring size (_n_u_m___s_l_o_t_s)
+     should not be assumed to be a power of two.
+
+     _h_e_a_d is the first slot available to userspace;
+
+     _c_u_r is the wakeup point: select/poll will unblock when _t_a_i_l passes _c_u_r;
+
+     _t_a_i_l is the first slot reserved to the kernel.
+
+     Slot indexes _m_u_s_t only move forward; for convenience, the function
+           nm_ring_next(ring, index)
+     returns the next index modulo the ring size.
+
+     _h_e_a_d and _c_u_r are only modified by the user program; _t_a_i_l is only modified
+     by the kernel.  The kernel only reads/writes the _s_t_r_u_c_t _n_e_t_m_a_p___r_i_n_g slots
+     and buffers during the execution of a netmap-related system call.  The
+     only exception are slots (and buffers) in the range _t_a_i_l ... _h_e_a_d_-_1, that
+     are explicitly assigned to the kernel.
+
+   TTRRAANNSSMMIITT RRIINNGGSS
+     On transmit rings, after a nneettmmaapp system call, slots in the range
+     _h_e_a_d ... _t_a_i_l_-_1 are available for transmission.  User code should fill
+     the slots sequentially and advance _h_e_a_d and _c_u_r past slots ready to
+     transmit.  _c_u_r may be moved further ahead if the user code needs more
+     slots before further transmissions (see _S_C_A_T_T_E_R _G_A_T_H_E_R _I_/_O).
+
+     At the next NIOCTXSYNC/select()/poll(), slots up to _h_e_a_d_-_1 are pushed to
+     the port, and _t_a_i_l may advance if further slots have become available.
+     Below is an example of the evolution of a TX ring:
+
+         after the syscall, slots between cur and tail are (a)vailable
+                   head=cur   tail
+                    |          |
+                    v          v
+          TX  [.....aaaaaaaaaaa.............]
+
+         user creates new packets to (T)ransmit
+                     head=cur tail
+                         |     |
+                         v     v
+          TX  [.....TTTTTaaaaaa.............]
+
+         NIOCTXSYNC/poll()/select() sends packets and reports new slots
+                     head=cur      tail
+                         |          |
+                         v          v
+          TX  [..........aaaaaaaaaaa........]
+
+     sseelleecctt() and ppoollll() will block if there is no space in the ring, i.e.,
+           ring->cur == ring->tail
+     and return when new slots have become available.
+
+     High speed applications may want to amortize the cost of system calls by
+     preparing as many packets as possible before issuing them.
+
+     A transmit ring with pending transmissions has
+           ring->head != ring->tail + 1 (modulo the ring size).
+     The function _i_n_t _n_m___t_x___p_e_n_d_i_n_g_(_r_i_n_g_) implements this test.
+
+   RREECCEEIIVVEE RRIINNGGSS
+     On receive rings, after a nneettmmaapp system call, the slots in the range
+     _h_e_a_d... _t_a_i_l_-_1 contain received packets.  User code should process them
+     and advance _h_e_a_d and _c_u_r past slots it wants to return to the kernel.
+     _c_u_r may be moved further ahead if the user code wants to wait for more
+     packets without returning all the previous slots to the kernel.
+
+     At the next NIOCRXSYNC/select()/poll(), slots up to _h_e_a_d_-_1 are returned
+     to the kernel for further receives, and _t_a_i_l may advance to report new
+     incoming packets.
+
+     Below is an example of the evolution of an RX ring:
+
+         after the syscall, there are some (h)eld and some (R)eceived slots
+                head  cur     tail
+                 |     |       |
+                 v     v       v
+          RX  [..hhhhhhRRRRRRRR..........]
+
+         user advances head and cur, releasing some slots and holding others
+                    head cur  tail
+                      |  |     |
+                      v  v     v
+          RX  [..*****hhhRRRRRR...........]
+
+         NICRXSYNC/poll()/select() recovers slots and reports new packets
+                    head cur        tail
+                      |  |           |
+                      v  v           v
+          RX  [.......hhhRRRRRRRRRRRR....]
+
+SSLLOOTTSS AANNDD PPAACCKKEETT BBUUFFFFEERRSS
+     Normally, packets should be stored in the netmap-allocated buffers as‐
+     signed to slots when ports are bound to a file descriptor.  One packet is
+     fully contained in a single buffer.
+
+     The following flags affect slot and buffer processing:
+
+     NS_BUF_CHANGED
+          _m_u_s_t be used when the _b_u_f___i_d_x in the slot is changed.  This can be
+          used to implement zero-copy forwarding, see _Z_E_R_O_-_C_O_P_Y _F_O_R_W_A_R_D_I_N_G.
+
+     NS_REPORT
+          reports when this buffer has been transmitted.  Normally, nneettmmaapp no‐
+          tifies transmit completions in batches, hence signals can be delayed
+          indefinitely.  This flag helps detect when packets have been sent
+          and a file descriptor can be closed.
+
+     NS_FORWARD
+          When a ring is in 'transparent' mode, packets marked with this flag
+          by the user application are forwarded to the other endpoint at the
+          next system call, thus restoring (in a selective way) the connection
+          between a NIC and the host stack.
+
+     NS_NO_LEARN
+          tells the forwarding code that the source MAC address for this
+          packet must not be used in the learning bridge code.
+
+     NS_INDIRECT
+          indicates that the packet's payload is in a user-supplied buffer
+          whose user virtual address is in the 'ptr' field of the slot.  The
+          size can reach 65535 bytes.
+
+          This is only supported on the transmit ring of VVAALLEE ports, and it
+          helps reducing data copies in the interconnection of virtual ma‐
+          chines.
+
+     NS_MOREFRAG
+          indicates that the packet continues with subsequent buffers; the
+          last buffer in a packet must have the flag clear.
+
+SSCCAATTTTEERR GGAATTHHEERR II//OO
+     Packets can span multiple slots if the _N_S___M_O_R_E_F_R_A_G flag is set in all but
+     the last slot.  The maximum length of a chain is 64 buffers.  This is
+     normally used with VVAALLEE ports when connecting virtual machines, as they
+     generate large TSO segments that are not split unless they reach a physi‐
+     cal device.
+
+     NOTE: The length field always refers to the individual fragment; there is
+     no place with the total length of a packet.
+
+     On receive rings the macro _N_S___R_F_R_A_G_S_(_s_l_o_t_) indicates the remaining number
+     of slots for this packet, including the current one.  Slots with a value
+     greater than 1 also have NS_MOREFRAG set.
+
+IIOOCCTTLLSS
+     nneettmmaapp uses two ioctls (NIOCTXSYNC, NIOCRXSYNC) for non-blocking I/O.
+     They take no argument.  Two more ioctls (NIOCGINFO, NIOCREGIF) are used
+     to query and configure ports, with the following argument:
+
+     struct nmreq {
+         char      nr_name[IFNAMSIZ]; /* (i) port name                  */
+         uint32_t  nr_version;        /* (i) API version                */
+         uint32_t  nr_offset;         /* (o) nifp offset in mmap region */
+         uint32_t  nr_memsize;        /* (o) size of the mmap region    */
+         uint32_t  nr_tx_slots;       /* (i/o) slots in tx rings        */
+         uint32_t  nr_rx_slots;       /* (i/o) slots in rx rings        */
+         uint16_t  nr_tx_rings;       /* (i/o) number of tx rings       */
+         uint16_t  nr_rx_rings;       /* (i/o) number of rx rings       */
+         uint16_t  nr_ringid;         /* (i/o) ring(s) we care about    */
+         uint16_t  nr_cmd;            /* (i) special command            */
+         uint16_t  nr_arg1;           /* (i/o) extra arguments          */
+         uint16_t  nr_arg2;           /* (i/o) extra arguments          */
+         uint32_t  nr_arg3;           /* (i/o) extra arguments          */
+         uint32_t  nr_flags           /* (i/o) open mode                */
+         ...
+     };
+
+     A file descriptor obtained through _/_d_e_v_/_n_e_t_m_a_p also supports the ioctl
+     supported by network devices, see netintro(4).
+
+     NIOCGINFO
+           returns EINVAL if the named port does not support netmap.  Other‐
+           wise, it returns 0 and (advisory) information about the port.  Note
+           that all the information below can change before the interface is
+           actually put in netmap mode.
+
+           _n_r___m_e_m_s_i_z_e
+               indicates the size of the nneettmmaapp memory region.  NICs in nneettmmaapp
+               mode all share the same memory region, whereas VVAALLEE ports have
+               independent regions for each port.
+
+           _n_r___t_x___s_l_o_t_s, _n_r___r_x___s_l_o_t_s
+               indicate the size of transmit and receive rings.
+
+           _n_r___t_x___r_i_n_g_s, _n_r___r_x___r_i_n_g_s
+               indicate the number of transmit and receive rings.  Both ring
+               number and sizes may be configured at runtime using interface-
+               specific functions (e.g., ethtool(8) ).
+
+     NIOCREGIF
+           binds the port named in _n_r___n_a_m_e to the file descriptor.  For a
+           physical device this also switches it into nneettmmaapp mode, disconnect‐
+           ing it from the host stack.  Multiple file descriptors can be bound
+           to the same port, with proper synchronization left to the user.
+
+           The recommended way to bind a file descriptor to a port is to use
+           function _n_m___o_p_e_n_(_._._) (see _L_I_B_R_A_R_I_E_S) which parses names to access
+           specific port types and enable features.  In the following we docu‐
+           ment the main features.
+
+           NIOCREGIF can also bind a file descriptor to one endpoint of a
+           _n_e_t_m_a_p _p_i_p_e, consisting of two netmap ports with a crossover con‐
+           nection.  A netmap pipe share the same memory space of the parent
+           port, and is meant to enable configuration where a master process
+           acts as a dispatcher towards slave processes.
+
+           To enable this function, the _n_r___a_r_g_1 field of the structure can be
+           used as a hint to the kernel to indicate how many pipes we expect
+           to use, and reserve extra space in the memory region.
+
+           On return, it gives the same info as NIOCGINFO, with _n_r___r_i_n_g_i_d and
+           _n_r___f_l_a_g_s indicating the identity of the rings controlled through
+           the file descriptor.
+
+           _n_r___f_l_a_g_s _n_r___r_i_n_g_i_d selects which rings are controlled through this
+           file descriptor.  Possible values of _n_r___f_l_a_g_s are indicated below,
+           together with the naming schemes that application libraries (such
+           as the nnmm__ooppeenn indicated below) can use to indicate the specific
+           set of rings.  In the example below, "netmap:foo" is any valid
+           netmap port name.
+
+           NR_REG_ALL_NIC netmap:foo
+                  (default) all hardware ring pairs
+
+           NR_REG_SW netmap:foo^
+                  the ``host rings'', connecting to the host stack.
+
+           NR_REG_NIC_SW netmap:foo*
+                  all hardware rings and the host rings
+
+           NR_REG_ONE_NIC netmap:foo-i
+                  only the i-th hardware ring pair, where the number is in
+                  _n_r___r_i_n_g_i_d;
+
+           NR_REG_PIPE_MASTER netmap:foo{i
+                  the master side of the netmap pipe whose identifier (i) is
+                  in _n_r___r_i_n_g_i_d;
+
+           NR_REG_PIPE_SLAVE netmap:foo}i
+                  the slave side of the netmap pipe whose identifier (i) is in
+                  _n_r___r_i_n_g_i_d.
+
+                  The identifier of a pipe must be thought as part of the pipe
+                  name, and does not need to be sequential.  On return the
+                  pipe will only have a single ring pair with index 0, irre‐
+                  spective of the value of _i.
+
+           By default, a poll(2) or select(2) call pushes out any pending
+           packets on the transmit ring, even if no write events are speci‐
+           fied.  The feature can be disabled by or-ing _N_E_T_M_A_P___N_O___T_X___P_O_L_L to
+           the value written to _n_r___r_i_n_g_i_d.  When this feature is used, packets
+           are transmitted only on _i_o_c_t_l_(_N_I_O_C_T_X_S_Y_N_C_) or _s_e_l_e_c_t_(_) _/ _p_o_l_l_(_) are
+           called with a write event (POLLOUT/wfdset) or a full ring.
+
+           When registering a virtual interface that is dynamically created to
+           a VVAALLEE switch, we can specify the desired number of rings (1 by de‐
+           fault, and currently up to 16) on it using nr_tx_rings and
+           nr_rx_rings fields.
+
+     NIOCTXSYNC
+           tells the hardware of new packets to transmit, and updates the num‐
+           ber of slots available for transmission.
+
+     NIOCRXSYNC
+           tells the hardware of consumed packets, and asks for newly avail‐
+           able packets.
+
+SSEELLEECCTT,, PPOOLLLL,, EEPPOOLLLL,, KKQQUUEEUUEE
+     select(2) and poll(2) on a nneettmmaapp file descriptor process rings as indi‐
+     cated in _T_R_A_N_S_M_I_T _R_I_N_G_S and _R_E_C_E_I_V_E _R_I_N_G_S, respectively when write (POLL‐
+     OUT) and read (POLLIN) events are requested.  Both block if no slots are
+     available in the ring (_r_i_n_g_-_>_c_u_r _=_= _r_i_n_g_-_>_t_a_i_l).  Depending on the plat‐
+     form, epoll(7) and kqueue(2) are supported too.
+
+     Packets in transmit rings are normally pushed out (and buffers reclaimed)
+     even without requesting write events.  Passing the NETMAP_NO_TX_POLL flag
+     to _N_I_O_C_R_E_G_I_F disables this feature.  By default, receive rings are pro‐
+     cessed only if read events are requested.  Passing the NETMAP_DO_RX_POLL
+     flag to _N_I_O_C_R_E_G_I_F _u_p_d_a_t_e_s _r_e_c_e_i_v_e _r_i_n_g_s _e_v_e_n _w_i_t_h_o_u_t _r_e_a_d _e_v_e_n_t_s_. Note
+     that on epoll(7) and kqueue(2), NETMAP_NO_TX_POLL and NETMAP_DO_RX_POLL
+     only have an effect when some event is posted for the file descriptor.
+
+LLIIBBRRAARRIIEESS
+     The nneettmmaapp API is supposed to be used directly, both because of its sim‐
+     plicity and for efficient integration with applications.
+
+     For convenience, the <_n_e_t_/_n_e_t_m_a_p___u_s_e_r_._h> header provides a few macros and
+     functions to ease creating a file descriptor and doing I/O with a nneettmmaapp
+     port.  These are loosely modeled after the pcap(3) API, to ease porting
+     of libpcap-based applications to nneettmmaapp.  To use these extra functions,
+     programs should
+           #define NETMAP_WITH_LIBS
+     before
+           #include <net/netmap_user.h>
+
+     The following functions are available:
+
+     _s_t_r_u_c_t _n_m___d_e_s_c _* _n_m___o_p_e_n_(_c_o_n_s_t _c_h_a_r _*_i_f_n_a_m_e_, _c_o_n_s_t _s_t_r_u_c_t _n_m_r_e_q _*_r_e_q_,
+            _u_i_n_t_6_4___t _f_l_a_g_s_, _c_o_n_s_t _s_t_r_u_c_t _n_m___d_e_s_c _*_a_r_g)
+            similar to pcap_open_live(3), binds a file descriptor to a port.
+
+            _i_f_n_a_m_e
+                is a port name, in the form "netmap:PPP" for a NIC and "va‐
+                leSSS:PPP" for a VVAALLEE port.
+
+            _r_e_q
+                provides the initial values for the argument to the NIOCREGIF
+                ioctl.  The nm_flags and nm_ringid values are overwritten by
+                parsing ifname and flags, and other fields can be overridden
+                through the other two arguments.
+
+            _a_r_g
+                points to a struct nm_desc containing arguments (e.g., from a
+                previously open file descriptor) that should override the de‐
+                faults.  The fields are used as described below
+
+            _f_l_a_g_s
+                can be set to a combination of the following flags:
+                _N_E_T_M_A_P___N_O___T_X___P_O_L_L, _N_E_T_M_A_P___D_O___R_X___P_O_L_L (copied into nr_ringid);
+                _N_M___O_P_E_N___N_O___M_M_A_P (if arg points to the same memory region,
+                avoids the mmap and uses the values from it); _N_M___O_P_E_N___I_F_N_A_M_E
+                (ignores ifname and uses the values in arg); _N_M___O_P_E_N___A_R_G_1,
+                _N_M___O_P_E_N___A_R_G_2, _N_M___O_P_E_N___A_R_G_3 (uses the fields from arg);
+                _N_M___O_P_E_N___R_I_N_G___C_F_G (uses the ring number and sizes from arg).
+
+     _i_n_t _n_m___c_l_o_s_e_(_s_t_r_u_c_t _n_m___d_e_s_c _*_d)
+            closes the file descriptor, unmaps memory, frees resources.
+
+     _i_n_t _n_m___i_n_j_e_c_t_(_s_t_r_u_c_t _n_m___d_e_s_c _*_d_, _c_o_n_s_t _v_o_i_d _*_b_u_f_, _s_i_z_e___t _s_i_z_e)
+            similar to _p_c_a_p___i_n_j_e_c_t_(_), pushes a packet to a ring, returns the
+            size of the packet is successful, or 0 on error;
+
+     _i_n_t _n_m___d_i_s_p_a_t_c_h_(_s_t_r_u_c_t _n_m___d_e_s_c _*_d_, _i_n_t _c_n_t_, _n_m___c_b___t _c_b_, _u___c_h_a_r _*_a_r_g)
+            similar to _p_c_a_p___d_i_s_p_a_t_c_h_(_), applies a callback to incoming packets
+
+     _u___c_h_a_r _* _n_m___n_e_x_t_p_k_t_(_s_t_r_u_c_t _n_m___d_e_s_c _*_d_, _s_t_r_u_c_t _n_m___p_k_t_h_d_r _*_h_d_r)
+            similar to _p_c_a_p___n_e_x_t_(_), fetches the next packet
+
+SSUUPPPPOORRTTEEDD DDEEVVIICCEESS
+     nneettmmaapp natively supports the following devices:
+
+     On FreeBSD: cxgbe(4), em(4), iflib(4) (providing igb(4) and em(4)),
+     ix(4), ixl(4), re(4), vtnet(4).
+
+     On Linux e1000, e1000e, i40e, igb, ixgbe, ixgbevf, r8169, virtio_net,
+     vmxnet3.
+
+     NICs without native support can still be used in nneettmmaapp mode through emu‐
+     lation.  Performance is inferior to native netmap mode but still signifi‐
+     cantly higher than various raw socket types (bpf, PF_PACKET, etc.).  Note
+     that for slow devices (such as 1 Gbit/s and slower NICs, or several 10
+     Gbit/s NICs whose hardware is unable to sustain line rate), emulated and
+     native mode will likely have similar or same throughput.
+
+     When emulation is in use, packet sniffer programs such as tcpdump could
+     see received packets before they are diverted by netmap.  This behaviour
+     is not intentional, being just an artifact of the implementation of emu‐
+     lation.  Note that in case the netmap application subsequently moves
+     packets received from the emulated adapter onto the host RX ring, the
+     sniffer will intercept those packets again, since the packets are in‐
+     jected to the host stack as they were received by the network interface.
+
+     Emulation is also available for devices with native netmap support, which
+     can be used for testing or performance comparison.  The sysctl variable
+     _d_e_v_._n_e_t_m_a_p_._a_d_m_o_d_e globally controls how netmap mode is implemented.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS AANNDD MMOODDUULLEE PPAARRAAMMEETTEERRSS
+     Some aspects of the operation of nneettmmaapp and VVAALLEE are controlled through
+     sysctl variables on FreeBSD (_d_e_v_._n_e_t_m_a_p_._*) and module parameters on Linux
+     (_/_s_y_s_/_m_o_d_u_l_e_/_n_e_t_m_a_p_/_p_a_r_a_m_e_t_e_r_s_/_*):
+
+     _d_e_v_._n_e_t_m_a_p_._a_d_m_o_d_e_: _0
+             Controls the use of native or emulated adapter mode.
+
+             0 uses the best available option;
+
+             1 forces native mode and fails if not available;
+
+             2 forces emulated hence never fails.
+
+     _d_e_v_._n_e_t_m_a_p_._g_e_n_e_r_i_c___r_i_n_g_s_: _1
+             Number of rings used for emulated netmap mode
+
+     _d_e_v_._n_e_t_m_a_p_._g_e_n_e_r_i_c___r_i_n_g_s_i_z_e_: _1_0_2_4
+             Ring size used for emulated netmap mode
+
+     _d_e_v_._n_e_t_m_a_p_._g_e_n_e_r_i_c___m_i_t_: _1_0_0_0_0_0
+             Controls interrupt moderation for emulated mode
+
+     _d_e_v_._n_e_t_m_a_p_._f_w_d_: _0
+             Forces NS_FORWARD mode
+
+     _d_e_v_._n_e_t_m_a_p_._t_x_s_y_n_c___r_e_t_r_y_: _2
+             Number of txsync loops in the VVAALLEE flush function
+
+     _d_e_v_._n_e_t_m_a_p_._n_o___p_e_n_d_i_n_t_r_: _1
+             Forces recovery of transmit buffers on system calls
+
+     _d_e_v_._n_e_t_m_a_p_._n_o___t_i_m_e_s_t_a_m_p_: _0
+             Disables the update of the timestamp in the netmap ring
+
+     _d_e_v_._n_e_t_m_a_p_._v_e_r_b_o_s_e_: _0
+             Verbose kernel messages
+
+     _d_e_v_._n_e_t_m_a_p_._b_u_f___n_u_m_: _1_6_3_8_4_0
+
+     _d_e_v_._n_e_t_m_a_p_._b_u_f___s_i_z_e_: _2_0_4_8
+
+     _d_e_v_._n_e_t_m_a_p_._r_i_n_g___n_u_m_: _2_0_0
+
+     _d_e_v_._n_e_t_m_a_p_._r_i_n_g___s_i_z_e_: _3_6_8_6_4
+
+     _d_e_v_._n_e_t_m_a_p_._i_f___n_u_m_: _1_0_0
+
+     _d_e_v_._n_e_t_m_a_p_._i_f___s_i_z_e_: _1_0_2_4
+             Sizes and number of objects (netmap_if, netmap_ring, buffers) for
+             the global memory region.  The only parameter worth modifying is
+             _d_e_v_._n_e_t_m_a_p_._b_u_f___n_u_m as it impacts the total amount of memory used
+             by netmap.
+
+     _d_e_v_._n_e_t_m_a_p_._b_u_f___c_u_r_r___n_u_m_: _0
+
+     _d_e_v_._n_e_t_m_a_p_._b_u_f___c_u_r_r___s_i_z_e_: _0
+
+     _d_e_v_._n_e_t_m_a_p_._r_i_n_g___c_u_r_r___n_u_m_: _0
+
+     _d_e_v_._n_e_t_m_a_p_._r_i_n_g___c_u_r_r___s_i_z_e_: _0
+
+     _d_e_v_._n_e_t_m_a_p_._i_f___c_u_r_r___n_u_m_: _0
+
+     _d_e_v_._n_e_t_m_a_p_._i_f___c_u_r_r___s_i_z_e_: _0
+             Actual values in use.
+
+     _d_e_v_._n_e_t_m_a_p_._p_r_i_v___b_u_f___n_u_m_: _4_0_9_8
+
+     _d_e_v_._n_e_t_m_a_p_._p_r_i_v___b_u_f___s_i_z_e_: _2_0_4_8
+
+     _d_e_v_._n_e_t_m_a_p_._p_r_i_v___r_i_n_g___n_u_m_: _4
+
+     _d_e_v_._n_e_t_m_a_p_._p_r_i_v___r_i_n_g___s_i_z_e_: _2_0_4_8_0
+
+     _d_e_v_._n_e_t_m_a_p_._p_r_i_v___i_f___n_u_m_: _2
+
+     _d_e_v_._n_e_t_m_a_p_._p_r_i_v___i_f___s_i_z_e_: _1_0_2_4
+             Sizes and number of objects (netmap_if, netmap_ring, buffers) for
+             private memory regions.  A separate memory region is used for
+             each VVAALLEE port and each pair of nneettmmaapp ppiippeess.
+
+     _d_e_v_._n_e_t_m_a_p_._b_r_i_d_g_e___b_a_t_c_h_: _1_0_2_4
+             Batch size used when moving packets across a VVAALLEE switch.  Values
+             above 64 generally guarantee good performance.
+
+     _d_e_v_._n_e_t_m_a_p_._m_a_x___b_r_i_d_g_e_s_: _8
+             Max number of VVAALLEE switches that can be created. This tunable can
+             be specified at loader time.
+
+     _d_e_v_._n_e_t_m_a_p_._p_t_n_e_t___v_n_e_t___h_d_r_: _1
+             Allow ptnet devices to use virtio-net headers
+
+     _d_e_v_._n_e_t_m_a_p_._p_o_r_t___n_u_m_a___a_f_f_i_n_i_t_y_: _0
+             On numa(4) systems, allocate memory for netmap ports from the lo‐
+             cal NUMA domain when possible.  This can improve performance by
+             reducing the number of remote memory accesses.  However, when
+             forwarding packets between ports attached to different NUMA do‐
+             mains, this will prevent zero-copy forwarding optimizations and
+             thus may hurt performance.  Note that this setting must be speci‐
+             fied as a loader tunable at boot time.
+
+SSYYSSTTEEMM CCAALLLLSS
+     nneettmmaapp uses select(2), poll(2), epoll(7) and kqueue(2) to wake up pro‐
+     cesses when significant events occur, and mmap(2) to map memory.
+     ioctl(2) is used to configure ports and VVAALLEE sswwiittcchheess.
+
+     Applications may need to create threads and bind them to specific cores
+     to improve performance, using standard OS primitives, see pthread(3).  In
+     particular, pthread_setaffinity_np(3) may be of use.
+
+EEXXAAMMPPLLEESS
+   TTEESSTT PPRROOGGRRAAMMSS
+     nneettmmaapp comes with a few programs that can be used for testing or simple
+     applications.  See the _e_x_a_m_p_l_e_s_/ directory in nneettmmaapp distributions, or
+     _t_o_o_l_s_/_t_o_o_l_s_/_n_e_t_m_a_p_/ directory in FreeBSD distributions.
+
+     pkt-gen(8) is a general purpose traffic source/sink.
+
+     As an example
+           pkt-gen -i ix0 -f tx -l 60
+     can generate an infinite stream of minimum size packets, and
+           pkt-gen -i ix0 -f rx
+     is a traffic sink.  Both print traffic statistics, to help monitor how
+     the system performs.
+
+     pkt-gen(8) has many options can be uses to set packet sizes, addresses,
+     rates, and use multiple send/receive threads and cores.
+
+     bridge(4) is another test program which interconnects two nneettmmaapp ports.
+     It can be used for transparent forwarding between interfaces, as in
+           bridge -i netmap:ix0 -i netmap:ix1
+     or even connect the NIC to the host stack using netmap
+           bridge -i netmap:ix0
+
+   UUSSIINNGG TTHHEE NNAATTIIVVEE AAPPII
+     The following code implements a traffic generator:
+
+     #include <net/netmap_user.h>
+     ...
+     void sender(void)
+     {
+         struct netmap_if *nifp;
+         struct netmap_ring *ring;
+         struct nmreq nmr;
+         struct pollfd fds;
+
+         fd = open("/dev/netmap", O_RDWR);
+         bzero(&nmr, sizeof(nmr));
+         strcpy(nmr.nr_name, "ix0");
+         nmr.nm_version = NETMAP_API;
+         ioctl(fd, NIOCREGIF, &nmr);
+         p = mmap(0, nmr.nr_memsize, fd);
+         nifp = NETMAP_IF(p, nmr.nr_offset);
+         ring = NETMAP_TXRING(nifp, 0);
+         fds.fd = fd;
+         fds.events = POLLOUT;
+         for (;;) {
+             poll(&fds, 1, -1);
+             while (!nm_ring_empty(ring)) {
+                 i = ring->cur;
+                 buf = NETMAP_BUF(ring, ring->slot[i].buf_index);
+                 ... prepare packet in buf ...
+                 ring->slot[i].len = ... packet length ...
+                 ring->head = ring->cur = nm_ring_next(ring, i);
+             }
+         }
+     }
+
+   HHEELLPPEERR FFUUNNCCTTIIOONNSS
+     A simple receiver can be implemented using the helper functions:
+
+     #define NETMAP_WITH_LIBS
+     #include <net/netmap_user.h>
+     ...
+     void receiver(void)
+     {
+         struct nm_desc *d;
+         struct pollfd fds;
+         u_char *buf;
+         struct nm_pkthdr h;
+         ...
+         d = nm_open("netmap:ix0", NULL, 0, 0);
+         fds.fd = NETMAP_FD(d);
+         fds.events = POLLIN;
+         for (;;) {
+             poll(&fds, 1, -1);
+             while ( (buf = nm_nextpkt(d, &h)) )
+                 consume_pkt(buf, h.len);
+         }
+         nm_close(d);
+     }
+
+   ZZEERROO--CCOOPPYY FFOORRWWAARRDDIINNGG
+     Since physical interfaces share the same memory region, it is possible to
+     do packet forwarding between ports swapping buffers.  The buffer from the
+     transmit ring is used to replenish the receive ring:
+
+         uint32_t tmp;
+         struct netmap_slot *src, *dst;
+         ...
+         src = &src_ring->slot[rxr->cur];
+         dst = &dst_ring->slot[txr->cur];
+         tmp = dst->buf_idx;
+         dst->buf_idx = src->buf_idx;
+         dst->len = src->len;
+         dst->flags = NS_BUF_CHANGED;
+         src->buf_idx = tmp;
+         src->flags = NS_BUF_CHANGED;
+         rxr->head = rxr->cur = nm_ring_next(rxr, rxr->cur);
+         txr->head = txr->cur = nm_ring_next(txr, txr->cur);
+         ...
+
+   AACCCCEESSSSIINNGG TTHHEE HHOOSSTT SSTTAACCKK
+     The host stack is for all practical purposes just a regular ring pair,
+     which you can access with the netmap API (e.g., with
+           nm_open("netmap:eth0^", ...);
+     All packets that the host would send to an interface in nneettmmaapp mode end
+     up into the RX ring, whereas all packets queued to the TX ring are send
+     up to the host stack.
+
+   VVAALLEE SSWWIITTCCHH
+     A simple way to test the performance of a VVAALLEE switch is to attach a
+     sender and a receiver to it, e.g., running the following in two different
+     terminals:
+           pkt-gen -i vale1:a -f rx # receiver
+           pkt-gen -i vale1:b -f tx # sender
+     The same example can be used to test netmap pipes, by simply changing
+     port names, e.g.,
+           pkt-gen -i vale2:x{3 -f rx # receiver on the master side
+           pkt-gen -i vale2:x}3 -f tx # sender on the slave side
+
+     The following command attaches an interface and the host stack to a
+     switch:
+           valectl -h vale2:em0
+     Other nneettmmaapp clients attached to the same switch can now communicate with
+     the network card or the host.
+
+SSEEEE AALLSSOO
+     vale(4), bridge(8), lb(8), nmreplay(8), pkt-gen(8), valectl(8)
+
+     _h_t_t_p_:_/_/_i_n_f_o_._i_e_t_._u_n_i_p_i_._i_t_/_~_l_u_i_g_i_/_n_e_t_m_a_p_/
+
+     Luigi Rizzo, Revisiting network I/O APIs: the netmap framework, Communi‐
+     cations of the ACM, 55 (3), pp.45-51, March 2012
+
+     Luigi Rizzo, netmap: a novel framework for fast packet I/O, Usenix
+     ATC'12, June 2012, Boston
+
+     Luigi Rizzo, Giuseppe Lettieri, VALE, a switched ethernet for virtual ma‐
+     chines, ACM CoNEXT'12, December 2012, Nice
+
+     Luigi Rizzo, Giuseppe Lettieri, Vincenzo Maffione, Speeding up packet I/O
+     in virtual machines, ACM/IEEE ANCS'13, October 2013, San Jose
+
+AAUUTTHHOORRSS
+     The nneettmmaapp framework has been originally designed and implemented at the
+     Universita` di Pisa in 2011 by Luigi Rizzo, and further extended with
+     help from Matteo Landi, Gaetano Catalli, Giuseppe Lettieri, and Vincenzo
+     Maffione.
+
+     nneettmmaapp and VVAALLEE have been funded by the European Commission within FP7
+     Projects CHANGE (257422) and OPENLAB (287581).
+
+CCAAVVEEAATTSS
+     No matter how fast the CPU and OS are, achieving line rate on 10G and
+     faster interfaces requires hardware with sufficient performance.  Several
+     NICs are unable to sustain line rate with small packet sizes.  Insuffi‐
+     cient PCIe or memory bandwidth can also cause reduced performance.
+
+     Another frequent reason for low performance is the use of flow control on
+     the link: a slow receiver can limit the transmit speed.  Be sure to dis‐
+     able flow control when running high speed experiments.
+
+   SSPPEECCIIAALL NNIICC FFEEAATTUURREESS
+     nneettmmaapp is orthogonal to some NIC features such as multiqueue, schedulers,
+     packet filters.
+
+     Multiple transmit and receive rings are supported natively and can be
+     configured with ordinary OS tools, such as ethtool(8) or device-specific
+     sysctl variables.  The same goes for Receive Packet Steering (RPS) and
+     filtering of incoming traffic.
+
+     nneettmmaapp _d_o_e_s _n_o_t _u_s_e features such as _c_h_e_c_k_s_u_m _o_f_f_l_o_a_d_i_n_g, _T_C_P
+     _s_e_g_m_e_n_t_a_t_i_o_n _o_f_f_l_o_a_d_i_n_g, _e_n_c_r_y_p_t_i_o_n, _V_L_A_N _e_n_c_a_p_s_u_l_a_t_i_o_n_/_d_e_c_a_p_s_u_l_a_t_i_o_n,
+     etc.  When using netmap to exchange packets with the host stack, make
+     sure to disable these features.
+
+BSD                            October 10, 2024                            BSD

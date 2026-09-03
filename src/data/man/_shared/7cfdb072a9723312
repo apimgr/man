@@ -1,0 +1,168 @@
+PACKAGE(5)                  BSD File Formats Manual                 PACKAGE(5)
+
+NNAAMMEE
+     ppaacckkaaggee, ppaacckkiinngg--lliisstt, pplliisstt — format for OpenBSD binary packages and
+     packing-lists
+
+DDEESSCCRRIIPPTTIIOONN
+     Binary packages for OpenBSD can be created using pkg_create(1) and are
+     usually manipulated using pkg_add(1), pkg_mklocatedb(1), or pkg_info(1).
+
+     The basic underlying format is an archive following the ustar specifica‐
+     tion that can be handled with tar(1) and compressed using gzip(1).
+
+     Package names always end in “.tgz”; the file name itself should conform
+     to packages-specs(7).
+
+     Note that the base distribution tarballs of OpenBSD (e.g. _b_a_s_e_X_X_._t_g_z,
+     _c_o_m_p_X_X_._t_g_z, ...) are not binary packages fit for pkg_add(1).
+
+     All types of archive contents can be present in a package, including
+     files, directories, hardlinks, symlinks, fifos, block and character de‐
+     vices.
+
+     In order to allow just-in-time extraction, packages always begin with a
+     table of contents, named _+_C_O_N_T_E_N_T_S, nicknamed ppaacckkiinngg--lliisstt (pplliisstt for
+     short).  This table of contents can be read using the API described in
+     OpenBSD::PackingList(3p).
+
+     All the remaining information in the archive should be referenced in the
+     ppaacckkiinngg--lliisstt, including symlinks destinations, special permissions, and
+     file owners (pkg_create(1) and pkg_add(1) actually enforce this).  See
+     pkg_create(1) for annotation details.
+
+     This table of contents is always followed by a few special files, some of
+     which are optional: the package description (+DESC), a display message
+     (+DISPLAY), etc.
+
+     The basic ustar format has some limitations with respect to file names.
+     Packages now use the "extended record specification" (header type x) for
+     long links and long file names.  Other extended ustar headers are cur‐
+     rently recognized, but not supported.
+
+     Starting with OpenBSD 5.5, the compressed archive may be composed of sev‐
+     eral gzip(1) archives concatenated together.  gzip(1) doesn't mind, and
+     tar(1) is happy as long as the uncompressed stream is sane.  This allows
+     for faster signing and better rsync properties.
+
+     Starting with OpenBSD 5.6, tarballs are stored "out-of-order": each ar‐
+     chive entry will match an entry in the ppaacckkiinngg--lliisstt (and all file-like
+     entries will be matched), but the order will be adjusted so that most re‐
+     cently changed files come first, in order to allow faster updates.
+
+     Starting with OpenBSD 5.7, by default, timestamps are stored directly in
+     the ppaacckkiinngg--lliisstt as @@ttss annotations.  The files in the archive will have
+     a null timestamp.
+
+     The combination of the LRU archive order, null timestamps and compression
+     in fixed chunks starting from the end, means a substantial amount of data
+     doesn't change from snapshot to snapshot, thus reducing the pressure on
+     mirroring bandwidth.
+
+PPAACCKKIINNGG LLIISSTT AANNNNOOTTAATTIIOONNSS
+     User annotations are described in pkg_create(1).  The following annota‐
+     tions are automatically inserted during package creation and installa‐
+     tion:
+
+     @@aarrcchh _a_r_c_h_e_s
+             List of architectures for which this package is intended.  This
+             corresponds to --AA _a_r_c_h_e_s of pkg_create(1)
+
+     @@ccoommmmeenntt ppkkggppaatthh==ppaatthh ffttpp==yyeess//nnoo
+             Historical accident.  This specific comment encodes the actual --DD
+             _F_U_L_L_P_K_G_P_A_T_H, and --DD _F_T_P arguments to pkg_create(1).
+
+     @@ddeeppeenndd _p_k_g_p_a_t_h:_p_k_g_s_p_e_c:_d_e_f_a_u_l_t
+             Record a dependency declared using the option --PP of
+             pkg_create(1).
+
+     @@ddiiggiittaall--ssiiggnnaattuurree _s_i_g_n_i_f_y_2:_d_a_t_e:_e_x_t_e_r_n_a_l
+             Record the date of signature of a package, synthesized by
+             pkg_add(1) from signify(1) output.
+
+     @@lliinnkk _n_a_m_e
+             Added after a file entry by ppaacckkaaggee to record that the entry is
+             actually a hard link.
+
+     @@llooccaallbbaassee _b_a_s_e
+             Used internally to record the settings of --LL option.
+
+     @@nnaammee _p_k_g_n_a_m_e
+             Set the name of the package.  This name is potentially different
+             than the name of the file it came in, and is used when keeping
+             track of the package for later deinstallation.  pkg_create(1)
+             will derive this field from the package file name.
+
+     @@ooppttiioonn _n_a_m_e
+             Some options are automatically inserted/modified by the package
+             tools:
+
+             _a_l_w_a_y_s_-_u_p_d_a_t_e
+                     pkg_create(1) will complete the option line with a sha256
+                     digest of the whole ppaacckkiinngg--lliisstt encoded in base64.
+
+             _f_i_r_m_w_a_r_e
+                     Set by fw_update(8) to trigger firmware-specific han‐
+                     dling.  In particular, firmware is hidden from normal up‐
+                     dates.
+
+             _m_a_n_u_a_l_-_i_n_s_t_a_l_l_a_t_i_o_n
+                     Record that a package has been explicitly installed by
+                     the user, and not as a result of a dependency look-up.
+                     Refer to pkg_add(1)'s --aa option for details.
+
+     @@sshhaa    Added after a file entry by pkg_create(1) to record the files's
+             cryptographic checksum, as a sha256 digest encoded in base64.
+
+     @@ssiiggnneerr
+             Record the signing key for a package, synthesized by pkg_add(1)
+             from signify(1) output.
+
+     @@ssiizzee   Added after a file entry by pkg_create(1) to record a file size.
+
+     @@ssyymmlliinnkk _n_a_m_e
+             Added after a file entry by pkg_create(1) to record that the en‐
+             try is actually a symbolic link.
+
+     @@uurrll    Original location of the package, synthesized by pkg_add(1) dur‐
+             ing installation.
+
+     @@ttss _t_i_m_e_s_t_a_m_p
+             Added after a file entry to record the actual file timestamp, in‐
+             stead of storing it as tarball meta-info.  The package tools read
+             and process that annotation correctly, whereas tar(1) will only
+             see files dated from the epoch.
+
+     @@vveerrssiioonn _n_u_m_b_e_r
+             Record a global (system) version number for the package.  This is
+             built adding together --VV options from pkg_create(1), and triggers
+             updates when it changes.
+
+     @@wwaannttlliibb _l_i_b_s_p_e_c
+             Record a library requirement declared using the option --WW of
+             pkg_create(1).
+
+     Note that most of these annotations cannot be added manually, as
+     pkg_create(1) will error out.
+
+PPAACCKKAAGGEE SSIIGGNNAATTUURREESS
+     All information within a package is checksummed, using SHA256 since
+     OpenBSD 4.4.  During creation and installation, meta-information, such as
+     file owners and permissions, are also checked: any important stuff that
+     isn't recorded in the ppaacckkiinngg--lliisstt is an error.
+
+     Starting with OpenBSD 6.1, signify(1) --zzSS gzip(1) header signatures are
+     the only supported format.  This allows for ‘just-in-time’ signature
+     checking, as the binary data is checked in 64K bytes long chunks.
+
+SSEEEE AALLSSOO
+     pkg_add(1), pkg_create(1), pkg_info(1), pkg_sign(1), packages(7),
+     packages-specs(7)
+
+SSTTAANNDDAARRDDSS
+     Packages are valid gzip'ed ustar archives that can be extracted using
+     tar(1).  In particular, hardlink names should be valid, and all items
+     will extract to different names.  However, it may be a bit difficult to
+     make sense of the package contents without peeking at the ppaacckkiinngg--lliisstt.
+
+BSD                            November 29, 2023                           BSD

@@ -1,0 +1,153 @@
+RANDOM(4)                BSD Kernel Interfaces Manual                RANDOM(4)
+
+NNAAMMEE
+     rraannddoomm — the entropy device
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss RRAANNDDOOMM__LLOOAADDAABBLLEE
+     ooppttiioonnss RRAANNDDOOMM__EENNAABBLLEE__EETTHHEERR
+     ooppttiioonnss RRAANNDDOOMM__EENNAABBLLEE__UUMMAA
+
+DDEESSCCRRIIPPTTIIOONN
+     The rraannddoomm device returns an endless supply of random bytes when read.
+
+     The generator will start in an _u_n_s_e_e_d_e_d state, and will block reads until
+     it is seeded for the first time.
+
+     To provide prompt access to the random device at boot time, FreeBSD auto‐
+     matically saves some entropy data in _/_b_o_o_t_/_e_n_t_r_o_p_y for the loader(8) to
+     provide to the kernel.  Additional entropy is regularly saved in
+     _/_v_a_r_/_d_b_/_e_n_t_r_o_p_y.  This saved entropy is sufficient to unblock the random
+     device on devices with writeable media.
+
+     Embedded applications without writable media must determine their own
+     scheme for re-seeding the random device on boot, or accept that the de‐
+     vice will remain unseeded and block reads indefinitely.  See _S_E_C_U_R_I_T_Y
+     _C_O_N_S_I_D_E_R_A_T_I_O_N_S for more detail.
+
+     In addition to read(2), the direct output of the abstract kernel entropy
+     device can be read with getrandom(2), getentropy(3), or the sysctl(8)
+     pseudo-variable _k_e_r_n_._a_r_a_n_d_o_m.
+
+     To see the current settings of the software rraannddoomm device, use the com‐
+     mand line:
+
+           sysctl kern.random
+
+     which results in something like:
+
+           kern.random.block_seeded_status: 0
+           kern.random.fortuna.minpoolsize: 64
+           kern.random.harvest.mask_symbolic: ENABLEDSOURCE,[DISABLEDSOURCE],...,CACHED
+           kern.random.harvest.mask_bin: 00000010000000111011111
+           kern.random.harvest.mask: 66015
+           kern.random.use_chacha20_cipher: 0
+           kern.random.random_sources: 'Intel Secure Key RNG'
+           kern.random.initial_seeding.bypass_before_seeding: 1
+           kern.random.initial_seeding.read_random_bypassed_before_seeding: 0
+           kern.random.initial_seeding.arc4random_bypassed_before_seeding: 0
+           kern.random.initial_seeding.disable_bypass_warnings: 0
+
+     Other than _k_e_r_n_._r_a_n_d_o_m_._b_l_o_c_k___s_e_e_d_e_d___s_t_a_t_u_s,
+     _k_e_r_n_._r_a_n_d_o_m_._f_o_r_t_u_n_a_._m_i_n_p_o_o_l_s_i_z_e, and _k_e_r_n_._r_a_n_d_o_m_._h_a_r_v_e_s_t_._m_a_s_k, all set‐
+     tings are read-only via sysctl(8).
+
+     The _k_e_r_n_._r_a_n_d_o_m_._f_o_r_t_u_n_a_._m_i_n_p_o_o_l_s_i_z_e sysctl is used to set the seed
+     threshold.  A smaller number gives a faster seed, but a less secure one.
+     In practice, values between 64 and 256 are acceptable.
+
+     The _k_e_r_n_._r_a_n_d_o_m_._h_a_r_v_e_s_t_._m_a_s_k bitmask is used to select the possible en‐
+     tropy sources.  A 0 (zero) value means the corresponding source is not
+     considered as an entropy source.  Set the bit to 1 (one) if you wish to
+     use that source.  The _k_e_r_n_._r_a_n_d_o_m_._h_a_r_v_e_s_t_._m_a_s_k___b_i_n and
+     _k_e_r_n_._r_a_n_d_o_m_._h_a_r_v_e_s_t_._m_a_s_k___s_y_m_b_o_l_i_c sysctls can be used to confirm settings
+     in a human readable form.  Disabled items in the latter are listed in
+     square brackets.  See random_harvest(9) for more on the harvesting of en‐
+     tropy.
+
+FFIILLEESS
+     /dev/random
+
+     /dev/urandom
+
+DDIIAAGGNNOOSSTTIICCSS
+     The following tunables are related to initial seeding of the rraannddoomm de‐
+     vice:
+
+     _k_e_r_n_._r_a_n_d_o_m_._i_n_i_t_i_a_l___s_e_e_d_i_n_g_._b_y_p_a_s_s___b_e_f_o_r_e___s_e_e_d_i_n_g
+       Defaults to 1 (on).  When set, the system will bypass the rraannddoomm device
+       prior to initial seeding.  On is _u_n_s_a_f_e, but provides availability on
+       many systems that lack early sources of entropy, or cannot load
+       _/_b_o_o_t_/_e_n_t_r_o_p_y sufficiently early in boot for rraannddoomm consumers.  When
+       unset (0), the system will block read_random(9) and arc4random(9) re‐
+       quests if and until the rraannddoomm device is initially seeded.
+
+     _k_e_r_n_._r_a_n_d_o_m_._i_n_i_t_i_a_l___s_e_e_d_i_n_g_._d_i_s_a_b_l_e___b_y_p_a_s_s___w_a_r_n_i_n_g_s
+       Defaults to 0 (off).  When set non-zero, disables warnings in dmesg
+       when the rraannddoomm device is bypassed.
+
+     The following read-only sysctl(8) variables allow programmatic diagnostic
+     of whether rraannddoomm device bypass occurred during boot.  If they are set
+     (non-zero), the specific functional unit bypassed the strong rraannddoomm de‐
+     vice output and either produced no output (read_random(9)) or seeded it‐
+     self with minimal, non-cryptographic entropy (arc4random(9)).
+
+     ••   _k_e_r_n_._r_a_n_d_o_m_._i_n_i_t_i_a_l___s_e_e_d_i_n_g_._r_e_a_d___r_a_n_d_o_m___b_y_p_a_s_s_e_d___b_e_f_o_r_e___s_e_e_d_i_n_g
+
+     ••   _k_e_r_n_._r_a_n_d_o_m_._i_n_i_t_i_a_l___s_e_e_d_i_n_g_._a_r_c_4_r_a_n_d_o_m___b_y_p_a_s_s_e_d___b_e_f_o_r_e___s_e_e_d_i_n_g
+
+SSEEEE AALLSSOO
+     getrandom(2), arc4random(3), getentropy(3), random(3), sysctl(8),
+     random(9)
+
+     Ferguson, Schneier, and Kohno, _C_r_y_p_t_o_g_r_a_p_h_y _E_n_g_i_n_e_e_r_i_n_g, _W_i_l_e_y, ISBN
+     978-0-470-47424-2.
+
+HHIISSTTOORRYY
+     A rraannddoomm device appeared in FreeBSD 2.2.  The implementation was changed
+     to the _Y_a_r_r_o_w _a_l_g_o_r_i_t_h_m _i_n FreeBSD 5.0.  In FreeBSD 11.0, the Fortuna al‐
+     gorithm was introduced as the default.  In FreeBSD 12.0, Yarrow was re‐
+     moved entirely.
+
+AAUUTTHHOORRSS
+     The current rraannddoomm code was authored by Mark R V Murray, with significant
+     contributions from many people.
+
+     The _F_o_r_t_u_n_a algorithm was designed by Niels Ferguson, Bruce Schneier, and
+     Tadayoshi Kohno.
+
+CCAAVVEEAATTSS
+     When ooppttiioonnss RRAANNDDOOMM__LLOOAADDAABBLLEE is enabled, the _/_d_e_v_/_r_a_n_d_o_m device is not
+     created until an "algorithm module" is loaded.  The only module built by
+     default is _r_a_n_d_o_m___f_o_r_t_u_n_a.  Loadable random modules are less efficient
+     than their compiled-in equivalents.  This is because some functions must
+     be locked against load and unload events, and also must be indirect calls
+     to allow for removal.
+
+     When ooppttiioonnss RRAANNDDOOMM__EENNAABBLLEE__UUMMAA is enabled, the _/_d_e_v_/_r_a_n_d_o_m device will
+     obtain entropy from the zone allocator.  This is a very high rate source
+     with significant performance impact.  Therefore, it is disabled by de‐
+     fault.
+
+     When ooppttiioonnss RRAANNDDOOMM__EENNAABBLLEE__EETTHHEERR is enabled, the rraannddoomm device will ob‐
+     tain entropy from _m_b_u_f structures passing through the network stack.
+     This source is both extremely expensive and a poor source of entropy, so
+     it is disabled by default.
+
+SSEECCUURRIITTYY CCOONNSSIIDDEERRAATTIIOONNSS
+     The initial seeding of random number generators is a bootstrapping prob‐
+     lem that needs very careful attention.  When writable media is available,
+     the _F_o_r_t_u_n_a paper describes a robust system for rapidly reseeding the de‐
+     vice.
+
+     In some embedded cases, it may be difficult to find enough randomness to
+     seed a random number generator until a system is fully operational.  In
+     these cases, is the responsibility of the system architect to ensure that
+     blocking is acceptable, or that the random device is seeded.  (This ad‐
+     vice does not apply to typical consumer systems.)
+
+     To emulate embedded systems, developers may set the
+     _k_e_r_n_._r_a_n_d_o_m_._b_l_o_c_k___s_e_e_d_e_d___s_t_a_t_u_s tunable to 1 to verify boot does not re‐
+     quire early availability of the rraannddoomm device.
+
+BSD                             April 19, 2019                             BSD

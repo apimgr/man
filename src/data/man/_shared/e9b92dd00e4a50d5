@@ -1,0 +1,97 @@
+KASAN(9)                 BSD Kernel Developer's Manual                KASAN(9)
+
+NNAAMMEE
+     KKAASSAANN — Kernel Address SANitizer
+
+SSYYNNOOPPSSIISS
+     The _G_E_N_E_R_I_C_-_K_A_S_A_N kernel configuration can be used to compile a KASAN-en‐
+     abled kernel using _G_E_N_E_R_I_C as a base configuration.  Alternately, to com‐
+     pile KASAN into the kernel, place the following line in your kernel con‐
+     figuration file:
+
+           ooppttiioonnss KKAASSAANN
+
+     ##iinncclluuddee <<ssyyss//aassaann..hh>>
+
+     _v_o_i_d
+     kkaassaann__mmaarrkk(_c_o_n_s_t _v_o_i_d _*_a_d_d_r, _s_i_z_e___t _s_i_z_e, _s_i_z_e___t _r_e_d_z_s_i_z_e, _u_i_n_t_8___t _c_o_d_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     KKAASSAANN is a subsystem which leverages compiler instrumentation to detect
+     invalid memory accesses in the kernel.  Currently it is implemented on
+     the amd64 and arm64 platforms.
+
+     When KKAASSAANN is compiled into the kernel, the compiler is configured to
+     emit function calls upon every memory access.  The functions are imple‐
+     mented by KKAASSAANN and permit run-time detection of several types of bugs
+     including use-after-frees, double frees and frees of invalid pointers,
+     and out-of-bounds accesses.  These protections apply to memory allocated
+     by uma(9), malloc(9) and related functions, and kkmmeemm__mmaalllloocc() and related
+     functions, as well as global variables and kernel stacks.  KKAASSAANN is con‐
+     servative and will not detect all instances of these types of bugs.  Mem‐
+     ory accesses through the kernel map are sanitized, but accesses via the
+     direct map are not.  When KKAASSAANN is configured, the kernel aims to mini‐
+     mize its use of the direct map.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     KKAASSAANN is implemented using compiler instrumentation and a kernel runtime.
+     When a kernel is built with the KASAN option enabled, the compiler in‐
+     serts function calls before most memory accesses in the generated code.
+     The runtime implements the corresponding functions, which decide whether
+     a given access is valid.  If not, the runtime prints a warning or panics
+     the kernel, depending on the value of the ddeebbuugg..kkaassaann..ppaanniicc__oonn__vviioollaattiioonn
+     sysctl/tunable.
+
+     The KKAASSAANN runtime in a KASAN-configured kernel can be disabled by setting
+     the loader tunable ddeebbuugg..kkaassaann..ddiissaabbllee==11.
+
+     The KKAASSAANN runtime works by maintaining a shadow map for the kernel map.
+     There exists a linear mapping between addresses in the kernel map and ad‐
+     dresses in the shadow map.  The shadow map is used to store information
+     about the current state of allocations from the kernel map.  For example,
+     when a buffer is returned by malloc(9), the corresponding region of the
+     shadow map is marked to indicate that the buffer is valid.  When it is
+     freed, the shadow map is updated to mark the buffer as invalid.  Accesses
+     to the buffer are intercepted by the KKAASSAANN runtime and validated using
+     the contents of the shadow map.
+
+     Upon booting, all kernel memory is marked as valid.  Kernel allocators
+     must mark cached but free buffers as invalid, and must mark them valid
+     before freeing the kernel virtual address range.  This slightly reduces
+     the effectiveness of KKAASSAANN but simplifies its maintenance and integration
+     into the kernel.
+
+     Updates to the shadow map are performed by calling kkaassaann__mmaarrkk().  Parame‐
+     ter _a_d_d_r is the address of the buffer whose shadow is to be updated, _s_i_z_e
+     is the usable size of the buffer, and _r_e_d_z_s_i_z_e is the full size of the
+     buffer allocated from lower layers of the system.  _r_e_d_z_s_i_z_e must be
+     greater than or equal to _s_i_z_e.  In some cases kernel allocators will re‐
+     turn a buffer larger than that requested by the consumer; the unused
+     space at the end is referred to as a red zone and is always marked as in‐
+     valid.  _c_o_d_e allows the caller to specify an identifier used when marking
+     a buffer as invalid.  The identifier is included in any reports generated
+     by KKAASSAANN and helps identify the source of the invalid access.  For in‐
+     stance, when an item is freed to a uma(9) zone, the item is marked with
+     KASAN_UMA_FREED.  See <_s_y_s_/_a_s_a_n_._h> for the available identifiers.  If the
+     entire buffer is to be marked valid, i.e., _s_i_z_e and _r_e_d_z_s_i_z_e are equal,
+     _c_o_d_e should be 0.
+
+SSEEEE AALLSSOO
+     build(7), KMSAN(9), malloc(9), memguard(9), redzone(9), uma(9)
+
+HHIISSTTOORRYY
+     KKAASSAANN was ported from NetBSD and first appeared in FreeBSD 13.1.
+
+BBUUGGSS
+     Accesses to kernel memory outside of the kernel map are ignored by the
+     KKAASSAANN runtime.  When KKAASSAANN is configured, the kernel memory allocators
+     are configured to use the kernel map, but some uses of the direct map re‐
+     main.  For example, on amd64 and arm64, accesses to page table pages are
+     not tracked.
+
+     Some kernel memory allocators explicitly permit accesses after an object
+     has been freed.  These cannot be sanitized by KKAASSAANN.  For example, memory
+     from all uma(9) zones initialized with the UMA_ZONE_NOFREE flag are not
+     sanitized.
+
+BSD                            October 13, 2023                            BSD

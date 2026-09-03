@@ -1,0 +1,287 @@
+_e_v_e_n_t_f_d(2)                    System Calls Manual                   _e_v_e_n_t_f_d(2)
+
+NNAAMMEE
+       eventfd - create a file descriptor for event notification
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//eevveennttffdd..hh>>
+
+       iinntt eevveennttffdd((uunnssiiggnneedd iinntt _i_n_i_t_v_a_l,, iinntt _f_l_a_g_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       eevveennttffdd()  creates  an  "eventfd  object"  that can be used as an event
+       wait/notify mechanism by user‐space applications, and by the kernel  to
+       notify  user‐space  applications of events.  The object contains an un‐
+       signed 64‐bit integer (_u_i_n_t_6_4___t) counter that is maintained by the ker‐
+       nel.  This counter is initialized with the value specified in the argu‐
+       ment _i_n_i_t_v_a_l.
+
+       As its return value, eevveennttffdd() returns a new file descriptor  that  can
+       be used to refer to the eventfd object.
+
+       The  following values may be bitwise ORed in _f_l_a_g_s to change the behav‐
+       ior of eevveennttffdd():
+
+       EEFFDD__CCLLOOEEXXEECC (since Linux 2.6.27)
+              Set the close‐on‐exec (FFDD__CCLLOOEEXXEECC) flag on the new file descrip‐
+              tor.  See the description of the OO__CCLLOOEEXXEECC flag in  ooppeenn(2)  for
+              reasons why this may be useful.
+
+       EEFFDD__NNOONNBBLLOOCCKK (since Linux 2.6.27)
+              Set the OO__NNOONNBBLLOOCCKK file status flag on the open file description
+              (see  ooppeenn(2))  referred  to  by the new file descriptor.  Using
+              this flag saves extra calls to ffccnnttll(2) to achieve the same  re‐
+              sult.
+
+       EEFFDD__SSEEMMAAPPHHOORREE (since Linux 2.6.30)
+              Provide semaphore‐like semantics for reads from the new file de‐
+              scriptor.  See below.
+
+       Up to Linux 2.6.26, the _f_l_a_g_s argument is unused, and must be specified
+       as zero.
+
+       The  following  operations  can be performed on the file descriptor re‐
+       turned by eevveennttffdd():
+
+       rreeaadd(2)
+              Each successful rreeaadd(2) returns an 8‐byte  integer.   A  rreeaadd(2)
+              fails  with  the error EEIINNVVAALL if the size of the supplied buffer
+              is less than 8 bytes.
+
+              The value returned by rreeaadd(2) is in host byte order—that is, the
+              native byte order for integers on the host machine.
+
+              The semantics of rreeaadd(2) depend on whether the  eventfd  counter
+              currently has a nonzero value and whether the EEFFDD__SSEEMMAAPPHHOORREE flag
+              was specified when creating the eventfd file descriptor:
+
+              •  If  EEFFDD__SSEEMMAAPPHHOORREE  was  not specified and the eventfd counter
+                 has a nonzero value, then a rreeaadd(2) returns 8 bytes  contain‐
+                 ing that value, and the counter’s value is reset to zero.
+
+              •  If  EEFFDD__SSEEMMAAPPHHOORREE was specified and the eventfd counter has a
+                 nonzero value, then a rreeaadd(2) returns 8 bytes containing  the
+                 value 1, and the counter’s value is decremented by 1.
+
+              •  If  the  eventfd  counter  is zero at the time of the call to
+                 rreeaadd(2), then the call either blocks until  the  counter  be‐
+                 comes  nonzero  (at  which  time, the rreeaadd(2) proceeds as de‐
+                 scribed above) or fails with the error EEAAGGAAIINN if the file de‐
+                 scriptor has been made nonblocking.
+
+       wwrriittee(2)
+              A wwrriittee(2) call adds the 8‐byte integer value  supplied  in  its
+              buffer  to the counter.  The maximum value that may be stored in
+              the counter is the largest unsigned 64‐bit value minus 1  (i.e.,
+              0xfffffffffffffffe).   If the addition would cause the counter’s
+              value to exceed the maximum, then the wwrriittee(2) either blocks un‐
+              til a rreeaadd(2) is performed on the file descriptor, or fails with
+              the error EEAAGGAAIINN if the file descriptor has been made  nonblock‐
+              ing.
+
+              A  wwrriittee(2)  fails with the error EEIINNVVAALL if the size of the sup‐
+              plied buffer is less than 8 bytes, or if an attempt is  made  to
+              write the value 0xffffffffffffffff.
+
+       ppoollll(2)
+       sseelleecctt(2)
+       (and similar)
+              The  returned  file descriptor supports ppoollll(2) (and analogously
+              eeppoollll(7)) and sseelleecctt(2), as follows:
+
+              •  The file descriptor is readable (the sseelleecctt(2) _r_e_a_d_f_d_s  argu‐
+                 ment;  the  ppoollll(2)  PPOOLLLLIINN  flag) if the counter has a value
+                 greater than 0.
+
+              •  The file descriptor is writable (the sseelleecctt(2) _w_r_i_t_e_f_d_s argu‐
+                 ment; the ppoollll(2) PPOOLLLLOOUUTT flag) if it is possible to write  a
+                 value of at least "1" without blocking.
+
+              •  If  an  overflow  of the counter value was detected, then ssee‐‐
+                 lleecctt(2) indicates the file descriptor as being both  readable
+                 and  writable, and ppoollll(2) returns a PPOOLLLLEERRRR event.  As noted
+                 above, wwrriittee(2) can never overflow the counter.   However  an
+                 overflow  can  occur if 2^64 eventfd "signal posts" were per‐
+                 formed by the KAIO  subsystem  (theoretically  possible,  but
+                 practically  unlikely).   If  an  overflow has occurred, then
+                 rreeaadd(2)  will  return  that  maximum  _u_i_n_t_6_4___t  value  (i.e.,
+                 0xffffffffffffffff).
+
+              The  eventfd  file  descriptor  also supports the other file‐de‐
+              scriptor multiplexing APIs: ppsseelleecctt(2) and ppppoollll(2).
+
+       cclloossee(2)
+              When the file descriptor is no  longer  required  it  should  be
+              closed.   When  all  file  descriptors  associated with the same
+              eventfd object have been closed, the resources  for  object  are
+              freed by the kernel.
+
+       A  copy of the file descriptor created by eevveennttffdd() is inherited by the
+       child produced by ffoorrkk(2).  The duplicate file descriptor is associated
+       with the same eventfd object.  File descriptors  created  by  eevveennttffdd()
+       are  preserved across eexxeeccvvee(2), unless the close‐on‐exec flag has been
+       set.
+
+RREETTUURRNN VVAALLUUEE
+       On success, eevveennttffdd() returns a new eventfd file descriptor.  On error,
+       -1 is returned and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEIINNVVAALL An unsupported value was specified in _f_l_a_g_s.
+
+       EEMMFFIILLEE The per‐process limit on the number of open file descriptors has
+              been reached.
+
+       EENNFFIILLEE The system‐wide limit on the total number of open files has been
+              reached.
+
+       EENNOODDEEVV Could not mount (internal) anonymous inode device.
+
+       EENNOOMMEEMM There was insufficient memory to create a new eventfd  file  de‐
+              scriptor.
+
+AATTTTRRIIBBUUTTEESS
+       For  an  explanation  of  the  terms  used in this section, see aattttrriibb‐‐
+       uutteess(7).  allbox; lbx lb lb l l l.  Interface Attribute Value T{
+       eevveennttffdd() T}   Thread safety  MT‐Safe
+
+VVEERRSSIIOONNSS
+   CC lliibbrraarryy//kkeerrnneell ddiiffffeerreenncceess
+       There are two underlying Linux system calls: eevveennttffdd() and the more
+       recent eevveennttffdd22().  The former system call does not implement a _f_l_a_g_s
+       argument.  The latter system call implements the _f_l_a_g_s values described
+       above.  The glibc wrapper function will use eevveennttffdd22() where it is
+       available.
+
+   AAddddiittiioonnaall gglliibbcc ffeeaattuurreess
+       The GNU C library defines an additional type, and two functions that
+       attempt to abstract some of the details of reading and writing on an
+       eventfd file descriptor:
+
+           typedef uint64_t eventfd_t;
+
+           int eventfd_read(int fd, eventfd_t *value);
+           int eventfd_write(int fd, eventfd_t value);
+
+       The functions perform the read and write operations on an eventfd file
+       descriptor, returning 0 if the correct number of bytes was transferred,
+       or -1 otherwise.
+
+SSTTAANNDDAARRDDSS
+       Linux, GNU.
+
+HHIISSTTOORRYY
+       eevveennttffdd()
+              Linux 2.6.22, glibc 2.8.
+
+       eevveennttffdd22()
+              Linux 2.6.27 (see VERSIONS).  Since  glibc  2.9,  the  eevveennttffdd()
+              wrapper  will  employ  the  eevveennttffdd22()  system  call,  if  it is
+              supported by the kernel.
+
+NNOOTTEESS
+       Applications can use an eventfd file descriptor instead of a pipe  (see
+       ppiippee(2))  in  all  cases  where a pipe is used simply to signal events.
+       The kernel overhead of an eventfd file descriptor is  much  lower  than
+       that  of  a  pipe, and only one file descriptor is required (versus the
+       two required for a pipe).
+
+       When used in the kernel, an  eventfd  file  descriptor  can  provide  a
+       bridge   from   kernel   to   user   space,   allowing,   for  example,
+       functionalities like KAIO (kernel AIO) to signal to a  file  descriptor
+       that some operation is complete.
+
+       A  key  point  about  an  eventfd  file  descriptor  is  that it can be
+       monitored just like any other file descriptor using sseelleecctt(2), ppoollll(2),
+       or eeppoollll(7).  This means that an application can simultaneously monitor
+       the readiness of "traditional" files and the readiness of other  kernel
+       mechanisms  that support the eventfd interface.  (Without the eevveennttffdd()
+       interface, these mechanisms could not  be  multiplexed  via  sseelleecctt(2),
+       ppoollll(2), or eeppoollll(7).)
+
+       The current value of an eventfd counter can be viewed via the entry for
+       the  corresponding  file  descriptor  in the process’s _/_p_r_o_c_/pid_/_f_d_i_n_f_o
+       directory.  See pprroocc(5) for further details.
+
+EEXXAAMMPPLLEESS
+       The following program creates an eventfd file descriptor and then forks
+       to create a child process.  While the parent briefly sleeps, the  child
+       writes  each  of  the  integers  supplied in the program’s command‐line
+       arguments to the eventfd file descriptor.  When the parent has finished
+       sleeping, it reads from the eventfd file descriptor.
+
+       The following shell session shows a sample run of the program:
+
+           $ ..//aa..oouutt 11 22 44 77 1144
+           Child writing 1 to efd
+           Child writing 2 to efd
+           Child writing 4 to efd
+           Child writing 7 to efd
+           Child writing 14 to efd
+           Child completed write loop
+           Parent about to read
+           Parent read 28 (0x1c) from efd
+
+   PPrrooggrraamm ssoouurrccee
+
+       #include <err.h>
+       #include <inttypes.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/eventfd.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       int
+       main(int argc, char *argv[])
+       {
+           int       efd;
+           uint64_t  u;
+           ssize_t   s;
+
+           if (argc < 2) {
+               fprintf(stderr, "Usage: %s <num>...\n", argv[0]);
+               exit(EXIT_FAILURE);
+           }
+
+           efd = eventfd(0, 0);
+           if (efd == -1)
+               err(EXIT_FAILURE, "eventfd");
+
+           switch (fork()) {
+           case 0:
+               for (size_t j = 1; j < argc; j++) {
+                   printf("Child writing %s to efd\n", argv[j]);
+                   u = strtoull(argv[j], NULL, 0);
+                           /* strtoull() allows various bases */
+                   s = write(efd, &u, sizeof(uint64_t));
+                   if (s != sizeof(uint64_t))
+                       err(EXIT_FAILURE, "write");
+               }
+               printf("Child completed write loop\n");
+
+               exit(EXIT_SUCCESS);
+
+           default:
+               sleep(2);
+
+               printf("Parent about to read\n");
+               s = read(efd, &u, sizeof(uint64_t));
+               if (s != sizeof(uint64_t))
+                   err(EXIT_FAILURE, "read");
+               printf("Parent read %"PRIu64" (%#"PRIx64") from efd\n", u, u);
+               exit(EXIT_SUCCESS);
+
+           case -1:
+               err(EXIT_FAILURE, "fork");
+           }
+       }
+
+SSEEEE AALLSSOO
+       ffuutteexx(2),   ppiippee(2),   ppoollll(2),   rreeaadd(2),   sseelleecctt(2),    ssiiggnnaallffdd(2),
+       ttiimmeerrffdd__ccrreeaattee(2), wwrriittee(2), eeppoollll(7), sseemm__oovveerrvviieeww(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                        _e_v_e_n_t_f_d(2)

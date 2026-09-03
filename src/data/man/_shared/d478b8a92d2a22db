@@ -1,0 +1,137 @@
+MKUZIP(8)                 BSD System Manager's Manual                MKUZIP(8)
+
+NNAAMMEE
+     mmkkuuzziipp — compress disk image for use with geom_uzip(4) class
+
+SSYYNNOOPPSSIISS
+     mmkkuuzziipp [--ddSSssvvZZ] [--AA _c_o_m_p_r_e_s_s_i_o_n___a_l_g_o_r_i_t_h_m] [--CC _c_o_m_p_r_e_s_s_i_o_n___l_e_v_e_l]
+            [--jj _c_o_m_p_r_e_s_s_i_o_n___j_o_b_s] [--oo _o_u_t_f_i_l_e] [--ss _c_l_u_s_t_e_r___s_i_z_e] _i_n_f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmkkuuzziipp utility compresses a disk image file so that the geom_uzip(4)
+     class will be able to decompress the resulting image at run-time.  This
+     allows for a significant reduction of size of disk image at the expense
+     of some CPU time required to decompress the data each time it is read.
+     The mmkkuuzziipp utility works in two phases:
+
+     1.   An _i_n_f_i_l_e image is split into clusters; each cluster is compressed.
+
+     2.   The resulting set of compressed clusters is written to the output
+          file.  In addition, a “table of contents” header is written which
+          allows for efficient seeking.
+
+     The options are:
+
+     --AA [_l_z_m_a | _z_l_i_b | _z_s_t_d]
+             Select a specific compression algorithm.  If this option is not
+             provided, the default is _z_l_i_b.
+
+             The _l_z_m_a algorithm provides noticeable better compression levels
+             than zlib on the same data set.  It has vastly slower compression
+             speed and moderately slower decompression speed.
+
+             The _z_s_t_d algorithm provides better compression levels than zlib
+             on the same data set.  It also has faster compression and decom‐
+             pression speed than zlib.  In the very high compression “level”
+             settings, it does not offer quite as high a compression ratio as
+             _l_z_m_a.  However, its decompression speed does not suffer at high
+             compression “levels”.
+
+     --CC _c_o_m_p_r_e_s_s_i_o_n___l_e_v_e_l
+             Select the integer compression level used to parameterize the
+             chosen compression algorithm.
+
+             For any given algorithm, a lesser number selects a faster com‐
+             pression mode.  A greater number selects a slower compression
+             mode.  Typically, for the same algorithm, a greater
+             _c_o_m_p_r_e_s_s_i_o_n___l_e_v_e_l provides better final compression ratio.
+
+             For _l_z_m_a, the range of valid compression levels is _0_-_9.  The
+             mmkkuuzziipp default for lzma is _6.
+
+             For _z_l_i_b, the range of valid compression levels is _1_-_9.  The
+             mmkkuuzziipp default for zlib is _9.
+
+             For _z_s_t_d, the range of valid compression levels is currently
+             _1_-_1_9.  The mmkkuuzziipp default for zstd is _9.
+
+     --dd      Enable de-duplication.  When the option is enabled mmkkuuzziipp detects
+             identical blocks in the input and replaces each subsequent occur‐
+             rence of such block with pointer to the very first one in the
+             output.  Setting this option results is moderate decrease of com‐
+             pressed image size, typically around 3-5% of a final size of the
+             compressed image.
+
+     --jj _c_o_m_p_r_e_s_s_i_o_n___j_o_b_s
+             Specify the number of compression jobs that mmkkuuzziipp runs in paral‐
+             lel to speed up compression.  When option is not specified the
+             number of jobs set to be equal to the value of _h_w_._n_c_p_u sysctl(8)
+             variable.
+
+     [--LL]    Legacy flag that indicates the same thing as “--AA _l_z_m_a”.
+
+     --oo _o_u_t_f_i_l_e
+             Name of the output file _o_u_t_f_i_l_e.  The default is to use the input
+             name with the suffix _._u_z_i_p for the zlib(3) compression or _._u_l_z_m_a
+             for the lzma(3).
+
+     --SS      Print summary about the compression ratio as well as output file
+             size after file has been processed.
+
+     --ss _c_l_u_s_t_e_r___s_i_z_e
+             Split the image into clusters of _c_l_u_s_t_e_r___s_i_z_e bytes, 16384 bytes
+             by default.  The _c_l_u_s_t_e_r___s_i_z_e should be a multiple of 512 bytes.
+
+     --vv      Display verbose messages.
+
+     --ZZ      Disable zero-block detection and elimination.  When this option
+             is set, mmkkuuzziipp compresses blocks of zero bytes just as it would
+             any other block.  When the option is not set, mmkkuuzziipp detects and
+             compresses zero blocks in a space-efficient way.  Setting --ZZ in‐
+             creases compressed image sizes slightly, typically less than
+             0.1%.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     The compression ratio largely depends on the compression algorithm,
+     level, and cluster size used.  For large cluster sizes (16kB and higher),
+     typical overall image compression ratios with zlib(3) are only 1-2% less
+     than those achieved with gzip(1) over the entire image.  However, it
+     should be kept in mind that larger cluster sizes lead to higher overhead
+     in the geom_uzip(4) class, as the class has to decompress the whole clus‐
+     ter even if only a few bytes from that cluster have to be read.
+
+     Additionally, the threshold at 16-32 kB where a larger cluster size does
+     not benefit overall compression ratio is an artifact of the zlib(3) algo‐
+     rithm in particular.  _L_z_m_a and _Z_s_t_d _w_i_l_l _c_o_n_t_i_n_u_e _t_o _p_r_o_v_i_d_e _b_e_t_t_e_r
+     _c_o_m_p_r_e_s_s_i_o_n _r_a_t_i_o_s _a_s _c_l_u_s_t_e_r _s_i_z_e_s are increased, at high enough com‐
+     pression levels.  The same tradeoff continues to apply: reads in
+     geom_uzip(4) become more expensive the greater the cluster size.
+
+     The mmkkuuzziipp utility inserts a short shell script at the beginning of the
+     generated image, which makes it possible to “run” the image just like any
+     other shell script.  The script tries to load the geom_uzip(4) class if
+     it is not loaded, configure the image as an md(4) disk device using
+     mdconfig(8), and automatically mount it using mount_cd9660(8) on the
+     mount point provided as the first argument to the script.
+
+     The de-duplication is a FreeBSD specific feature and while it does not
+     require any changes to on-disk compressed image format, however it did
+     require some matching changes to the geom_uzip(4) to handle resulting im‐
+     ages correctly.
+
+     To make use of _z_s_t_d mmkkuuzziipp images, the kernel must be configured with
+     ZZSSTTDDIIOO.  It is enabled by default in many GGEENNEERRIICC kernels provided as bi‐
+     nary distributions by FreeBSD.  The status on any particular system can
+     be verified by checking sysctl(8) kern.features.geom_uzip_zstd for “1”.
+
+EEXXIITT SSTTAATTUUSS
+     The mmkkuuzziipp utility exits 0 on success, and >0 if an error occurs.
+
+SSEEEE AALLSSOO
+     gzip(1), xz(1), zstd(1), zlib(3), geom(4), geom_uzip(4), md(4),
+     mdconfig(8), mount_cd9660(8)
+
+AAUUTTHHOORRSS
+     Maxim Sobolev <_s_o_b_o_m_a_x_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                             August 9, 2019                             BSD

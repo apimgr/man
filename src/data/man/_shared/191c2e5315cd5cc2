@@ -1,0 +1,328 @@
+TTY(4)                   BSD Kernel Interfaces Manual                   TTY(4)
+
+NNAAMMEE
+     ttttyy, ccuuaa — general terminal interface
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//iiooccttll..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     This section describes the interface to the terminal drivers in the sys‐
+     tem.
+
+   TTeerrmmiinnaall SSppeecciiaall FFiilleess
+     Each hardware terminal port (such as a serial port) on the system usually
+     has a terminal special device file associated with it in the directory
+     _/_d_e_v_/ (for example, _/_d_e_v_/_t_t_y_0_3).  When a user logs into the system on one
+     of these hardware terminal ports, the system has already opened the asso‐
+     ciated device and prepared the line for normal interactive use (see
+     getty(8)).  There is also a special case of a terminal file that connects
+     not to a hardware terminal port, but to another program on the other
+     side.  These special terminal devices are called _p_t_y_s and provide the
+     mechanism necessary to give users the same interface to the system when
+     logging in over a network (using ssh(1) for example).  Even in these
+     cases the details of how the terminal file was opened and set up is al‐
+     ready handled by special software in the system.  Thus, users do not nor‐
+     mally need to worry about the details of how these lines are opened or
+     used.
+
+     For hardware terminal ports, dial-out is supported through matching de‐
+     vice nodes called calling units.  For instance, the terminal called
+     _/_d_e_v_/_t_t_y_0_3 would have a matching calling unit called _/_d_e_v_/_c_u_a_0_3.  These
+     two devices are normally differentiated by creating the calling unit de‐
+     vice node with a minor number 128 greater than the dial-in device node.
+     Whereas the dial-in device (the _t_t_y) normally requires a hardware signal
+     to indicate to the system that it is active, the dial-out device (the
+     _c_u_a) does not, and hence can communicate unimpeded with a device such as
+     a modem, or with another system over a serial link.  This means that a
+     process like getty(8) will wait on a dial-in device until a connection is
+     established.  Meanwhile, a dial-out connection can be established on the
+     dial-out device (for the very same hardware terminal port) without dis‐
+     turbing anything else on the system.  The getty(8) process does not even
+     notice that anything is happening on the terminal port.  If a connecting
+     call comes in after the dial-out connection has finished, the getty(8)
+     process will deal with it properly, without having noticed the interven‐
+     ing dial-out action.  For more information on dial-out, see cu(1).
+
+     When an interactive user logs in, the system prepares the line to behave
+     in a certain way (called a _l_i_n_e _d_i_s_c_i_p_l_i_n_e), described in stty(1) at the
+     command level, and in termios(4) at the programming level.  To change
+     settings associated with a login terminal, refer to the preceding man
+     pages for the common cases.  The remainder of this man page is concerned
+     with describing details of using and controlling terminal devices at a
+     low level, such as that possibly required by a program wishing to provide
+     features similar to those provided by the system.
+
+   LLiinnee ddiisscciipplliinneess
+     A terminal file is used like any other file in the system in that it can
+     be opened, read, and written to using standard system calls.  For each
+     existing terminal file, there is a software processing module called a
+     _l_i_n_e _d_i_s_c_i_p_l_i_n_e associated with it.  The _l_i_n_e _d_i_s_c_i_p_l_i_n_e essentially
+     glues the low level device driver code with the high level generic inter‐
+     face routines (such as read(2) and write(2)), and is responsible for im‐
+     plementing the semantics associated with the device.  When a terminal
+     file is first opened by a program, the default _l_i_n_e _d_i_s_c_i_p_l_i_n_e called the
+     termios line discipline is associated with the file.  This is the primary
+     line discipline that is used in most cases and provides the semantics
+     that users normally associate with a terminal.  When the termios line
+     discipline is in effect, the terminal file behaves and is operated ac‐
+     cording to the rules described in termios(4).  Refer to that man page for
+     a full description of the terminal semantics.  The operations described
+     here generally represent features common across all _l_i_n_e _d_i_s_c_i_p_l_i_n_e_s, al‐
+     though some of these calls may not make sense in conjunction with a line
+     discipline other than termios, and some may not be supported by the un‐
+     derlying hardware (or lack thereof, as in the case of ptys).
+
+   TTeerrmmiinnaall FFiillee OOppeerraattiioonnss
+     All of the following operations are invoked using the ioctl(2) system
+     call.  Refer to that man page for a description of the _r_e_q_u_e_s_t and _a_r_g_p
+     parameters.  In addition to the ioctl _r_e_q_u_e_s_t_s defined here, the specific
+     line discipline in effect will define other _r_e_q_u_e_s_t_s specific to it (ac‐
+     tually termios(4) defines them as function calls, not ioctl _r_e_q_u_e_s_t_s).
+     The following section lists the available ioctl requests.  The name of
+     the request, a description of its purpose, and the typed _a_r_g_p parameter
+     (if any) are listed.  For example, the first entry says
+
+           _T_I_O_C_S_E_T_D _i_n_t _*_l_d_i_s_c
+
+     and would be called on the terminal associated with file descriptor zero
+     by the following code fragment:
+
+             int ldisc;
+
+             ldisc = TTYDISC;
+             ioctl(0, TIOCSETD, &ldisc);
+
+   TTeerrmmiinnaall FFiillee RReeqquueesstt DDeessccrriippttiioonnss
+     TIOCSETD _i_n_t _*_l_d_i_s_c
+                 Change to the new line discipline pointed to by _l_d_i_s_c.  The
+                 available line disciplines currently available are:
+
+                 TTYDISC     Termios interactive line discipline.
+                 PPPDISC     Point-to-Point Protocol line discipline.
+                 NMEADISC    NMEA 0183 line discipline.
+                 MSTSDISC    Meinberg Standard Time String line discipline.
+
+     TIOCGETD _i_n_t _*_l_d_i_s_c
+                 Return the current line discipline in the integer pointed to
+                 by _l_d_i_s_c.
+
+     TIOCSBRK _v_o_i_d
+                 Set the terminal hardware into BREAK condition.
+
+     TIOCCBRK _v_o_i_d
+                 Clear the terminal hardware BREAK condition.
+
+     TIOCSDTR _v_o_i_d
+                 Assert data terminal ready (DTR).
+
+     TIOCCDTR _v_o_i_d
+                 Clear data terminal ready (DTR).
+
+     TIOCGPGRP _i_n_t _*_t_p_g_r_p
+                 Return the current process group the terminal is associated
+                 with in the integer pointed to by _t_p_g_r_p.  This is the under‐
+                 lying call that implements the tcgetpgrp(3) call.
+
+     TIOCSPGRP _i_n_t _*_t_p_g_r_p
+                 Associate the terminal with the process group (as an integer)
+                 pointed to by _t_p_g_r_p.  This is the underlying call that imple‐
+                 ments the tcsetpgrp(3) call.
+
+     TIOCGETA _s_t_r_u_c_t _t_e_r_m_i_o_s _*_t_e_r_m
+                 Place the current value of the termios state associated with
+                 the device in the termios structure pointed to by _t_e_r_m.  This
+                 is the underlying call that implements the tcgetattr(3) call.
+
+     TIOCSETA _s_t_r_u_c_t _t_e_r_m_i_o_s _*_t_e_r_m
+                 Set the termios state associated with the device immediately.
+                 This is the underlying call that implements the tcsetattr(3)
+                 call with the TCSANOW option.
+
+     TIOCSETAW _s_t_r_u_c_t _t_e_r_m_i_o_s _*_t_e_r_m
+                 First wait for any output to complete, then set the termios
+                 state associated with the device.  This is the underlying
+                 call that implements the tcsetattr(3) call with the TCSADRAIN
+                 option.
+
+     TIOCSETAF _s_t_r_u_c_t _t_e_r_m_i_o_s _*_t_e_r_m
+                 First wait for any output to complete, clear any pending in‐
+                 put, then set the termios state associated with the device.
+                 This is the underlying call that implements the tcsetattr(3)
+                 call with the TCSAFLUSH option.
+
+     TIOCOUTQ _i_n_t _*_n_u_m
+                 Place the current number of characters in the output queue in
+                 the integer pointed to by _n_u_m.
+
+     TIOCNOTTY _v_o_i_d
+                 This call is obsolete but left for compatibility.  In the
+                 past, when a process that didn't have a controlling terminal
+                 (see _T_h_e _C_o_n_t_r_o_l_l_i_n_g _T_e_r_m_i_n_a_l in termios(4)) first opened a
+                 terminal device, it acquired that terminal as its controlling
+                 terminal.  For some programs this was a hazard as they didn't
+                 want a controlling terminal in the first place, and this pro‐
+                 vided a mechanism to disassociate the controlling terminal
+                 from the calling process.  It _m_u_s_t be called by opening the
+                 file _/_d_e_v_/_t_t_y and calling TIOCNOTTY on that file descriptor.
+
+                 The current system does not allocate a controlling terminal
+                 to a process on an open(2) call: there is a specific ioctl
+                 called TIOCSCTTY to make a terminal the controlling terminal.
+                 In addition, a program can fork(2) and call the setsid(2)
+                 system call which will place the process into its own session
+                 - which has the effect of disassociating it from the control‐
+                 ling terminal.  This is the new and preferred method for pro‐
+                 grams to lose their controlling terminal.
+
+     TIOCSETVERAUTH _i_n_t _*_s_e_c_s
+                 Indicate that the current user has successfully authenticated
+                 to this session.  Future authentication checks may then be
+                 bypassed by performing a TIOCCHKVERAUTH check.  The verified
+                 authentication status will expire after _s_e_c_s seconds.  Only
+                 root may perform this operation.
+
+     TIOCCLRVERAUTH _v_o_i_d
+                 Clear any verified auth status associated with this session.
+
+     TIOCCHKVERAUTH _v_o_i_d
+                 Check the verified auth status of this session.  The calling
+                 process must have the same real user ID and parent process as
+                 the process which called TIOCSETVERAUTH.  A zero return indi‐
+                 cates success.
+
+     TIOCSTOP _v_o_i_d
+                 Stop output on the terminal (like typing ^S at the keyboard).
+
+     TIOCSTART _v_o_i_d
+                 Start output on the terminal (like typing ^Q at the key‐
+                 board).
+
+     TIOCSCTTY _v_o_i_d
+                 Make the terminal the controlling terminal for the process
+                 (the process must not currently have a controlling terminal).
+
+     TIOCDRAIN _v_o_i_d
+                 Wait until all output is drained.
+
+     TIOCEXCL _v_o_i_d
+                 Set exclusive use on the terminal.  No further opens are per‐
+                 mitted except by root.  Of course, this means that programs
+                 that are run by root (or setuid) will not obey the exclusive
+                 setting - which limits the usefulness of this feature.
+
+     TIOCNXCL _v_o_i_d
+                 Clear exclusive use of the terminal.  Further opens are per‐
+                 mitted.
+
+     TIOCFLUSH _i_n_t _*_w_h_a_t
+                 If the value of the int pointed to by _w_h_a_t contains the FREAD
+                 bit as defined in <_s_y_s_/_f_c_n_t_l_._h>, then all characters in the
+                 input queue are cleared.  If it contains the FWRITE bit, then
+                 all characters in the output queue are cleared.  If the value
+                 of the integer is zero, then it behaves as if both the FREAD
+                 and FWRITE bits were set (i.e., clears both queues).
+
+     TIOCGWINSZ _s_t_r_u_c_t _w_i_n_s_i_z_e _*_w_s
+                 Put the window size information associated with the terminal
+                 in the _w_i_n_s_i_z_e structure pointed to by _w_s.  The window size
+                 structure contains the number of rows and columns (and pixels
+                 if appropriate) of the devices attached to the terminal.  It
+                 is set by user software and is the means by which most full-
+                 screen oriented programs determine the screen size.
+
+     TIOCSWINSZ _s_t_r_u_c_t _w_i_n_s_i_z_e _*_w_s
+                 Set the window size associated with the terminal to be the
+                 value in the _w_i_n_s_i_z_e structure pointed to by _w_s (see above).
+
+     TIOCCONS _i_n_t _*_o_n
+                 If _o_n points to a non-zero integer, redirect kernel console
+                 output (see printf(9)) to this terminal.  If _o_n points to a
+                 zero integer, redirect kernel console output back to the nor‐
+                 mal console.  This is usually used on workstations to redi‐
+                 rect kernel messages to a particular window.
+
+     TIOCMSET _i_n_t _*_s_t_a_t_e
+                 The integer pointed to by _s_t_a_t_e contains bits that correspond
+                 to modem state.  Following is a list of defined variables and
+                 the modem state they represent:
+
+                 TIOCM_LE   Line Enable.
+                 TIOCM_DTR  Data Terminal Ready.
+                 TIOCM_RTS  Request To Send.
+                 TIOCM_ST   Secondary Transmit.
+                 TIOCM_SR   Secondary Receive.
+                 TIOCM_CTS  Clear To Send.
+                 TIOCM_CAR  Carrier Detect.
+                 TIOCM_CD   Carrier Detect (synonym).
+                 TIOCM_RNG  Ring Indication.
+                 TIOCM_RI   Ring Indication (synonym).
+                 TIOCM_DSR  Data Set Ready.
+
+                 This call sets the terminal modem state to that represented
+                 by _s_t_a_t_e.  Not all terminals may support this.
+
+     TIOCMGET _i_n_t _*_s_t_a_t_e
+                 Return the current state of the terminal modem lines as rep‐
+                 resented above in the integer pointed to by _s_t_a_t_e.
+
+     TIOCMBIS _i_n_t _*_s_t_a_t_e
+                 The bits in the integer pointed to by _s_t_a_t_e represent modem
+                 state as described above; however, the state is OR-ed in with
+                 the current state.
+
+     TIOCMBIC _i_n_t _*_s_t_a_t_e
+                 The bits in the integer pointed to by _s_t_a_t_e represent modem
+                 state as described above; however, each bit which is on in
+                 _s_t_a_t_e is cleared in the terminal.
+
+     TIOCGTSTAMP _s_t_r_u_c_t _t_i_m_e_v_a_l _*_t_i_m_e_v_a_l
+                 Return the (single) timestamp.
+
+     TIOCSTSTAMP _s_t_r_u_c_t _t_s_t_a_m_p_s _*_t_s_t_a_m_p_s
+                 Chooses the conditions which will cause the current system
+                 time to be immediately copied to the terminal timestamp stor‐
+                 age.  This is often used to determine exactly the moment at
+                 which one or more of these events occurred, though only one
+                 can be monitored.  Only TIOCM_CTS and TIOCM_CAR are honoured
+                 in _t_s_t_a_m_p_s_._t_s___s_e_t and _t_s_t_a_m_p_s_._t_s___c_l_r; these indicate which
+                 raising and lowering events on the respective lines should
+                 cause a timestamp capture.
+
+     TIOCSFLAGS _i_n_t _*_s_t_a_t_e
+                 The bits in the integer pointed to by _s_t_a_t_e contain bits that
+                 correspond to serial port state.  Following is a list of de‐
+                 fined variables and the serial port state they represent:
+
+                 TIOCFLAG_SOFTCAR  Ignore hardware carrier.
+                 TIOCFLAG_CLOCAL   Set clocal on open.
+                 TIOCFLAG_CRTSCTS  Set crtscts on open.
+                 TIOCFLAG_MDMBUF   Set mdmbuf on open.
+
+                 This call sets the serial port state to that represented by
+                 _s_t_a_t_e.  Not all serial ports may support this.
+
+     TIOCGFLAGS _i_n_t _*_s_t_a_t_e
+                 Return the current state of the serial port as represented
+                 above in the integer pointed to by _s_t_a_t_e.
+
+     TIOCSTAT _v_o_i_d
+                 Causes the kernel to write a status message to the terminal
+                 that displays the current load average, the name of the com‐
+                 mand in the foreground, its process ID, the symbolic wait
+                 channel, the number of user and system seconds used, the per‐
+                 centage of CPU the process is getting, and the resident set
+                 size of the process.
+
+FFIILLEESS
+     /dev/tty  controlling terminal, if any
+
+SSEEEE AALLSSOO
+     cu(1), stty(1), tty(1), ioctl(2), pty(4), termios(4), ttys(5), getty(8)
+
+HHIISSTTOORRYY
+     A console typewriter device _/_d_e_v_/_t_t_y and asynchronous communication in‐
+     terfaces _/_d_e_v_/_t_t_y_[_0_-_5_] first appeared in Version 1 AT&T UNIX.  The cua
+     support is inspired by similar support in SunOS.
+
+BSD                             August 16, 2024                            BSD

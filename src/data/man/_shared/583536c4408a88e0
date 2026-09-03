@@ -1,0 +1,192 @@
+ARCHIVE_WRITE(3)         BSD Library Functions Manual         ARCHIVE_WRITE(3)
+
+NNAAMMEE
+     aarrcchhiivvee__wwrriittee — functions for creating archives
+
+LLIIBBRRAARRYY
+     Streaming Archive Library (libarchive, -larchive)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<aarrcchhiivvee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     These functions provide a complete API for creating streaming archive
+     files.  The general process is to first create the struct archive object,
+     set any desired options, initialize the archive, append entries, then
+     close the archive and release all resources.
+
+   CCrreeaattee aarrcchhiivvee oobbjjeecctt
+     See archive_write_new(3).
+
+     To write an archive, you must first obtain an initialized struct archive
+     object from aarrcchhiivvee__wwrriittee__nneeww().
+
+   EEnnaabbllee ffiilltteerrss aanndd ffoorrmmaattss,, ccoonnffiigguurree bblloocckk ssiizzee aanndd ppaaddddiinngg
+     See archive_write_filter(3), archive_write_format(3) and
+     archive_write_blocksize(3).
+
+     You can then modify this object for the desired operations with the vari‐
+     ous aarrcchhiivvee__wwrriittee__sseett__XXXXXX() functions.  In particular, you will need to
+     invoke appropriate aarrcchhiivvee__wwrriittee__aadddd__XXXXXX() and aarrcchhiivvee__wwrriittee__sseett__XXXXXX()
+     functions to enable the corresponding compression and format support.
+
+   SSeett ooppttiioonnss
+     See archive_write_set_options(3).
+
+   OOppeenn aarrcchhiivvee
+     See archive_write_open(3).
+
+     Once you have prepared the struct archive object, you call
+     aarrcchhiivvee__wwrriittee__ooppeenn() to actually open the archive and prepare it for
+     writing.  There are several variants of this function; the most basic ex‐
+     pects you to provide pointers to several functions that can provide
+     blocks of bytes from the archive.  There are convenience forms that allow
+     you to specify a filename, file descriptor, _F_I_L_E _* object, or a block of
+     memory from which to write the archive data.
+
+   PPrroodduuccee aarrcchhiivvee
+     See archive_write_header(3) and archive_write_data(3).
+
+     Individual archive entries are written in a three-step process: You first
+     initialize a struct archive_entry structure with information about the
+     new entry.  At a minimum, you should set the pathname of the entry and
+     provide a _s_t_r_u_c_t _s_t_a_t with a valid _s_t___m_o_d_e field, which specifies the
+     type of object and _s_t___s_i_z_e field, which specifies the size of the data
+     portion of the object.
+
+   RReelleeaassee rreessoouurrcceess
+     See archive_write_free(3).
+
+     After all entries have been written, use the aarrcchhiivvee__wwrriittee__ffrreeee() func‐
+     tion to release all resources.
+
+EEXXAAMMPPLLEESS
+     The following sketch illustrates basic usage of the library.  In this ex‐
+     ample, the callback functions are simply wrappers around the standard
+     open(2), write(2), and close(2) system calls.
+
+           #ifdef __linux__
+           #define _FILE_OFFSET_BITS 64
+           #endif
+           #include <sys/stat.h>
+           #include <archive.h>
+           #include <archive_entry.h>
+           #include <fcntl.h>
+           #include <stdlib.h>
+           #include <unistd.h>
+
+           struct mydata {
+             const char *name;
+             int fd;
+           };
+
+           int
+           myopen(struct archive *a, void *client_data)
+           {
+             struct mydata *mydata = client_data;
+
+             mydata->fd = open(mydata->name, O_WRONLY | O_CREAT, 0644);
+             if (mydata->fd >= 0)
+               return (ARCHIVE_OK);
+             else
+               return (ARCHIVE_FATAL);
+           }
+
+           la_ssize_t
+           mywrite(struct archive *a, void *client_data, const void *buff, size_t n)
+           {
+             struct mydata *mydata = client_data;
+
+             return (write(mydata->fd, buff, n));
+           }
+
+           int
+           myclose(struct archive *a, void *client_data)
+           {
+             struct mydata *mydata = client_data;
+
+             if (mydata->fd > 0)
+               close(mydata->fd);
+             return (0);
+           }
+
+           void
+           write_archive(const char *outname, const char **filename)
+           {
+             struct mydata *mydata = malloc(sizeof(struct mydata));
+             struct archive *a;
+             struct archive_entry *entry;
+             struct stat st;
+             char buff[8192];
+             int len;
+             int fd;
+
+             a = archive_write_new();
+             mydata->name = outname;
+             /* Set archive format and filter according to output file extension.
+              * If it fails, set default format. Platform depended function.
+              * See supported formats in archive_write_set_format_filter_by_ext.c */
+             if (archive_write_set_format_filter_by_ext(a, outname) != ARCHIVE_OK)  {
+               archive_write_add_filter_gzip(a);
+               archive_write_set_format_ustar(a);
+             }
+             archive_write_open(a, mydata, myopen, mywrite, myclose);
+             while (*filename) {
+               stat(*filename, &st);
+               entry = archive_entry_new();
+               archive_entry_copy_stat(entry, &st);
+               archive_entry_set_pathname(entry, *filename);
+               archive_write_header(a, entry);
+               if ((fd = open(*filename, O_RDONLY)) != -1) {
+                 len = read(fd, buff, sizeof(buff));
+                 while (len > 0) {
+                   archive_write_data(a, buff, len);
+                   len = read(fd, buff, sizeof(buff));
+                 }
+                 close(fd);
+               }
+               archive_entry_free(entry);
+               filename++;
+             }
+             archive_write_free(a);
+           }
+
+           int main(int argc, const char **argv)
+           {
+             const char *outname;
+             argv++;
+             outname = *argv++;
+             write_archive(outname, argv);
+             return 0;
+           }
+
+SSEEEE AALLSSOO
+     tar(1), archive_write_set_options(3), libarchive(3), cpio(5), mtree(5),
+     tar(5)
+
+HHIISSTTOORRYY
+     The lliibbaarrcchhiivvee library first appeared in FreeBSD 5.3.
+
+AAUUTTHHOORRSS
+     The lliibbaarrcchhiivvee library was written by Tim Kientzle <kientzle@acm.org>.
+
+BBUUGGSS
+     There are many peculiar bugs in historic tar implementations that may
+     cause certain programs to reject archives written by this library.  For
+     example, several historic implementations calculated header checksums in‐
+     correctly and will thus reject valid archives; GNU tar does not fully
+     support pax interchange format; some old tar implementations required
+     specific field terminations.
+
+     The default pax interchange format eliminates most of the historic tar
+     limitations and provides a generic key/value attribute facility for ven‐
+     dor-defined extensions.  One oversight in POSIX is the failure to provide
+     a standard attribute for large device numbers.  This library uses
+     “SCHILY.devminor” and “SCHILY.devmajor” for device numbers that exceed
+     the range supported by the backwards-compatible ustar header.  These keys
+     are compatible with Joerg Schilling's ssttaarr archiver.  Other implementa‐
+     tions may not recognize these keys and will thus be unable to correctly
+     restore device nodes with large device numbers from archives created by
+     this library.
+
+BSD                            February 2, 2012                            BSD

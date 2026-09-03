@@ -1,0 +1,325 @@
+_v_D_S_O(7)                Miscellaneous Information Manual                _v_D_S_O(7)
+
+NNAAMMEE
+       vdso - overview of the virtual ELF dynamic shared object
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//aauuxxvv..hh>>
+
+       vvooiidd **vvddssoo == ((uuiinnttppttrr__tt)) ggeettaauuxxvvaall((AATT__SSYYSSIINNFFOO__EEHHDDRR));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  "vDSO"  (virtual  dynamic shared object) is a small shared library
+       that the kernel automatically maps into the address space of all  user‐
+       space  applications.  Applications usually do not need to concern them‐
+       selves with these details as the vDSO is most commonly called by the  C
+       library.   This way you can code in the normal way using standard func‐
+       tions and the C library will take care of using any functionality  that
+       is available via the vDSO.
+
+       Why does the vDSO exist at all?  There are some system calls the kernel
+       provides  that  user‐space  code ends up using frequently, to the point
+       that such calls can dominate overall performance.  This is due both  to
+       the  frequency  of the call as well as the context‐switch overhead that
+       results from exiting user space and entering the kernel.
+
+       The rest of this documentation is geared toward the  curious  and/or  C
+       library  writers  rather  than general developers.  If you’re trying to
+       call the vDSO in your own application rather than using the C  library,
+       you’re most likely doing it wrong.
+
+   EExxaammppllee bbaacckkggrroouunndd
+       Making  system calls can be slow.  In x86 32‐bit systems, you can trig‐
+       ger a software interrupt (_i_n_t _$_0_x_8_0) to tell the  kernel  you  wish  to
+       make  a  system  call.  However, this instruction is expensive: it goes
+       through the full interrupt‐handling paths in the processor’s  microcode
+       as  well  as in the kernel.  Newer processors have faster (but backward
+       incompatible) instructions to initiate system calls.  Rather  than  re‐
+       quire the C library to figure out if this functionality is available at
+       run time, the C library can use functions provided by the kernel in the
+       vDSO.
+
+       Note  that  the terminology can be confusing.  On x86 systems, the vDSO
+       function used to determine the preferred method of making a system call
+       is named "__kernel_vsyscall", but on x86‐64, the term  "vsyscall"  also
+       refers to an obsolete way to ask the kernel what time it is or what CPU
+       the caller is on.
+
+       One  frequently  used system call is ggeettttiimmeeooffddaayy(2).  This system call
+       is called both directly by user‐space applications  as  well  as  indi‐
+       rectly  by the C library.  Think timestamps or timing loops or polling—
+       all of these frequently need to know what time it is right  now.   This
+       information  is  also  not secret—any application in any privilege mode
+       (root or any unprivileged user) will get the  same  answer.   Thus  the
+       kernel arranges for the information required to answer this question to
+       be  placed  in memory the process can access.  Now a call to ggeettttiimmeeooff‐‐
+       ddaayy(2) changes from a system call to a normal function call and  a  few
+       memory accesses.
+
+   FFiinnddiinngg tthhee vvDDSSOO
+       The base address of the vDSO (if one exists) is passed by the kernel to
+       each  program  in  the initial auxiliary vector (see ggeettaauuxxvvaall(3)), via
+       the AATT__SSYYSSIINNFFOO__EEHHDDRR tag.
+
+       You must not assume the vDSO is mapped at any  particular  location  in
+       the  user’s memory map.  The base address will usually be randomized at
+       run time every time a new process image is created (at eexxeeccvvee(2) time).
+       This is done for security reasons, to prevent "return‐to‐libc" attacks.
+
+       For some architectures, there is also an AATT__SSYYSSIINNFFOO tag.  This is  used
+       only for locating the vsyscall entry point and is frequently omitted or
+       set  to 0 (meaning it’s not available).  This tag is a throwback to the
+       initial vDSO work (see _H_i_s_t_o_r_y below) and its use should be avoided.
+
+   FFiillee ffoorrmmaatt
+       Since the vDSO is a fully formed ELF image, you can do  symbol  lookups
+       on it.  This allows new symbols to be added with newer kernel releases,
+       and  allows the C library to detect available functionality at run time
+       when running under different kernel versions.  Oftentimes the C library
+       will do detection with the first call and then  cache  the  result  for
+       subsequent calls.
+
+       All  symbols  are  also versioned (using the GNU version format).  This
+       allows the kernel to update the  function  signature  without  breaking
+       backward  compatibility.   This  means  changing the arguments that the
+       function accepts as well as the return value.  Thus, when looking up  a
+       symbol  in  the  vDSO, you must always include the version to match the
+       ABI you expect.
+
+       Typically the vDSO follows the naming convention of prefixing all  sym‐
+       bols with "__vdso_" or "__kernel_" so as to distinguish them from other
+       standard  symbols.   For  example, the "gettimeofday" function is named
+       "__vdso_gettimeofday".
+
+       You use the standard C calling conventions when calling  any  of  these
+       functions.  No need to worry about weird register or stack behavior.
+
+NNOOTTEESS
+   SSoouurrccee
+       When you compile the kernel, it will automatically compile and link the
+       vDSO code for you.  You will frequently find it under the architecture‐
+       specific directory:
+
+           find arch/$ARCH/ -name '*vdso*.so*' -o -name '*gate*.so*'
+
+   vvDDSSOO nnaammeess
+       The  name  of the vDSO varies across architectures.  It will often show
+       up in things like glibc’s lldddd(1) output.  The  exact  name  should  not
+       matter to any code, so do not hardcode it.
+
+       lB   lB  l   l  .   user  ABI  vDSO  name  _  aarch64   linux-vdso.so.1
+       arm  linux-vdso.so.1     ia64 linux-gate.so.1      mips linux-vdso.so.1
+       ppc/32    linux-vdso32.so.1                 ppc/64    linux-vdso64.so.1
+       riscv     linux-vdso.so.1                        s390 linux-vdso32.so.1
+       s390x     linux-vdso64.so.1  sh   linux-gate.so.1  i386 linux-gate.so.1
+       x86‐64    linux-vdso.so.1 x86/x32   linux-vdso.so.1
+
+   ssttrraaccee((11)),, sseeccccoommpp((22)),, aanndd tthhee vvDDSSOO
+       When tracing system calls with ssttrraaccee(1), symbols (system  calls)  that
+       are  exported  by  the vDSO will _n_o_t appear in the trace output.  Those
+       system calls will likewise not be visible to sseeccccoommpp(2) filters.
+
+AARRCCHHIITTEECCTTUURREE‐‐SSPPEECCIIFFIICC NNOOTTEESS
+       The subsections below provide architecture‐specific notes on the vDSO.
+
+       Note that the vDSO that is used is based on the ABI of your  user‐space
+       code and not the ABI of the kernel.  Thus, for example, when you run an
+       i386  32‐bit ELF binary, you’ll get the same vDSO regardless of whether
+       you run it under an i386 32‐bit kernel or under an x86‐64  64‐bit  ker‐
+       nel.   Therefore,  the name of the user‐space ABI should be used to de‐
+       termine which of the sections below is relevant.
+
+   AARRMM ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .  symbol    version  _  __vdso_gettimeofday LINUX_2.6  (ex‐
+       ported  since  Linux  4.1) __vdso_clock_gettime     LINUX_2.6 (exported
+       since Linux 4.1)
+
+       Additionally, the ARM port has a code page full of  utility  functions.
+       Since it’s just a raw page of code, there is no ELF information for do‐
+       ing  symbol lookups or versioning.  It does provide support for differ‐
+       ent versions though.
+
+       For information on this code page, it’s best to  refer  to  the  kernel
+       documentation as it’s extremely detailed and covers everything you need
+       to know: _D_o_c_u_m_e_n_t_a_t_i_o_n_/_a_r_m_/_k_e_r_n_e_l___u_s_e_r___h_e_l_p_e_r_s_._r_s_t.
+
+   aaaarrcchh6644 ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .  symbol    version _ __kernel_rt_sigreturn    LINUX_2.6.39
+       __kernel_gettimeofday    LINUX_2.6.39               __kernel_clock_get‐
+       time   LINUX_2.6.39 __kernel_clock_getres    LINUX_2.6.39
+
+   bbffiinn ((BBllaacckkffiinn)) ffuunnccttiioonnss ((ppoorrtt rreemmoovveedd iinn LLiinnuuxx 44..1177))
+       As this CPU lacks a memory management unit (MMU), it doesn’t set  up  a
+       vDSO  in  the  normal  sense.   Instead, it maps at boot time a few raw
+       functions into a fixed location  in  memory.   User‐space  applications
+       then  call  directly into that region.  There is no provision for back‐
+       ward compatibility beyond sniffing raw opcodes, but as this is  an  em‐
+       bedded  CPU,  it can get away with things—some of the object formats it
+       runs aren’t even ELF based (they’re bFLT/FLAT).
+
+       For information on this code page, it’s best to  refer  to  the  public
+       documentation:
+       http://docs.blackfin.uclinux.org/doku.php?id=linux-kernel:fixed-code
+
+   mmiippss ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB  lB  l   l .  symbol    version _ __kernel_gettimeofday    LINUX_2.6
+       (exported since Linux 4.4) __kernel_clock_gettime   LINUX_2.6 (exported
+       since Linux 4.4)
+
+   iiaa6644 ((IIttaanniiuumm)) ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .  symbol    version _ __kernel_sigtramp   LINUX_2.5  __ker‐
+       nel_syscall_via_break    LINUX_2.5 __kernel_syscall_via_epc LINUX_2.5
+
+       The Itanium port is somewhat tricky.  In addition to the vDSO above, it
+       also  has "light‐weight system calls" (also known as "fast syscalls" or
+       "fsys").  You can invoke these via  the  _____k_e_r_n_e_l___s_y_s_c_a_l_l___v_i_a___e_p_c  vDSO
+       helper.  The system calls listed here have the same semantics as if you
+       called  them directly via ssyyssccaallll(2), so refer to the relevant documen‐
+       tation for each.  The table below lists  the  functions  available  via
+       this mechanism.
+
+       lB  l  .   function  _ clock_gettime getcpu getpid getppid gettimeofday
+       set_tid_address
+
+   ppaarriisscc ((hhppppaa)) ffuunnccttiioonnss
+       The parisc port has a code page with utility functions called a gateway
+       page.  Rather than use the normal ELF  auxiliary  vector  approach,  it
+       passes  the  address  of  the page to the process via the SR2 register.
+       The permissions on the page are such that merely  executing  those  ad‐
+       dresses  automatically  executes with kernel privileges and not in user
+       space.  This is done to match the way HP‐UX works.
+
+       Since it’s just a raw page of code, there is no ELF information for do‐
+       ing symbol lookups or versioning.  Simply  call  into  the  appropriate
+       offset via the branch instruction, for example:
+
+           ble <offset>(%sr2, %r0)
+
+       lB  lB  l   l  .   offset    function _ 00b0 lws_entry (CAS operations)
+       00e0 set_thread_pointer  (used   by   glibc)   0100 linux_gateway_entry
+       (syscall)
+
+   ppppcc//3322 ffuunnccttiioonnss
+       The  table below lists the symbols exported by the vDSO.  The functions
+       marked with a _* are available only  when  the  kernel  is  a  PowerPC64
+       (64‐bit) kernel.
+
+       lB lB l  l .  symbol    version _ __kernel_clock_getres    LINUX_2.6.15
+       __kernel_clock_gettime   LINUX_2.6.15               __kernel_clock_get‐
+       time64 LINUX_5.11     __kernel_datapage_offset LINUX_2.6.15      __ker‐
+       nel_get_syscall_map LINUX_2.6.15       __kernel_get_tbfreq LINUX_2.6.15
+       __kernel_getcpu _*   LINUX_2.6.15  __kernel_gettimeofday    LINUX_2.6.15
+       __kernel_sigtramp_rt32   LINUX_2.6.15  __kernel_sigtramp32 LINUX_2.6.15
+       __kernel_sync_dicache    LINUX_2.6.15                 __kernel_sync_di‐
+       cache_p5 LINUX_2.6.15
+
+       Before  Linux 5.6, the CCLLOOCCKK__RREEAALLTTIIMMEE__CCOOAARRSSEE and CCLLOOCCKK__MMOONNOOTTOONNIICC__CCOOAARRSSEE
+       clocks are  _n_o_t  supported  by  the  _____k_e_r_n_e_l___c_l_o_c_k___g_e_t_r_e_s  and  _____k_e_r_‐
+       _n_e_l___c_l_o_c_k___g_e_t_t_i_m_e  interfaces; the kernel falls back to the real system
+       call.
+
+   ppppcc//6644 ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .  symbol    version _ __kernel_clock_getres    LINUX_2.6.15
+       __kernel_clock_gettime   LINUX_2.6.15            __kernel_datapage_off‐
+       set LINUX_2.6.15      __kernel_get_syscall_map LINUX_2.6.15      __ker‐
+       nel_get_tbfreq LINUX_2.6.15   __kernel_getcpu     LINUX_2.6.15   __ker‐
+       nel_gettimeofday    LINUX_2.6.15  __kernel_sigtramp_rt64   LINUX_2.6.15
+       __kernel_sync_dicache    LINUX_2.6.15                 __kernel_sync_di‐
+       cache_p5 LINUX_2.6.15
+
+       Before Linux 4.16, the CCLLOOCCKK__RREEAALLTTIIMMEE__CCOOAARRSSEE and CCLLOOCCKK__MMOONNOOTTOONNIICC__CCOOAARRSSEE
+       clocks  are  _n_o_t  supported  by  the  _____k_e_r_n_e_l___c_l_o_c_k___g_e_t_r_e_s  and _____k_e_r_‐
+       _n_e_l___c_l_o_c_k___g_e_t_t_i_m_e interfaces; the kernel falls back to the real  system
+       call.
+
+   rriissccvv ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB  lB  l   l  .   symbol    version  _  __vdso_rt_sigreturn LINUX_4.15
+       __vdso_gettimeofday LINUX_4.15      __vdso_clock_gettime     LINUX_4.15
+       __vdso_clock_getres LINUX_4.15                __vdso_getcpu  LINUX_4.15
+       __vdso_flush_icache LINUX_4.15
+
+   ss339900 ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .  symbol    version _ __kernel_clock_getres    LINUX_2.6.29
+       __kernel_clock_gettime   LINUX_2.6.29               __kernel_gettimeof‐
+       day    LINUX_2.6.29
+
+   ss339900xx ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .  symbol    version _ __kernel_clock_getres    LINUX_2.6.29
+       __kernel_clock_gettime   LINUX_2.6.29               __kernel_gettimeof‐
+       day    LINUX_2.6.29
+
+   sshh ((SSuuppeerrHH)) ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .   symbol    version  _  __kernel_rt_sigreturn    LINUX_2.6
+       __kernel_sigreturn  LINUX_2.6 __kernel_vsyscall   LINUX_2.6
+
+   ii338866 ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB  lB l  l .  symbol    version _ __kernel_sigreturn  LINUX_2.5 __ker‐
+       nel_rt_sigreturn    LINUX_2.5             __kernel_vsyscall   LINUX_2.5
+       __vdso_clock_gettime     LINUX_2.6    (exported   since   Linux   3.15)
+       __vdso_gettimeofday LINUX_2.6    (exported    since     Linux     3.15)
+       __vdso_time    LINUX_2.6 (exported since Linux 3.15)
+
+   xx8866‐‐6644 ffuunnccttiioonnss
+       The  table  below lists the symbols exported by the vDSO.  All of these
+       symbols are also available without the "__vdso_" prefix, but you should
+       ignore those and stick to the names below.
+
+       lB lB l  l .   symbol    version  _  __vdso_clock_gettime     LINUX_2.6
+       __vdso_getcpu  LINUX_2.6                  __vdso_gettimeofday LINUX_2.6
+       __vdso_time    LINUX_2.6
+
+   xx8866//xx3322 ffuunnccttiioonnss
+       The table below lists the symbols exported by the vDSO.
+
+       lB lB l  l .   symbol    version  _  __vdso_clock_gettime     LINUX_2.6
+       __vdso_getcpu  LINUX_2.6                  __vdso_gettimeofday LINUX_2.6
+       __vdso_time    LINUX_2.6
+
+   HHiissttoorryy
+       The vDSO was originally just a single function—the vsyscall.  In  older
+       kernels,  you might see that name in a process’s memory map rather than
+       "vdso".  Over time, people realized that this mechanism was a great way
+       to pass more functionality to user space, so it was  reconceived  as  a
+       vDSO in the current format.
+
+SSEEEE AALLSSOO
+       ssyyssccaallllss(2), ggeettaauuxxvvaall(3), pprroocc(5)
+
+       The documents, examples, and source code in the Linux source code tree:
+
+           Documentation/ABI/stable/vdso
+           Documentation/ia64/fsys.rst
+           Documentation/vDSO/* (includes examples of using the vDSO)
+
+       find arch/ -iname '*vdso*' -o -iname '*gate*'
+
+       ⟨http://articles.manugarg.com/systemcallinlinux2_6.html⟩
+
+       ⟨https://lwn.net/Articles/446528/⟩
+
+       ⟨http://www.linuxjournal.com/content/
+       creating-vdso-colonels-other-chicken⟩
+
+       ⟨http://www.trilithium.com/johan/2005/08/linux-gate/⟩
+
+Linux man‐pages (unreleased)      2025‐10‐04                           _v_D_S_O(7)

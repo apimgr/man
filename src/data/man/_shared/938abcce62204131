@@ -1,0 +1,409 @@
+MICROSEQ(9)              BSD Kernel Developer's Manual             MICROSEQ(9)
+
+NNAAMMEE
+     mmiiccrroosseeqq — ppbus microsequencer developer's guide
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ddeevv//ppppbbuuss//ppppbbccoonnff..hh>>
+     ##iinncclluuddee <<ddeevv//ppppbbuuss//ppppbb__mmssqq..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     See ppbus(4) for ppbus description and general info about the microse‐
+     quencer.
+
+     The purpose of this document is to encourage developers to use the mi‐
+     crosequencer mechanism in order to have:
+
+           1.   a uniform programming model
+
+           2.   efficient code
+
+     Before using microsequences, you are encouraged to look at ppc(4) mi‐
+     crosequencer implementation and an example of how using it in ppi(4).
+
+PPPPBBUUSS rreeggiisstteerr mmooddeell
+   BBaacckkggrroouunndd
+     The parallel port model chosen for ppbus is the PC parallel port model.
+     Thus, any register described later has the same semantic than its coun‐
+     terpart in a PC parallel port.  For more info about ISA/ECP programming,
+     get the Microsoft standard referenced as "Extended Capabilities Port Pro‐
+     tocol and ISA interface Standard".  Registers described later are stan‐
+     dard parallel port registers.
+
+     Mask macros are defined in the standard ppbus include files for each
+     valid bit of parallel port registers.
+
+   DDaattaa rreeggiisstteerr
+     In compatible or nibble mode, writing to this register will drive data to
+     the parallel port data lines.  In any other mode, drivers may be tri-
+     stated by setting the direction bit (PCD) in the control register.  Reads
+     to this register return the value on the data lines.
+
+   DDeevviiccee ssttaattuuss rreeggiisstteerr
+     This read-only register reflects the inputs on the parallel port inter‐
+     face.
+
+     _B_i_t    _N_a_m_e    _D_e_s_c_r_i_p_t_i_o_n
+     7      nBUSY   inverted version of parallel port Busy signal
+     6      nACK    version of parallel port nAck signal
+     5      PERROR  version of parallel port PERROR signal
+     4      SELECT  version of parallel port Select signal
+     3      nFAULT  version of parallel port nFault signal
+
+     Others are reserved and return undefined result when read.
+
+   DDeevviiccee ccoonnttrrooll rreeggiisstteerr
+     This register directly controls several output signals as well as en‐
+     abling some functions.
+
+     _B_i_t    _N_a_m_e        _D_e_s_c_r_i_p_t_i_o_n
+     5      PCD         direction bit in extended modes
+     4      IRQENABLE   1 enables an interrupt on the rising edge of nAck
+     3      SELECTIN    inverted and driven as parallel port nSelectin signal
+     2      nINIT       driven as parallel port nInit signal
+     1      AUTOFEED    inverted and driven as parallel port nAutoFd signal
+     0      STROBE      inverted and driven as parallel port nStrobe signal
+
+MMIICCRROOIINNSSTTRRUUCCTTIIOONNSS
+   DDeessccrriippttiioonn
+     _M_i_c_r_o_i_n_s_t_r_u_c_t_i_o_n_s are either parallel port accesses, program iterations,
+     submicrosequence or C calls.  The parallel port must be considered as the
+     logical model described in ppbus(4).
+
+     Available microinstructions are:
+
+     #define MS_OP_GET       0       /* get <ptr>, <len>                     */
+     #define MS_OP_PUT       1       /* put <ptr>, <len>                     */
+     #define MS_OP_RFETCH    2       /* rfetch <reg>, <mask>, <ptr>          */
+     #define MS_OP_RSET      3       /* rset <reg>, <mask>, <mask>           */
+     #define MS_OP_RASSERT   4       /* rassert <reg>, <mask>                */
+     #define MS_OP_DELAY     5       /* delay <val>                          */
+     #define MS_OP_SET       6       /* set <val>                            */
+     #define MS_OP_DBRA      7       /* dbra <offset>                        */
+     #define MS_OP_BRSET     8       /* brset <mask>, <offset>               */
+     #define MS_OP_BRCLEAR   9       /* brclear <mask>, <offset>             */
+     #define MS_OP_RET       10      /* ret <retcode>                        */
+     #define MS_OP_C_CALL    11      /* c_call <function>, <parameter>       */
+     #define MS_OP_PTR       12      /* ptr <pointer>                        */
+     #define MS_OP_ADELAY    13      /* adelay <val>                         */
+     #define MS_OP_BRSTAT    14      /* brstat <mask>, <mask>, <offset>      */
+     #define MS_OP_SUBRET    15      /* subret <code>                        */
+     #define MS_OP_CALL      16      /* call <microsequence>                 */
+     #define MS_OP_RASSERT_P 17      /* rassert_p <iter>, <reg>              */
+     #define MS_OP_RFETCH_P  18      /* rfetch_p <iter>, <reg>, <mask>       */
+     #define MS_OP_TRIG      19      /* trigger <reg>, <len>, <array>        */
+
+   EExxeeccuuttiioonn ccoonntteexxtt
+     The _e_x_e_c_u_t_i_o_n _c_o_n_t_e_x_t of microinstructions is:
+
+           ••   the _p_r_o_g_r_a_m _c_o_u_n_t_e_r which points to the next microinstruction
+               to execute either in the main microsequence or in a subcall
+
+           ••   the current value of _p_t_r which points to the next char to
+               send/receive
+
+           ••   the current value of the internal _b_r_a_n_c_h _r_e_g_i_s_t_e_r
+
+     This data is modified by some of the microinstructions, not all.
+
+   MMSS__OOPP__GGEETT aanndd MMSS__OOPP__PPUUTT
+     are microinstructions used to do either predefined standard IEEE1284-1994
+     transfers or programmed non-standard io.
+
+   MMSS__OOPP__RRFFEETTCCHH -- RReeggiisstteerr FFEETTCCHH
+     is used to retrieve the current value of a parallel port register, apply
+     a mask and save it in a buffer.
+
+     Parameters:
+
+           1.   register
+
+           2.   character mask
+
+           3.   pointer to the buffer
+
+     Predefined macro: MS_RFETCH(reg,mask,ptr)
+
+   MMSS__OOPP__RRSSEETT -- RReeggiisstteerr SSEETT
+     is used to assert/clear some bits of a particular parallel port register,
+     two masks are applied.
+
+     Parameters:
+
+           1.   register
+
+           2.   mask of bits to assert
+
+           3.   mask of bits to clear
+
+     Predefined macro: MS_RSET(reg,assert,clear)
+
+   MMSS__OOPP__RRAASSSSEERRTT -- RReeggiisstteerr AASSSSEERRTT
+     is used to assert all bits of a particular parallel port register.
+
+     Parameters:
+
+           1.   register
+
+           2.   byte to assert
+
+     Predefined macro: MS_RASSERT(reg,byte)
+
+   MMSS__OOPP__DDEELLAAYY -- mmiiccrroosseeccoonndd DDEELLAAYY
+     is used to delay the execution of the microsequence.
+
+     Parameter:
+
+           1.   delay in microseconds
+
+     Predefined macro: MS_DELAY(delay)
+
+   MMSS__OOPP__SSEETT -- SSEETT iinntteerrnnaall bbrraanncchh rreeggiisstteerr
+     is used to set the value of the internal branch register.
+
+     Parameter:
+
+           1.   integer value
+
+     Predefined macro: MS_SET(accum)
+
+   MMSS__OOPP__DDBBRRAA -- DDoo BBRRAAnncchh
+     is used to branch if internal branch register decremented by one result
+     value is positive.
+
+     Parameter:
+
+           1.   integer offset in the current executed (sub)microsequence.
+                Offset is added to the index of the next microinstruction to
+                execute.
+
+     Predefined macro: MS_DBRA(offset)
+
+   MMSS__OOPP__BBRRSSEETT -- BBRRaanncchh oonn SSEETT
+     is used to branch if some of the status register bits of the parallel
+     port are set.
+
+     Parameter:
+
+           1.   bits of the status register
+
+           2.   integer offset in the current executed (sub)microsequence.
+                Offset is added to the index of the next microinstruction to
+                execute.
+
+     Predefined macro: MS_BRSET(mask,offset)
+
+   MMSS__OOPP__BBRRCCLLEEAARR -- BBRRaanncchh oonn CCLLEEAARR
+     is used to branch if some of the status register bits of the parallel
+     port are cleared.
+
+     Parameter:
+
+           1.   bits of the status register
+
+           2.   integer offset in the current executed (sub)microsequence.
+                Offset is added to the index of the next microinstruction to
+                execute.
+
+     Predefined macro: MS_BRCLEAR(mask,offset)
+
+   MMSS__OOPP__RREETT -- RREETTuurrnn
+     is used to return from a microsequence.  This instruction is mandatory.
+     This is the only way for the microsequencer to detect the end of the mi‐
+     crosequence.  The return code is returned in the integer pointed by the
+     (int *) parameter of the ppb_MS_microseq().
+
+     Parameter:
+
+           1.   integer return code
+
+     Predefined macro: MS_RET(code)
+
+   MMSS__OOPP__CC__CCAALLLL -- CC ffuunnccttiioonn CCAALLLL
+     is used to call C functions from microsequence execution.  This may be
+     useful when a non-standard i/o is performed to retrieve a data character
+     from the parallel port.
+
+     Parameter:
+
+           1.   the C function to call
+
+           2.   the parameter to pass to the function call
+
+     The C function shall be declared as a _i_n_t_(_*_)_(_v_o_i_d _*_p_, _c_h_a_r _*_p_t_r_).  The
+     ptr parameter is the current position in the buffer currently scanned.
+
+     Predefined macro: MS_C_CALL(func,param)
+
+   MMSS__OOPP__PPTTRR -- iinniittiiaalliizzee iinntteerrnnaall PPTTRR
+     is used to initialize the internal pointer to the currently scanned buf‐
+     fer.  This pointer is passed to any C call (see above).
+
+     Parameter:
+
+           1.   pointer to the buffer that shall be accessed by xxx_P() mi‐
+                crosequence calls.  Note that this pointer is automatically
+                incremented during xxx_P() calls
+
+     Predefined macro: MS_PTR(ptr)
+
+   MMSS__OOPP__AADDEELLAAYY -- ddoo aann AAssyynncchhrroonnoouuss DDEELLAAYY
+     is used to make a tsleep() during microsequence execution.  The tsleep is
+     executed at PPBPRI level.
+
+     Parameter:
+
+           1.   delay in ms
+
+     Predefined macro: MS_ADELAY(delay)
+
+   MMSS__OOPP__BBRRSSTTAATT -- BBRRaanncchh oonn SSTTAATTee
+     is used to branch on status register state condition.
+
+     Parameter:
+
+           1.   mask of asserted bits.  Bits that shall be asserted in the
+                status register are set in the mask
+
+           2.   mask of cleared bits.  Bits that shall be cleared in the sta‐
+                tus register are set in the mask
+
+           3.   integer offset in the current executed (sub)microsequence.
+                Offset is added to the index of the next microinstruction to
+                execute.
+
+     Predefined macro: MS_BRSTAT(asserted_bits,clear_bits,offset)
+
+   MMSS__OOPP__SSUUBBRREETT -- SSUUBBmmiiccrroosseeqquueennccee RREETTuurrnn
+     is used to return from the submicrosequence call.  This action is manda‐
+     tory before a RET call.  Some microinstructions (PUT, GET) may not be
+     callable within a submicrosequence.
+
+     No parameter.
+
+     Predefined macro: MS_SUBRET()
+
+   MMSS__OOPP__CCAALLLL -- ssuubbmmiiccrroosseeqquueennccee CCAALLLL
+     is used to call a submicrosequence.  A submicrosequence is a microse‐
+     quence with a SUBRET call.  Parameter:
+
+           1.   the submicrosequence to execute
+
+     Predefined macro: MS_CALL(microseq)
+
+   MMSS__OOPP__RRAASSSSEERRTT__PP -- RReeggiisstteerr AASSSSEERRTT ffrroomm iinntteerrnnaall PPTTRR
+     is used to assert a register with data currently pointed by the internal
+     PTR pointer.  Parameter:
+
+           1.   amount of data to write to the register
+
+           2.   register
+
+     Predefined macro: MS_RASSERT_P(iter,reg)
+
+   MMSS__OOPP__RRFFEETTCCHH__PP -- RReeggiisstteerr FFEETTCCHH ttoo iinntteerrnnaall PPTTRR
+     is used to fetch data from a register.  Data is stored in the buffer cur‐
+     rently pointed by the internal PTR pointer.  Parameter:
+
+           1.   amount of data to read from the register
+
+           2.   register
+
+           3.   mask applied to fetched data
+
+     Predefined macro: MS_RFETCH_P(iter,reg,mask)
+
+   MMSS__OOPP__TTRRIIGG -- TTRRIIGG rreeggiisstteerr
+     is used to trigger the parallel port.  This microinstruction is intended
+     to provide a very efficient control of the parallel port.  Triggering a
+     register is writing data, wait a while, write data, wait a while...  This
+     allows to write magic sequences to the port.  Parameter:
+
+           1.   amount of data to read from the register
+
+           2.   register
+
+           3.   size of the array
+
+           4.   array of unsigned chars.  Each couple of u_chars define the
+                data to write to the register and the delay in us to wait.
+                The delay is limited to 255 us to simplify and reduce the size
+                of the array.
+
+     Predefined macro: MS_TRIG(reg,len,array)
+
+MMIICCRROOSSEEQQUUEENNCCEESS
+   CC ssttrruuccttuurreess
+     union ppb_insarg {
+          int     i;
+          char    c;
+          void    *p;
+          int     (* f)(void *, char *);
+     };
+
+     struct ppb_microseq {
+          int                     opcode;         /* microins. opcode */
+          union ppb_insarg        arg[PPB_MS_MAXARGS];    /* arguments */
+     };
+
+   UUssiinngg mmiiccrroosseeqquueenncceess
+     To instantiate a microsequence, just declare an array of ppb_microseq
+     structures and initialize it as needed.  You may either use predefined
+     macros or code directly your microinstructions according to the ppb_mi‐
+     croseq definition.  For example,
+
+          struct ppb_microseq select_microseq[] = {
+
+                  /* parameter list
+                   */
+                  #define SELECT_TARGET    MS_PARAM(0, 1, MS_TYP_INT)
+                  #define SELECT_INITIATOR MS_PARAM(3, 1, MS_TYP_INT)
+
+                  /* send the select command to the drive */
+                  MS_DASS(MS_UNKNOWN),
+                  MS_CASS(H_nAUTO | H_nSELIN |  H_INIT | H_STROBE),
+                  MS_CASS( H_AUTO | H_nSELIN |  H_INIT | H_STROBE),
+                  MS_DASS(MS_UNKNOWN),
+                  MS_CASS( H_AUTO | H_nSELIN | H_nINIT | H_STROBE),
+
+                  /* now, wait until the drive is ready */
+                  MS_SET(VP0_SELTMO),
+     /* loop: */     MS_BRSET(H_ACK, 2 /* ready */),
+                  MS_DBRA(-2 /* loop */),
+     /* error: */    MS_RET(1),
+     /* ready: */    MS_RET(0)
+          };
+
+     Here, some parameters are undefined and must be filled before executing
+     the microsequence.  In order to initialize each microsequence, one should
+     use the ppb_MS_init_msq() function like this:
+
+          ppb_MS_init_msq(select_microseq, 2,
+                          SELECT_TARGET, 1 << target,
+                          SELECT_INITIATOR, 1 << initiator);
+
+     and then execute the microsequence.
+
+   TThhee mmiiccrroosseeqquueenncceerr
+     The microsequencer is executed either at ppbus or adapter level (see
+     ppbus(4) for info about ppbus system layers).  Most of the microsequencer
+     is executed at ppc level to avoid ppbus to adapter function call over‐
+     head.  But some actions like deciding whereas the transfer is
+     IEEE1284-1994 compliant are executed at ppbus layer.
+
+SSEEEE AALLSSOO
+     ppbus(4), ppc(4), ppi(4)
+
+HHIISSTTOORRYY
+     The mmiiccrroosseeqq manual page first appeared in FreeBSD 3.0.
+
+AAUUTTHHOORRSS
+     This manual page was written by Nicolas Souchu.
+
+BBUUGGSS
+     Only one level of submicrosequences is allowed.
+
+     When triggering the port, maximum delay allowed is 255 us.
+
+BSD                              June 6, 1998                              BSD

@@ -1,0 +1,149 @@
+MAC(9)                   BSD Kernel Developer's Manual                  MAC(9)
+
+NNAAMMEE
+     mmaacc — TrustedBSD Mandatory Access Control framework
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//mmaacc..hh>>
+
+     In the kernel configuration file:
+     ooppttiioonnss MMAACC
+     ooppttiioonnss MMAACC__DDEEBBUUGG
+
+DDEESSCCRRIIPPTTIIOONN
+   IInnttrroodduuccttiioonn
+     The TrustedBSD mandatory access control framework permits dynamically in‐
+     troduced system security modules to modify system security functionality.
+     This can be used to support a variety of new security services, including
+     traditional labeled mandatory access control models.  The framework pro‐
+     vides a series of entry points which must be called by code supporting
+     various kernel services, especially with respects to access control
+     points and object creation.  The framework then calls out to security
+     modules to offer them the opportunity to modify security behavior at
+     those MAC API entry points.  Both consumers of the API (normal kernel
+     services) and security modules must be aware of the semantics of the API
+     calls, particularly with respect to synchronization primitives (such as
+     locking).
+
+   KKeerrnneell OObbjjeeccttss SSuuppppoorrtteedd bbyy tthhee FFrraammeewwoorrkk
+     The MAC framework manages labels on a variety of types of in-kernel ob‐
+     jects, including process credentials, vnodes, devfs_dirents, mount
+     points, sockets, mbufs, bpf descriptors, network interfaces, IP fragment
+     queues, and pipes.  Label data on kernel objects, represented by _s_t_r_u_c_t
+     _l_a_b_e_l, is policy-unaware, and may be used in the manner seen fit by pol‐
+     icy modules.
+
+   AAPPII ffoorr CCoonnssuummeerrss
+     The MAC API provides a large set of entry points, too broad to specifi‐
+     cally document here.  In general, these entry points represent an access
+     control check or other MAC-relevant operations, accept one or more sub‐
+     jects (credentials) authorizing the activity, a set of objects on which
+     the operation is to be performed, and a set of operation arguments pro‐
+     viding information about the type of operation being requested.
+
+   LLoocckkiinngg ffoorr CCoonnssuummeerrss
+     Consumers of the MAC API must be aware of the locking requirements for
+     each API entry point: generally, appropriate locks must be held over each
+     subject or object being passed into the call, so that MAC modules may
+     make use of various aspects of the object for access control purposes.
+     For example, vnode locks are frequently required in order that the MAC
+     framework and modules may retrieve security labels and attributes from
+     the vnodes for the purposes of access control.  Similarly, the caller
+     must be aware of the reference counting semantics of any subject or ob‐
+     ject passed into the MAC API: all calls require that a valid reference to
+     the object be held for the duration of the (potentially lengthy) MAC API
+     call.  Under some circumstances, objects must be held in either a shared
+     or exclusive manner.
+
+   AAPPII ffoorr MMoodduullee WWrriitteerrss
+     Each module exports a structure describing the MAC API operations that
+     the module chooses to implement, including initialization and destruction
+     API entry points, a variety of object creation and destruction calls, and
+     a large set of access control check points.  In the future, additional
+     audit entry points will also be present.  Module authors may choose to
+     only implement a subset of the entry points, setting API function point‐
+     ers in the description structure to NULL, permitting the framework to
+     avoid calling into the module.
+
+   LLoocckkiinngg ffoorr MMoodduullee WWrriitteerrss
+     Module writers must be aware of the locking semantics of entry points
+     that they implement: MAC API entry points will have specific locking or
+     reference counting semantics for each argument, and modules must follow
+     the locking and reference counting protocol or risk a variety of failure
+     modes (including race conditions, inappropriate pointer dereferences,
+     etc).
+
+     MAC module writers must also be aware that MAC API entry points will fre‐
+     quently be invoked from deep in a kernel stack, and as such must be care‐
+     ful to avoid violating more global locking requirements, such as global
+     lock order requirements.  For example, it may be inappropriate to lock
+     additional objects not specifically maintained and ordered by the policy
+     module, or the policy module might violate a global ordering requirement
+     relating to those additional objects.
+
+     Finally, MAC API module implementors must be careful to avoid inappropri‐
+     ately calling back into the MAC framework: the framework makes use of
+     locking to prevent inconsistencies during policy module attachment and
+     detachment.  MAC API modules should avoid producing scenarios in which
+     deadlocks or inconsistencies might occur.
+
+   AAddddiinngg NNeeww MMAACC EEnnttrryy PPooiinnttss
+     The MAC API is intended to be easily expandable as new services are added
+     to the kernel.  In order that policies may be guaranteed the opportunity
+     to ubiquitously protect system subjects and objects, it is important that
+     kernel developers maintain awareness of when security checks or relevant
+     subject or object operations occur in newly written or modified kernel
+     code.  New entry points must be carefully documented so as to prevent any
+     confusion regarding lock orders and semantics.  Introducing new entry
+     points requires four distinct pieces of work: introducing new MAC API en‐
+     tries reflecting the operation arguments, scattering these MAC API entry
+     points throughout the new or modified kernel service, extending the
+     front-end implementation of the MAC API framework, and modifying appro‐
+     priate modules to take advantage of the new entry points so that they may
+     consistently enforce their policies.
+
+EENNTTRRYY PPOOIINNTTSS
+     System service and module authors should reference the _F_r_e_e_B_S_D
+     _A_r_c_h_i_t_e_c_t_u_r_e _H_a_n_d_b_o_o_k for information on the MAC Framework APIs.
+
+SSEEEE AALLSSOO
+     acl(3), mac(3), posix1e(3), mac(4), ucred(9), vaccess(9),
+     vaccess_acl_posix1e(9), VFS(9), VOP_SETLABEL(9)
+
+     _T_h_e _F_r_e_e_B_S_D _A_r_c_h_i_t_e_c_t_u_r_e _H_a_n_d_b_o_o_k,
+     https://docs.freebsd.org/en/books/arch-handbook/.
+
+HHIISSTTOORRYY
+     The TrustedBSD MAC Framework first appeared in FreeBSD 5.0.
+
+AAUUTTHHOORRSS
+     This manual page was written by Robert Watson.  This software was con‐
+     tributed to the FreeBSD Project by Network Associates Laboratories, the
+     Security Research Division of Network Associates Inc. under DARPA/SPAWAR
+     contract N66001-01-C-8035 (“CBOSS”), as part of the DARPA CHATS research
+     program.
+
+     The TrustedBSD MAC Framework was designed by Robert Watson, and imple‐
+     mented by the Network Associates Laboratories Network Security (NETSEC),
+     Secure Execution Environment (SEE), and Adaptive Network Defense research
+     groups.  Network Associates Laboratory staff contributing to the CBOSS
+     Project include (in alphabetical order): Lee Badger, Brian Feldman,
+     Hrishikesh Dandekar, Tim Fraser, Doug Kilpatrick, Suresh Krishnaswamy,
+     Adam Migus, Wayne Morrison, Andrew Reisse, Chris Vance, and Robert
+     Watson.
+
+     Sub-contracted staff include: Chris Costello, Poul-Henning Kamp, Jonathan
+     Lemon, Kirk McKusick, Dag-Erling Smørgrav.
+
+     Additional contributors include: Pawel Dawidek, Chris Faulhaber, Ilmar
+     Habibulin, Mike Halderman, Bosko Milekic, Thomas Moestl, Andrew Reiter,
+     and Tim Robbins.
+
+BBUUGGSS
+     While the MAC Framework design is intended to support the containment of
+     the root user, not all attack channels are currently protected by entry
+     point checks.  As such, MAC Framework policies should not be relied on,
+     in isolation, to protect against a malicious privileged user.
+
+BSD                              May 20, 2021                              BSD

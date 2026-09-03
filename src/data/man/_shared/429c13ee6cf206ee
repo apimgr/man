@@ -1,0 +1,105 @@
+ZFSD(8)                   BSD System Manager's Manual                  ZFSD(8)
+
+NNAAMMEE
+     zzffssdd — ZFS fault management daemon
+
+SSYYNNOOPPSSIISS
+     zzffssdd [--dd]
+
+DDEESSCCRRIIPPTTIIOONN
+     zzffssdd attempts to resolve ZFS faults that the kernel can't resolve by it‐
+     self.  It listens to devctl(4) events, which are how the kernel notifies
+     userland of events such as I/O errors and disk removals.  zzffssdd attempts
+     to resolve these faults by activating or deactivating hot spares and on‐
+     lining offline vdevs.
+
+     The following options are available:
+
+     --dd      Run in the foreground instead of daemonizing.
+
+     System administrators never interact with zzffssdd directly.  Instead, they
+     control its behavior indirectly through zpool configuration.  There are
+     two ways to influence zzffssdd: assigning hot spares and setting pool proper‐
+     ties.  Currently, only the _a_u_t_o_r_e_p_l_a_c_e property has any effect.  See
+     zpool(8) for details.
+
+     zzffssdd will attempt to resolve the following types of fault:
+
+     device removal
+        When a leaf vdev disappears, zzffssdd will activate any available hot
+        spare.
+
+     device arrival
+        When a new GEOM device appears, zzffssdd will attempt to read its ZFS la‐
+        bel, if any.  If it matches a previously removed vdev on an active
+        pool, zzffssdd will online it.  Once resilvering completes, any active hot
+        spare will detach automatically.
+
+        If the new device has no ZFS label but its physical path matches the
+        physical path of a previously removed vdev on an active pool, and that
+        pool has the autoreplace property set, then zzffssdd will replace the
+        missing vdev with the newly arrived device.  Once resilvering com‐
+        pletes, any active hot spare will detach automatically.
+
+     vdev degrade or fault events
+        If a vdev becomes degraded or faulted, zzffssdd will activate any avail‐
+        able hot spare.
+
+     I/O errors
+        By default, if a leaf vdev generates more than 50 I/O errors in a 60
+        second period, then zzffssdd will mark that vdev as _F_A_U_L_T_E_D.  ZFS will no
+        longer issue any I/Os to it.  zzffssdd will activate a hot spare if one is
+        available. The defaults can be changed by setting the _i_o___n and/or _i_o___t
+        vdev properties. See vdevprops(7) for details.
+
+     I/O delays
+        By default, if a leaf vdev generates more than delayed 8 I/O events in
+        a 60 second period, then zzffssdd will mark that vdev as _F_A_U_L_T_E_D.  ZFS
+        will no longer issue any I/Os to it.  zzffssdd will activate a hot spare
+        if one is available. The defaults can be changed by setting the
+        _s_l_o_w___i_o___n and/or _s_l_o_w___i_o___t vdev properties. See vdevprops(7) for de‐
+        tails.
+
+     Checksum errors
+        By default, if a leaf vdev generates more than 50 checksum errors in a
+        60 second period, then zzffssdd will mark that vdev as _D_E_G_R_A_D_E_D.  ZFS will
+        still use it, but zfsd will also activate a hot spare if one is avail‐
+        able. The defaults can be changed by setting the _c_h_e_c_k_s_u_m___n and/or
+        _c_h_e_c_k_s_u_m___t vdev properties. See vdevprops(7) for details.
+
+     Spare addition
+        If the system administrator adds a hot spare to a pool that is already
+        degraded, zzffssdd will activate the spare.
+
+     Resilver complete
+        zzffssdd will detach any hot spare once a permanent replacement finishes
+        resilvering.
+
+     Physical path change
+        If the physical path of an existing disk changes, zzffssdd will attempt to
+        replace any missing disk with the same physical path, if its pool's
+        autoreplace property is set.
+
+     zzffssdd will log interesting events and its actions to syslog with facility
+     _d_a_e_m_o_n and identity [zfsd].
+
+FFIILLEESS
+     /var/db/zfsd/cases
+        When zzffssdd exits, it serializes any unresolved casefiles here, then
+        reads them back in when next it starts up.
+
+SSEEEE AALLSSOO
+     devctl(4), vdevprops(7), zpool(8)
+
+HHIISSTTOORRYY
+     zzffssdd first appeared in FreeBSD 11.0.
+
+AAUUTTHHOORRSS
+     zzffssdd was originally written by Justin Gibbs <_g_i_b_b_s_@_F_r_e_e_B_S_D_._o_r_g> and
+     Alan Somers <_a_s_o_m_e_r_s_@_F_r_e_e_B_S_D_._o_r_g>
+
+TTOODDOO
+     In the future, zzffssdd should be able to resume a pool that became suspended
+     due to device removals, if enough missing devices have returned.
+
+BSD                            February 20, 2024                           BSD

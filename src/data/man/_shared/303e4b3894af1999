@@ -1,0 +1,202 @@
+CD(4)                    BSD Kernel Interfaces Manual                    CD(4)
+
+NNAAMMEE
+     ccdd — ATAPI and SCSI CD-ROM driver
+
+SSYYNNOOPPSSIISS
+     ccdd** aatt ssccssiibbuuss??
+     ##ccdd00 aatt ssccssiibbuuss00 ttaarrggeett 66 lluunn 00 (fixed-configuration example)
+
+DDEESSCCRRIIPPTTIIOONN
+     The ccdd driver provides support for ATAPI and SCSI CD-ROM (Compact Disc
+     Read-Only Memory) drives, via scsibus(4).  In an attempt to look like a
+     regular disk, the ccdd driver synthesizes a partition table, with one par‐
+     tition covering the entire CD-ROM.  It is possible to modify this parti‐
+     tion table using disklabel(8), but it will only last until the CD-ROM is
+     unmounted.  In general the interfaces are similar to those described by
+     wd(4) and sd(4).
+
+     As the SCSI adapter is probed during boot, the SCSI bus is scanned for
+     devices.  Any devices found which answer as “Read-only” and “removable”
+     CD-ROM or WORM devices will be “attached” to the ccdd driver.
+
+     The system utility disklabel(8) may be used to read the synthesized disk
+     label structure, which will contain correct figures for the size of the
+     CD-ROM should that information be required.
+
+IIOOCCTTLLSS
+     The following ioctl(2) calls which apply to CD-ROM drives are defined in
+     the header files <_s_y_s_/_c_d_i_o_._h> and <_s_y_s_/_d_k_i_o_._h>.
+
+     DIOCGDINFO, DIOCSDINFO _s_t_r_u_c_t _d_i_s_k_l_a_b_e_l _*
+             Read or write the in-core copy of the disklabel for the drive.
+             The disklabel is initialized with information read from the SCSI
+             inquiry commands, and should be the same as the information
+             printed at boot.  This structure is defined in disklabel(5).
+
+     CDIOCPLAYTRACKS _s_t_r_u_c_t _i_o_c___p_l_a_y___t_r_a_c_k _*
+             Start audio playback given a track address and length.  The
+             structure is defined as follows:
+
+                   struct ioc_play_track {
+                           u_char  start_track;
+                           u_char  start_index;
+                           u_char  end_track;
+                           u_char  end_index;
+                   };
+
+     CDIOCPLAYBLOCKS _s_t_r_u_c_t _i_o_c___p_l_a_y___b_l_o_c_k_s _*
+             Start audio playback given a block address and length.  The
+             structure is defined as follows:
+
+                   struct ioc_play_blocks {
+                           int     blk;
+                           int     len;
+                   };
+
+     CDIOCPLAYMSF _s_t_r_u_c_t _i_o_c___p_l_a_y___m_s_f _*
+             Start audio playback given a “minutes-seconds-frames” address and
+             length.  The structure is defined as follows:
+
+                   struct ioc_play_msf {
+                           u_char  start_m;
+                           u_char  start_s;
+                           u_char  start_f;
+                           u_char  end_m;
+                           u_char  end_s;
+                           u_char  end_f;
+                   };
+
+     CDIOCREADSUBCHANNEL _s_t_r_u_c_t _i_o_c___r_e_a_d___s_u_b_c_h_a_n_n_e_l _*
+             Read information from the subchannel at the location specified by
+             this structure:
+
+                   struct ioc_read_subchannel {
+                           u_char address_format;
+                   #define CD_LBA_FORMAT   1
+                   #define CD_MSF_FORMAT   2
+                           u_char data_format;
+                   #define CD_SUBQ_DATA            0
+                   #define CD_CURRENT_POSITION     1
+                   #define CD_MEDIA_CATALOG        2
+                   #define CD_TRACK_INFO           3
+                           u_char track;
+                           int     data_len;
+                           struct  cd_sub_channel_info *data;
+                   };
+
+     CDIOREADTOCHEADER _s_t_r_u_c_t _i_o_c___t_o_c___h_e_a_d_e_r _*
+             Return summary information about the table of contents for the
+             mounted CD-ROM.  The information is returned into the following
+             structure:
+
+                   struct ioc_toc_header {
+                           u_short len;
+                           u_char  starting_track;
+                           u_char  ending_track;
+                   };
+
+     CDIOREADTOCENTRIES _s_t_r_u_c_t _i_o_c___r_e_a_d___t_o_c___e_n_t_r_y _*
+             Return information from the table of contents entries mentioned.
+             The argument structure is defined as follows:
+
+                   struct ioc_read_toc_entry {
+                           u_char  address_format;
+                           u_char  starting_track;
+                           u_short data_len;
+                           struct  cd_toc_entry *data;
+                   };
+
+             The requested data is written into an area of size data_len and
+             pointed to by data.
+
+     CDIOCSETPATCH _s_t_r_u_c_t _i_o_c___p_a_t_c_h _*
+             Attach various audio channels to various output channels.  The
+             argument structure is defined thusly:
+
+                   struct ioc_patch {
+                           u_char  patch[4];
+                           /* one for each channel */
+                   };
+
+     CDIOCGETVOL, CDIOCSETVOL _s_t_r_u_c_t _i_o_c___v_o_l _*
+             Get (set) information about the volume settings of the output
+             channels.  The argument structure is as follows:
+
+                   struct  ioc_vol {
+                           u_char  vol[4];
+                           /* one for each channel */
+                   };
+
+     CDIOCSETMONO
+             Patch all output channels to all source channels.
+
+     CDIOCSETSTEREO
+             Patch left source channel to the left output channel and the
+             right source channel to the right output channel.
+
+     CDIOCSETMUTE
+             Mute output without changing the volume settings.
+
+     CDIOCSETLEFT, CDIOCSETRIGHT
+             Attach both output channels to the left (right) source channel.
+
+     CDIOCSETDEBUG, CDIOCCLRDEBUG
+             Turn on (off) debugging for the appropriate device.
+
+     CDIOCPAUSE, CDIOCRESUME
+             Pause (resume) audio play, without resetting the location of the
+             read-head.
+
+     CDIOCRESET
+             Reset the drive.
+
+     CDIOCSTART, CDIOCSTOP
+             Tell the drive to spin-up (-down) the CD-ROM.
+
+     CDIOCALLOW, CDIOCPREVENT
+             Tell the drive to allow (prevent) manual ejection of the CD-ROM
+             disc.  Not all drives support this feature.
+
+     CDIOCEJECT
+             Eject the CD-ROM.
+
+     In addition the general scsi(4) ioctls may be used with the ccdd driver, if
+     used against the `whole disk' partition (i.e., _/_d_e_v_/_r_c_d_0_c).
+
+NNOOTTEESS
+     When a CD-ROM is changed in a drive controlled by the ccdd driver, then the
+     act of changing the media will invalidate the disklabel and information
+     held within the kernel.  To stop corruption, all accesses to the device
+     will be discarded until there are no more open file descriptors referenc‐
+     ing the device.  During this period, all new open attempts will be re‐
+     jected.  When no more open file descriptors reference the device, the
+     first next open will load a new set of parameters (including disklabel)
+     for the drive.
+
+     The audio code in the ccdd driver only supports SCSI-2 standard audio com‐
+     mands.  Because many CD-ROM manufacturers have not followed the standard,
+     there are many CD-ROM drives for which audio will not work.  Some work is
+     planned to support some of the more common “broken” CD-ROM drives; how‐
+     ever, this is not yet under way.
+
+FFIILLEESS
+     /dev/cd[0-9][a-p]   block mode CD-ROM devices
+     /dev/rcd[0-9][a-p]  raw mode CD-ROM devices
+
+DDIIAAGGNNOOSSTTIICCSS
+     None.
+
+SSEEEE AALLSSOO
+     cdio(1), eject(1), ioctl(2), intro(4), scsi(4), scsibus(4), sd(4), wd(4),
+     disklabel(5), disklabel(8)
+
+HHIISSTTOORRYY
+     Julian Elischer wrote ccdd for Mach 2.5 and ported it to 386BSD.
+
+BBUUGGSS
+     The names of the structures used for the third argument to iiooccttll() were
+     poorly chosen, and a number of spelling errors have survived in the names
+     of the iiooccttll() commands.
+
+BSD                            December 21, 2024                           BSD

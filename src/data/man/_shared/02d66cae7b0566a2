@@ -1,0 +1,181 @@
+NG_PATCH(4)              BSD Kernel Interfaces Manual              NG_PATCH(4)
+
+NNAAMMEE
+     nngg__ppaattcchh — trivial mbuf data modifying netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneettggrraapphh//nngg__ppaattcchh..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppaattcchh node performs data modification of packets passing through it.
+     Modifications are restricted to a subset of C language operations on un‐
+     signed integers of 8, 16, 32 or 64 bit size.  These are: set to new value
+     (=), addition (+=), subtraction (-=), multiplication (*=), division (/=),
+     negation (= -), bitwise AND (&=), bitwise OR (|=), bitwise eXclusive OR
+     (^=), shift left (<<=), shift right (>>=).  A negation operation is the
+     one exception: integer is treated as signed and second operand (the
+     _v_a_l_u_e) is not used.  If there is more than one modification operation,
+     they are applied to packets sequentially in the order they were specified
+     by the user.  The data payload of a packet is viewed as an array of
+     bytes, with a zero offset corresponding to the very first byte of packet
+     headers, and the _l_e_n_g_t_h bytes beginning from _o_f_f_s_e_t as a single integer
+     in network byte order.  An additional offset can be optionally requested
+     at configuration time to account for packet type.
+
+HHOOOOKKSS
+     This node type has two hooks:
+
+     _i_n   Packets received on this hook are modified according to rules speci‐
+          fied in the configuration and then forwarded to the _o_u_t hook, if it
+          exists.  Otherwise they are reflected back to the _i_n hook.
+
+     _o_u_t  Packets received on this hook are forwarded to the _i_n hook without
+          any changes.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_PATCH_SETDLT (sseettddlltt)
+          Sets the data link type on the _i_n hook (to help calculate relative
+          offset). Currently, supported types are DDLLTT__RRAAWW (raw IP datagrams ,
+          no offset applied, the default) and DDLLTT__EENN1100MMBB (Ethernet). DLT_ def‐
+          initions can be found in <_n_e_t_/_b_p_f_._h>.  If you want to work on the
+          link layer header you must use no additional offset by specifying
+          DDLLTT__RRAAWW.  If EENN1100MMBB is specified, then the optional additional off‐
+          set will take into account the Ethernet header and a QinQ header if
+          present.
+
+     NGM_PATCH_GETDLT (ggeettddlltt)
+          This control message returns the data link type of the _i_n hook.
+
+     NGM_PATCH_SETCONFIG (sseettccoonnffiigg)
+          This command sets the sequence of modify operations that will be ap‐
+          plied to incoming data on a hook.  The following _s_t_r_u_c_t
+          _n_g___p_a_t_c_h___c_o_n_f_i_g must be supplied as an argument:
+
+              struct ng_patch_op {
+                      uint32_t        offset;
+                      uint16_t        length; /* 1,2,4 or 8 bytes */
+                      uint16_t        mode;
+                      uint64_t        value;
+              };
+              /* Patching modes */
+              #define NG_PATCH_MODE_SET       1
+              #define NG_PATCH_MODE_ADD       2
+              #define NG_PATCH_MODE_SUB       3
+              #define NG_PATCH_MODE_MUL       4
+              #define NG_PATCH_MODE_DIV       5
+              #define NG_PATCH_MODE_NEG       6
+              #define NG_PATCH_MODE_AND       7
+              #define NG_PATCH_MODE_OR        8
+              #define NG_PATCH_MODE_XOR       9
+              #define NG_PATCH_MODE_SHL       10
+              #define NG_PATCH_MODE_SHR       11
+
+              struct ng_patch_config {
+                      uint32_t        count;
+                      uint32_t        csum_flags;
+                      uint32_t        relative_offset;
+                      struct ng_patch_op ops[];
+              };
+
+          The _c_s_u_m___f_l_a_g_s can be set to any combination of CSUM_IP, CSUM_TCP,
+          CSUM_SCTP and CSUM_UDP (other values are ignored) for instructing
+          the IP stack to recalculate the corresponding checksum before trans‐
+          mitting packet on output interface.  The nngg__ppaattcchh node does not do
+          any checksum correction by itself.
+
+     NGM_PATCH_GETCONFIG (ggeettccoonnffiigg)
+          This control message returns the current set of modify operations,
+          in the form of a _s_t_r_u_c_t _n_g___p_a_t_c_h___c_o_n_f_i_g.
+
+     NGM_PATCH_GET_STATS (ggeettssttaattss)
+          Returns the node's statistics as a _s_t_r_u_c_t _n_g___p_a_t_c_h___s_t_a_t_s.
+
+     NGM_PATCH_CLR_STATS (ccllrrssttaattss)
+          Clears the node's statistics.
+
+     NGM_PATCH_GETCLR_STATS (ggeettccllrrssttaattss)
+          This command is identical to NGM_PATCH_GET_STATS, except that the
+          statistics are also atomically cleared.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+EEXXAAMMPPLLEESS
+     This nngg__ppaattcchh node was designed to modify TTL and TOS/DSCP fields in IP
+     packets.  As an example, suppose you have two adjacent simplex links to a
+     remote network (e.g. satellite), so that the packets expiring in between
+     will generate unwanted ICMP-replies which have to go forth, not back.
+     Thus you need to raise TTL of every packet entering link by 2 to ensure
+     the TTL will not reach zero there.  To achieve this you can set an
+     ipfw(8) rule to use the nneettggrraapphh action to inject packets which are going
+     to the simplex link into the patch node, by using the following ngctl(8)
+     script:
+
+         /usr/sbin/ngctl -f- <<-SEQ
+                 mkpeer ipfw: patch 200 in
+                 name ipfw:200 ttl_add
+                 msg ttl_add: setconfig { count=1 csum_flags=1 ops=[     \
+                         { mode=2 value=3 length=1 offset=8 } ] }
+         SEQ
+         /sbin/ipfw add 150 netgraph 200 ip from any to simplex.remote.net
+
+     Here the “ttl_add” node of type nngg__ppaattcchh is configured to add (mode
+     NG_PATCH_MODE_ADD) a _v_a_l_u_e of 3 to a one-byte TTL field, which is 9th
+     byte of IP packet header.
+
+     Another example would be two consecutive modifications of packet TOS
+     field: say, you need to clear the IPTOS_THROUGHPUT bit and set the
+     IPTOS_MINCOST bit.  So you do:
+
+         /usr/sbin/ngctl -f- <<-SEQ
+                 mkpeer ipfw: patch 300 in
+                 name ipfw:300 tos_chg
+                 msg tos_chg: setconfig { count=2 csum_flags=1 ops=[     \
+                         { mode=7 value=0xf7 length=1 offset=1 }         \
+                         { mode=8 value=0x02 length=1 offset=1 } ] }
+         SEQ
+         /sbin/ipfw add 160 netgraph 300 ip from any to any not dst-port 80
+
+     This first does NG_PATCH_MODE_AND clearing the fourth bit and then
+     NG_PATCH_MODE_OR setting the third bit.
+
+     In both examples the _c_s_u_m___f_l_a_g_s field indicates that IP checksum (but not
+     TCP or UDP checksum) should be recalculated before transmit.
+
+     Note: one should ensure that packets are returned to ipfw after process‐
+     ing inside netgraph(4), by setting appropriate sysctl(8) variable:
+
+         sysctl net.inet.ip.fw.one_pass=0
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_ipfw(4), ngctl(8)
+
+HHIISSTTOORRYY
+     The nngg__ppaattcchh node type was implemented in FreeBSD 8.1.
+
+AAUUTTHHOORRSS
+     Maxim Ignatenko <gelraen.ua@gmail.com>.
+
+     Relative offset code by
+     DMitry Vagin
+
+     This manual page was written by
+     Vadim Goncharov <vadimnuclight@tpu.ru>.
+
+BBUUGGSS
+     The node blindly tries to apply every patching operation to each packet
+     (except those which offset if greater than length of the packet), so be
+     sure that you supply only the right packets to it (e.g. changing bytes in
+     the ARP packets meant to be in IP header could corrupt them and make your
+     machine unreachable from the network).
+
+     _!_!_! _W_A_R_N_I_N_G _!_!_!
+
+     The output path of the IP stack assumes correct fields and lengths in the
+     packets - changing them by to incorrect values can cause unpredictable
+     results including kernel panics.
+
+BSD                            November 17, 2015                           BSD

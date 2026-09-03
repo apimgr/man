@@ -1,0 +1,181 @@
+_P_R_O_V_I_D_E_R_‐_S_T_O_R_E_M_G_M_T(7)               OpenSSL              _P_R_O_V_I_D_E_R_‐_S_T_O_R_E_M_G_M_T(7)
+
+NNAAMMEE
+       provider-storemgmt - The OSSL_STORE library <-> provider functions
+
+LLIIBBRRAARRYY
+       libcrypto, ‐lcrypto
+
+SSYYNNOOPPSSIISS
+        #include <openssl/core_dispatch.h>
+
+        /*
+         * None of these are actual functions, but are displayed like this for
+         * the function signatures for functions that are offered as function
+         * pointers in OSSL_DISPATCH arrays.
+         */
+
+        void *OSSL_FUNC_store_open(void *provctx, const char *uri);
+        void *OSSL_FUNC_store_attach(void *provctx, OSSL_CORE_BIO *bio);
+        const OSSL_PARAM *store_settable_ctx_params(void *provctx);
+        int OSSL_FUNC_store_set_ctx_params(void *loaderctx, const OSSL_PARAM[]);
+        int OSSL_FUNC_store_load(void *loaderctx,
+                                 OSSL_CALLBACK *object_cb, void *object_cbarg,
+                                 OSSL_PASSPHRASE_CALLBACK *pw_cb, void *pw_cbarg);
+        int OSSL_FUNC_store_eof(void *loaderctx);
+        int OSSL_FUNC_store_close(void *loaderctx);
+
+        int OSSL_FUNC_store_export_object
+            (void *loaderctx, const void *objref, size_t objref_sz,
+             OSSL_CALLBACK *export_cb, void *export_cbarg);
+
+DDEESSCCRRIIPPTTIIOONN
+       The STORE operation is the provider side of the oossssll__ssttoorree(7) API.
+
+       The primary responsibility of the STORE operation is to load all sorts
+       of objects from a container indicated by URI.  These objects are given
+       to the OpenSSL library in provider‐native object abstraction form (see
+       pprroovviiddeerr--oobbjjeecctt(7)).  The OpenSSL library is then responsible for
+       passing on that abstraction to suitable provided functions.
+
+       Examples of functions that the OpenSSL library can pass the abstraction
+       to include OOSSSSLL__FFUUNNCC__kkeeyymmggmmtt__llooaadd(()) (pprroovviiddeerr--kkeeyymmggmmtt(7)),
+       OOSSSSLL__FFUUNNCC__ssttoorree__eexxppoorrtt__oobbjjeecctt(()) (which exports the object in
+       parameterized form).
+
+       All "functions" mentioned here are passed as function pointers between
+       _l_i_b_c_r_y_p_t_o and the provider in OOSSSSLL__DDIISSPPAATTCCHH(3) arrays via
+       OOSSSSLL__AALLGGOORRIITTHHMM(3) arrays that are returned by the provider’s
+       pprroovviiddeerr__qquueerryy__ooppeerraattiioonn(()) function (see "Provider Functions" in
+       pprroovviiddeerr--bbaassee(7)).
+
+       All these "functions" have a corresponding function type definition
+       named OOSSSSLL__FFUUNNCC__{{nnaammee}}__ffnn, and a helper function to retrieve the
+       function pointer from a OOSSSSLL__DDIISSPPAATTCCHH(3) element named OOSSSSLL__ggeett__{{nnaammee}}.
+       For example, the "function" OOSSSSLL__FFUUNNCC__ssttoorree__aattttaacchh(()) has these:
+
+        typedef void *(OSSL_FUNC_store_attach_fn)(void *provctx,
+                                                  OSSL_CORE_BIO * bio);
+        static ossl_inline OSSL_FUNC_store_attach_fn
+            OSSL_FUNC_store_attach(const OSSL_DISPATCH *opf);
+
+       OOSSSSLL__DDIISSPPAATTCCHH(3) arrays are indexed by numbers that are provided as
+       macros in ooppeennssssll--ccoorree__ddiissppaattcchh..hh(7), as follows:
+
+        OSSL_FUNC_store_open                 OSSL_FUNC_STORE_OPEN
+        OSSL_FUNC_store_attach               OSSL_FUNC_STORE_ATTACH
+        OSSL_FUNC_store_settable_ctx_params  OSSL_FUNC_STORE_SETTABLE_CTX_PARAMS
+        OSSL_FUNC_store_set_ctx_params       OSSL_FUNC_STORE_SET_CTX_PARAMS
+        OSSL_FUNC_store_load                 OSSL_FUNC_STORE_LOAD
+        OSSL_FUNC_store_eof                  OSSL_FUNC_STORE_EOF
+        OSSL_FUNC_store_close                OSSL_FUNC_STORE_CLOSE
+        OSSL_FUNC_store_export_object        OSSL_FUNC_STORE_EXPORT_OBJECT
+
+   FFuunnccttiioonnss
+       OOSSSSLL__FFUUNNCC__ssttoorree__ooppeenn(()) should create a provider side context with data
+       based on the input _u_r_i.  The implementation is entirely responsible for
+       the interpretation of the URI.
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__aattttaacchh(()) should create a provider side context with the
+       core BBIIOO _b_i_o attached.  This is an alternative to using a URI to find
+       storage, supporting OOSSSSLL__SSTTOORREE__aattttaacchh(3).
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__sseettttaabbllee__ccttxx__ppaarraammss(()) should return a constant array of
+       descriptor OOSSSSLL__PPAARRAAMM(3), for parameters that
+       OOSSSSLL__FFUUNNCC__ssttoorree__sseett__ccttxx__ppaarraammss(()) can handle.
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__sseett__ccttxx__ppaarraammss(()) should set additional parameters, such
+       as what kind of data to expect, search criteria, and so on.  More on
+       those below, in "Load Parameters".  Whether unrecognised parameters are
+       an error or simply ignored is at the implementation’s discretion.
+       Passing NULL for _p_a_r_a_m_s should return true.
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__llooaadd(()) loads the next object from the URI opened by
+       OOSSSSLL__FFUUNNCC__ssttoorree__ooppeenn(()), creates an object abstraction for it (see
+       pprroovviiddeerr--oobbjjeecctt(7)), and calls _o_b_j_e_c_t___c_b with it as well as
+       _o_b_j_e_c_t___c_b_a_r_g.  _o_b_j_e_c_t___c_b will then interpret the object abstraction and
+       do what it can to wrap it or decode it into an OpenSSL structure.  In
+       case a passphrase needs to be prompted to unlock an object, _p_w___c_b
+       should be called.
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__eeooff(()) indicates if the end of the set of objects from
+       the URI has been reached.  When that happens, there’s no point trying
+       to do any further loading.
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__cclloossee(()) frees the provider side context _c_t_x.
+
+       When a provider‐native object is created by a store manager it would be
+       unsuitable for direct use with a foreign provider. The export function
+       allows for exporting the object to that foreign provider if the foreign
+       provider supports the type of the object and provides an import
+       function.
+
+       OOSSSSLL__FFUUNNCC__ssttoorree__eexxppoorrtt__oobbjjeecctt(()) should export the object of size
+       _o_b_j_r_e_f___s_z referenced by _o_b_j_r_e_f as an OOSSSSLL__PPAARRAAMM(3) array and pass that
+       to the _e_x_p_o_r_t___c_b as well as the given _e_x_p_o_r_t___c_b_a_r_g.
+
+   LLooaadd PPaarraammeetteerrss
+       "expect" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__EEXXPPEECCTT) <integer>
+           Is  a hint of what type of data the OpenSSL library expects to get.
+           This is only useful for optimization, as  the  library  will  check
+           that the object types match the expectation too.
+
+           The  number  that  can  be given through this parameter is found in
+           _<_o_p_e_n_s_s_l_/_s_t_o_r_e_._h_>, with  the  macros  having  names  starting  with
+           "OSSL_STORE_INFO_".   These  are  further  described  in "SUPPORTED
+           OBJECTS" in OOSSSSLL__SSTTOORREE__IINNFFOO(3).
+
+       "subject" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__SSUUBBJJEECCTT) <octet string>
+           Indicates that the caller wants to search for an  object  with  the
+           given  subject  associated.   This  can  be used to select specific
+           certificates by subject.
+
+           The contents of the octet string is expected to be in DER form.
+
+       "issuer" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__IISSSSUUEERR) <octet string>
+           Indicates that the caller wants to search for an  object  with  the
+           given  issuer  associated.   This  can  be  used to select specific
+           certificates by issuer.
+
+           The contents of the octet string is expected to be in DER form.
+
+       "serial" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__SSEERRIIAALL) <integer>
+           Indicates that the caller wants to search for an  object  with  the
+           given serial number associated.
+
+       "digest" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__DDIIGGEESSTT) <UTF8 string>
+       "fingerprint" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__FFIINNGGEERRPPRRIINNTT) <octet string>
+           Indicates  that  the  caller wants to search for an object with the
+           given fingerprint, computed with the given digest.
+
+       "alias" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__AALLIIAASS) <UTF8 string>
+           Indicates that the caller wants to search for an  object  with  the
+           given alias (some call it a "friendly name").
+
+       "properties" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__PPRROOPPEERRTTIIEESS)) <<uuttff88 ssttrriinngg
+           Property  string  to  use  when querying for algorithms such as the
+           OOSSSSLL__DDEECCOODDEERR decoder implementations.
+
+       "input‐type" (OOSSSSLL__SSTTOORREE__PPAARRAAMM__IINNPPUUTT__TTYYPPEE)) <<uuttff88 ssttrriinngg
+           Type of the input format as a hint to use when decoding the objects
+           in the store.
+
+       Several of these search criteria may  be  combined.   For  example,  to
+       search  for  a  certificate by issuer+serial, both the "issuer" and the
+       "serial" parameters will be given.
+
+SSEEEE AALLSSOO
+       pprroovviiddeerr(7)
+
+HHIISSTTOORRYY
+       The STORE interface was introduced in OpenSSL 3.0.
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2020-2022 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in   the   file   LICENSE   in   the   source   distribution   or    at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐07             _P_R_O_V_I_D_E_R_‐_S_T_O_R_E_M_G_M_T(7)

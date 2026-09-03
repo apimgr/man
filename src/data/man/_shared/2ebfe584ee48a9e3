@@ -1,0 +1,341 @@
+The  function  searches the volume (that is, mounted file system)
+specified by for file system objects matching the criteria speci‐
+fied by and The parameter returns the  number  of  matching  file
+system  objects  found.   The function also returns attributes of
+those file system objects in a buffer specified by The  parameter
+allows you search the volume using multiple calls to resuming the
+search  where  it left off.  The routine will only return objects
+to which you have access (that is, you have  execute  permissions
+on  the  directories  leading to this object from the root).  The
+parameter must reference a valid file system object on the volume
+to be searched.  Typically the path is to the volume’s  root  di‐
+rectory.   The entire volume is always searched.  All directories
+listed in the path name leading to this object  must  be  search‐
+able.   The parameter is a pointer to an structure, as defined by
+(shown below).  You are responsible for filling out all fields of
+this structure before calling the function.  struct fssearchblock
+{
+    struct attrlist *   returnattrs;
+    void *              returnbuffer;
+    size_t              returnbuffersize;
+    unsigned int        maxmatches;
+    struct timeval      timelimit;
+    void *              searchparams1;
+    size_t              sizeofsearchparams1;
+    void *              searchparams2;
+    size_t              sizeofsearchparams2;
+    struct attrlist     searchattrs; }; For information about the
+structure, see the discussion of The fields of the structure  are
+defined  as follows.  can return arbitrary attributes of the file
+system objects that meet the designated search criteria passed in
+via and This field must point to an structure that specifies  the
+attributes  that  you want returned.  To request an attribute you
+must set the corresponding bit in the appropriate  field  of  the
+structure.   You  are  responsible  for filling out all fields of
+this structure before calling the function.  You must not request
+volume attributes.  places attributes of the matching file system
+objects into this returned attributes buffer.  The attributes for
+any given object are grouped together and packed in  exactly  the
+same  way  as they would be returned from The initial contents of
+this buffer are ignored.  Set this field to the size,  in  bytes,
+of  the  buffer  pointed  to  by  Specifies the maximum number of
+matches that you want this call to to return.  Specifies the max‐
+imum time that you want this call to to run.   If  you’re  imple‐
+menting  a  volume  format,  you  should impose your own internal
+limit on the duration of this call to prevent  a  malicious  user
+program  from monopolizing kernel resources.  Specifies the lower
+bound of the search criteria.  This is discussed in detail below.
+You must place attribute values into the buffer in the  same  way
+as they would be returned by where the field determines the exact
+layout  of  the attribute values.  Set this field to the size, in
+bytes, of the buffer pointed to by Specifies the upper  bound  of
+the  search  criteria.   This  is discussed in detail below.  You
+must place attribute values into the buffer in the  same  way  as
+they  would  be  returned by where the field determines the exact
+layout of the attribute values.  Set this field to the  size,  in
+bytes,  of the buffer pointed to by Specifies the attributes that
+you want you use for your search criteria.  You  are  responsible
+for  filling  out all fields of this structure before calling the
+function.  To search for an attribute you  must  set  the  corre‐
+sponding bit in the appropriate field of the structure, and place
+the  appropriate  values  into  the  and buffers.  The attributes
+specified here determine the format of those  buffers.   This  is
+discussed  in detail below.  The parameter points to an variable.
+The initial value of this variable is ignored.  On  return,  this
+variable  contains  the  number  of  matching file system objects
+found.  The is always less than or equal to the field of the  pa‐
+rameter.   The  attributes  for  the  matching  objects have been
+placed into the returned attributes  buffer.   The  parameter  is
+currently   ignored.    You  should  always  pass  in  the  value
+0x08000103, which corresponds to the UTF‐8  text  encoding  value
+defined by The parameter is a bit set that controls the behaviour
+of  The  following  option bits are defined.  If this bit is set,
+will ignore the parameter and start a new search.  Otherwise  as‐
+sumes  that  is  valid  and  attempts to resume a previous search
+based on that state.  If this bit  is  set,  will  consider  sub‐
+strings  to  be successful matches when evaluating the attribute.
+If this bit is set, will search for directories  that  match  the
+search  criteria.  To get meaningful results you must specify ei‐
+ther this bit or or both.  If this bit is set,  will  search  for
+files  that match the search criteria.  To get meaningful results
+you must specify either this bit or or both.  If this bit is set,
+will only return one reference for a  hard  linked  file,  rather
+than  a reference for each hard link to the file.  This option is
+not recommended for general development.  Its primary  client  is
+the  utility.  Note that not all filesystems that support support
+this option and may return EINVAL if it is requested.   This  op‐
+tion  is  privileged  (the  caller’s effective UID must be 0) and
+cannot be used if you request the or attributes.  Introduced with
+Darwin 7.0 (Mac OS X version 10.3).  If this bit is set, will not
+match any invisible file system objects (that is,  objects  whose
+attribute  has bit 6 set in the ninth byte) or any objects within
+invisible directories.  Introduced with Darwin 7.0 (Mac OS X ver‐
+sion 10.3).  If this bit is set, will not match any  file  system
+objects that are inside a package.  A package is defined as a di‐
+rectory  whose  extension  matches one of the extensions that are
+configured into the kernel by Launch Services.   Introduced  with
+Darwin 7.0 (Mac OS X version 10.3).  If this bit is set, will not
+match  any  file  system objects that are within an inappropriate
+directory.  The current list of  inappropriate  directories  con‐
+tains  one  item:  /System.  Introduced with Darwin 7.0 (Mac OS X
+version 10.3).  If this bit is set, will return all the file sys‐
+tem objects that do not match the  search  criteria.   Introduced
+with  Darwin  7.0  (Mac  OS  X version 10.3).  The parameter is a
+pointer to an opaque data structure that  uses  to  maintain  the
+state  of  a search between successive calls.  In your first call
+to you specify the flag in the parameter.  This  tells  that  the
+search  state  is  invalid and that it should start a new search.
+When this call completes, it may have only returned  partial  re‐
+sults;  in  that case, it will have updated the structure pointed
+to by If you call again, this time without specifying the flag in
+the parameter, it will resume the search where it left off, using
+the search state that it previously stored in  the  state  struc‐
+ture.   You do not need to explicitly dispose of this state.  The
+function returns significant errors in the followings cases.   If
+it has found as many objects as you requested in the field of the
+parameter, it will return If there is not enough space in the re‐
+turned  attributes buffer for the first match, it will return You
+should allocate a  larger  returned  attributes  buffer  and  try
+again.   will  be  zero  in this case.  If the timeout expires it
+will return If you attempt to resume a search (that  is,  is  not
+specified in the parameter) and the catalog has changed since the
+last  search, the function will return You must start your search
+again from the beginning.  If returns the value in may be greater
+than zero.  This is known as a partial  result.   You  should  be
+sure  to process these matches before calling again.  You specify
+the search criteria using a combination of the and fields of  the
+parameter,  and various flags in the parameter.  The field deter‐
+mines the attributes considered when comparing a file system  ob‐
+ject  to  the search criteria.  You can specify that an attribute
+should be considered by setting the corresponding bit in the  ap‐
+propriate  field  of  the structure.  See the discussion of for a
+detailed description of this structure.  The and  fields  specify
+the attribute values that must be matched.  The format of each of
+these buffers is determined by the attributes that you’re search‐
+ing  for.   The values are packed in exactly the same way as they
+would be returned from including the leading length value.   Note
+that   the   size   of   these   buffers   must   be  bounded  by
+SEARCHFS_MAX_SEARCHPARMS bytes, which is defined in <sys/attr.h>.
+The attribute values in the first and second search buffers  form
+a lower and upper bound for the search, respectively.  These have
+different  meanings  depending  on  the  type  of attribute.  For
+string attributes (specifically the object name),  the  value  in
+the  first search buffer is significant and the value in the sec‐
+ond search buffer is ignored.  The string comparison is either an
+exact match or a substring match depending on the flag in the pa‐
+rameter.  For structured attributes (specifically the Finder  in‐
+formation), the value from the file system object is masked (log‐
+ical  AND)  with  the  value in the second search buffer and then
+compared, byte for byte, against the value in  the  first  search
+buffer.   If  it is equal, the object is a match.  For scalar at‐
+tributes (all other attributes,  for  example,  the  modification
+date), the values in the first and second search buffers are lit‐
+erally  a  lower and upper bound.  An object matches the criteria
+if its value is greater than or equal to the value in  the  first
+buffer  and  less than or equal to the value in the second.  Upon
+successful completion, a value of 0 is returned.  This means that
+the entire volume has been searched  and  all  matches  returned.
+Otherwise,  a  value of ‐1 is returned and is set to indicate the
+error.  See the discussion of the and error codes above.  Not all
+volumes support You can test whether a volume supports  by  using
+to  get  the  volume  capabilities attribute and then testing the
+flag.  The function has  been  undocumented  for  more  than  two
+years.   In  that  time a number of volume format implementations
+have been created without a proper specification for  the  behav‐
+iour  of this routine.  You may encounter volume format implemen‐
+tations with slightly different behaviour than what is  described
+here.   Your  program  is expected to be tolerant of this variant
+behaviour.  If you’re implementing a volume format that  supports
+you  should be careful to support the behaviour specified by this
+document.  A bug in systems prior to Darwin 7.0 (Mac OS X version
+10.3) makes searching for the attribute tricky.  The  bug  causes
+the  attribute  to  consume  two  items  in  the search attribute
+buffers, the first in the proper place and the second between and
+will fail if: The volume does not support A component of the path
+prefix is not a directory.  A component of a path  name  exceeded
+characters, or an entire path name exceeded characters.  The file
+system  object does not exist.  Search permission is denied for a
+component of the path prefix.  Too many symbolic links  were  en‐
+countered  in translating the pathname.  One of the pointer para‐
+meters points to an invalid address.  The parameter  contains  an
+invalid   flag   or   sizeofsearchparams1/2   is   greater   than
+SEARCHFS_MAX_SEARCHPARMS (see attr.h).  Additionally, filesystems
+that do not support SRCHFS_SKIPLINKS may return  EINVAL  if  this
+search  option  is  requested. EINVAL may also be returned if you
+request attributes for either searching or  to  be  returned  for
+matched  entries  if the filesystem does not support vending that
+particular attribute.  The search  terminated  with  partial  re‐
+sults,  either  because has hit the limit specified by or because
+the timeout expired.  Process the matches  returned  so  far  and
+then call again to look for more.  The returned attributes buffer
+is  too  small for the first match.  You should allocate a larger
+returned attributes buffer and try again.  will be zero  in  this
+case.   The  search  could  not be resumed because the volume has
+changed.  An I/O error occurred while reading from or writing  to
+the file system.
+
+The  list  of attributes valid for searching and returning to the
+caller may be substantially smaller than that of the system call.
+See the following lists for the currently available search crite‐
+ria.  In general, a filesystem that supports will typically  sup‐
+ply  per‐item  attributes  for matched objects that are also sup‐
+ported by the  system  call.   This  varies  from  filesystem  to
+filesystem.
+
+
+
+The  list  of  attributes  that are valid as search criteria cur‐
+rently includes the following list of attributes for a particular
+filesystem object.
+
+ATTR_CMN_NAME  ATTR_CMN_OBJID  ATTR_CMN_PAROBJID  ATTR_CMN_CRTIME
+ATTR_CMN_MODTIME ATTR_CMN_CHGTIME ATTR_CMN_ACCTIME ATTR_CMN_BKUP‐
+TIME     ATTR_CMN_FNDRINFO     ATTR_CMN_OWNERID    ATTR_CMN_GRPID
+ATTR_CMN_ACCESSMASK       ATTR_CMN_FILEID       ATTR_CMN_PARENTID
+ATTR_DIR_ENTRYCOUNT  ATTR_FILE_DATALENGTH ATTR_FILE_DATAALLOCSIZE
+ATTR_FILE_RSRCLENGTH ATTR_FILE_RSRCALLOCSIZE
+
+
+As mentioned above, the list of attributes that are available  to
+be  returned to the caller vary by filesystem, but should include
+the following attributes, in the  following  order.   The  buffer
+should  be  assumed  to be packed similar to the output buffer of
+the system call. Note that again, this list may be  substantially
+smaller than what is available via
+
+ATTR_CMN_NAME   ATTR_CMN_DEVID   ATTR_CMN_FSID   ATTR_CMN_OBJTYPE
+ATTR_CMN_OBJTAG      ATTR_CMN_OBJID       ATTR_CMN_OBJPERMANENTID
+ATTR_CMN_PAROBJID  ATTR_CMN_SCRIPT  ATTR_CMN_CRTIME ATTR_CMN_MOD‐
+TIME    ATTR_CMN_CHGTIME    ATTR_CMN_ACCTIME    ATTR_CMN_BKUPTIME
+ATTR_CMN_FNDRINFO  ATTR_CMN_OWNERID  ATTR_CMN_GRPID  ATTR_CMN_AC‐
+CESSMASK   ATTR_CMN_FLAGS   ATTR_CMN_USERACCESS   ATTR_CMN_FILEID
+ATTR_CMN_PARENTID      ATTR_DIR_LINKCOUNT     ATTR_DIR_ENTRYCOUNT
+ATTR_DIR_MOUNTSTATUS   ATTR_FILE_LINKCOUNT    ATTR_FILE_TOTALSIZE
+ATTR_FILE_ALLOCSIZE   ATTR_FILE_IOBLOCKSIZE   ATTR_FILE_CLUMPSIZE
+ATTR_FILE_DEVTYPE  ATTR_FILE_DATALENGTH   ATTR_FILE_DATAALLOCSIZE
+ATTR_FILE_RSRCLENGTH ATTR_FILE_RSRCALLOCSIZE
+
+
+The  following  code searches a volume for files of the specified
+type and creator.  #include <assert.h>  #include  <stdio.h>  #in‐
+clude  <stddef.h>  #include <string.h> #include <sys/attr.h> #in‐
+clude <sys/errno.h> #include <unistd.h> typedef  struct  attrlist
+attrlist_t;   typedef  struct  fssearchblock     fssearchblock_t;
+typedef struct searchstate      searchstate_t; struct SearchAttr‐
+Buf {
+    u_int32_t       length;
+    char            finderInfo[32]; }; typedef struct SearchAttr‐
+Buf SearchAttrBuf; struct ResultAttrBuf {
+    u_int32_t       length;
+    attrreference_t name;
+    fsobj_id_t      parObjID; }; typedef struct ResultAttrBuf Re‐
+sultAttrBuf; enum {
+    kMatchesPerCall = 16 }; static int SearchFSDemo(
+    const char *volPath,
+    const char *type,
+    const char *creator ) {
+    int             err;
+    fssearchblock_t searchBlock;
+    SearchAttrBuf   lower;
+    SearchAttrBuf   upper;
+    static const unsigned char kAllOnes[4] = { 0xFF, 0xFF,  0xFF,
+0xFF };
+    unsigned long   matchCount;
+    unsigned long   matchIndex;
+    unsigned int    options;
+    searchstate_t   state;
+    ResultAttrBuf * thisEntry;
+    attrlist_t      returnAttrList;
+    char            resultAttrBuf[  kMatchesPerCall
+                                  *    (sizeof(ResultAttrBuf)   +
+64)];
+    // resultAttrBuf is big enough for kMatchesPerCall entries,
+    // assuming that the average name length is less than 64.
+    assert(strlen(type)    == 4);
+    assert(strlen(creator) == 4);
+
+    memset(&searchBlock, 0, sizeof(searchBlock));
+    searchBlock.searchattrs.bitmapcount = ATTR_BIT_MAP_COUNT;
+    searchBlock.searchattrs.commonattr  = ATTR_CMN_FNDRINFO;
+
+    memset(&lower, 0, sizeof(lower));
+    memset(&upper, 0, sizeof(upper));
+    lower.length = sizeof(lower);
+    upper.length = sizeof(upper);
+    memcpy(&lower.finderInfo[0], type,     4);
+    memcpy(&lower.finderInfo[4], creator,  4);
+    memcpy(&upper.finderInfo[0], kAllOnes, 4);
+    memcpy(&upper.finderInfo[4], kAllOnes, 4);
+    searchBlock.searchparams1       = &lower;
+    searchBlock.sizeofsearchparams1 = sizeof(lower);
+    searchBlock.searchparams2       = &upper;
+    searchBlock.sizeofsearchparams2 = sizeof(lower);
+
+    searchBlock.timelimit.tv_sec  = 0;
+    searchBlock.timelimit.tv_usec = 100 * 1000;
+
+    searchBlock.maxmatches = kMatchesPerCall;
+
+    memset(&returnAttrList, 0, sizeof(returnAttrList));
+    returnAttrList.bitmapcount = ATTR_BIT_MAP_COUNT;
+    returnAttrList.commonattr  = ATTR_CMN_NAME |  ATTR_CMN_PAROB‐
+JID;
+    searchBlock.returnattrs = &returnAttrList;
+    searchBlock.returnbuffer = resultAttrBuf;
+    searchBlock.returnbuffersize = sizeof(resultAttrBuf);
+
+    options = SRCHFS_START | SRCHFS_MATCHFILES;
+
+    do {
+        err = searchfs(
+            volPath,
+            &searchBlock,
+            &matchCount,
+            0x08000103,
+            options,
+            &state
+        );
+        if (err != 0) {
+            err = errno;
+        }
+        if ( (err == 0) || (err == EAGAIN) ) {
+            thisEntry = (ResultAttrBuf *) resultAttrBuf;
+
+            for   (matchIndex   =  0;  matchIndex  <  matchCount;
+matchIndex++) {
+                printf("%08x ", thisEntry‐>parObjID.fid_objno);
+                printf(
+                    "%s\n",
+                    ((char *) &thisEntry‐>name)
+                        + thisEntry‐>name.attr_dataoffset
+                );
+                // Advance to the next entry.
+                ((char *) thisEntry) += thisEntry‐>length;
+            }
+        }
+
+        options &= ˜SRCHFS_START;
+    } while (err == EAGAIN);
+
+    return err; } A function call appeared in Darwin  1.3.1  (Mac
+OS X version 10.0).

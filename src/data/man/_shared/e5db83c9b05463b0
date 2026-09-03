@@ -1,0 +1,177 @@
+SPPP(4)                  BSD Kernel Interfaces Manual                  SPPP(4)
+
+NNAAMMEE
+     sspppppp — PPP and Link Control Protocol
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee sspppppp [_c_o_u_n_t]
+
+DDEESSCCRRIIPPTTIIOONN
+     The sspppppp network layer implements the state machine and Link Control Pro‐
+     tocol (LCP) of the Point-to-Point Protocol (PPP) as described in RFC
+     1661.  Note that this layer does not provide network interfaces of its
+     own, it is rather intended to be layered on top of drivers providing a
+     point-to-point connection that wish to run a PPP stack over it.  The cor‐
+     responding network interfaces have to be provided by these hardware driv‐
+     ers.
+
+     The sspppppp layer provides three basic modes of operation.  The default
+     mode, with no special flags set, is to create the PPP connection (admin‐
+     istrative _O_p_e_n event to the LCP layer) as soon as the interface is taken
+     up with the ifconfig(8) command.  Taking the interface down again will
+     terminate the LCP layer and thus all other layers on top.  The link will
+     also terminate itself as soon as no Network Control Protocol (NCP) is
+     open anymore, indicating that the lower layers are no longer needed.
+
+     Setting the link-level flag lliinnkk00 with ifconfig(8) will cause the respec‐
+     tive network interface to go into _p_a_s_s_i_v_e mode.  This means the adminis‐
+     trative _O_p_e_n event to the LCP layer will be delayed until after the lower
+     layers signal an _U_p event (rise of “carrier”).  This can be used by the
+     lower layers to support a dial-in connection where the physical layer
+     isn't available immediately at startup, but only after some external
+     event arrives.  Receipt of a _D_o_w_n event from the lower layer will not
+     take the interface completely down in this case.
+
+     Finally, setting the flag lliinnkk11 will cause the interface to operate in
+     _d_i_a_l_-_o_n_-_d_e_m_a_n_d mode.  This is also only useful if the lower layers sup‐
+     port the notion of a carrier (like with an ISDN line).  Upon configuring
+     the respective interface, it will delay the administrative _O_p_e_n event to
+     the LCP layer until either an outbound network packet arrives, or until
+     the lower layers signal an _U_p event, indicating an inbound connection.
+     As with passive mode, receipt of a _D_o_w_n event (loss of carrier) will not
+     automatically take the interface down, thus it remains available for fur‐
+     ther connections.
+
+     The sspppppp layer supports the _d_e_b_u_g interface flag, which can be set with
+     ifconfig(8).  If this flag is set, the various control protocol packets
+     being exchanged as well as the option negotiation between both ends of
+     the link will be logged at level LOG_DEBUG.  This can be helpful to exam‐
+     ine configuration problems during the first attempts to set up a new con‐
+     figuration.  Without this flag being set, only the major phase transi‐
+     tions will be logged at level LOG_INFO.
+
+     It is possible to leave the local interface IP address open for negotia‐
+     tion by setting it to 0.0.0.0.  This requires that the remote peer can
+     correctly supply a value for it based on the identity of the caller, or
+     on the remote address supplied by this side.  Due to the way the IPCP op‐
+     tion negotiation works, this address is supplied late during the negotia‐
+     tion, which could cause the remote peer to make false assumptions.
+
+     In a similar spirit the remote address can be set to a magical value in
+     the range 0.0.0.1 to 0.0.0.255, which means that we don't care what ad‐
+     dress the remote side will use, as long as it is not 0.0.0.0.  This is
+     useful if your ISP has several dial-in servers.  You can of course rroouuttee
+     aadddd something or other 0.0.0.1 and it will do exactly what you would want
+     it to.
+
+     Once a connection is established, the device will send out a nameserver
+     proposal, which resolvd(8) can act on.  If during IPCP negotiation no DNS
+     server options were exchanged, the nameserver proposal will be empty.
+
+     The PAP and CHAP authentication protocols, as described in RFCs 1334 and
+     1994, respectively, are also implemented.  Their parameters are con‐
+     trolled by the ifconfig(8) utility.
+
+EEXXAAMMPPLLEESS
+     Display the settings for pppoe0.  The interface is currently in the
+     _e_s_t_a_b_l_i_s_h phase and tries to connect to the remote peer; other possible
+     PPP phases are _d_e_a_d, _a_u_t_h_e_n_t_i_c_a_t_e, _n_e_t_w_o_r_k, or _t_e_r_m_i_n_a_t_e.  Both ends of
+     the connection use the CHAP protocol, the local client tells the remote
+     peer the system name ‘uriah’, and the peer is expected to authenticate by
+     the name ‘ifb-gw’.  Once the initial CHAP handshake has been successful,
+     no further CHAP challenges will be transmitted.  There are supposedly
+     some known CHAP secrets for both ends of the link which are not dis‐
+     played.
+
+           $ ifconfig pppoe0
+           pppoe0: flags=8851<UP,POINTOPOINT,RUNNING,SIMPLEX,MULTICAST> mtu 1492
+                   dev: em0 state: PADI sent
+                   sid: 0x0 PADI retries: 0 PADR retries: 0
+                   sppp: phase establish authproto chap authname "uriah" \
+                           peerproto chap peername "ifb-gw" norechallenge
+                   groups: pppoe
+                   inet 0.0.0.0 --> 0.0.0.1 netmask 0xffffffff
+
+     A possible call to ifconfig(8) that could have been used to bring the in‐
+     terface into the state shown by the previous example:
+
+           # ifconfig em0 up
+           # ifconfig pppoe0 0.0.0.0 0.0.0.1 netmask 0xffffffff \
+                   pppoedev em0 \
+                   authproto chap authname uriah authkey "some secret" \
+                   peerproto chap peername "ifb-gw" peerkey "another" \
+                   peerflag norechallenge \
+                   up
+
+DDIIAAGGNNOOSSTTIICCSS
+     <<iiffnnaammee>><<iiffnnuumm>>:: <<pprroottoo>> iilllleeggaall <<eevveenntt>> iinn ssttaattee <<ssttaatteennaammee>>  An event
+     happened that should not happen for the current state the respective con‐
+     trol protocol is in.  See RFC 1661 for a description of the state automa‐
+     ton.
+
+     <<iiffnnaammee>><<iiffnnuumm>>:: llooooppbbaacckk  The state automaton detected a line loopback
+     (that is, it was talking with itself).  The interface will be temporarily
+     disabled.
+
+     <<iiffnnaammee>><<iiffnnuumm>>:: uupp  The LCP layer is running again, after a line loop‐
+     back had previously been detected.
+
+     <<iiffnnaammee>><<iiffnnuumm>>:: ddoowwnn  The keepalive facility detected the line being un‐
+     responsive.  Keepalive must be explicitly requested by the lower layers
+     in order to take place.
+
+SSEEEE AALLSSOO
+     inet(4), pppoe(4), ifconfig(8)
+
+SSTTAANNDDAARRDDSS
+     G. McGregor, _T_h_e _P_P_P _I_n_t_e_r_n_e_t _P_r_o_t_o_c_o_l _C_o_n_t_r_o_l _P_r_o_t_o_c_o_l _(_I_P_C_P_), RFC 1332,
+     May 1992.
+
+     B. Lloyd and W. Simpson, _P_P_P _A_u_t_h_e_n_t_i_c_a_t_i_o_n _P_r_o_t_o_c_o_l_s, RFC 1334, October
+     1992.
+
+     W. Simpson, _T_h_e _P_o_i_n_t_-_t_o_-_P_o_i_n_t _P_r_o_t_o_c_o_l _(_P_P_P_), RFC 1661, July 1994.
+
+     S. Cobb, _P_P_P _I_n_t_e_r_n_e_t _P_r_o_t_o_c_o_l _C_o_n_t_r_o_l _P_r_o_t_o_c_o_l _E_x_t_e_n_s_i_o_n_s _f_o_r _N_a_m_e
+     _S_e_r_v_e_r _A_d_d_r_e_s_s_e_s, RFC 1877, December 1995.
+
+     W. Simpson, _P_P_P _C_h_a_l_l_e_n_g_e _H_a_n_d_s_h_a_k_e _A_u_t_h_e_n_t_i_c_a_t_i_o_n _P_r_o_t_o_c_o_l _(_C_H_A_P_), RFC
+     1994, August 1996.
+
+     S. Varada, D. Haskins, and E. Allen, _I_P _V_e_r_s_i_o_n _6 _o_v_e_r _P_P_P, RFC 5072,
+     September 2007.
+
+AAUUTTHHOORRSS
+     The original implementation of sspppppp was written in 1994 at Cronyx Ltd.,
+     Moscow, by Serge Vakulenko <_v_a_k_@_c_r_o_n_y_x_._r_u>.  Joerg Wunsch
+     <_j_o_e_r_g___w_u_n_s_c_h_@_u_r_i_a_h_._h_e_e_p_._s_a_x_._d_e> rewrote a large part in 1997 in order to
+     fully implement the state machine as described in RFC 1661, so it could
+     also be used for dialup lines.  He also wrote the initial version of this
+     man page.  Serge later on wrote a basic implementation for PAP and CHAP,
+     which served as the base for the current implementation, done again by
+     Joerg Wunsch.
+
+     Reyk Floeter implemented sspppppp support for ifconfig(8) in OpenBSD 4.0 in
+     order to remove the original ‘spppcontrol’ utility, which was previously
+     used to configure and display the sspppppp settings.
+
+BBUUGGSS
+     Many.
+
+     Negotiation loop avoidance is not fully implemented.  If the negotiation
+     doesn't converge, this can cause an endless loop.
+
+     The various parameters that should be adjustable per RFC 1661 are cur‐
+     rently hard-coded into the kernel, and should be made accessible through
+     ifconfig(8).
+
+     _P_a_s_s_i_v_e mode has not been tested extensively.
+
+     More NCPs should be implemented, as well as other control protocols for
+     authentication and link quality reporting.
+
+     IPCP should support VJ header compression.
+
+     Link-level compression protocols should be supported.
+
+BSD                             March 23, 2023                             BSD

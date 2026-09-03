@@ -1,0 +1,172 @@
+CARP(4)                  BSD Kernel Interfaces Manual                  CARP(4)
+
+NNAAMMEE
+     ccaarrpp — Common Address Redundancy Protocol
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ccaarrpp
+
+DDEESSCCRRIIPPTTIIOONN
+     The CARP allows multiple hosts on the same local network to share a set
+     of IPv4 and/or IPv6 addresses.  Its primary purpose is to ensure that
+     these addresses are always available.
+
+     To use ccaarrpp, the administrator needs to configure at a minimum a common
+     virtual host ID (vhid), and attach at least one IP address to this vhid
+     on each machine which is to take part in the virtual group.  Additional
+     parameters can also be set on a per-vhid basis: aaddvvbbaassee and aaddvvsskkeeww,
+     which are used to control how frequently the host sends advertisements
+     when it is the master for a virtual host, and ppaassss which is used to au‐
+     thenticate ccaarrpp advertisements.  The aaddvvbbaassee parameter stands for
+     “advertisement base”.  It is measured in seconds and specifies the base
+     of the advertisement interval.  The aaddvvsskkeeww parameter stands for
+     “advertisement skew”.  It is measured in 1/256 of seconds.  It is added
+     to the base advertisement interval to make one host advertise a bit
+     slower that the other does.  Both aaddvvbbaassee and aaddvvsskkeeww are put inside CARP
+     advertisements.  These values can be configured using ifconfig(8), or
+     through the SIOCSVH ioctl(2).
+
+     CARP defaults to using multicast messages, but can be configured to uni‐
+     cast announcements to peers using the ppeeeerr and ppeeeerr66 parameters. Default
+     addresses can be restored using mmccaasstt and mmccaasstt66.  Note that TTL verifi‐
+     cation is disabled if the peer address is not a multicast address.  These
+     values can be configured using ifconfig(8), or through the SIOCSPEER
+     ioctl(2).
+
+     CARP virtual hosts can be configured on multicast-capable interfaces:
+     Ethernet, layer 2 VLAN, FDDI and Token Ring.  An arbitrary number of vir‐
+     tual host IDs can be configured on an interface.  An arbitrary number of
+     IPv4 or IPv6 addresses can be attached to a particular vhid.  It is im‐
+     portant that all hosts participating in a vhid have the same list of pre‐
+     fixes configured on the vhid, since all the prefixes are included in the
+     cryptographic checksum supplied in each advertisement.  Multiple vhids
+     running on one interface participate in master/backup elections indepen‐
+     dently.
+
+     Additionally, there are a number of global parameters which can be set
+     using sysctl(8):
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._a_l_l_o_w                   Allow ccaarrpp operation.  When dis‐
+                                           abled, virtual hosts remain in ini‐
+                                           tial state, neither sending nor re‐
+                                           ceiving announcements or traffic.
+                                           Enabled by default.
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._p_r_e_e_m_p_t                 Allow virtual hosts to preempt each
+                                           other.  When enabled, a vhid in a
+                                           backup state would preempt a master
+                                           that is announcing itself with a
+                                           lower advskew.  Disabled by de‐
+                                           fault.
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._d_s_c_p                    DSCP value in carp packet.  Valid
+                                           Values are 0 to 63.  A value of 4
+                                           is equivalent to the old standard
+                                           of TOS LOW_DELAY.  TOS values were
+                                           deprecated and replaced by DSCP in
+                                           1998.  The default value is 56
+                                           (CS7/Network Control).
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._l_o_g                     Determines what events relating to
+                                           ccaarrpp vhids are logged.  A value of
+                                           0 disables any logging.  A value of
+                                           1 enables logging state changes of
+                                           ccaarrpp vhids.  Values above 1 enable
+                                           logging of bad ccaarrpp packets.  The
+                                           default value is 1.
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._d_e_m_o_t_i_o_n                This value shows the current level
+                                           of CARP demotion.  The value is
+                                           added to the actual advskew sent in
+                                           announcements for all vhids.  Dur‐
+                                           ing normal system operation the de‐
+                                           motion factor is zero.  However,
+                                           problematic conditions raise its
+                                           level: when ccaarrpp experiences prob‐
+                                           lem with sending announcements,
+                                           when an interface running a vhid
+                                           goes down, or while the pfsync(4)
+                                           interface is not synchronized.  The
+                                           demotion factor can be adjusted
+                                           writing to the sysctl oid.  The
+                                           signed value supplied to the
+                                           sysctl(8) command is added to cur‐
+                                           rent demotion factor.  This allows
+                                           to control ccaarrpp behaviour depending
+                                           on some external conditions, for
+                                           example on the status of some dae‐
+                                           mon utility.
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._i_f_d_o_w_n___d_e_m_o_t_i_o_n___f_a_c_t_o_r  This value is added to
+                                           _n_e_t_._i_n_e_t_._c_a_r_p_._d_e_m_o_t_i_o_n when an in‐
+                                           terface running a vhid goes down.
+                                           The default value is 240 (the maxi‐
+                                           mum advskew value).
+
+     _n_e_t_._i_n_e_t_._c_a_r_p_._s_e_n_d_e_r_r___d_e_m_o_t_i_o_n___f_a_c_t_o_r
+                                           This value is added to
+                                           _n_e_t_._i_n_e_t_._c_a_r_p_._d_e_m_o_t_i_o_n when ccaarrpp
+                                           experiences errors sending its an‐
+                                           nouncements.  The default value is
+                                           240 (the maximum advskew value).
+
+SSTTAATTEE CCHHAANNGGEE NNOOTTIIFFIICCAATTIIOONNSS
+     Sometimes it is useful to get notified about ccaarrpp status change events.
+     This can be accomplished by using devd(8) hooks.  Master/slave events are
+     signalled under system CARP.  The subsystem specifies the vhid and name
+     of the interface where the master/slave event occurred.  The type of the
+     message displays the new state of the vhid.  Please see devd.conf(5) and
+     the _E_X_A_M_P_L_E_S section for more information.
+
+EEXXAAMMPPLLEESS
+     For firewalls and routers with multiple interfaces, it is desirable to
+     failover all of the addresses running ccaarrpp together, when one of the
+     physical interfaces goes down.  This is achieved by the use of the pre‐
+     empt option.  Enable it on both hosts A and B:
+
+           sysctl net.inet.carp.preempt=1
+
+     Assume that host A is the preferred master and we are running the
+     192.168.1.0/24 prefix on em0 and 192.168.2.0/24 on em1.  This is the
+     setup for host A (advskew is above 0 so it could be overwritten in the
+     emergency situation from the other host):
+
+           ifconfig em0 vhid 1 advskew 100 pass mekmitasdigoat 192.168.1.1/24
+           ifconfig em1 vhid 2 advskew 100 pass mekmitasdigoat 192.168.2.1/24
+
+     The setup for host B is identical, but it has a higher aaddvvsskkeeww:
+
+           ifconfig em0 vhid 1 advskew 200 pass mekmitasdigoat 192.168.1.1/24
+           ifconfig em1 vhid 2 advskew 200 pass mekmitasdigoat 192.168.2.1/24
+
+     When one of the physical interfaces of host A fails, aaddvvsskkeeww is demoted
+     to a configured value on all its ccaarrpp vhids.  Due to the preempt option,
+     host B would start announcing itself, and thus preempt host A on both in‐
+     terfaces instead of just the failed one.
+
+     Processing of ccaarrpp status change events can be set up by using the fol‐
+     lowing devd.conf rule:
+
+           notify 0 {
+                   match "system"          "CARP";
+                   match "subsystem"       "[0-9]+@[0-9a-z.]+";
+                   match "type"            "(MASTER|BACKUP)";
+                   action "/root/carpcontrol.sh $subsystem $type";
+           };
+
+     To see ccaarrpp packets decoded in tcpdump(1) output, one needs to specify
+     the --TT _c_a_r_p option, otherwise tcpdump(1) will interpret them as VRRP
+     packets:
+
+           tcpdump -npi vlan0 -T carp
+
+SSEEEE AALLSSOO
+     tcpdump(1), inet(4), pfsync(4), devd.conf(5), rc.conf(5), ifconfig(8),
+     sysctl(8)
+
+HHIISSTTOORRYY
+     The ccaarrpp device first appeared in OpenBSD 3.5.  The ccaarrpp device was im‐
+     ported into FreeBSD 5.4.  In FreeBSD 10.0, ccaarrpp was significantly rewrit‐
+     ten, and is no longer a pseudo-interface.
+
+BSD                              March 6, 2023                             BSD

@@ -1,0 +1,877 @@
+SMTPD.CONF(5)               BSD File Formats Manual              SMTPD.CONF(5)
+
+NNAAMMEE
+     ssmmttppdd..ccoonnff — SMTP daemon configuration file
+
+DDEESSCCRRIIPPTTIIOONN
+     ssmmttppdd..ccoonnff is the configuration file for the mail daemon smtpd(8).
+
+     When mail arrives, each “RCPT TO:” command generates a mail envelope.  If
+     an envelope matches any of a pre-designated set of criteria (using the
+     mmaattcchh directive), the message is accepted for delivery.  A copy of the
+     message, as well as its associated envelopes, is saved in the mail queue
+     and later dispatched according to an associated set of actions (using the
+     aaccttiioonn directive).  If an envelope does not match any options, it is re‐
+     jected.  The match rules are evaluated sequentially, with the first match
+     winning.
+
+     The format of the configuration file is fairly flexible.  The current
+     line can be extended over multiple lines using a backslash (‘\’).  Com‐
+     ments can be put anywhere in the file using a hash mark (‘#’), and extend
+     to the end of the current line.  Care should be taken when commenting out
+     multi-line text: the comment is effective until the end of the entire
+     block.  Argument names not beginning with a letter, digit, or underscore,
+     as well as reserved words (such as lliisstteenn, mmaattcchh, and ppoorrtt), must be
+     quoted.  Arguments containing whitespace should be surrounded by double
+     quotes (").
+
+     A macro is defined with a command of the form _n_a_m_e=_v_a_l_u_e.  The macro _n_a_m_e
+     can contain letters, digits, and underscores and cannot be a reserved
+     word.  Within unquoted arguments, the string $_n_a_m_e is later expanded to
+     _v_a_l_u_e.
+
+     For example:
+
+           lan_addr = "192.168.0.1"
+           listen on $lan_addr
+           listen on $lan_addr tls auth
+
+     The syntax of ssmmttppdd..ccoonnff is described below.
+
+     aaccttiioonn _n_a_m_e _m_e_t_h_o_d [_o_p_t_i_o_n_s]
+             When the queue runner processes an envelope from the mail queue,
+             it carries out the aaccttiioonn _n_a_m_e, selected by the mmaattcchh ... aaccttiioonn
+             directive when the message was received.  The aaccttiioonn directive
+             provides configuration data for delivery attempts.  Required
+             lookups are performed at the time of each delivery attempt.  Con‐
+             sequently, changing an aaccttiioonn directive or the files it refer‐
+             ences and restarting the smtpd(8) daemon causes the changes to
+             take effect for subsequent delivery attempts for the respective
+             dispatcher _n_a_m_e, even for messages that were already stuck in the
+             queue prior to the configuration changes.
+
+             The delivery _m_e_t_h_o_d parameter may be one of the following:
+
+             eexxppaanndd--oonnllyy
+                     Only accept the message if a delivery method was speci‐
+                     fied in an aliases or _._f_o_r_w_a_r_d file.
+
+             ffoorrwwaarrdd--oonnllyy
+                     Only accept the message if the recipient results in a re‐
+                     mote address after the processing of aliases or forward
+                     file.
+
+             llmmttpp _d_e_s_t_i_n_a_t_i_o_n [rrccpptt--ttoo]
+                     Deliver the message to an LMTP server at _d_e_s_t_i_n_a_t_i_o_n.
+                     The location may be expressed as host:port or as a UNIX
+                     socket.
+
+                     Optionally, rrccpptt--ttoo might be specified to use the recipi‐
+                     ent email address (after expansion) instead of the local
+                     user in the LMTP session as RCPT TO.
+
+             mmaaiillddiirr [_p_a_t_h_n_a_m_e] [jjuunnkk]
+                     Deliver the message to the maildir in _p_a_t_h_n_a_m_e if speci‐
+                     fied, or by default to _~_/_M_a_i_l_d_i_r.
+
+                     The _p_a_t_h_n_a_m_e may contain format specifiers that are ex‐
+                     panded before use (see _F_O_R_M_A_T _S_P_E_C_I_F_I_E_R_S).
+
+                     If the jjuunnkk argument is provided, the message will be
+                     moved to the ‘Junk’ folder if it contains a positive
+                     ‘X-Spam’ header.  This folder will be created under
+                     _p_a_t_h_n_a_m_e if it does not yet exist.
+
+             mmbbooxx    Deliver the message to the user's mbox with
+                     mail.local(8).
+
+             mmddaa _c_o_m_m_a_n_d
+                     Delegate the delivery to a _c_o_m_m_a_n_d that receives the mes‐
+                     sage on its standard input (see _M_D_A _C_O_M_M_A_N_D_S).
+
+                     The _c_o_m_m_a_n_d may contain format specifiers that are ex‐
+                     panded before use (see _F_O_R_M_A_T _S_P_E_C_I_F_I_E_R_S).
+
+             rreellaayy   Relay the message to another SMTP server.
+
+             The local delivery methods support additional options:
+
+             aalliiaass <_t_a_b_l_e>
+                     Use the mapping _t_a_b_l_e for aliases(5) expansion.
+
+             ttttll _n{ss|mm|hh|dd}
+                     Specify how long a message may remain in the queue.
+
+             uusseerr _u_s_e_r_n_a_m_e
+                     Specify the _u_s_e_r_n_a_m_e for performing the delivery, to be
+                     looked up with getpwnam(3).
+
+                     This is used for virtual hosting where a single username
+                     is in charge of handling delivery for all virtual users.
+
+                     This option is not usable with the mmbbooxx delivery method.
+
+                     Only the delivery user's _._f_o_r_w_a_r_d file will be processed.
+
+             uusseerrbbaassee <_t_a_b_l_e>
+                     Use the mapping _t_a_b_l_e for user lookups instead of the
+                     getpwnam(3) function.
+
+                     The uusseerrbbaassee does not apply to the uusseerr option.
+
+             vviirrttuuaall <_t_a_b_l_e>
+                     Use the mapping _t_a_b_l_e for virtual expansion.  The alias‐
+                     ing table format is described in table(5).
+
+             wwrraappppeerr _n_a_m_e
+                     Use the wrapper specified in mmddaa wwrraappppeerr.
+
+             The relay delivery methods also support additional options:
+
+             bbaacckkuupp  Operate as a backup mail exchanger delivering messages to
+                     any mail exchanger with higher priority.
+
+             bbaacckkuupp mmxx _n_a_m_e
+                     Operate as a backup mail exchanger delivering messages to
+                     any mail exchanger with higher priority than mail ex‐
+                     changer identified as _n_a_m_e.
+
+             ccaa _c_a_n_a_m_e
+                     For secure connections, use the certificate authority as‐
+                     sociated with _c_a_n_a_m_e (declared in a ccaa directive) to val‐
+                     idate the server's identity.
+
+             hheelloo _h_e_l_o_n_a_m_e
+                     Advertise _h_e_l_o_n_a_m_e as the hostname to other mail exchang‐
+                     ers during the HELO phase.
+
+             hheelloo--ssrrcc <_t_a_b_l_e>
+                     Use the mapping _t_a_b_l_e to look up a hostname matching the
+                     source address, to advertise during the HELO phase.
+
+             ddoommaaiinn <_d_o_m_a_i_n_s>
+                     Do not perform MX lookups but look up destination domain
+                     in _d_o_m_a_i_n_s and use matching relay url as relay host.
+
+             hhoosstt _r_e_l_a_y_-_u_r_l
+                     Do not perform MX lookups but relay messages to the relay
+                     host described by _r_e_l_a_y_-_u_r_l.  The format for _r_e_l_a_y_-_u_r_l is
+                     [_p_r_o_t_o://[_l_a_b_e_l@]]_h_o_s_t[:_p_o_r_t].  The following protocols
+                     are available:
+
+                     smtp        Normal SMTP session with opportunistic START‐
+                                 TLS (the default).
+                     smtp+tls    Normal SMTP session with mandatory STARTTLS.
+                     smtp+notls  Plain text SMTP session without TLS.
+                     lmtp        LMTP session.  _p_o_r_t is required.
+                     smtps       SMTP session with forced TLS on connection.
+                                 The default port is 465.
+
+                     Unless noted, _p_o_r_t defaults to 25.
+
+                     The _l_a_b_e_l corresponds to an entry in a credentials table,
+                     as documented in table(5).  It is used with the
+                     “smtp+tls” and “smtps” protocols for authentication.
+                     Server certificates for those protocols are verified by
+                     default.
+
+             ppkkii _p_k_i_n_a_m_e
+                     For secure connections, use the certificate associated
+                     with _p_k_i_n_a_m_e (declared in a ppkkii directive) to prove the
+                     client's identity to the remote mail server.
+
+             ssrrss     When relaying a mail resulting from a forward, use the
+                     Sender Rewriting Scheme to rewrite sender address.
+
+             ttllss [nnoo--vveerriiffyy]
+                     Require TLS to be used when relaying, using mandatory
+                     STARTTLS by default.  When used with a smarthost, the
+                     protocol must not be “smtp+notls://”.  If nnoo--vveerriiffyy is
+                     specified, do not require a valid certificate.
+
+             pprroottooccoollss _p_r_o_t_o_s_t_r
+                     Define the protocol versions to be used for TLS sessions.
+                     Refer to the tls_config_parse_protocols(3) manpage for
+                     the format of _p_r_o_t_o_s_t_r.
+
+             cciipphheerrss _c_i_p_h_e_r_s_t_r
+                     Define the list of ciphers that may be used for TLS ses‐
+                     sions.  Refer to the tls_config_set_ciphers(3) manpage
+                     for the format of _c_i_p_h_e_r_s_t_r.
+
+             aauutthh <_t_a_b_l_e>
+                     Use the mapping _t_a_b_l_e for connecting to _r_e_l_a_y_-_u_r_l using
+                     credentials.  This option is usable only with hhoosstt op‐
+                     tion.  The credential table format is described in
+                     table(5).
+
+             mmaaiill--ffrroomm _m_a_i_l_a_d_d_r
+                     Use _m_a_i_l_a_d_d_r as the MAIL FROM address within the SMTP
+                     transaction.
+
+             ssrrcc _s_o_u_r_c_e_a_d_d_r | <_s_o_u_r_c_e_a_d_d_r>
+                     Use the string or list table _s_o_u_r_c_e_a_d_d_r for the source IP
+                     address, which is useful on machines with multiple inter‐
+                     faces.  If the list contains more than one address, all
+                     of them are used in such a way that traffic is routed as
+                     efficiently as possible.
+
+     aaddmmdd _a_u_t_h_s_e_r_v_i_d
+             The Administrative Management Domain this mail server belongs to.
+             The authservid will be forwarded to filters using it to identify
+             or mark authentication-results headers.  If omitted, it defaults
+             to the server name.
+
+     bboouunnccee wwaarrnn--iinntteerrvvaall _d_e_l_a_y [, _d_e_l_a_y _._._.]
+             Send warning messages to the envelope sender when temporary de‐
+             livery failures cause a message to remain in the queue for longer
+             than _d_e_l_a_y.  Each _d_e_l_a_y parameter consists of a positive decimal
+             integer and a unit ss, mm, hh, or dd.  At most four _d_e_l_a_y parameters
+             can be specified.  The default is "bboouunnccee wwaarrnn--iinntteerrvvaall 4h",
+             sending a single warning after four hours.
+
+     ccaa _c_a_n_a_m_e cceerrtt _c_a_f_i_l_e
+             Associate the Certificate Authority (CA) certificate file _c_a_f_i_l_e
+             with ca entry _c_a_n_a_m_e.  The ca entry can be referenced in lliisstteenn
+             oonn and aaccttiioonn ...... rreellaayy rules.
+
+     ffiilltteerr _c_h_a_i_n_-_n_a_m_e cchhaaiinn {_f_i_l_t_e_r_-_n_a_m_e [, _._._.]}
+             Register a chain of filters _c_h_a_i_n_-_n_a_m_e, consisting of the filters
+             listed in _f_i_l_t_e_r_-_n_a_m_e.  Filters in a filter chain are executed in
+             order of declaration for each phase that they are registered for.
+             A filter chain may be used in place of a filter for any directive
+             except filter chains themselves.
+
+     ffiilltteerr _f_i_l_t_e_r_-_n_a_m_e pphhaassee _p_h_a_s_e_-_n_a_m_e mmaattcchh _c_o_n_d_i_t_i_o_n_s _d_e_c_i_s_i_o_n
+             Register a filter _f_i_l_t_e_r_-_n_a_m_e.  A _d_e_c_i_s_i_o_n about what to do with
+             the mail is taken at phase _p_h_a_s_e_-_n_a_m_e when matching _c_o_n_d_i_t_i_o_n_s.
+             Phases, matching conditions, and decisions are described in _M_A_I_L
+             _F_I_L_T_E_R_I_N_G, below.
+
+     ffiilltteerr _f_i_l_t_e_r_-_n_a_m_e pprroocc _p_r_o_c_-_n_a_m_e
+             Register "proc" filter _f_i_l_t_e_r_-_n_a_m_e backed by the _p_r_o_c_-_n_a_m_e
+             process.
+
+     ffiilltteerr _f_i_l_t_e_r_-_n_a_m_e pprroocc--eexxeecc _c_o_m_m_a_n_d
+             Register and execute "proc" filter _f_i_l_t_e_r_-_n_a_m_e from _c_o_m_m_a_n_d, con‐
+             formant with the smtpd-filters(7) API.  If _c_o_m_m_a_n_d starts with a
+             slash it is executed with an absolute path, otherwise it will be
+             run from “/usr/local/libexec/smtpd/”.
+
+     iinncclluuddee "_p_a_t_h_n_a_m_e"
+             Replace this directive with the content of the additional config‐
+             uration file at the absolute _p_a_t_h_n_a_m_e.
+
+     lliisstteenn oonn _i_n_t_e_r_f_a_c_e [_f_a_m_i_l_y] [_o_p_t_i_o_n_s]
+             Listen on the _i_n_t_e_r_f_a_c_e for incoming connections, using the same
+             syntax as ifconfig(8).  The _i_n_t_e_r_f_a_c_e parameter may also be an
+             interface group, an IP address, or a domain name.  Listening can
+             optionally be restricted to a specific address _f_a_m_i_l_y, which can
+             be either iinneett44 or iinneett66.
+
+             The _o_p_t_i_o_n_s are as follows:
+
+             aauutthh [<_a_u_t_h_t_a_b_l_e>]
+                     Support SMTPAUTH: clients may only start SMTP transac‐
+                     tions after successful authentication.  Users are authen‐
+                     ticated against either their own normal login credentials
+                     or a credentials table _a_u_t_h_t_a_b_l_e, the format of which is
+                     described in table(5).
+
+             aauutthh--ooppttiioonnaall [<_a_u_t_h_t_a_b_l_e>]
+                     Support SMTPAUTH optionally: clients need not authenti‐
+                     cate, but may do so.  This allows a lliisstteenn oonn directive
+                     to both accept incoming mail from untrusted senders and
+                     permit outgoing mail from authenticated users (using
+                     mmaattcchh aauutthh).  It can be used in situations where it is
+                     not possible to listen on a separate port (usually the
+                     submission port, 587) for users to authenticate.
+
+             ccaa _c_a_n_a_m_e
+                     For secure connections, use the CA certificate associated
+                     with _c_a_n_a_m_e (declared in a ccaa directive) as the CA cer‐
+                     tificate when verifying client certificates.
+
+             ffiilltteerr _n_a_m_e
+                     Apply filter _n_a_m_e on connections handled by this lis‐
+                     tener.
+
+             hhoossttnnaammee _h_o_s_t_n_a_m_e
+                     Use _h_o_s_t_n_a_m_e in the greeting banner instead of the de‐
+                     fault server name.
+
+             hhoossttnnaammeess <_n_a_m_e_s>
+                     Override the server name for specific addresses.  The
+                     _n_a_m_e_s table contains a mapping of IP addresses to host‐
+                     names.  If the address on which the connection arrives
+                     appears in the mapping, the associated hostname is used.
+
+             mmaasskk--ssrrcc
+                     Omit the ffrroomm part when prepending “Received” headers.
+
+             nnoo--ddssnn  Disable the DSN (Delivery Status Notification) extension.
+
+             ppkkii _p_k_i_n_a_m_e
+                     For secure connections, use the certificate associated
+                     with _p_k_i_n_a_m_e (declared in a ppkkii directive) to prove a
+                     mail server's identity.  This option can be used multiple
+                     times to provide alternate certificates for SNI.
+
+             ppoorrtt [_p_o_r_t]
+                     Listen on the given _p_o_r_t instead of the default port 25.
+
+             pprrooxxyy--vv22
+                     Support the PROXYv2 protocol, appropriately rewriting the
+                     source address received from proxy.
+
+             rreecceeiivveedd--aauutthh
+                     In “Received” headers, report whether the session was au‐
+                     thenticated and by which local user.
+
+             sseennddeerrss <_u_s_e_r_s> [mmaassqquueerraaddee]
+                     Look up the authenticated user in the _u_s_e_r_s mapping table
+                     to find the email addresses that user is allowed to sub‐
+                     mit mail as.  In addition, if the mmaassqquueerraaddee option is
+                     provided, the From header is rewritten to match the
+                     sender provided in the SMTP session.
+
+             ssmmttppss [vveerriiffyy]
+                     Support SMTPS, by default on port 465.  Mutually exclu‐
+                     sive with ttllss.  With the vveerriiffyy option, clients must also
+                     provide a valid certificate to establish an SMTP session.
+
+             ttaagg _t_a_g
+                     Clients connecting to the listener are tagged with the
+                     given _t_a_g.
+
+             ttllss     Support STARTTLS, by default on port 25.  Mutually exclu‐
+                     sive with ssmmttppss.
+
+             ttllss--rreeqquuiirree [vveerriiffyy]
+                     Like ttllss, but force clients to establish a secure connec‐
+                     tion before being allowed to start an SMTP transaction.
+                     With the vveerriiffyy option, clients must also provide a valid
+                     certificate to establish an SMTP session.
+
+             pprroottooccoollss _p_r_o_t_o_s_t_r
+                     Define the protocol versions to be used for TLS sessions.
+                     Refer to the tls_config_parse_protocols(3) manpage for
+                     the format of _p_r_o_t_o_s_t_r.
+
+             cciipphheerrss _c_i_p_h_e_r_s_t_r
+                     Define the list of ciphers that may be used for TLS ses‐
+                     sions.  Refer to the tls_config_set_ciphers(3) manpage
+                     for the format of _c_i_p_h_e_r_s_t_r.
+
+     lliisstteenn oonn ssoocckkeett [_o_p_t_i_o_n_s]
+             Listen for incoming SMTP connections on the Unix domain socket
+             _/_v_a_r_/_r_u_n_/_s_m_t_p_d_._s_o_c_k.  This is done by default, even if the direc‐
+             tive is absent.
+
+             The _o_p_t_i_o_n_s are as follows:
+
+             ffiilltteerr _n_a_m_e
+                     Apply filter _n_a_m_e on connections handled by this lis‐
+                     tener.
+
+             mmaasskk--ssrrcc
+                     Omit the ffrroomm part when prepending “Received” headers.
+
+             nnoo--ddssnn  Disable the DSN (Delivery Status Notification) extension.
+
+             ttaagg _t_a_g
+                     Clients connecting to the listener are tagged with the
+                     given _t_a_g.
+
+     mmaattcchh _o_p_t_i_o_n_s aaccttiioonn _n_a_m_e
+             If at least one mail envelope matches the _o_p_t_i_o_n_s of one mmaattcchh
+             aaccttiioonn directive, receive the incoming message, put a copy into
+             each matching envelope, and atomically save the envelopes to the
+             mail spool for later processing by the respective dispatcher _n_a_m_e
+             which has to be declared beforehand with the aaccttiioonn directive.
+
+             The following matching options are supported and can all be
+             negated:
+
+             [!!] ffoorr aannyy
+                     Specify that session may address any destination.
+
+             [!!] ffoorr llooccaall
+                     Specify that session may address any local domain.  This
+                     is the default, and may be omitted.
+
+             [!!] ffoorr ddoommaaiinn [rreeggeexx] _d_o_m_a_i_n | <_d_o_m_a_i_n>
+                     Specify that session may address the string or list table
+                     _d_o_m_a_i_n.  The rreeggeexx keyword is required if _d_o_m_a_i_n is a
+                     regular expression or table of regular expressions.
+
+             [!!] ffoorr rrccpptt--ttoo [rreeggeexx] _r_e_c_i_p_i_e_n_t | <_r_e_c_i_p_i_e_n_t>
+                     Specify that session may address the string or list table
+                     _r_e_c_i_p_i_e_n_t.  The rreeggeexx keyword is required if _r_e_c_i_p_i_e_n_t is
+                     a regular expression or table of regular expressions.
+
+             [!!] ffrroomm aannyy
+                     Specify that session may originate from any source.
+
+             [!!] ffrroomm aauutthh
+                     Specify that session may originate from any authenticated
+                     user, no matter the source IP address.
+
+             [!!] ffrroomm aauutthh [rreeggeexx] _u_s_e_r | <_u_s_e_r>
+                     Specify that session may originate from authenticated
+                     user or user list _u_s_e_r, no matter the source IP address.
+                     The rreeggeexx keyword is required if _u_s_e_r is a regular ex‐
+                     pression or table of regular expressions.
+
+             [!!] ffrroomm llooccaall
+                     Specify that session may only originate from a local IP
+                     address, or from the local enqueuer.  This is the de‐
+                     fault, and may be omitted.
+
+             [!!] ffrroomm mmaaiill--ffrroomm [rreeggeexx] _s_e_n_d_e_r | <_s_e_n_d_e_r>
+                     Specify that session may originate from sender or sender
+                     list _s_e_n_d_e_r, no matter the source IP address.  The rreeggeexx
+                     keyword is required if _s_e_n_d_e_r is a regular expression or
+                     table of regular expressions.
+
+             [!!] ffrroomm rrddnnss
+                     Specify that session may only originate from an IP ad‐
+                     dress that resolves to a reverse DNS.
+
+             [!!] ffrroomm rrddnnss [rreeggeexx] _h_o_s_t_n_a_m_e | <_h_o_s_t_n_a_m_e>
+                     Specify that session may only originate from an IP ad‐
+                     dress that resolves to a reverse DNS matching string or
+                     list string _h_o_s_t_n_a_m_e.  The rreeggeexx keyword is required if
+                     _h_o_s_t_n_a_m_e is a regular expression or table of regular ex‐
+                     pressions.
+
+             [!!] ffrroomm ssoocckkeett
+                     Specify that session may only originate from the local
+                     enqueuer.
+
+             [!!] ffrroomm ssrrcc [rreeggeexx] _a_d_d_r_e_s_s | <_a_d_d_r_e_s_s>
+                     Specify that session may only originate from string or
+                     list table _a_d_d_r_e_s_s which can be a specific address or a
+                     subnet expressed in CIDR-notation.  The rreeggeexx keyword is
+                     required if _a_d_d_r_e_s_s is a regular expression or table of
+                     regular expressions.
+
+             In addition, the following transaction options may be matched:
+
+             [!!] aauutthh
+                     Matches transactions which have been authenticated.
+
+             [!!] aauutthh [rreeggeexx] _u_s_e_r_n_a_m_e | <_u_s_e_r_n_a_m_e>
+                     Matches transactions which have been authenticated for
+                     user or user list _u_s_e_r_n_a_m_e.  The rreeggeexx keyword is re‐
+                     quired if _u_s_e_r_n_a_m_e is a regular expression or table of
+                     regular expressions.
+
+             [!!] hheelloo [rreeggeexx] _h_e_l_o_-_n_a_m_e | <_h_e_l_o_-_n_a_m_e>
+                     Specify that session's HELO / EHLO should match the
+                     string or list table _h_e_l_o_-_n_a_m_e.  The rreeggeexx keyword is re‐
+                     quired if _h_e_l_o_-_n_a_m_e is a regular expression or table of
+                     regular expressions.
+
+             [!!] mmaaiill--ffrroomm [rreeggeexx] _s_e_n_d_e_r | <_s_e_n_d_e_r>
+                     Specify that transaction's MAIL FROM should match the
+                     string or list table _s_e_n_d_e_r.  The rreeggeexx keyword is re‐
+                     quired if _s_e_n_d_e_r is a regular expression or table of reg‐
+                     ular expressions.
+
+             [!!] rrccpptt--ttoo [rreeggeexx] _r_e_c_i_p_i_e_n_t | <_r_e_c_i_p_i_e_n_t>
+                     Specify that transaction's RCPT TO should match the
+                     string or list table _r_e_c_i_p_i_e_n_t.  The rreeggeexx keyword is re‐
+                     quired if _r_e_c_i_p_i_e_n_t is a regular expression or table of
+                     regular expressions.
+
+             [!!] ttaagg [rreeggeexx] _t_a_g
+                     Matches transactions tagged with the given _t_a_g.  The
+                     rreeggeexx keyword is required if _t_a_g is a regular expression.
+
+             [!!] ttllss
+                     Specify that transaction should take place in a TLS chan‐
+                     nel.
+
+     mmaattcchh _o_p_t_i_o_n_s rreejjeecctt
+             Reject the incoming message during the SMTP dialogue.  The same
+             _o_p_t_i_o_n_s are supported as for the mmaattcchh aaccttiioonn directive.
+
+     mmddaa wwrraappppeerr _n_a_m_e _c_o_m_m_a_n_d
+             Associate _c_o_m_m_a_n_d with the mail delivery agent wrapper named
+             _n_a_m_e.  When a local delivery specifies a wrapper, the _c_o_m_m_a_n_d as‐
+             sociated with the wrapper will be executed instead.  The command
+             may contain format specifiers (see _F_O_R_M_A_T _S_P_E_C_I_F_I_E_R_S).
+
+     mmttaa mmaaxx--ddeeffeerrrreedd _n_u_m_b_e_r
+             When delivery to a given host is suspended due to temporary fail‐
+             ures, cache at most _n_u_m_b_e_r envelopes for that host such that they
+             can be delivered as soon as another delivery succeeds to that
+             host.  The default is 100.
+
+     ppkkii _p_k_i_n_a_m_e cceerrtt _c_e_r_t_f_i_l_e
+             Associate certificate file _c_e_r_t_f_i_l_e with pki entry _p_k_i_n_a_m_e.  The
+             pki entry defines a keypair configuration that can be referenced
+             in listener rules and relay actions.
+
+             A certificate chain may be created by appending one or many cer‐
+             tificates, including a Certificate Authority certificate, to
+             _c_e_r_t_f_i_l_e.  The creation of certificates is documented in
+             starttls(8).
+
+     ppkkii _p_k_i_n_a_m_e kkeeyy _k_e_y_f_i_l_e
+             Associate the key located in _k_e_y_f_i_l_e with pki entry _p_k_i_n_a_m_e.
+
+     ppkkii _p_k_i_n_a_m_e ddhhee _p_a_r_a_m_s
+             Specify the DHE parameters to use for DHE cipher suites with pki
+             entry _p_k_i_n_a_m_e.  Valid parameter values are nnoonnee, lleeggaaccyy, and
+             aauuttoo.  For lleeggaaccyy, a fixed key length of 1024 bits is used,
+             whereas for aauuttoo, the key length is determined automatically.
+             The default is nnoonnee, which disables DHE cipher suites.
+
+     pprroocc _p_r_o_c_-_n_a_m_e _c_o_m_m_a_n_d
+             Register an external process named _p_r_o_c_-_n_a_m_e from _c_o_m_m_a_n_d, con‐
+             formant with the smtpd-filters(7) API.  Such processes may be
+             used to share the same instance between multiple filters.  If
+             _c_o_m_m_a_n_d starts with a slash it is executed with an absolute path,
+             otherwise it will be run from “/usr/local/libexec/smtpd/”.
+
+     qquueeuuee ccoommpprreessssiioonn
+             Store queue files in a compressed format.  This may be useful to
+             save disk space.
+
+     qquueeuuee eennccrryyppttiioonn [_k_e_y]
+             Encrypt queue files with EVP_aes_256_gcm(3).  If no _k_e_y is speci‐
+             fied, it is read with getpass(3).  If the string ssttddiinn or a sin‐
+             gle dash (‘-’) is given instead of a _k_e_y, the key is read from
+             the standard input.
+
+     qquueeuuee ttttll _d_e_l_a_y
+             Set the default expiration time for temporarily undeliverable
+             messages, given as a positive decimal integer followed by a unit
+             ss, mm, hh, or dd.  The default is four days (4d).
+
+     ssmmttpp cciipphheerrss _c_o_n_t_r_o_l
+             Set the _c_o_n_t_r_o_l string for SSL_CTX_set_cipher_list(3).  The de‐
+             fault is "HIGH:!aNULL:!MD5".
+
+     ssmmttpp lliimmiitt mmaaxx--mmaaiillss _c_o_u_n_t
+             Limit the number of messages to _c_o_u_n_t for each session.  The de‐
+             fault is 100.
+
+     ssmmttpp lliimmiitt mmaaxx--rrccpptt _c_o_u_n_t
+             Limit the number of recipients to _c_o_u_n_t for each transaction.
+             The default is 1000.
+
+     ssmmttpp mmaaxx--mmeessssaaggee--ssiizzee _s_i_z_e
+             Reject messages larger than _s_i_z_e, given as a positive number of
+             bytes or as a string to be parsed with scan_scaled(3).  The de‐
+             fault is "35M".
+
+     ssmmttpp ssuubb--aaddddrr--ddeelliimm _c_h_a_r_a_c_t_e_r
+             When resolving the local part of a local email address, ignore
+             the ASCII _c_h_a_r_a_c_t_e_r and all characters following it.  The default
+             is ‘+’.
+
+     ssrrss kkeeyy [bbaacckkuupp] _s_e_c_r_e_t
+             Set the secret key to use for SRS, the Sender Rewriting Scheme.
+             The bbaacckkuupp option can be specified to set a secret key to use as
+             a fallback for SRS; this can be used to implement SRS key rota‐
+             tion.
+
+     ssrrss ttttll _d_e_l_a_y
+             Set the time-to-live delay for SRS envelopes.  After this delay,
+             a bounce reply to the SRS address will be discarded to limit
+             risks of forged addresses.  The default is four days (4d).
+
+     ttaabbllee _n_a_m_e [_t_y_p_e:]_p_a_t_h_n_a_m_e
+             Tables provide additional configuration information for smtpd(8)
+             in the form of lists or key-value mappings.  The format of the
+             entries depends on what the table is used for.  Refer to table(5)
+             for the exhaustive documentation.
+
+             Each table is identified by an arbitrary, unique _n_a_m_e.
+
+             If the _t_y_p_e is ddbb, information is stored in a file created with
+             makemap(8); if it is ffiillee or omitted, information is stored in a
+             plain text file using the format described in table(5).  The
+             _p_a_t_h_n_a_m_e to the file must be absolute.
+
+     ttaabbllee _n_a_m_e {_v_a_l_u_e [, _._._.]}
+             Instead of using a separate file, declare a list table containing
+             the given static _v_a_l_u_es.  The table must contain at least one
+             value and may declare multiple values as a comma-separated
+             (whitespace optional) list.
+
+     ttaabbllee _n_a_m_e {_k_e_y=_v_a_l_u_e [, _._._.]}
+             Instead of using a separate file, declare a mapping table con‐
+             taining the given static _k_e_y-_v_a_l_u_e pairs.  The table must contain
+             at least one key-value pair and may declare multiple pairs as a
+             comma-separated (whitespace optional) list.
+
+   MMAAIILL FFIILLTTEERRIINNGG
+     In a regular workflow, smtpd(8) may accept or reject a message based only
+     on the content of envelopes.  Its decisions are about the handling of the
+     message, not about the handling of an active session.
+
+     Filtering extends the decision making process by allowing smtpd(8) to
+     stop at each phase of an SMTP session, check that conditions are met,
+     then decide if a session is allowed to move forward.
+
+     With filtering, a session may be interrupted at any phase before an enve‐
+     lope is complete.  A message may also be rejected after being submitted,
+     regardless of whether the envelope was accepted or not.
+
+     The following phases are currently supported:
+
+           connect      upon connection, before a banner is displayed
+           helo         after HELO command is submitted
+           ehlo         after EHLO command is submitted
+           mail-from    after MAIL FROM command is submitted
+           rcpt-to      after RCPT TO command is submitted
+           data         after DATA command is submitted
+           commit       after message is fully submitted
+
+     At each phase, various conditions may be matched.  The fcrdns, rdns, and
+     src data are available in all phases, but other data must have been al‐
+     ready submitted before they are available.
+
+           fcrdns                   forward-confirmed reverse DNS is valid
+           rdns                     session has a reverse DNS
+           rdns <_t_a_b_l_e>             session has a reverse DNS in table
+           src <_t_a_b_l_e>              source address is in table
+           helo <_t_a_b_l_e>             helo name is in table
+           auth                     session is authenticated
+           auth <_t_a_b_l_e>             session username is in table
+           mail-from <_t_a_b_l_e>        sender address is in table
+           rcpt-to <_t_a_b_l_e>          recipient address is in table
+
+     These conditions may all be negated by prefixing them with an exclamation
+     mark:
+
+           !fcrdns                  forward-confirmed reverse DNS is invalid
+
+     Any conditions using a table may indicate that the table contains regular
+     expressions by prefixing the table name with the keyword regex.
+
+           helo regex <_t_a_b_l_e>       helo name matches a regex in table
+
+     Finally, a number of decisions may be taken:
+
+           bypass                   the session or transaction bypasses
+                                    filters
+           disconnect _m_e_s_s_a_g_e       the session is disconnected with message
+           junk                     the session or transaction is junked,
+                                    i.e., an ‘X-Spam: yes’ header is added to
+                                    any messages
+           reject _m_e_s_s_a_g_e           the command is rejected with message
+           rewrite _v_a_l_u_e            the command parameter is rewritten with
+                                    value
+
+     Decisions that involve a message require that the message be RFC valid,
+     meaning that they should either start with a 4xx or 5xx status code.  De‐
+     cisions can be taken at any phase, though junking can only happen before
+     a message is committed.
+
+   FFOORRMMAATT SSPPEECCIIFFIIEERRSS
+     Some configuration directives support expansion of their parameters at
+     runtime.  Such directives (for example aaccttiioonn mmaaiillddiirr, aaccttiioonn mmddaa) may
+     use format specifiers which are expanded before delivery or relaying.
+     The following formats are currently supported:
+
+           %{sender}            sender email address, may be empty string
+           %{sender.user}       user part of the sender email address, may be
+                                empty
+           %{sender.domain}     domain part of the sender email address, may
+                                be empty
+           %{rcpt}              recipient email address
+           %{rcpt.user}         user part of the recipient email address
+           %{rcpt.domain}       domain part of the recipient email address
+           %{dest}              recipient email address after expansion
+           %{dest.user}         user part after expansion
+           %{dest.domain}       domain part after expansion
+           %{user.username}     local user
+           %{user.directory}    home directory of the local user
+           %{mbox.from}         name used in mbox From separator lines
+           %{mda}               mda command, only available for mda wrappers
+
+     Expansion formats also support partial expansion using the optional
+     bracket notations with substring offset.  For example, with recipient do‐
+     main “example.org”:
+
+           %{rcpt.domain[0]}       expands to “e”
+           %{rcpt.domain[1]}       expands to “x”
+           %{rcpt.domain[8:]}      expands to “org”
+           %{rcpt.domain[-3:]}     expands to “org”
+           %{rcpt.domain[0:6]}     expands to “example”
+           %{rcpt.domain[0:-4]}    expands to “example”
+
+     In addition, modifiers may be applied to the token.  For example, with
+     recipient “User+Tag@Example.org”:
+
+           %{rcpt:lowercase}          expands to “user+tag@example.org”
+           %{rcpt:uppercase}          expands to “USER+TAG@EXAMPLE.ORG”
+           %{rcpt:strip}              expands to “User@Example.org”
+           %{rcpt:lowercase|strip}    expands to “user@example.org”
+
+     For security concerns, expanded values are sanitized and potentially dan‐
+     gerous characters are replaced with ‘:’.  In situations where they are
+     desirable, the “raw” modifier may be applied.  For example, with recipi‐
+     ent “user+t?g@example.org”:
+
+           %{rcpt}        expands to “user+t:g@example.org”
+           %{rcpt:raw}    expands to “user+t?g@example.org”
+
+   MMDDAA CCOOMMMMAANNDDSS
+     When an action delivery method is mmddaa, smtpd(8) runs the associated com‐
+     mand for the delivery with the mail content provided via standard input.
+     The command is expected to read all the mail content.
+
+     The exit code of the command reports the outcome of the delivery: status
+     0 (EX_OK) is a successful delivery; status 71 (EX_OSERR) and 75
+     (EX_TEMPFAIL) are temporary failures; and all other exit status are con‐
+     sidered permanent failures.
+
+     The following environment variables are set:
+
+     DOMAIN              The recipient domain.
+     EXTENSION           The sub address of the recipient (may be unset).
+     HOME                The delivery user's login directory.
+     LOCAL               The local part of the recipient user address.
+     LOGNAME             The login name of the user.
+     ORIGINAL_RECIPIENT  The address of the original recipient.
+     PATH                Set to _PATH_DEFPATH.  Traditionally _/_u_s_r_/_b_i_n_:_/_b_i_n,
+                         but expanded to include _/_u_s_r_/_s_b_i_n, _/_s_b_i_n,
+                         _/_u_s_r_/_X_1_1_R_6_/_b_i_n, _/_u_s_r_/_l_o_c_a_l_/_b_i_n, and _/_u_s_r_/_l_o_c_a_l_/_s_b_i_n
+                         in OpenBSD.
+     RECIPIENT           The address of the final recipient.
+     SENDER              The address of the sender (might be empty).
+     SHELL               Set to _/_b_i_n_/_s_h.
+     USER                Synonym of LOGNAME for backwards compatibility.
+
+FFIILLEESS
+     /etc/mail/smtpd.conf     Default smtpd(8) configuration file.
+     /etc/mail/mailname       If this file exists, the first line is used as
+                              the server name.  Otherwise, the server name is
+                              derived from the local hostname returned by
+                              gethostname(3), either directly if it is a fully
+                              qualified domain name, or by retrieving the as‐
+                              sociated canonical name through getaddrinfo(3).
+     /var/run/smtpd.sock      Unix domain socket for incoming SMTP connec‐
+                              tions.
+     /var/spool/smtpd/        Spool directories for mail during processing.
+
+EEXXAAMMPPLLEESS
+     The default ssmmttppdd..ccoonnff file which ships with OpenBSD listens on the loop‐
+     back network interface (_l_o_0) and allows for mail from users and daemons
+     on the local machine, as well as permitting email to remote servers.
+     Some more complex configurations are given below.
+
+     This first example is similar to the default configuration, but all out‐
+     going mail is forwarded to a remote SMTP server.  A secrets file is
+     needed to specify a username and password:
+
+           # touch /etc/mail/secrets
+           # chmod 640 /etc/mail/secrets
+           # chown root:_smtpd /etc/mail/secrets
+           # echo "bob username:password" > /etc/mail/secrets
+
+     ssmmttppdd..ccoonnff would look like this:
+
+           table aliases file:/etc/mail/aliases
+           table secrets file:/etc/mail/secrets
+
+           listen on lo0
+
+           action "local_mail" mbox alias <aliases>
+           action "outbound" relay host smtp+tls://bob@smtp.example.com \
+                   auth <secrets>
+
+           match from local for local action "local_mail"
+           match from local for any action "outbound"
+
+     In this second example, the aim is to permit mail delivery and relaying
+     only for users that can authenticate (using their normal login creden‐
+     tials).  An RSA certificate must be provided to prove the server's iden‐
+     tity.  The mail server listens on all interfaces the default routes point
+     to.  Mail with a local destination is sent to an external MDA.  First,
+     the RSA certificate is created:
+
+           # openssl genrsa -out /etc/ssl/private/mail.example.com.key 4096
+           # openssl req -new -x509 -key /etc/ssl/private/mail.example.com.key \
+                   -out /etc/ssl/mail.example.com.crt -days 365
+           # chmod 600 /etc/ssl/mail.example.com.crt
+           # chmod 600 /etc/ssl/private/mail.example.com.key
+
+     In the example above, a certificate valid for one year was created.  The
+     configuration file would look like this:
+
+           pki mail.example.com cert "/etc/ssl/mail.example.com.crt"
+           pki mail.example.com key "/etc/ssl/private/mail.example.com.key"
+
+           table aliases file:/etc/mail/aliases
+
+           listen on lo0
+           listen on egress tls pki mail.example.com auth
+
+           action mda_with_aliases mda "/path/to/mda -f -" alias <aliases>
+           action mda_without_aliases mda "/path/to/mda -f -"
+           action "outbound" relay
+
+           match for local action mda_with_aliases
+           match from any for domain example.com action mda_without_aliases
+           match for any action "outbound"
+           match auth from any for any action "outbound"
+
+     For sites that wish to sign messages using DKIM, the following example
+     uses ooppeennssmmttppdd--ffiilltteerr--ddkkiimmssiiggnn for DKIM signing:
+
+           table aliases file:/etc/mail/aliases
+
+           filter "dkimsign" proc-exec "filter-dkimsign -d <domain> -s <selector> \
+                   -k /etc/mail/dkim/private.key" user _dkimsign group _dkimsign
+
+           listen on socket filter "dkimsign"
+           listen on lo0 filter "dkimsign"
+
+           action "local_mail" mbox alias <aliases>
+           action "outbound" relay
+
+           match for local action "local_mail"
+           match for any action "outbound"
+
+     Alternatively, the ooppeennssmmttppdd--ffiilltteerr--rrssppaammdd package may be used to provide
+     integration with rrssppaammdd, a third-party daemon which provides multiple an‐
+     tispam features as well as DKIM signing.  As well as configuring rrssppaammdd
+     itself, it requires use of the pprroocc--eexxeecc keyword:
+
+           filter "rspamd" proc-exec "filter-rspamd"
+
+     Sites that accept non-local messages may be able to cut down on the vol‐
+     ume of spam received by rejecting forged messages that claim to be from
+     the local domain.  The following example uses a list table _o_t_h_e_r_-_r_e_l_a_y_s
+     to specify the IP addresses of relays that may legitimately originate
+     mail with the owner's domain as the sender.
+
+           table aliases file:/etc/mail/aliases
+           table other-relays file:/etc/mail/other-relays
+
+           listen on lo0
+           listen on egress
+
+           action "local_mail" mbox alias <aliases>
+           action "outbound" relay
+
+           match for local action "local_mail"
+           match for any action "outbound"
+           match !from src <other-relays> mail-from "@example.com" for any \
+                 reject
+           match from any for domain example.com action "local_mail"
+
+SSEEEE AALLSSOO
+     mailer.conf(5), table(5), smtpd-filters(7), makemap(8), smtpd(8)
+
+HHIISSTTOORRYY
+     smtpd(8) first appeared in OpenBSD 4.6.
+
+BSD                             August 26, 2025                            BSD

@@ -1,0 +1,294 @@
+LOADER.EFI(8)             BSD System Manager's Manual            LOADER.EFI(8)
+
+NNAAMMEE
+     llooaaddeerr..eeffii — UEFI kernel loader
+
+DDEESSCCRRIIPPTTIIOONN
+     On UEFI systems, llooaaddeerr..eeffii loads the kernel.
+
+     boot1.efi(8) is used to load llooaaddeerr..eeffii when it is placed within a UFS or
+     ZFS file system.  Alternatively, llooaaddeerr..eeffii is used directly when config‐
+     ured with efibootmgr(8), or when placed directly as the default boot pro‐
+     gram as described in uefi(8).  When a system is built using
+     bsdinstall(8), llooaaddeerr..eeffii will be used directly.
+
+   CCoonnssoollee CCoonnssiiddeerraattiioonnss
+     The EFI BIOS provides a generic console.  In llooaaddeerr..eeffii this is selected
+     by specifying “efi” using the console variable.  llooaaddeerr..eeffii examines the
+     8be4df61-93ca-11d2-aa0d-00e098032b8c-ConOut UEFI environment variable to
+     guess what the “efi” console points to.  llooaaddeerr..eeffii will output its
+     prompts and menus to all the places specified by ConOut.  However, the
+     FreeBSD kernel has a limitation when more than one console is present.
+     The kernel outputs to all configured consoles.  Only the primary console
+     will get the log messages from the rc(8) system, and prompts for things
+     like geli(8) passwords.  If llooaaddeerr..eeffii finds a video device first, then
+     llooaaddeerr..eeffii tells the kernel to use the video console as primary.  Like‐
+     wise, if a serial device is first in the ConOut list, the serial port
+     will be the primary console.
+
+     If there is no ConOut variable, both serial and video are attempted.
+     llooaaddeerr..eeffii uses the “efi” console for the video (which may or may not
+     work) and “comconsole” for the serial on COM1 at the default baud rate.
+     The kernel will use a dual console, with the video console primary if a
+     UEFI graphics device is detected, or the serial console as primary if
+     not.
+
+     On x86 platforms, if you wish to redirect the loader's output to a serial
+     port when the EFI BIOS doesn't support it, or to a serial port that isn't
+     the one the EFI BIOS redirects its output to, set console to
+     “comconsole”.  The default port is COM1 with an I/O address of 0x3f8.
+     comconsole_port is used to set this to a different port address.
+     comconsole_speed is used to set the of the serial port (the default is
+     9600).  If you have console set to “efi,comconsole” you will get output
+     on both the EFI console and the serial port.  If this causes a doubling
+     of characters, set console to “efi”, since your EFI BIOS is redirecting
+     to the serial port already.
+
+     If your EFI BIOS redirects the serial port, you may need to tell the ker‐
+     nel which address to use.  EFI uses ACPI's UID to identify the serial
+     port, but llooaaddeerr..eeffii does not have an ACPI parser, so it cannot convert
+     that to an I/O port.  The FreeBSD kernel initializes its consoles before
+     it can decode ACPI resources.  The FreeBSD kernel will look at the
+     hw.uart.console variable to set its serial console.  Its format should be
+     described in uart(4) but is not.  Set it to “io:0x3f8,br:115200” with the
+     proper port address.  PCI or memory mapped ports are beyond the scope of
+     this man page.
+
+     The serial ports are assigned as follows on IBM PC compatible systems:
+
+           WWiinnddoowwss NNaammee    II//OO PPoorrtt AAddddrreessss    TTyyppiiccaall FFrreeeeBBSSDD ddeevviiccee
+           COM1            0x3f8               _/_d_e_v_/_u_a_r_t_0
+           COM2            0x2f8               _/_d_e_v_/_u_a_r_t_1
+           COM3            0x3e8               _/_d_e_v_/_u_a_r_t_2
+           COM4            0x2e8               _/_d_e_v_/_u_a_r_t_3
+     Though COM3 and COM4 can vary.
+
+   PPrriimmaarryy CCoonnssoollee
+     The primary console is set using the boot flags.  These command line ar‐
+     guments set corresponding flags for the kernel.  These flags can be con‐
+     trolled by setting loader environment variables to “yes” or “no”.  Boot
+     flags may be set on the command line to the boot command.  Inside the
+     kernel, the RB_ flags are used to control behavior, sometimes in archi‐
+     tecturally specific ways and are included to aid in discovery of any be‐
+     havior not covered in this document.
+
+           bboooott ffllaagg    llooaaddeerr vvaarriiaabbllee    KKeerrnneell RRBB__ ffllaagg
+           --aa           boot_askme         _R_B___A_S_K_N_A_M_E
+           --cc           boot_cdrom         _R_B___C_D_R_O_M
+           --dd           boot_ddb           _R_B___K_D_B
+           --rr           boot_dfltroot      _R_B___D_F_L_T_R_O_O_T
+           --DD           boot_multiple      _R_B___M_U_L_T_I_P_L_E
+           --mm           boot_mute          _R_B___M_U_T_E
+           --gg           boot_gdb           _R_B___G_D_B
+           --hh           boot_serial        _R_B___S_E_R_I_A_L
+           --pp           boot_pause         _R_B___P_A_U_S_E
+           --PP           boot_probe         _R_B___P_R_O_B_E
+           --ss           boot_single        _R_B___S_I_N_G_L_E
+           --vv           boot_verbose       _R_B___V_E_R_B_O_S_E
+     And the following flags determine the primary console:
+
+           FFllaaggss    KKeerrnneell FFllaaggss    KKeerrnneell CCoonnssoolleess    PPrriimmaarryy CCoonnssoollee
+           none     0               Video              Video
+           --hh       RB_SERIAL       Serial             Serial
+           --DD       RB_MULTIPLE     Serial, Video      Video
+           --DDhh      RB_SERIAL | RB_MULTIPLE            Serial,
+                                                                          Video      Serial
+
+     llooaaddeerr..eeffii does not implement the probe --PP functionality where we use the
+     video console if a keyboard is connected and a serial console otherwise.
+
+   AAddddiittiioonnaall EEnnvviirroonnmmeenntt VVaarriiaabblleess
+     llooaaddeerr..eeffii loads some extra variables early in startup from
+     _/_e_f_i_/_f_r_e_e_b_s_d_/_l_o_a_d_e_r_._e_n_v from the EFI partition.  Only simple variables
+     can be set here.  It can be useful to specify the root filesystem:
+
+           rootdev=disk0s1a
+
+   SSttaaggiinngg SSlloopp
+     The kernel must parse the firmware memory map tables to know what memory
+     it can use.  Since it must allocate memory to do this, llooaaddeerr..eeffii ensures
+     there's extra memory available, called “slop”, after everything it loads
+     (the kernel, modules and metadata) for the kernel to bootstrap the memory
+     allocator.
+
+     By default, amd64 reserves 8MB.  The ssttaaggiinngg__sslloopp command allows for tun‐
+     ing the slop size.  It takes a single argument, the size of the slop in
+     bytes.
+
+   aammdd6644 NNooccooppyy
+     llooaaddeerr..eeffii will load the kernel into memory that is 2MB aligned below
+     4GB.  It cannot load to a fixed address because the UEFI firmware may re‐
+     serve arbitrary memory for its use at runtime.  Prior to FreeBSD 13.1,
+     kernels retained the old BIOS-boot protocol of loading at exactly 2MB.
+     Such kernels must be copied from their loaded location to 2MB prior
+     starting them up.  The ccooppyy__ssttaaggiinngg command is used to enable this copy‐
+     ing for older kernels.  It takes a single argument which can be one of
+
+     _d_i_s_a_b_l_e  Force-disable copying staging area to _2_M.
+
+     _e_n_a_b_l_e   Force-enable copying staging area to _2_M.
+
+     _a_u_t_o     Selects the behaviour based on the kernel's capability of boost‐
+              raping from non-2M physical base.  The kernel reports this capa‐
+              bility by exporting the symbol _k_e_r_n_p_h_y_s.
+
+     Arm64 loaders have operated in the ‘nocopy’ mode from their inception, so
+     there is no ccooppyy__ssttaaggiinngg command on that platform.  Riscv, 32-bit arm and
+     arm64 have always loaded at any _2_M_B aligned location, so do not provide
+     ccooppyy__ssttaaggiinngg.
+
+           NNoottee.. BIOS loaders on i386 and amd64 put the staging area starting
+           at the physical address _2_M, then enable paging with identical map‐
+           ping for the low _1_G.  The initial port of llooaaddeerr..eeffii followed the
+           same scheme for handing control to the kernel, since it avoided
+           modifications for the loader/kernel hand-off protocol, and for the
+           kernel page table bootstrap.
+
+           This approach is incompatible with the UEFI specification, and as a
+           practical matter, caused troubles on many boards, because UEFI
+           firmware is free to use any memory for its own needs.  Applications
+           like llooaaddeerr..eeffii must only use memory explicitly allocated using
+           boot interfaces.  The original way also potentially destroyed UEFI
+           runtime interfaces data.
+
+           Eventually, llooaaddeerr..eeffii and the kernel were improved to avoid this
+           problem.
+
+   aammdd6644 FFaauullttss
+     Because it executes in x86 protected mode, the amd64 version of
+     llooaaddeerr..eeffii is susceptible to CPU faults due to programmer mistakes and
+     memory corruption.  To make debugging such faults easier, amd64
+     llooaaddeerr..eeffii can provide detailed reporting of the CPU state at the time of
+     the fault.
+
+     The ggrraabb__ffaauullttss command installs a handler for faults directly in the
+     IDT, avoiding the use of the UEFI debugging interface
+     EEFFII__DDEEBBUUGG__SSUUPPPPOORRTT__PPRROOTTOOCCOOLL..RReeggiisstteerrEExxcceeppttiioonnCCaallllbbaacckk().  That interface
+     is left available for advanced debuggers in the UEFI environment.  The
+     uunnggrraabb__ffaauullttss command tries to deinstall the fault handler, returning TSS
+     and IDT CPU tables to their pre-installation state.  The ffaauulltt command
+     produces a fault in the llooaaddeerr..eeffii environment for testing purposes, by
+     executing the uudd22 processor instruction.
+
+FFIILLEESS
+     /boot/loader.efi  The location of the UEFI kernel loader within the sys‐
+                       tem.
+
+   EEFFII SSyysstteemm PPaarrttiittiioonn
+     llooaaddeerr..eeffii is installed on the ESP (EFI System Partition) in one of the
+     following locations:
+
+     efi/boot/bootXXX.efi    The default location for any EFI loader (see
+                             uefi(8) for values to replace ‘XXX’ with).
+
+     efi/freebsd/loader.efi  The location reserved specifically for the
+                             FreeBSD EFI loader.
+
+     The default location for the ESP mount point is documented in hier(7).
+
+EEXXAAMMPPLLEESS
+   UUppddaattiinngg llooaaddeerr..eeffii oonn tthhee EESSPP
+     The following example shows how to install a new llooaaddeerr..eeffii on the ESP.
+     The exact placement is complicated due to the diversity of installations,
+     setups and situations.  In this section, paths that are all lower case
+     are Unix paths.  Paths that are all upper case are relative to the ESP
+     mount point, though they may appear as lower case on your system because
+     the FAT filesystem of the ESP is case insensitive.
+
+     Locate the ESP, which has its own partition type of “efi”:
+
+           # gpart show nda0
+           =>        40  7501476448  nda0  GPT  (3.5T)
+                     40      614400     1  efi  (300M)
+                 614440  7500862048     2  freebsd-zfs  (3.5T)
+
+     The name of the ESP on this system is _n_d_a_0_p_1.  By default, this will be
+     mounted on _/_b_o_o_t_/_e_f_i.  To check:
+
+           # mount | grep nda0p1
+           /dev/nda0p1 on /boot/efi (msdosfs, local)
+     If it's not mounted, you will need to mount it:
+
+           # mount -t msdosfs /dev/nda0p1 /boot/efi
+
+     efibootmgr(8) reports what we booted from.
+
+           # efibootmgr -v
+           Boot to FW : false
+           BootCurrent: 0001
+           Timeout    : 2 seconds
+           BootOrder  : 0000, 0001, 0003, 0004, 0005, 0006, 0001, 0008, 000A, 000B, 000C, 000E, 0007
+           ...
+           +Boot0001* FreeBSD ZPOOL HD(1,GPT,b5d0f86b-265d-1e1b-18aa-0ed55e1e73bd,0x28,0x96000)/File(EEBSDDER.EFI)
+                                       nda0p1:/EFI/FREEBSD/LOADER.EFI /boot/efi//EFI/FREEBSD/LOADER.EFI
+           ...
+     Often there are several options, depending on the BIOS.  The entry that
+     we booted with is marked with a ‘+’ at the start of the line, as shown
+     above.  So in this case, this firmware is using _/_E_F_I_/_F_R_E_E_B_S_D_/_L_O_A_D_E_R_._E_F_I
+     from the ESP.  Often times it will be the UEFI “default” loader, which
+     varies by architecture.
+
+           AArrcchhiitteeccttuurree    DDeeffaauulltt PPaatthh
+           amd64           _/_E_F_I_/_B_O_O_T_/_B_O_O_T_X_6_4_._E_F_I
+           arm             _/_E_F_I_/_B_O_O_T_/_B_O_O_T_A_R_M_._E_F_I
+           arm64           _/_E_F_I_/_B_O_O_T_/_B_O_O_T_A_A_6_4_._E_F_I
+           i386            _/_E_F_I_/_B_O_O_T_/_B_O_O_T_I_A_3_2_._E_F_I
+           riscv           _/_E_F_I_/_B_O_O_T_/_B_O_O_T_R_I_S_C_V_6_4_._E_F_I
+     However, care must be taken: some multiple-boot environments rely on a
+     special _b_o_o_t_X_X_X_._e_f_i to function.  Before updating a _b_o_o_t_X_X_X_._e_f_i file,
+     make sure it is the FreeBSD boot loader before updating it:
+
+           # strings /boot/efi/EFI/BOOT/BOOTX64.EFI | grep FreeBSD | grep EFI
+           FreeBSD/amd64 EFI loader, Revision 3.0
+
+     bsdinstall(8) copies _l_o_a_d_e_r_._e_f_i to the default name if there wasn't one
+     there before.  Check to see if they are copies before updating (with X64
+     substituted using the above table):
+
+           # cmp /boot/efi/EFI/FREEBSD/LOADER.EFI /boot/efi/EFI/BOOT/BOOOTX64.EFI
+     Copy the loader:
+
+           # cp /boot/loader.efi /boot/efi/EFI/FREEBSD/LOADER.EFI
+     replacing the all caps part of the example with the proper path.
+
+     If ESP path was _/_F_R_E_E_B_S_D_/_L_O_A_D_E_R_._E_F_I and LOADER.EFI and BOOTX64.EFI were
+     identical in the cmp step, copy the loader to the default location:
+
+           # cp /boot/loader.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+
+     Finally, if you mounted the ESP, you may wish to unmount it.
+
+           # umount /boot/efi
+
+SSEEEE AALLSSOO
+     loader(8), uefi(8)
+
+BBUUGGSS
+     Non-x86 serial console handling is even more confusing and less well doc‐
+     umented.
+
+     Sometimes when the serial port speed isn't set, 9600 is used.  Other
+     times the result is typically 115200 since the speed remains unchanged
+     from the default.
+
+     U-Boot implements a subset of the UEFI standard.  Some versions do not
+     support fetching loader variables, so _e_f_i_b_o_o_t_m_g_r may not work.  In addi‐
+     tion, _e_f_i_b_o_o_t_m_g_r is not supported on armv7 or riscv.  In these instances,
+     the user has to understand what was booted to update it properly (and in
+     most cases, it will be the FreeBSD path and the UEFI default so just copy
+     loader.efi there if there are loaders there).  Typically in these embed‐
+     ded situations, there is only one .efi file (loader.efi or a copy of
+     loader.efi).  The path to this file is typically the default removable
+     path above.
+
+     Managing booting multiple OSes on UEFI varies greatly, so extra caution
+     when updating the UEFI default loader.
+
+     The old, now obsolete, boot1.efi was installed as bootx64.efi in
+     FreeBSD 10 and earlier.  Since it was quite limited in functionality, we
+     created very small ESPs by default.  A modern loader.efi will not fit.
+     However, if the old boot1.efi still works, there's no need to update it
+     since it will chain boot /boot/loader.efi from a copy that make install‐
+     world updates.
+
+BSD                            September 3, 2024                           BSD

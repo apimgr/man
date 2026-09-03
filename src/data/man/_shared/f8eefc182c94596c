@@ -1,0 +1,426 @@
+_p_a_c_k_e_t(7)              Miscellaneous Information Manual              _p_a_c_k_e_t(7)
+
+NNAAMMEE
+       packet - packet interface on device level
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+       ##iinncclluuddee <<lliinnuuxx//iiff__ppaacckkeett..hh>>
+       ##iinncclluuddee <<nneett//eetthheerrnneett..hh>> //** tthhee LL22 pprroottooccoollss **//
+
+       ppaacckkeett__ssoocckkeett == ssoocckkeett((AAFF__PPAACCKKEETT,, iinntt _s_o_c_k_e_t___t_y_p_e,, iinntt _p_r_o_t_o_c_o_l));;
+
+DDEESSCCRRIIPPTTIIOONN
+       Packet  sockets  are  used to receive or send raw packets at the device
+       driver (OSI Layer 2) level.  They allow the user to implement  protocol
+       modules in user space on top of the physical layer.
+
+       The  _s_o_c_k_e_t___t_y_p_e is either SSOOCCKK__RRAAWW for raw packets including the link‐
+       level header or SSOOCCKK__DDGGRRAAMM  for  cooked  packets  with  the  link‐level
+       header  removed.   The  link‐level header information is available in a
+       common format in a _s_o_c_k_a_d_d_r___l_l structure.  _p_r_o_t_o_c_o_l is the  IEEE  802.3
+       protocol  number in network byte order.  See the _<_l_i_n_u_x_/_i_f___e_t_h_e_r_._h_> in‐
+       clude file for a list of allowed protocols.  When protocol  is  set  to
+       hhttoonnss((EETTHH__PP__AALLLL)),  then all protocols are received.  All incoming pack‐
+       ets of that protocol type will be passed to the  packet  socket  before
+       they  are passed to the protocols implemented in the kernel.  If _p_r_o_t_o_‐
+       _c_o_l is set to zero, no packets are received.  bbiinndd(2) can optionally be
+       called with a nonzero _s_l_l___p_r_o_t_o_c_o_l to start receiving packets  for  the
+       protocols specified.
+
+       In order to create a packet socket, a process must have the CCAAPP__NNEETT__RRAAWW
+       capability in the user namespace that governs its network namespace.
+
+       SSOOCCKK__RRAAWW  packets  are passed to and from the device driver without any
+       changes in the packet data.  When receiving a packet,  the  address  is
+       still  parsed  and  passed in a standard _s_o_c_k_a_d_d_r___l_l address structure.
+       When transmitting a packet, the user‐supplied buffer should contain the
+       physical‐layer header.  That packet is then queued  unmodified  to  the
+       network  driver  of  the  interface defined by the destination address.
+       Some device drivers always add other headers.  SSOOCCKK__RRAAWW is  similar  to
+       but not compatible with the obsolete AAFF__IINNEETT//SSOOCCKK__PPAACCKKEETT of Linux 2.0.
+
+       SSOOCCKK__DDGGRRAAMM operates on a slightly higher level.  The physical header is
+       removed  before the packet is passed to the user.  Packets sent through
+       a SSOOCCKK__DDGGRRAAMM packet socket get a suitable physical‐layer  header  based
+       on  the  information in the _s_o_c_k_a_d_d_r___l_l destination address before they
+       are queued.
+
+       By default, all packets of the specified protocol type are passed to  a
+       packet  socket.   To  get  packets  only  from a specific interface use
+       bbiinndd(2) specifying an address in  a  _s_t_r_u_c_t  _s_o_c_k_a_d_d_r___l_l  to  bind  the
+       packet  socket to an interface.  Fields used for binding are _s_l_l___f_a_m_i_l_y
+       (should be AAFF__PPAACCKKEETT), _s_l_l___p_r_o_t_o_c_o_l, and _s_l_l___i_f_i_n_d_e_x.
+
+       The ccoonnnneecctt(2) operation is not supported on packet sockets.
+
+       When  the  MMSSGG__TTRRUUNNCC  flag  is  passed  to  rreeccvvmmssgg(2),   rreeccvv(2),   or
+       rreeccvvffrroomm(2),  the  real  size  of  the packet on the wire is always re‐
+       turned, even when it is longer than the buffer.
+
+   AAddddrreessss ttyyppeess
+       The _s_o_c_k_a_d_d_r___l_l structure is a  device‐independent  physical‐layer  ad‐
+       dress.
+
+           struct sockaddr_ll {
+               unsigned short sll_family;   /* Always AF_PACKET */
+               unsigned short sll_protocol; /* Physical-layer protocol */
+               int            sll_ifindex;  /* Interface number */
+               unsigned short sll_hatype;   /* ARP hardware type */
+               unsigned char  sll_pkttype;  /* Packet type */
+               unsigned char  sll_halen;    /* Size of address */
+               unsigned char  sll_addr[8];  /* Physical-layer address */
+           };
+
+       The fields of this structure are as follows:
+
+       _s_l_l___p_r_o_t_o_c_o_l
+              is  the standard ethernet protocol type in network byte order as
+              defined in the _<_l_i_n_u_x_/_i_f___e_t_h_e_r_._h_> include file.  It defaults  to
+              the socket’s protocol.
+
+       _s_l_l___i_f_i_n_d_e_x
+              is  the  interface  index of the interface (see nneettddeevviiccee(7)); 0
+              matches any interface (only permitted for binding).   _s_l_l___h_a_t_y_p_e
+              is an ARP type as defined in the _<_l_i_n_u_x_/_i_f___a_r_p_._h_> include file.
+
+       _s_l_l___p_k_t_t_y_p_e
+              contains  the  packet  type.   Valid types are PPAACCKKEETT__HHOOSSTT for a
+              packet addressed to the local host, PPAACCKKEETT__BBRROOAADDCCAASSTT for a phys‐
+              ical‐layer broadcast packet, PPAACCKKEETT__MMUULLTTIICCAASSTT for a packet  sent
+              to  a  physical‐layer  multicast address, PPAACCKKEETT__OOTTHHEERRHHOOSSTT for a
+              packet to some other host that has been caught by a device  dri‐
+              ver in promiscuous mode, and PPAACCKKEETT__OOUUTTGGOOIINNGG for a packet origi‐
+              nating  from  the  local  host  that  is looped back to a packet
+              socket.  These types make sense only for receiving.
+
+       _s_l_l___a_d_d_r
+       _s_l_l___h_a_l_e_n
+              contain the physical‐layer (e.g., IEEE 802.3)  address  and  its
+              size.  The exact interpretation depends on the device.
+
+       When  you  send  packets, it is enough to specify _s_l_l___f_a_m_i_l_y, _s_l_l___a_d_d_r,
+       _s_l_l___h_a_l_e_n, _s_l_l___i_f_i_n_d_e_x, and _s_l_l___p_r_o_t_o_c_o_l.  The other fields  should  be
+       0.  _s_l_l___h_a_t_y_p_e and _s_l_l___p_k_t_t_y_p_e are set on received packets for your in‐
+       formation.
+
+   SSoocckkeett ooppttiioonnss
+       Packet  socket  options  are  configured  by calling sseettssoocckkoopptt(2) with
+       level SSOOLL__PPAACCKKEETT.
+
+       PPAACCKKEETT__AADDDD__MMEEMMBBEERRSSHHIIPP
+       PPAACCKKEETT__DDRROOPP__MMEEMMBBEERRSSHHIIPP
+              Packet sockets can be used to configure physical‐layer multicas‐
+              ting and promiscuous mode.  PPAACCKKEETT__AADDDD__MMEEMMBBEERRSSHHIIPP adds a binding
+              and  PPAACCKKEETT__DDRROOPP__MMEEMMBBEERRSSHHIIPP  drops  it.   They  both  expect   a
+              _p_a_c_k_e_t___m_r_e_q structure as argument:
+
+                  struct packet_mreq {
+                      int            mr_ifindex;    /* interface index */
+                      unsigned short mr_type;       /* action */
+                      unsigned short mr_alen;       /* address size */
+                      unsigned char  mr_address[8]; /* physical-layer address */
+                  };
+
+              _m_r___i_f_i_n_d_e_x  contains the interface index for the interface whose
+              status should be changed.  The _m_r___t_y_p_e field specifies which ac‐
+              tion to perform.  PPAACCKKEETT__MMRR__PPRROOMMIISSCC enables receiving all  pack‐
+              ets  on  a  shared  medium  (often known as "promiscuous mode"),
+              PPAACCKKEETT__MMRR__MMUULLTTIICCAASSTT binds the socket to the physical‐layer  mul‐
+              ticast   group   specified   in   _m_r___a_d_d_r_e_s_s  and  _m_r___a_l_e_n,  and
+              PPAACCKKEETT__MMRR__AALLLLMMUULLTTII sets the socket up to receive  all  multicast
+              packets arriving at the interface.
+
+              In  addition, the traditional ioctls SSIIOOCCSSIIFFFFLLAAGGSS, SSIIOOCCAADDDDMMUULLTTII,
+              SSIIOOCCDDEELLMMUULLTTII can be used for the same purpose.
+
+       PPAACCKKEETT__AAUUXXDDAATTAA (since Linux 2.6.21)
+              If this binary option is enabled, the  packet  socket  passes  a
+              metadata structure along with each packet in the rreeccvvmmssgg(2) con‐
+              trol  field.  The structure can be read with ccmmssgg(3).  It is de‐
+              fined as
+
+                  struct tpacket_auxdata {
+                      __u32 tp_status;
+                      __u32 tp_len;      /* packet size */
+                      __u32 tp_snaplen;  /* captured size */
+                      __u16 tp_mac;
+                      __u16 tp_net;
+                      __u16 tp_vlan_tci;
+                      __u16 tp_vlan_tpid; /* Since Linux 3.14; earlier, these
+                                             were unused padding bytes */
+                  };
+
+       PPAACCKKEETT__FFAANNOOUUTT (since Linux 3.1)
+              To scale processing across threads, packet sockets  can  form  a
+              fanout  group.   In  this mode, each matching packet is enqueued
+              onto only one socket in the group.   A  socket  joins  a  fanout
+              group  by calling sseettssoocckkoopptt(2) with level SSOOLL__PPAACCKKEETT and option
+              PPAACCKKEETT__FFAANNOOUUTT.  Each network namespace can have up to 65536  in‐
+              dependent  groups.   A socket selects a group by encoding the ID
+              in the first 16 bits of the integer  option  value.   The  first
+              packet  socket  to  join a group implicitly creates it.  To suc‐
+              cessfully join an existing group, subsequent packet sockets must
+              have the same protocol, device settings, fanout mode, and  flags
+              (see  below).   Packet  sockets can leave a fanout group only by
+              closing the socket.  The group is deleted when the  last  socket
+              is closed.
+
+              Fanout  supports  multiple  algorithms to spread traffic between
+              sockets, as follows:
+
+              •  The default mode, PPAACCKKEETT__FFAANNOOUUTT__HHAASSHH, sends packets from  the
+                 same  flow  to the same socket to maintain per‐flow ordering.
+                 For each packet, it chooses a socket  by  taking  the  packet
+                 flow  hash modulo the number of sockets in the group, where a
+                 flow hash is a hash over network‐layer address  and  optional
+                 transport‐layer port fields.
+
+              •  The  load‐balance  mode  PPAACCKKEETT__FFAANNOOUUTT__LLBB implements a round‐
+                 robin algorithm.
+
+              •  PPAACCKKEETT__FFAANNOOUUTT__CCPPUU selects the socket based on  the  CPU  that
+                 the packet arrived on.
+
+              •  PPAACCKKEETT__FFAANNOOUUTT__RROOLLLLOOVVEERR processes all data on a single socket,
+                 moving to the next when one becomes backlogged.
+
+              •  PPAACCKKEETT__FFAANNOOUUTT__RRNNDD  selects  the  socket using a pseudo‐random
+                 number generator.
+
+              •  PPAACCKKEETT__FFAANNOOUUTT__QQMM (available since  Linux  3.14)  selects  the
+                 socket using the recorded queue_mapping of the received skb.
+
+              Fanout  modes  can  take  additional  options.  IP fragmentation
+              causes packets from the same flow to have different flow hashes.
+              The flag PPAACCKKEETT__FFAANNOOUUTT__FFLLAAGG__DDEEFFRRAAGG, if set, causes packets to be
+              defragmented before fanout is applied, to preserve order even in
+              this case.  Fanout mode and options are communicated in the sec‐
+              ond  16  bits  of  the   integer   option   value.    The   flag
+              PPAACCKKEETT__FFAANNOOUUTT__FFLLAAGG__RROOLLLLOOVVEERR enables the roll over mechanism as a
+              backup  strategy:  if  the  original  fanout algorithm selects a
+              backlogged socket, the packet rolls over to the  next  available
+              one.
+
+       PPAACCKKEETT__LLOOSSSS (with PPAACCKKEETT__TTXX__RRIINNGG)
+              When  a  malformed packet is encountered on a transmit ring, the
+              default is to reset its _t_p___s_t_a_t_u_s to TTPP__SSTTAATTUUSS__WWRROONNGG__FFOORRMMAATT  and
+              abort the transmission immediately.  The malformed packet blocks
+              itself  and  subsequently enqueued packets from being sent.  The
+              format error must be fixed, the associated  _t_p___s_t_a_t_u_s  reset  to
+              TTPP__SSTTAATTUUSS__SSEENNDD__RREEQQUUEESSTT,  and  the transmission process restarted
+              via sseenndd(2).  However, if  PPAACCKKEETT__LLOOSSSS  is  set,  any  malformed
+              packet  will be skipped, its _t_p___s_t_a_t_u_s reset to TTPP__SSTTAATTUUSS__AAVVAAIILL‐‐
+              AABBLLEE, and the transmission process continued.
+
+       PPAACCKKEETT__RREESSEERRVVEE (with PPAACCKKEETT__RRXX__RRIINNGG)
+              By default, a packet receive  ring  writes  packets  immediately
+              following  the  metadata  structure and alignment padding.  This
+              integer option reserves additional headroom.
+
+       PPAACCKKEETT__RRXX__RRIINNGG
+              Create a memory‐mapped ring buffer for asynchronous  packet  re‐
+              ception.   The packet socket reserves a contiguous region of ap‐
+              plication address space, lays it out into  an  array  of  packet
+              slots  and  copies  packets  (up  to _t_p___s_n_a_p_l_e_n) into subsequent
+              slots.  Each packet is preceded by a metadata structure  similar
+              to  _t_p_a_c_k_e_t___a_u_x_d_a_t_a.   The  protocol fields encode the offset to
+              the data from the start of the metadata header.   _t_p___n_e_t  stores
+              the  offset  to  the  network layer.  If the packet socket is of
+              type SSOOCCKK__DDGGRRAAMM, then _t_p___m_a_c is the same.   If  it  is  of  type
+              SSOOCCKK__RRAAWW,  then  that  field stores the offset to the link‐layer
+              frame.  Packet socket and application communicate the  head  and
+              tail of the ring through the _t_p___s_t_a_t_u_s field.  The packet socket
+              owns  all slots with _t_p___s_t_a_t_u_s equal to TTPP__SSTTAATTUUSS__KKEERRNNEELL.  After
+              filling a slot, it changes the status of the  slot  to  transfer
+              ownership  to the application.  During normal operation, the new
+              _t_p___s_t_a_t_u_s value has at least the TTPP__SSTTAATTUUSS__UUSSEERR bit set to  sig‐
+              nal  that  a received packet has been stored.  When the applica‐
+              tion has finished processing a packet, it transfers ownership of
+              the slot back to  the  socket  by  setting  _t_p___s_t_a_t_u_s  equal  to
+              TTPP__SSTTAATTUUSS__KKEERRNNEELL.
+
+              Packet  sockets  implement multiple variants of the packet ring.
+              The implementation details are described  in  _D_o_c_u_m_e_n_t_a_t_i_o_n_/_n_e_t_‐
+              _w_o_r_k_i_n_g_/_p_a_c_k_e_t___m_m_a_p_._r_s_t in the Linux kernel source tree.
+
+       PPAACCKKEETT__SSTTAATTIISSTTIICCSS
+              Retrieve packet socket statistics in the form of a structure
+
+                  struct tpacket_stats {
+                      unsigned int tp_packets;  /* Total packet count */
+                      unsigned int tp_drops;    /* Dropped packet count */
+                  };
+
+              Receiving  statistics resets the internal counters.  The statis‐
+              tics structure differs when using a ring of variant TTPPAACCKKEETT__VV33.
+
+       PPAACCKKEETT__TTIIMMEESSTTAAMMPP (with PPAACCKKEETT__RRXX__RRIINNGG; since Linux 2.6.36)
+              The packet receive ring always stores a timestamp in  the  meta‐
+              data header.  By default, this is a software generated timestamp
+              generated when the packet is copied into the ring.  This integer
+              option  selects  the type of timestamp.  Besides the default, it
+              support the two hardware formats described in _D_o_c_u_m_e_n_t_a_t_i_o_n_/_n_e_t_‐
+              _w_o_r_k_i_n_g_/_t_i_m_e_s_t_a_m_p_i_n_g_._r_s_t in the Linux kernel source tree.
+
+       PPAACCKKEETT__TTXX__RRIINNGG (since Linux 2.6.31)
+              Create a memory‐mapped  ring  buffer  for  packet  transmission.
+              This  option is similar to PPAACCKKEETT__RRXX__RRIINNGG and takes the same ar‐
+              guments.  The application writes packets into slots with _t_p___s_t_a_‐
+              _t_u_s equal to TTPP__SSTTAATTUUSS__AAVVAAIILLAABBLLEE and schedules them  for  trans‐
+              mission  by  changing _t_p___s_t_a_t_u_s to TTPP__SSTTAATTUUSS__SSEENNDD__RREEQQUUEESSTT.  When
+              packets are ready  to  be  transmitted,  the  application  calls
+              sseenndd(2)  or  a  variant thereof.  The _b_u_f and _l_e_n fields of this
+              call are ignored.  If an address is passed  using  sseennddttoo(2)  or
+              sseennddmmssgg(2), then that overrides the socket default.  On success‐
+              ful   transmission,  the  socket  resets  _t_p___s_t_a_t_u_s  to  TTPP__SSTTAA‐‐
+              TTUUSS__AAVVAAIILLAABBLLEE.  It immediately aborts the transmission on  error
+              unless PPAACCKKEETT__LLOOSSSS is set.
+
+       PPAACCKKEETT__VVEERRSSIIOONN (with PPAACCKKEETT__RRXX__RRIINNGG; since Linux 2.6.27)
+              By  default,  PPAACCKKEETT__RRXX__RRIINNGG  creates  a  packet receive ring of
+              variant TTPPAACCKKEETT__VV11.  To create another  variant,  configure  the
+              desired  variant  by setting this integer option before creating
+              the ring.
+
+       PPAACCKKEETT__QQDDIISSCC__BBYYPPAASSSS (since Linux 3.14)
+              By default, packets sent through packet sockets pass through the
+              kernel’s qdisc (traffic control) layer, which is  fine  for  the
+              vast  majority  of  use cases.  For traffic generator appliances
+              using packet sockets that intend to brute‐force flood  the  net‐
+              work—for  example, to test devices under load in a similar fash‐
+              ion to pktgen—this layer can be bypassed by setting this integer
+              option to 1.  A side effect is  that  packet  buffering  in  the
+              qdisc  layer is avoided, which will lead to increased drops when
+              network device transmit queues are busy; therefore, use at  your
+              own risk.
+
+   IIooccttllss
+       SSIIOOCCGGSSTTAAMMPP  can  be  used to receive the timestamp of the last received
+       packet.  Argument is a _s_t_r_u_c_t _t_i_m_e_v_a_l variable.
+
+       In addition, all standard ioctls defined in nneettddeevviiccee(7) and  ssoocckkeett(7)
+       are valid on packet sockets.
+
+   EErrrroorr hhaannddlliinngg
+       Packet  sockets  do  no error handling other than errors occurred while
+       passing the packet to the device driver.  They don’t have  the  concept
+       of a pending error.
+
+EERRRROORRSS
+       EEAADDDDRRNNOOTTAAVVAAIILL
+              Unknown multicast group address passed.
+
+       EEFFAAUULLTT User passed invalid memory address.
+
+       EEIINNVVAALL Invalid argument.
+
+       EEMMSSGGSSIIZZEE
+              Packet is bigger than interface MTU.
+
+       EENNEETTDDOOWWNN
+              Interface is not up.
+
+       EENNOOBBUUFFSS
+              Not enough memory to allocate the packet.
+
+       EENNOODDEEVV Unknown  device  name  or interface index specified in interface
+              address.
+
+       EENNOOEENNTT No packet received.
+
+       EENNOOTTCCOONNNN
+              No interface address passed.
+
+       EENNXXIIOO  Interface address contained an invalid interface index.
+
+       EEPPEERRMM  User has insufficient privileges to carry out this operation.
+
+       In addition, other errors may be generated by the low‐level driver.
+
+VVEERRSSIIOONNSS
+       AAFF__PPAACCKKEETT is a new feature in Linux 2.2.  Earlier Linux  versions  sup‐
+       ported only SSOOCCKK__PPAACCKKEETT.
+
+NNOOTTEESS
+       For portable programs it is suggested to use AAFF__PPAACCKKEETT via ppccaapp(3); al‐
+       though this covers only a subset of the AAFF__PPAACCKKEETT features.
+
+       The  SSOOCCKK__DDGGRRAAMM  packet  sockets make no attempt to create or parse the
+       IEEE 802.2 LLC header for a IEEE  802.3  frame.   When  EETTHH__PP__880022__33  is
+       specified  as  protocol  for sending the kernel creates the 802.3 frame
+       and fills out the size field; the user has to supply the LLC header  to
+       get  a  fully conforming packet.  Incoming 802.3 packets are not multi‐
+       plexed on the DSAP/SSAP protocol fields; instead they are  supplied  to
+       the  user  as protocol EETTHH__PP__880022__22 with the LLC header prefixed.  It is
+       thus not possible to bind to EETTHH__PP__880022__33; bind to  EETTHH__PP__880022__22  instead
+       and do the protocol multiplex yourself.  The default for sending is the
+       standard Ethernet DIX encapsulation with the protocol filled in.
+
+       Packet sockets are not subject to the input or output firewall chains.
+
+   CCoommppaattiibbiilliittyy
+       In Linux 2.0, the only way to get a packet socket was with the call:
+
+           socket(AF_INET, SOCK_PACKET, protocol)
+
+       This  is still supported, but deprecated and strongly discouraged.  The
+       main difference between the two methods is that  SSOOCCKK__PPAACCKKEETT  uses  the
+       old  _s_t_r_u_c_t _s_o_c_k_a_d_d_r___p_k_t to specify an interface, which doesn’t provide
+       physical‐layer independence.
+
+           struct sockaddr_pkt {
+               unsigned short spkt_family;
+               unsigned char  spkt_device[14];
+               unsigned short spkt_protocol;
+           };
+
+       _s_p_k_t___f_a_m_i_l_y contains the device type, _s_p_k_t___p_r_o_t_o_c_o_l is the  IEEE  802.3
+       protocol type as defined in _<_s_y_s_/_i_f___e_t_h_e_r_._h_> and _s_p_k_t___d_e_v_i_c_e is the de‐
+       vice name as a null‐terminated string, for example, eth0.
+
+       This structure is obsolete and should not be used in new code.
+
+BBUUGGSS
+   LLLLCC hheeaaddeerr hhaannddlliinngg
+       The IEEE 802.2/803.3 LLC handling could be considered as a bug.
+
+   MMSSGG__TTRRUUNNCC iissssuueess
+       The  MMSSGG__TTRRUUNNCC  rreeccvvmmssgg(2)  extension is an ugly hack and should be re‐
+       placed by a control message.  There is currently  no  way  to  get  the
+       original destination address of packets via SSOOCCKK__DDGGRRAAMM.
+
+   ssppkktt__ddeevviiccee ddeevviiccee nnaammee ttrruunnccaattiioonn
+       The  _s_p_k_t___d_e_v_i_c_e field of _s_o_c_k_a_d_d_r___p_k_t has a size of 14 bytes, which is
+       less than the constant IIFFNNAAMMSSIIZZ defined in _<_n_e_t_/_i_f_._h_> which is 16 bytes
+       and describes the system limit for  a  network  interface  name.   This
+       means  the  names of network devices longer than 14 bytes will be trun‐
+       cated to fit into _s_p_k_t___d_e_v_i_c_e.  All these sizes include the terminating
+       null byte ('\0')).
+
+       Issues from this with old code typically show up with very long  inter‐
+       face  names used by the PPrreeddiiccttaabbllee NNeettwwoorrkk IInntteerrffaaccee NNaammeess feature en‐
+       abled by default in many modern Linux distributions.
+
+       The preferred solution is to rewrite code to avoid SSOOCCKK__PPAACCKKEETT.  Possi‐
+       ble user solutions are to disable PPrreeddiiccttaabbllee NNeettwwoorrkk  IInntteerrffaaccee  NNaammeess
+       or  to  rename the interface to a name of at most 13 bytes, for example
+       using the iipp(8) tool.
+
+   DDooccuummeennttaattiioonn iissssuueess
+       Socket filters are not documented.
+
+SSEEEE AALLSSOO
+       ssoocckkeett(2), ppccaapp(3), ccaappaabbiilliittiieess(7), iipp(7), rraaww(7), ssoocckkeett(7), iipp(8),
+
+       RFC 894 for the standard IP Ethernet encapsulation.  RFC 1700  for  the
+       IEEE 802.3 IP encapsulation.
+
+       The _<_l_i_n_u_x_/_i_f___e_t_h_e_r_._h_> include file for physical‐layer protocols.
+
+       The  Linux kernel source tree.  _D_o_c_u_m_e_n_t_a_t_i_o_n_/_n_e_t_w_o_r_k_i_n_g_/_f_i_l_t_e_r_._r_s_t de‐
+       scribes how  to  apply  Berkeley  Packet  Filters  to  packet  sockets.
+       _t_o_o_l_s_/_t_e_s_t_i_n_g_/_s_e_l_f_t_e_s_t_s_/_n_e_t_/_p_s_o_c_k___t_p_a_c_k_e_t_._c   contains  example  source
+       code for all available versions of PPAACCKKEETT__RRXX__RRIINNGG and PPAACCKKEETT__TTXX__RRIINNGG.
+
+Linux man‐pages (unreleased)      2025‐09‐21                         _p_a_c_k_e_t(7)

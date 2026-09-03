@@ -1,0 +1,175 @@
+EVENTTIMERS(9)           BSD Kernel Developer's Manual          EVENTTIMERS(9)
+
+NNAAMMEE
+     eevveennttttiimmeerrss — kernel event timers subsystem
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttiimmeeeett..hh>>
+
+     struct eventtimer;
+
+     typedef int et_start_t(struct eventtimer *et,
+         sbintime_t first, sbintime_t period);
+     typedef int et_stop_t(struct eventtimer *et);
+     typedef void et_event_cb_t(struct eventtimer *et, void *arg);
+     typedef int et_deregister_cb_t(struct eventtimer *et, void *arg);
+
+     struct eventtimer {
+             SLIST_ENTRY(eventtimer) et_all;
+             char                    *et_name;
+             int                     et_flags;
+     #define ET_FLAGS_PERIODIC       1
+     #define ET_FLAGS_ONESHOT        2
+     #define ET_FLAGS_PERCPU         4
+     #define ET_FLAGS_C3STOP         8
+     #define ET_FLAGS_POW2DIV        16
+             int                     et_quality;
+             int                     et_active;
+             uint64_t                et_frequency;
+             sbintime_t              et_min_period;
+             sbintime_t              et_max_period;
+             et_start_t              *et_start;
+             et_stop_t               *et_stop;
+             et_event_cb_t           *et_event_cb;
+             et_deregister_cb_t      *et_deregister_cb;
+             void                    *et_arg;
+             void                    *et_priv;
+             struct sysctl_oid       *et_sysctl;
+     };
+
+     _i_n_t
+     eett__rreeggiisstteerr(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t);
+
+     _i_n_t
+     eett__ddeerreeggiisstteerr(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t);
+
+     _v_o_i_d
+     eett__cchhaannggee__ffrreeqquueennccyy(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t, _u_i_n_t_6_4___t _n_e_w_f_r_e_q);
+
+     EETT__LLOOCCKK();
+
+     EETT__UUNNLLOOCCKK();
+
+     _s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*
+     eett__ffiinndd(_c_o_n_s_t _c_h_a_r _*_n_a_m_e, _i_n_t _c_h_e_c_k, _i_n_t _w_a_n_t);
+
+     _i_n_t
+     eett__iinniitt(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t, _e_t___e_v_e_n_t___c_b___t _*_e_v_e_n_t,
+         _e_t___d_e_r_e_g_i_s_t_e_r___c_b___t _*_d_e_r_e_g_i_s_t_e_r, _v_o_i_d _*_a_r_g);
+
+     _i_n_t
+     eett__ssttaarrtt(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t, _s_b_i_n_t_i_m_e___t _f_i_r_s_t, _s_b_i_n_t_i_m_e___t _p_e_r_i_o_d);
+
+     _i_n_t
+     eett__ssttoopp(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t);
+
+     _i_n_t
+     eett__bbaann(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t);
+
+     _i_n_t
+     eett__ffrreeee(_s_t_r_u_c_t _e_v_e_n_t_t_i_m_e_r _*_e_t);
+
+DDEESSCCRRIIPPTTIIOONN
+     Event timers are responsible for generating interrupts at specified time
+     or periodically, to run different time-based events.  Subsystem consists
+     of three main parts:
+
+     Drivers    Manage hardware to generate requested time events.
+
+     Consumers  _s_y_s_/_k_e_r_n_/_k_e_r_n___c_l_o_c_k_s_o_u_r_c_e_._c uses event timers to supply kernel
+                with hhaarrddcclloocckk(), ssttaattcclloocckk() and pprrooffcclloocckk() time events.
+
+     Glue code  _s_y_s_/_s_y_s_/_t_i_m_e_e_t_._h, _s_y_s_/_k_e_r_n_/_k_e_r_n___e_t_._c provide APIs for event
+                timer drivers and consumers.
+
+DDRRIIVVEERR AAPPII
+     Driver API is built around eventtimer structure.  To register its func‐
+     tionality driver allocates that structure and calls eett__rreeggiisstteerr().
+     Driver should fill following fields there:
+
+     _e_t___n_a_m_e       Unique name of the event timer for management purposes.
+
+     _e_t___f_l_a_g_s      Set of flags, describing timer capabilities:
+                   ET_FLAGS_PERIODIC  Periodic mode supported.
+                   ET_FLAGS_ONESHOT   One-shot mode supported.
+                   ET_FLAGS_PERCPU    Timer is per-CPU.
+                   ET_FLAGS_C3STOP    Timer may stop in CPU sleep state.
+                   ET_FLAGS_POW2DIV   Timer supports only 2^n divisors.
+
+     _e_t___q_u_a_l_i_t_y    Abstract value to certify whether this timecounter is bet‐
+                   ter than the others.  Higher value means better.
+
+     _e_t___f_r_e_q_u_e_n_c_y  Timer oscillator's base frequency, if applicable and known.
+                   Used by consumers to predict set of possible frequencies
+                   that could be obtained by dividing it.  Should be zero if
+                   not applicable or unknown.
+
+     _e_t___m_i_n___p_e_r_i_o_d, _e_t___m_a_x___p_e_r_i_o_d
+                   Minimal and maximal reliably programmable time periods.
+
+     _e_t___s_t_a_r_t      Driver's timer start function pointer.
+
+     _e_t___s_t_o_p       Driver's timer stop function pointer.
+
+     _e_t___p_r_i_v       Driver's private data storage.
+
+     After the event timer functionality is registered, it is controlled via
+     _e_t___s_t_a_r_t and _e_t___s_t_o_p methods.  _e_t___s_t_a_r_t method is called to start the
+     specified event timer.  The last two arguments are used to specify time
+     when events should be generated.  _f_i_r_s_t argument specifies time period
+     before the first event generated.  In periodic mode NULL value specifies
+     that first period is equal to the _p_e_r_i_o_d argument value.  _p_e_r_i_o_d argument
+     specifies the time period between following events for the periodic mode.
+     The NULL value there specifies the one-shot mode.  At least one of these
+     two arguments should be not NULL.  When event time arrive, driver should
+     call _e_t___e_v_e_n_t___c_b callback function, passing _e_t___a_r_g as the second argu‐
+     ment.  _e_t___s_t_o_p method is called to stop the specified event timer.  For
+     the per-CPU event timers _e_t___s_t_a_r_t and _e_t___s_t_o_p methods control timers as‐
+     sociated with the current CPU.
+
+     Driver may deregister its functionality by calling eett__ddeerreeggiisstteerr().
+
+     If the frequency of the clock hardware can change while it is running
+     (for example, during power-saving modes), the driver must call
+     eett__cchhaannggee__ffrreeqquueennccyy() on each change.  If the given event timer is the
+     active timer, eett__cchhaannggee__ffrreeqquueennccyy() stops the timer on all CPUs, updates
+     _e_t_-_>_f_r_e_q_u_e_n_c_y, then restarts the timer on all CPUs so that all current
+     events are rescheduled using the new frequency.  If the given timer is
+     not currently active, eett__cchhaannggee__ffrreeqquueennccyy() simply updates _e_t_-_>_f_r_e_q_u_e_n_c_y.
+
+CCOONNSSUUMMEERR AAPPII
+     eett__ffiinndd() allows consumer to find available event timer, optionally
+     matching specific name and/or capability flags.  Consumer may read re‐
+     turned eventtimer structure, but should not modify it.  When wanted event
+     timer is found, eett__iinniitt() should be called for it, submitting _e_v_e_n_t and
+     optionally _d_e_r_e_g_i_s_t_e_r callbacks functions, and the opaque argument _a_r_g.
+     That argument will be passed as argument to the callbacks.  Event call‐
+     back function will be called on scheduled time events.  It is called from
+     the hardware interrupt context, so no sleep is permitted there.  Deregis‐
+     ter callback function may be called to report consumer that the event
+     timer functionality is no longer available.  On this call, consumer
+     should stop using event timer before the return.
+
+     After the timer is found and initialized, it can be controlled via
+     eett__ssttaarrtt() and eett__ssttoopp().  The arguments are the same as described in
+     driver API.  Per-CPU event timers can be controlled only from specific
+     CPUs.
+
+     eett__bbaann() allows consumer to mark event timer as broken via clearing both
+     one-shot and periodic capability flags, if it was somehow detected.
+     eett__ffrreeee() is the opposite to eett__iinniitt().  It releases the event timer for
+     other consumers use.
+
+     EETT__LLOOCCKK() and EETT__UUNNLLOOCCKK() macros should be used to manage mutex(9) lock
+     around eett__ffiinndd(), eett__iinniitt() and eett__ffrreeee() calls to serialize access to
+     the list of the registered event timers and the pointers returned by
+     eett__ffiinndd().  eett__ssttaarrtt() and eett__ssttoopp() calls should be serialized in con‐
+     sumer's internal way to avoid concurrent timer hardware access.
+
+SSEEEE AALLSSOO
+     eventtimers(4)
+
+AAUUTTHHOORRSS
+     Alexander Motin <_m_a_v_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                              April 2, 2014                             BSD

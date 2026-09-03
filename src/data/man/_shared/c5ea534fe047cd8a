@@ -1,0 +1,107 @@
+REFCOUNT(9)              BSD Kernel Developer's Manual             REFCOUNT(9)
+
+NNAAMMEE
+     rreeffccoouunntt, rreeffccoouunntt__iinniitt, rreeffccoouunntt__aaccqquuiirree, rreeffccoouunntt__rreelleeaassee — manage a
+     simple reference counter
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//rreeffccoouunntt..hh>>
+
+     _v_o_i_d
+     rreeffccoouunntt__iinniitt(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t, _u___i_n_t _v_a_l_u_e);
+
+     _u___i_n_t
+     rreeffccoouunntt__llooaadd(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+     _u___i_n_t
+     rreeffccoouunntt__aaccqquuiirree(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+     _b_o_o_l
+     rreeffccoouunntt__aaccqquuiirree__cchheecckkeedd(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+     _b_o_o_l
+     rreeffccoouunntt__aaccqquuiirree__iiff__nnoott__zzeerroo(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+     _b_o_o_l
+     rreeffccoouunntt__rreelleeaassee(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+     _b_o_o_l
+     rreeffccoouunntt__rreelleeaassee__iiff__llaasstt(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+     _b_o_o_l
+     rreeffccoouunntt__rreelleeaassee__iiff__nnoott__llaasstt(_v_o_l_a_t_i_l_e _u___i_n_t _*_c_o_u_n_t);
+
+DDEESSCCRRIIPPTTIIOONN
+     The rreeffccoouunntt functions provide an API to manage a simple reference
+     counter.  The caller provides the storage for the counter in an unsigned
+     integer.  A pointer to this integer is passed via _c_o_u_n_t.  Usually the
+     counter is used to manage the lifetime of an object and is stored as a
+     member of the object.
+
+     Currently all functions are implemented as static inline.
+
+     The rreeffccoouunntt__iinniitt() function is used to set the initial value of the
+     counter to _v_a_l_u_e.  It is normally used when creating a reference-counted
+     object.
+
+     The rreeffccoouunntt__llooaadd() function returns a snapshot of the counter value.
+     This value may immediately become out-of-date in the absence of external
+     synchronization.  rreeffccoouunntt__llooaadd() should be used instead of relying on
+     the properties of the _v_o_l_a_t_i_l_e qualifier.
+
+     The rreeffccoouunntt__aaccqquuiirree() function is used to acquire a new reference.  It
+     returns the counter value before the new reference was acquired.  The
+     caller is responsible for ensuring that it holds a valid reference while
+     obtaining a new reference.  For example, if an object is stored on a list
+     and the list holds a reference on the object, then holding a lock that
+     protects the list provides sufficient protection for acquiring a new ref‐
+     erence.
+
+     The rreeffccoouunntt__aaccqquuiirree__cchheecckkeedd() variant performs the same operation as
+     rreeffccoouunntt__aaccqquuiirree(), but additionally checks that the _c_o_u_n_t value does not
+     overflow as result of the operation.  It returns true if the reference
+     was sucessfully obtained, and false if it was not, due to the overflow.
+
+     The rreeffccoouunntt__aaccqquuiirree__iiff__nnoott__zzeerroo() function is yet another variant of
+     rreeffccoouunntt__aaccqquuiirree(), which only obtains the reference when some reference
+     already exists.  In other words, _*_c_o_u_n_t must be already greater than zero
+     for the function to succeed, in which case the return value is true, oth‐
+     erwise false is returned.
+
+     The rreeffccoouunntt__rreelleeaassee() function is used to release an existing reference.
+     The function returns true if the reference being released was the last
+     reference; otherwise, it returns false.
+
+     The rreeffccoouunntt__rreelleeaassee__iiff__llaasstt() and rreeffccoouunntt__rreelleeaassee__iiff__nnoott__llaasstt() func‐
+     tions are variants of rreeffccoouunntt__rreelleeaassee() which only drop the reference
+     when it is or is not the last reference, respectively.  In other words,
+     rreeffccoouunntt__rreelleeaassee__iiff__llaasstt() returns true when _*_c_o_u_n_t is equal to one, in
+     which case it is decremented to zero.  Otherwise, _*_c_o_u_n_t is not modified
+     and the function returns false.  Similarly,
+     rreeffccoouunntt__rreelleeaassee__iiff__nnoott__llaasstt() returns true when _*_c_o_u_n_t is greater than
+     one, in which case _*_c_o_u_n_t is decremented.  Otherwise, if _*_c_o_u_n_t is equal
+     to one, the reference is not released and the function returns false.
+
+     Note that these routines do not provide any inter-CPU synchronization or
+     data protection for managing the counter.  The caller is responsible for
+     any additional synchronization needed by consumers of any containing ob‐
+     jects.  In addition, the caller is also responsible for managing the life
+     cycle of any containing objects including explicitly releasing any re‐
+     sources when the last reference is released.
+
+     The rreeffccoouunntt__rreelleeaassee() unconditionally executes a release fence (see
+     atomic(9)) before releasing the reference, which synchronizes with an ac‐
+     quire fence executed right before returning the true value.  This ensures
+     that the destructor, supposedly executed by the caller after the last
+     reference was dropped, sees all updates done during the lifetime of the
+     object.
+
+RREETTUURRNN VVAALLUUEESS
+     The rreeffccoouunntt__rreelleeaassee function returns true when releasing the last refer‐
+     ence and false when releasing any other reference.
+
+HHIISSTTOORRYY
+     These functions were introduced in FreeBSD 6.0.
+
+BSD                            October 12, 2022                            BSD

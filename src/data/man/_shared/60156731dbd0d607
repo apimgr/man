@@ -1,0 +1,221 @@
+KYUA-DEBUG(1)             BSD General Commands Manual            KYUA-DEBUG(1)
+
+NNAAMMEE
+     kkyyuuaa ddeebbuugg — Executes a single test case with facilities for debugging
+
+SSYYNNOOPPSSIISS
+     kkyyuuaa ddeebbuugg [----bbuuiilldd--rroooott _p_a_t_h] [----kkyyuuaaffiillee _f_i_l_e] [----ssttddoouutt _p_a_t_h]
+          [----ssttddeerrrr _p_a_t_h] _t_e_s_t___c_a_s_e
+
+DDEESSCCRRIIPPTTIIOONN
+     The kkyyuuaa ddeebbuugg command provides a mechanism to execute a single test case
+     bypassing some of the Kyua infrastructure and allowing the user to poke
+     into the execution behavior of the test.
+
+     The test case to run is selected by providing a test filter, described
+     below in _T_e_s_t _f_i_l_t_e_r_s, that matches a single test case.  The test case is
+     executed and its result is printed as the last line of the output of the
+     tool.
+
+     The test executed by kkyyuuaa ddeebbuugg is run under a controlled environment as
+     described in _T_e_s_t _i_s_o_l_a_t_i_o_n.
+
+     At the moment, the kkyyuuaa ddeebbuugg command allows the following aspects of a
+     test case execution to be tweaked:
+
+     ••   Redirection of the test case's stdout and stderr to the console (the
+         default) or to arbitrary files.  See the ----ssttddoouutt and ----ssttddeerrrr op‐
+         tions below.
+
+     The following subcommand options are recognized:
+
+     ----bbuuiilldd--rroooott _p_a_t_h
+         Specifies the build root in which to find the test programs refer‐
+         enced by the Kyuafile, if different from the Kyuafile's directory.
+         See _B_u_i_l_d _d_i_r_e_c_t_o_r_i_e_s below for more information.
+
+     ----kkyyuuaaffiillee _f_i_l_e, --kk _f_i_l_e
+         Specifies the Kyuafile to process.  Defaults to _K_y_u_a_f_i_l_e file in the
+         current directory.
+
+     ----ssttddeerrrr _p_a_t_h
+         Specifies the file to which to send the standard error of the test
+         program's body.  The default is _/_d_e_v_/_s_t_d_e_r_r, which is a special char‐
+         acter device that redirects the output to standard error on the con‐
+         sole.
+
+     ----ssttddoouutt _p_a_t_h
+         Specifies the file to which to send the standard output of the test
+         program's body.  The default is _/_d_e_v_/_s_t_d_o_u_t, which is a special char‐
+         acter device that redirects the output to standard output on the con‐
+         sole.
+
+     For example, consider the following Kyua session:
+
+           $ kyua test
+           kernel/fs:mkdir  ->  passed
+           kernel/fs:rmdir  ->  failed: Invalid argument
+
+           1/2 passed (1 failed)
+
+     At this point, we do not have a lot of information regarding the failure
+     of the ‘kernel/fs:rmdir’ test.  We can run this test through the kkyyuuaa
+     ddeebbuugg command to inspect its output a bit closer, hoping that the test
+     case is kind enough to log its progress:
+
+           $ kyua debug kernel/fs:rmdir
+           Trying rmdir('foo')
+           Trying rmdir(NULL)
+           kernel/fs:rmdir  ->  failed: Invalid argument
+
+     Luckily, the offending test case was printing status lines as it pro‐
+     gressed, so we could see the last attempted call and we can know match
+     the failure message to the problem.
+
+   BBuuiilldd ddiirreeccttoorriieess
+     _B_u_i_l_d _d_i_r_e_c_t_o_r_i_e_s (or object directories, target directories, product di‐
+     rectories, etc.) is the concept that allows a developer to keep the
+     source tree clean from build products by asking the build system to place
+     such build products under a separate subtree.
+
+     Most build systems today support build directories.  For example, the GNU
+     Automake/Autoconf build system exposes such concept when invoked as fol‐
+     lows:
+
+           $ cd my-project-1.0
+           $ mkdir build
+           $ cd build
+           $ ../configure
+           $ make
+
+     Under such invocation, all the results of the build are left in the
+     _m_y_-_p_r_o_j_e_c_t_-_1_._0_/_b_u_i_l_d_/ subdirectory while maintaining the contents of
+     _m_y_-_p_r_o_j_e_c_t_-_1_._0_/ intact.
+
+     Because build directories are an integral part of most build systems, and
+     because they are a tool that developers use frequently, kkyyuuaa ddeebbuugg sup‐
+     ports build directories too.  This manifests in the form of kkyyuuaa ddeebbuugg
+     being able to run tests from build directories while reading the (often
+     immutable) test suite definition from the source tree.
+
+     One important property of build directories is that they follow (or need
+     to follow) the exact same layout as the source tree.  For example, con‐
+     sider the following directory listings:
+
+           src/Kyuafile
+           src/bin/ls/
+           src/bin/ls/Kyuafile
+           src/bin/ls/ls.c
+           src/bin/ls/ls_test.c
+           src/sbin/su/
+           src/sbin/su/Kyuafile
+           src/sbin/su/su.c
+           src/sbin/su/su_test.c
+
+           obj/bin/ls/
+           obj/bin/ls/ls*
+           obj/bin/ls/ls_test*
+           obj/sbin/su/
+           obj/sbin/su/su*
+           obj/sbin/su/su_test*
+
+     Note how the directory layout within _s_r_c_/ matches that of _o_b_j_/.  The _s_r_c_/
+     directory contains only source files and the definition of the test suite
+     (the Kyuafiles), while the _o_b_j_/ directory contains only the binaries gen‐
+     erated during a build.
+
+     All commands that deal with the workspace support the ----bbuuiilldd--rroooott _p_a_t_h
+     option.  When this option is provided, the directory specified by the op‐
+     tion is considered to be the root of the build directory.  For example,
+     considering our previous fake tree layout, we could invoke kkyyuuaa ddeebbuugg as
+     any of the following:
+
+           $ kyua debug --kyuafile=src/Kyuafile --build-root=obj
+           $ cd src && kyua debug --build-root=../obj
+
+   TTeesstt ffiilltteerrss
+     A _t_e_s_t _f_i_l_t_e_r is a string that is used to match test cases or test pro‐
+     grams in a test suite.  Filters have the following form:
+
+           test_program_name[:test_case_name]
+
+     Where ‘test_program_name’ is the name of a test program or a subdirectory
+     in the test suite, and ‘test_case_name’ is the name of a test case.
+
+   TTeesstt iissoollaattiioonn
+     The test programs and test cases run by kkyyuuaa ddeebbuugg are all executed in a
+     deterministic environment.  This known, clean environment serves to make
+     the test execution as reproducible as possible and also to prevent
+     clashes between tests that may, for example, create auxiliary files with
+     overlapping names.
+
+     For plain test programs and for TAP test programs, the whole test program
+     is run under a single instance of the environment described in this page.
+     For ATF test programs (see atf(7)), each individual test case _a_n_d test
+     cleanup routine are executed in separate environments.
+
+     Process space
+         Each test is executed in an independent processes.  Corollary: the
+         test can do whatever it wants to the current process (such as modify
+         global variables) without having to undo such changes.
+
+     Session and process group
+         The test is executed in its own session and its own process group.
+         There is no controlling terminal attached to the session.
+
+         Should the test spawn any children, the children should maintain the
+         same session and process group.  Modifying any of these settings pre‐
+         vents kkyyuuaa ddeebbuugg from being able to kill any stray subprocess as part
+         of the cleanup phase.  If modifying these settings is necessary, or
+         if any subprocess started by the test decides to use a different
+         process group or session, it is the responsibility of the test to en‐
+         sure those subprocesses are forcibly terminated during cleanup.
+
+     Work directory
+         The test is executed in a temporary directory automatically created
+         by the runtime engine.  Corollary: the test can write to its current
+         directory without needing to clean any files and/or directories it
+         creates.  The runtime engine takes care to recursively delete the
+         temporary directories after the execution of a test case.  Any file
+         systems mounted within the temporary directory are also unmounted.
+
+     Home directory
+         The _H_O_M_E environment variable is set to the absolute path of the work
+         directory.
+
+     Umask
+         The value of the umask is set to 0022.
+
+     Environment
+         The _L_A_N_G, _L_C___A_L_L, _L_C___C_O_L_L_A_T_E, _L_C___C_T_Y_P_E, _L_C___M_E_S_S_A_G_E_S, _L_C___M_O_N_E_T_A_R_Y,
+         _L_C___N_U_M_E_R_I_C and _L_C___T_I_M_E variables are unset.
+
+         The _T_Z variable is set to ‘UTC’.
+
+         The _T_M_P_D_I_R variable is set to the absolute path of the work direc‐
+         tory.  This is to prevent the test from mistakenly using a temporary
+         directory outside of the automatically-managed work directory, should
+         the test use the mktemp(3) familiy of functions.
+
+     Process limits
+         The maximum soft core size limit is raised to its corresponding hard
+         limit.  This is a simple, best-effort attempt at allowing tests to
+         dump core for further diagnostic purposes.
+
+     Configuration varibles
+         The test engine may pass run-time configuration variables to the test
+         program via the environment.  The name of the configuration variable
+         is prefixed with ‘TEST_ENV_’ so that a configuration variable of the
+         form ‘foo=bar’ becomes accessible in the environment as
+         ‘TEST_ENV_foo=bar’.
+
+EEXXIITT SSTTAATTUUSS
+     The kkyyuuaa ddeebbuugg command returns 0 if the test case passes or 1 if the test
+     case fails.
+
+     Additional exit codes may be returned as described in kyua(1).
+
+SSEEEE AALLSSOO
+     kyua(1), kyuafile(5)
+
+BSD                            October 13, 2014                            BSD

@@ -1,0 +1,107 @@
+ETHERIP(4)               BSD Kernel Interfaces Manual               ETHERIP(4)
+
+NNAAMMEE
+     eetthheerriipp — EtherIP tunnel interface
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee eetthheerriipp
+
+DDEESSCCRRIIPPTTIIOONN
+     The eetthheerriipp driver provides point-to-point tunnel interfaces for carrying
+     Ethernet frames across IPv4 and IPv6 networks using RFC 3378 EtherIP en‐
+     capsulation.
+
+     An eetthheerriipp interface can be created using the iiffccoonnffiigg eetthheerriipp_N ccrreeaattee
+     command or by setting up a hostname.if(5) configuration file for
+     netstart(8).  It must be configured with the addresses used for the outer
+     header.  This can be done using ifconfig(8)'s ttuunnnneell command (which uses
+     the SIOCSLIFPHYADDR ioctl).  The sysctl(2) variable
+     net.inet.etherip.allow must be set to 1, unless ipsec(4) is being used to
+     protect the traffic.
+
+     eetthheerriipp interfaces can configured as part of an Ethernet bridge, such as
+     veb(4), tpmr(4), and bridge(4), to extend the connectivity of Ethernet
+     networks across IP networks, possibly across the Internet.
+
+     The EtherIP protocol does not provide any integrated security features.
+     EtherIP should only be deployed on trusted private networks, or protected
+     with IPsec to add authentication and encryption for confidentiality.
+     IPsec is especially recommended when transporting EtherIP over the public
+     Internet.  EtherIP encapsulated packets may be protected with IPsec by
+     specifying the appropriate IPsec flows between the two endpoints.  To
+     only protect the encapsulated EtherIP traffic between the tunnel end‐
+     points, the IP transport protocol 97 (etherip) selector may be used in
+     ipsec.conf(5) or iked.conf(5).
+
+EEXXAAMMPPLLEESS
+     Given two physically separate Ethernet networks, eetthheerriipp can be used as
+     follows to make them appear as the same local area network.  If host gw1
+     has the external IP address 192.0.2.10 and is connected to network1 on
+     em1, and host gw2 has the external IP address 198.51.100.14 and is con‐
+     nected to network2 on ix1, the following configuration can be used to
+     bridge network1 and network2.
+
+     First create a bridge using a veb(4) interface, adding the eetthheerriipp inter‐
+     face and internal Ethernet interface to the bridge.
+
+     On gw1:
+
+           gw1# ifconfig etherip0 create tunnel 192.0.2.10 198.51.100.14
+           gw1# ifconfig veb0 create add etherip0 add em1
+
+     On gw2:
+
+           gw2# ifconfig etherip0 create tunnel 198.51.100.14 192.0.2.10
+           gw2# ifconfig veb0 create add etherip0 add ix1
+
+     Create Security Associations (SAs) between the external IP address of
+     each bridge and matching ingress flows by using the following
+     ipsec.conf(5) file on gw1:
+
+           esp from 198.51.100.14 to 192.0.2.10 spi 0x4242:0x4243 \
+                   authkey file "auth1:auth2" enckey file "enc1:enc2"
+           flow esp proto etherip from 198.51.100.14 to 192.0.2.10
+
+     Now load these rules into the kernel by issuing the ipsecctl(8) command:
+
+           gw1# ipsecctl -f ipsec.conf
+
+     Appropriate ipsec.conf(5) for gw2:
+
+           esp from 198.51.100.14 to 192.0.2.10 spi 0x4243:0x4242 \
+                   authkey file "auth2:auth1" enckey file "enc2:enc1"
+           flow esp proto etherip from 198.51.100.14 to 192.0.2.10
+
+     And load them:
+
+           gw2# ipsecctl -f ipsec.conf
+
+     Finally, bring all the interfaces up (if not already up).
+
+     On gw1:
+
+           gw1# ifconfig em1 up
+           gw1# ifconfig etherip0 up
+           gw1# ifconfig veb0 up
+
+     On gw2:
+
+           gw1# ifconfig ix1 up
+           gw1# ifconfig etherip0 up
+           gw1# ifconfig veb0 up
+
+SSEEEE AALLSSOO
+     sysctl(2), bridge(4), inet(4), inet6(4), ipsec(4), tpmr(4), veb(4),
+     hostname.if(5), iked.conf(5), ipsec.conf(5), ifconfig(8), netstart(8)
+
+SSTTAANNDDAARRDDSS
+     R. Housley and S. Hollenbeck, _E_t_h_e_r_I_P_: _T_u_n_n_e_l_i_n_g _E_t_h_e_r_n_e_t _F_r_a_m_e_s _i_n _I_P
+     _D_a_t_a_g_r_a_m_s, RFC 3378, September 2002.
+
+HHIISSTTOORRYY
+     The eetthheerriipp device first appeared in OpenBSD 5.9.
+
+AAUUTTHHOORRSS
+     The eetthheerriipp driver was written by Kazuya Goda <_g_o_d_a_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BSD                             August 30, 2024                            BSD

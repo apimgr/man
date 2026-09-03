@@ -1,0 +1,323 @@
+GEOM(4)                  BSD Kernel Interfaces Manual                  GEOM(4)
+
+NNAAMMEE
+     GGEEOOMM — modular disk I/O request transformation framework
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss GGEEOOMM__BBDDEE
+     ooppttiioonnss GGEEOOMM__CCAACCHHEE
+     ooppttiioonnss GGEEOOMM__CCOONNCCAATT
+     ooppttiioonnss GGEEOOMM__EELLII
+     ooppttiioonnss GGEEOOMM__GGAATTEE
+     ooppttiioonnss GGEEOOMM__JJOOUURRNNAALL
+     ooppttiioonnss GGEEOOMM__LLAABBEELL
+     ooppttiioonnss GGEEOOMM__LLIINNUUXX__LLVVMM
+     ooppttiioonnss GGEEOOMM__MMAAPP
+     ooppttiioonnss GGEEOOMM__MMIIRRRROORR
+     ooppttiioonnss GGEEOOMM__MMOOUUNNTTVVEERR
+     ooppttiioonnss GGEEOOMM__MMUULLTTIIPPAATTHH
+     ooppttiioonnss GGEEOOMM__NNOOPP
+     ooppttiioonnss GGEEOOMM__PPAARRTT__AAPPMM
+     ooppttiioonnss GGEEOOMM__PPAARRTT__BBSSDD
+     ooppttiioonnss GGEEOOMM__PPAARRTT__BBSSDD6644
+     ooppttiioonnss GGEEOOMM__PPAARRTT__EEBBRR
+     ooppttiioonnss GGEEOOMM__PPAARRTT__EEBBRR__CCOOMMPPAATT
+     ooppttiioonnss GGEEOOMM__PPAARRTT__GGPPTT
+     ooppttiioonnss GGEEOOMM__PPAARRTT__LLDDMM
+     ooppttiioonnss GGEEOOMM__PPAARRTT__MMBBRR
+     ooppttiioonnss GGEEOOMM__RRAAIIDD
+     ooppttiioonnss GGEEOOMM__RRAAIIDD33
+     ooppttiioonnss GGEEOOMM__SSHHSSEECC
+     ooppttiioonnss GGEEOOMM__SSTTRRIIPPEE
+     ooppttiioonnss GGEEOOMM__UUZZIIPP
+     ooppttiioonnss GGEEOOMM__VVIIRRSSTTOORR
+     ooppttiioonnss GGEEOOMM__ZZEERROO
+
+DDEESSCCRRIIPPTTIIOONN
+     The GGEEOOMM framework provides an infrastructure in which “classes” can per‐
+     form transformations on disk I/O requests on their path from the upper
+     kernel to the device drivers and back.
+
+     Transformations in a GGEEOOMM context range from the simple geometric dis‐
+     placement performed in typical disk partitioning modules over RAID algo‐
+     rithms and device multipath resolution to full blown cryptographic pro‐
+     tection of the stored data.
+
+     Compared to traditional “volume management”, GGEEOOMM differs from most and
+     in some cases all previous implementations in the following ways:
+
+     ••   GGEEOOMM is extensible.  It is trivially simple to write a new class of
+         transformation and it will not be given stepchild treatment.  If
+         someone for some reason wanted to mount IBM MVS diskpacks, a class
+         recognizing and configuring their VTOC information would be a trivial
+         matter.
+
+     ••   GGEEOOMM is topologically agnostic.  Most volume management implementa‐
+         tions have very strict notions of how classes can fit together, very
+         often one fixed hierarchy is provided, for instance, subdisk - plex -
+         volume.
+
+     Being extensible means that new transformations are treated no differ‐
+     ently than existing transformations.
+
+     Fixed hierarchies are bad because they make it impossible to express the
+     intent efficiently.  In the fixed hierarchy above, it is not possible to
+     mirror two physical disks and then partition the mirror into subdisks,
+     instead one is forced to make subdisks on the physical volumes and to
+     mirror these two and two, resulting in a much more complex configuration.
+     GGEEOOMM on the other hand does not care in which order things are done, the
+     only restriction is that cycles in the graph will not be allowed.
+
+TTEERRMMIINNOOLLOOGGYY AANNDD TTOOPPOOLLOOGGYY
+     GGEEOOMM is quite object oriented and consequently the terminology borrows a
+     lot of context and semantics from the OO vocabulary:
+
+     A “class”, represented by the data structure _g___c_l_a_s_s implements one par‐
+     ticular kind of transformation.  Typical examples are MBR disk partition,
+     BSD disklabel, and RAID5 classes.
+
+     An instance of a class is called a “geom” and represented by the data
+     structure _g___g_e_o_m.  In a typical i386 FreeBSD system, there will be one
+     geom of class MBR for each disk.
+
+     A “provider”, represented by the data structure _g___p_r_o_v_i_d_e_r, is the front
+     gate at which a geom offers service.  A provider is “a disk-like thing
+     which appears in _/_d_e_v” - a logical disk in other words.  All providers
+     have three main properties: “name”, “sectorsize” and “size”.
+
+     A “consumer” is the backdoor through which a geom connects to another
+     geom provider and through which I/O requests are sent.
+
+     The topological relationship between these entities are as follows:
+
+     ••   A class has zero or more geom instances.
+
+     ••   A geom has exactly one class it is derived from.
+
+     ••   A geom has zero or more consumers.
+
+     ••   A geom has zero or more providers.
+
+     ••   A consumer can be attached to zero or one providers.
+
+     ••   A provider can have zero or more consumers attached.
+
+     All geoms have a rank-number assigned, which is used to detect and pre‐
+     vent loops in the acyclic directed graph.  This rank number is assigned
+     as follows:
+
+     1.   A geom with no attached consumers has rank=1.
+
+     2.   A geom with attached consumers has a rank one higher than the high‐
+          est rank of the geoms of the providers its consumers are attached
+          to.
+
+SSPPEECCIIAALL TTOOPPOOLLOOGGIICCAALL MMAANNEEUUVVEERRSS
+     In addition to the straightforward attach, which attaches a consumer to a
+     provider, and detach, which breaks the bond, a number of special topolog‐
+     ical maneuvers exists to facilitate configuration and to improve the
+     overall flexibility.
+
+     _T_A_S_T_I_N_G is a process that happens whenever a new class or new provider is
+     created, and it provides the class a chance to automatically configure an
+     instance on providers which it recognizes as its own.  A typical example
+     is the MBR disk-partition class which will look for the MBR table in the
+     first sector and, if found and validated, will instantiate a geom to mul‐
+     tiplex according to the contents of the MBR.
+
+     A new class will be offered to all existing providers in turn and a new
+     provider will be offered to all classes in turn.
+
+     Exactly what a class does to recognize if it should accept the offered
+     provider is not defined by GGEEOOMM, but the sensible set of options are:
+
+     ••   Examine specific data structures on the disk.
+
+     ••   Examine properties like “sectorsize” or “mediasize” for the provider.
+
+     ••   Examine the rank number of the provider's geom.
+
+     ••   Examine the method name of the provider's geom.
+
+     _O_R_P_H_A_N_I_Z_A_T_I_O_N is the process by which a provider is removed while it po‐
+     tentially is still being used.
+
+     When a geom orphans a provider, all future I/O requests will “bounce” on
+     the provider with an error code set by the geom.  Any consumers attached
+     to the provider will receive notification about the orphanization when
+     the event loop gets around to it, and they can take appropriate action at
+     that time.
+
+     A geom which came into being as a result of a normal taste operation
+     should self-destruct unless it has a way to keep functioning whilst lack‐
+     ing the orphaned provider.  Geoms like disk slicers should therefore
+     self-destruct whereas RAID5 or mirror geoms will be able to continue as
+     long as they do not lose quorum.
+
+     When a provider is orphaned, this does not necessarily result in any im‐
+     mediate change in the topology: any attached consumers are still at‐
+     tached, any opened paths are still open, any outstanding I/O requests are
+     still outstanding.
+
+     The typical scenario is:
+
+           ••   A device driver detects a disk has departed and orphans the
+               provider for it.
+           ••   The geoms on top of the disk receive the orphanization event
+               and orphan all their providers in turn.  Providers which are
+               not attached to will typically self-destruct right away.  This
+               process continues in a quasi-recursive fashion until all rele‐
+               vant pieces of the tree have heard the bad news.
+           ••   Eventually the buck stops when it reaches geom_dev at the top
+               of the stack.
+           ••   Geom_dev will call destroy_dev(9) to stop any more requests
+               from coming in.  It will sleep until any and all outstanding
+               I/O requests have been returned.  It will explicitly close
+               (i.e.: zero the access counts), a change which will propagate
+               all the way down through the mesh.  It will then detach and de‐
+               stroy its geom.
+           ••   The geom whose provider is now detached will destroy the
+               provider, detach and destroy its consumer and destroy its geom.
+           ••   This process percolates all the way down through the mesh, un‐
+               til the cleanup is complete.
+
+     While this approach seems byzantine, it does provide the maximum flexi‐
+     bility and robustness in handling disappearing devices.
+
+     The one absolutely crucial detail to be aware of is that if the device
+     driver does not return all I/O requests, the tree will not unravel.
+
+     _S_P_O_I_L_I_N_G is a special case of orphanization used to protect against stale
+     metadata.  It is probably easiest to understand spoiling by going through
+     an example.
+
+     Imagine a disk, _d_a_0, on top of which an MBR geom provides _d_a_0_s_1 and
+     _d_a_0_s_2, and on top of _d_a_0_s_1 a BSD geom provides _d_a_0_s_1_a through _d_a_0_s_1_e, and
+     that both the MBR and BSD geoms have autoconfigured based on data struc‐
+     tures on the disk media.  Now imagine the case where _d_a_0 is opened for
+     writing and those data structures are modified or overwritten: now the
+     geoms would be operating on stale metadata unless some notification sys‐
+     tem can inform them otherwise.
+
+     To avoid this situation, when the open of _d_a_0 for write happens, all at‐
+     tached consumers are told about this and geoms like MBR and BSD will
+     self-destruct as a result.  When _d_a_0 is closed, it will be offered for
+     tasting again and, if the data structures for MBR and BSD are still
+     there, new geoms will instantiate themselves anew.
+
+     Now for the fine print:
+
+     If any of the paths through the MBR or BSD module were open, they would
+     have opened downwards with an exclusive bit thus rendering it impossible
+     to open _d_a_0 for writing in that case.  Conversely, the requested exclu‐
+     sive bit would render it impossible to open a path through the MBR geom
+     while _d_a_0 is open for writing.
+
+     From this it also follows that changing the size of open geoms can only
+     be done with their cooperation.
+
+     Finally: the spoiling only happens when the write count goes from zero to
+     non-zero and the retasting happens only when the write count goes from
+     non-zero to zero.
+
+     _C_O_N_F_I_G_U_R_E is the process where the administrator issues instructions for
+     a particular class to instantiate itself.  There are multiple ways to ex‐
+     press intent in this case - a particular provider may be specified with a
+     level of override forcing, for instance, a BSD disklabel module to attach
+     to a provider which was not found palatable during the TASTE operation.
+
+     Finally, I/O is the reason we even do this: it concerns itself with send‐
+     ing I/O requests through the graph.
+
+     _I_/_O _R_E_Q_U_E_S_T_S, represented by _s_t_r_u_c_t _b_i_o, originate at a consumer, are
+     scheduled on its attached provider and, when processed, are returned to
+     the consumer.  It is important to realize that the _s_t_r_u_c_t _b_i_o which en‐
+     ters through the provider of a particular geom does not “come out on the
+     other side”.  Even simple transformations like MBR and BSD will clone the
+     _s_t_r_u_c_t _b_i_o, modify the clone, and schedule the clone on their own con‐
+     sumer.  Note that cloning the _s_t_r_u_c_t _b_i_o does not involve cloning the ac‐
+     tual data area specified in the I/O request.
+
+     In total, four different I/O requests exist in GGEEOOMM: read, write, delete,
+     and “get attribute”.
+
+     Read and write are self explanatory.
+
+     Delete indicates that a certain range of data is no longer used and that
+     it can be erased or freed as the underlying technology supports.  Tech‐
+     nologies like flash adaptation layers can arrange to erase the relevant
+     blocks before they will become reassigned and cryptographic devices may
+     want to fill random bits into the range to reduce the amount of data
+     available for attack.
+
+     It is important to recognize that a delete indication is not a request
+     and consequently there is no guarantee that the data actually will be
+     erased or made unavailable unless guaranteed by specific geoms in the
+     graph.  If “secure delete” semantics are required, a geom should be
+     pushed which converts delete indications into (a sequence of) write re‐
+     quests.
+
+     “Get attribute” supports inspection and manipulation of out-of-band at‐
+     tributes on a particular provider or path.  Attributes are named by ASCII
+     strings and they will be discussed in a separate section below.
+
+     (Stay tuned while the author rests his brain and fingers: more to come.)
+
+DDIIAAGGNNOOSSTTIICCSS
+     Several flags are provided for tracing GGEEOOMM operations and unlocking pro‐
+     tection mechanisms via the _k_e_r_n_._g_e_o_m_._d_e_b_u_g_f_l_a_g_s sysctl.  All of these
+     flags are off by default, and great care should be taken in turning them
+     on.
+
+     0x01 (G_T_TOPOLOGY)
+             Provide tracing of topology change events.
+
+     0x02 (G_T_BIO)
+             Provide tracing of buffer I/O requests.
+
+     0x04 (G_T_ACCESS)
+             Provide tracing of access check controls.
+
+     0x08 (unused)
+
+     0x10 (allow foot shooting)
+             Allow writing to Rank 1 providers.  This would, for example, al‐
+             low the super-user to overwrite the MBR on the root disk or write
+             random sectors elsewhere to a mounted disk.  The implications are
+             obvious.
+
+     0x40 (G_F_DISKIOCTL)
+             This is unused at this time.
+
+     0x80 (G_F_CTLDUMP)
+             Dump contents of gctl requests.
+
+SSEEEE AALLSSOO
+     libgeom(3), geom(8), DECLARE_GEOM_CLASS(9), disk(9), g_access(9),
+     g_attach(9), g_bio(9), g_consumer(9), g_data(9), g_event(9), g_geom(9),
+     g_provider(9), g_provider_by_name(9)
+
+HHIISSTTOORRYY
+     This software was initially developed for the FreeBSD Project by
+     Poul-Henning Kamp and NAI Labs, the Security Research Division of Network
+     Associates, Inc. under DARPA/SPAWAR contract N66001-01-C-8035 (“CBOSS”),
+     as part of the DARPA CHATS research program.
+
+     The following obsolete GGEEOOMM components were removed in FreeBSD 13.0:
+           ••   GGEEOOMM__BBSSDD,
+           ••   GGEEOOMM__FFOOXX,
+           ••   GGEEOOMM__MMBBRR,
+           ••   GGEEOOMM__SSUUNNLLAABBEELL, and
+           ••   GGEEOOMM__VVOOLL.
+
+     Use
+           ••   GGEEOOMM__PPAARRTT__BBSSDD,
+           ••   GGEEOOMM__MMUULLTTIIPPAATTHH,
+           ••   GGEEOOMM__PPAARRTT__MMBBRR, and
+           ••   GGEEOOMM__LLAABBEELL
+     options, respectively, instead.
+
+AAUUTTHHOORRSS
+     Poul-Henning Kamp <_p_h_k_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                              July 26, 2023                             BSD

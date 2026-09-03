@@ -1,0 +1,91 @@
+_P_V_M_O_V_E(8)                   System Manager’s Manual                  _P_V_M_O_V_E(8)
+
+NNAAMMEE
+       pvmove - move physical extents
+
+SSYYNNOOPPSSIISS
+       ppvvmmoovvee [--abort] [--alloc AllocationPolicy] [-b|--background] [-d|--de‐
+       bug] [-h|--help] [-i|--interval Seconds] [-v|--verbose] [-n|--name Log‐
+       icalVolume] [SourcePhysicalVolume[:PE[‐PE]...] [DestinationPhysicalVol‐
+       ume[:PE[‐PE]...]...]]
+
+DDEESSCCRRIIPPTTIIOONN
+       ppvvmmoovvee allows you to move the allocated physical extents (PEs) on _S_o_u_r_‐
+       _c_e_P_h_y_s_i_c_a_l_V_o_l_u_m_e  to one or more other physical volumes (PVs).  You can
+       optionally specify a source _L_o_g_i_c_a_l_V_o_l_u_m_e in which  case  only  extents
+       used  by that LV will be moved to free (or specified) extents on _D_e_s_t_i_‐
+       _n_a_t_i_o_n_P_h_y_s_i_c_a_l_V_o_l_u_m_e(s).  If no _D_e_s_t_i_n_a_t_i_o_n_P_h_y_s_i_c_a_l_V_o_l_u_m_e is specified,
+       the normal allocation rules for the volume group are used.
+
+       If ppvvmmoovvee gets interrupted for any reason (e.g.  the  machine  crashes)
+       then  run  ppvvmmoovvee again without any PhysicalVolume arguments to restart
+       any moves that were in progress from  the  last  checkpoint.   Alterna‐
+       tively  use ppvvmmoovvee ‐‐‐‐aabboorrtt at any time to abort them at the last check‐
+       point.
+
+       You can run more than one pvmove at once provided they are moving  data
+       off different SourcePhysicalVolumes, but additional pvmoves will ignore
+       any  logical  volumes  already in the process of being changed, so some
+       data might not get moved.
+
+       ppvvmmoovvee works as follows:
+
+       1. A temporary ’pvmove’ logical volume is created to store  details  of
+       all the data movements required.
+
+       2.  Every logical volume in the volume group is searched for contiguous
+       data that need moving according to the  command  line  arguments.   For
+       each  piece of data found, a new segment is added to the end of the pv‐
+       move LV.  This segment takes the form of a temporary mirror to copy the
+       data from the original location to  a  newly‐allocated  location.   The
+       original  LV  is updated to use the new temporary mirror segment in the
+       pvmove LV instead of accessing the data directly.
+
+       3. The volume group metadata is updated on disk.
+
+       4. The first segment of the pvmove  logical  volume  is  activated  and
+       starts  to mirror the first part of the data.  Only one segment is mir‐
+       rored at once as this is usually more efficient.
+
+       5. A daemon repeatedly checks progress at the specified time  interval.
+       When  it  detects that the first temporary mirror is in‐sync, it breaks
+       that mirror so that only the new location for that data gets  used  and
+       writes  a  checkpoint  into the volume group metadata on disk.  Then it
+       activates the mirror for the next segment of the pvmove LV.
+
+       6. When there are no more segments left to be mirrored,  the  temporary
+       logical  volume  is removed and the volume group metadata is updated so
+       that the logical volumes reflect the new data locations.
+
+       Note that this new process cannot support the original LVM1 type of on‐
+       disk metadata.  Metadata can be converted using vvggccoonnvveerrtt(8).
+
+
+OOPPTTIIOONNSS
+       _-_-_a_b_o_r_t
+              Abort any moves in progress.
+
+       _-_b_, _-_-_b_a_c_k_g_r_o_u_n_d
+              Run the daemon in the background.
+
+       _-_i_, _-_-_i_n_t_e_r_v_a_l _S_e_c_o_n_d_s
+              Report progress as a percentage at regular intervals.
+
+       _-_n_, _-_-_n_a_m_e  _L_o_g_i_c_a_l_V_o_l_u_m_e
+              Move only the extents belonging to  _L_o_g_i_c_a_l_V_o_l_u_m_e  from  _S_o_u_r_c_e_‐
+              _P_h_y_s_i_c_a_l_V_o_l_u_m_e  instead of all allocated extents to the destina‐
+              tion physical volume(s).
+
+
+EEXXAAMMPPLLEESS
+       To move all logical extents of any logical volumes on //ddeevv//hhddaa44 to free
+       physical extents elsewhere in the volume group, giving verbose  runtime
+       information, use:
+
+            pvmove ‐v /dev/hda4
+
+
+SSEEEE AALLSSOO
+       llvvmm(8), vvggccoonnvveerrtt(8)
+
+Sistina Software UK    LVM TOOLS 2.02.44‐cvs (02‐17‐09)              _P_V_M_O_V_E(8)

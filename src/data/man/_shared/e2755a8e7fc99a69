@@ -1,0 +1,2085 @@
+_M_I_G_R_A_T_I_O_N___G_U_I_D_E(7)                  OpenSSL                 _M_I_G_R_A_T_I_O_N___G_U_I_D_E(7)
+
+NNAAMMEE
+       migration_guide - OpenSSL migration guide
+
+LLIIBBRRAARRYY
+       libcrypto, ‐lcrypto
+
+SSYYNNOOPPSSIISS
+       See the individual manual pages for details.
+
+DDEESSCCRRIIPPTTIIOONN
+       This guide details the changes required to migrate to new versions of
+       OpenSSL.  Currently this covers OpenSSL 3.0. For earlier versions refer
+       to <https://github.com/openssl/openssl/blob/master/CHANGES.md>.  For an
+       overview of some of the key concepts introduced in OpenSSL 3.0 see
+       ccrryyppttoo(7).
+
+OOPPEENNSSSSLL 33..00
+   MMaaiinn CChhaannggeess ffrroomm OOppeennSSSSLL 11..11..11
+       _M_a_j_o_r _R_e_l_e_a_s_e
+
+       OpenSSL 3.0 is a major release and consequently any application that
+       currently uses an older version of OpenSSL will at the very least need
+       to be recompiled in order to work with the new version. It is the
+       intention that the large majority of applications will work unchanged
+       with OpenSSL 3.0 if those applications previously worked with OpenSSL
+       1.1.1. However this is not guaranteed and some changes may be required
+       in some cases. Changes may also be required if applications need to
+       take advantage of some of the new features available in OpenSSL 3.0
+       such as the availability of the FIPS module.
+
+       _L_i_c_e_n_s_e _C_h_a_n_g_e
+
+       In previous versions, OpenSSL was licensed under the dual OpenSSL and
+       SSLeay licenses <https://www.openssl.org/source/license‐openssl‐
+       ssleay.txt> (both licenses apply). From OpenSSL 3.0 this is replaced by
+       the Apache License v2 <https://www.openssl.org/source/apache‐
+       license‐2.0.txt>.
+
+       _P_r_o_v_i_d_e_r_s _a_n_d _F_I_P_S _s_u_p_p_o_r_t
+
+       One of the key changes from OpenSSL 1.1.1 is the introduction of the
+       Provider concept. Providers collect together and make available
+       algorithm implementations.  With OpenSSL 3.0 it is possible to specify,
+       either programmatically or via a config file, which providers you want
+       to use for any given application.  OpenSSL 3.0 comes with 5 different
+       providers as standard. Over time third parties may distribute
+       additional providers that can be plugged into OpenSSL.  All algorithm
+       implementations available via providers are accessed through the "high
+       level" APIs (for example those functions prefixed with "EVP"). They
+       cannot be accessed using the "Low Level APIs".
+
+       One of the standard providers available is the FIPS provider. This
+       makes available FIPS validated cryptographic algorithms.  The FIPS
+       provider is disabled by default and needs to be enabled explicitly at
+       configuration time using the "enable-fips" option. If it is enabled,
+       the FIPS provider gets built and installed in addition to the other
+       standard providers. No separate installation procedure is necessary.
+       There is however a dedicated "install_fips" make target, which serves
+       the special purpose of installing only the FIPS provider into an
+       existing OpenSSL installation.
+
+       Not all algorithms may be available for the application at a particular
+       moment.  If the application code uses any digest or cipher algorithm
+       via the EVP interface, the application should verify the result of the
+       EEVVPP__EEnnccrryyppttIInniitt(3), EEVVPP__EEnnccrryyppttIInniitt__eexx(3), and EEVVPP__DDiiggeessttIInniitt(3)
+       functions. In case when the requested algorithm is not available, these
+       functions will fail.
+
+       See also "Legacy Algorithms" for information on the legacy provider.
+
+       See also "Completing the installation of the FIPS Module" and "Using
+       the FIPS Module in applications".
+
+       _L_o_w _L_e_v_e_l _A_P_I_s
+
+       OpenSSL has historically provided two sets of APIs for invoking
+       cryptographic algorithms: the "high level" APIs (such as the "EVP"
+       APIs) and the "low level" APIs. The high level APIs are typically
+       designed to work across all algorithm types. The "low level" APIs are
+       targeted at a specific algorithm implementation.  For example, the EVP
+       APIs provide the functions EEVVPP__EEnnccrryyppttIInniitt__eexx(3), EEVVPP__EEnnccrryyppttUUppddaattee(3)
+       and EEVVPP__EEnnccrryyppttFFiinnaall(3) to perform symmetric encryption. Those
+       functions can be used with the algorithms AES, CHACHA, 3DES etc.  On
+       the other hand, to do AES encryption using the low level APIs you would
+       have to call AES specific functions such as AAEESS__sseett__eennccrryypptt__kkeeyy(3),
+       AAEESS__eennccrryypptt(3), and so on. The functions for 3DES are different.  Use
+       of the low level APIs has been informally discouraged by the OpenSSL
+       development team for a long time. However in OpenSSL 3.0 this is made
+       more formal. All such low level APIs have been deprecated. You may
+       still use them in your applications, but you may start to see
+       deprecation warnings during compilation (dependent on compiler support
+       for this). Deprecated APIs may be removed from future versions of
+       OpenSSL so you are strongly encouraged to update your code to use the
+       high level APIs instead.
+
+       This is described in more detail in "Deprecation of Low Level
+       Functions"
+
+       _L_e_g_a_c_y _A_l_g_o_r_i_t_h_m_s
+
+       Some cryptographic algorithms such as MMDD22 and DDEESS that were available
+       via the EVP APIs are now considered legacy and their use is strongly
+       discouraged.  These legacy EVP algorithms are still available in
+       OpenSSL 3.0 but not by default. If you want to use them then you must
+       load the legacy provider.  This can be as simple as a config file
+       change, or can be done programmatically.  See OOSSSSLL__PPRROOVVIIDDEERR--lleeggaaccyy(7)
+       for a complete list of algorithms.  Applications using the EVP APIs to
+       access these algorithms should instead use more modern algorithms. If
+       that is not possible then these applications should ensure that the
+       legacy provider has been loaded. This can be achieved either
+       programmatically or via configuration. See ccrryyppttoo(7) man page for more
+       information about providers.
+
+       _E_n_g_i_n_e_s _a_n_d _"_M_E_T_H_O_D_" _A_P_I_s
+
+       The refactoring to support Providers conflicts internally with the APIs
+       used to support engines, including the ENGINE API and any function that
+       creates or modifies custom "METHODS" (for example EEVVPP__MMDD__mmeetthh__nneeww(3),
+       EEVVPP__CCIIPPHHEERR__mmeetthh__nneeww(3), EEVVPP__PPKKEEYY__mmeetthh__nneeww(3), RRSSAA__mmeetthh__nneeww(3),
+       EECC__KKEEYY__MMEETTHHOODD__nneeww(3), etc.). These functions are being deprecated in
+       OpenSSL 3.0, and users of these APIs should know that their use can
+       likely bypass provider selection and configuration, with unintended
+       consequences.  This is particularly relevant for applications written
+       to use the OpenSSL 3.0 FIPS module, as detailed below. Authors and
+       maintainers of external engines are strongly encouraged to refactor
+       their code transforming engines into providers using the new Provider
+       API and avoiding deprecated methods.
+
+       _S_u_p_p_o_r_t _o_f _l_e_g_a_c_y _e_n_g_i_n_e_s
+
+       If openssl is not built without engine support or deprecated API
+       support, engines will still work. However, their applicability will be
+       limited.
+
+       New algorithms provided via engines will still work.
+
+       Engine‐backed keys can be loaded via custom OOSSSSLL__SSTTOORREE implementation.
+       In this case the EEVVPP__PPKKEEYY objects created via
+       EENNGGIINNEE__llooaadd__pprriivvaattee__kkeeyy(3) will be considered legacy and will continue
+       to work.
+
+       To ensure the future compatibility, the engines should be turned to
+       providers.  To prefer the provider‐based hardware offload, you can
+       specify the default properties to prefer your provider.
+
+       _V_e_r_s_i_o_n_i_n_g _S_c_h_e_m_e
+
+       The OpenSSL versioning scheme has changed with the OpenSSL 3.0 release.
+       The new versioning scheme has this format:
+
+       MAJOR.MINOR.PATCH
+
+       For OpenSSL 1.1.1 and below, different patch levels were indicated by a
+       letter at the end of the release version number. This will no longer be
+       used and instead the patch level is indicated by the final number in
+       the version. A change in the second (MINOR) number indicates that new
+       features may have been added. OpenSSL versions with the same major
+       number are API and ABI compatible.  If the major number changes then
+       API and ABI compatibility is not guaranteed.
+
+       For more information, see OOppeennSSSSLL__vveerrssiioonn(3).
+
+       _O_t_h_e_r _m_a_j_o_r _n_e_w _f_e_a_t_u_r_e_s
+
+       Certificate Management Protocol (CMP, RFC 4210)
+
+       This also covers CRMF (RFC 4211) and HTTP transfer (RFC 6712) See
+       ooppeennssssll--ccmmpp(1) and OOSSSSLL__CCMMPP__eexxeecc__cceerrttrreeqq(3) as starting points.
+
+       HTTP(S) client
+
+       A proper HTTP(S) client that supports GET and POST, redirection, plain
+       and ASN.1-encoded contents, proxies, and timeouts.
+
+       Key Derivation Function API (EVP_KDF)
+
+       This simplifies the process of adding new KDF and PRF implementations.
+
+       Previously KDF algorithms had been shoe‐horned into using the EVP_PKEY
+       object which was not a logical mapping.  Existing applications that use
+       KDF algorithms using EVP_PKEY (scrypt, TLS1 PRF and HKDF) may be slower
+       as they use an EVP_KDF bridge internally.  All new applications should
+       use the new EEVVPP__KKDDFF(3) interface.  See also "Key Derivation Function
+       (KDF)" in OOSSSSLL__PPRROOVVIIDDEERR--ddeeffaauulltt(7) and "Key Derivation Function (KDF)"
+       in OOSSSSLL__PPRROOVVIIDDEERR--FFIIPPSS(7).
+
+       Message Authentication Code API (EVP_MAC)
+
+       This simplifies the process of adding MAC implementations.
+
+       This includes a generic EVP_PKEY to EVP_MAC bridge, to facilitate the
+       continued use of MACs through raw private keys in functionality such as
+       EEVVPP__DDiiggeessttSSiiggnn(3) and EEVVPP__DDiiggeessttVVeerriiffyy(3).
+
+       All new applications should use the new EEVVPP__MMAACC(3) interface.  See also
+       "Message Authentication Code (MAC)" in OOSSSSLL__PPRROOVVIIDDEERR--ddeeffaauulltt(7) and
+       "Message Authentication Code (MAC)" in OOSSSSLL__PPRROOVVIIDDEERR--FFIIPPSS(7).
+
+       Algorithm Fetching
+
+       Using calls to convenience functions such as EEVVPP__sshhaa225566(()) and
+       EEVVPP__aaeess__225566__ggccmm(()) may incur a performance penalty when using providers.
+       Retrieving algorithms from providers involves searching for an
+       algorithm by name.  This is much slower than directly accessing a
+       method table.  It is recommended to prefetch algorithms if an algorithm
+       is used many times.  See "Performance" in ccrryyppttoo(7), "Explicit
+       fetching" in ccrryyppttoo(7) and "Implicit fetching" in ccrryyppttoo(7).
+
+       Support for Linux Kernel TLS
+
+       In order to use KTLS, support for it must be compiled in using the
+       "enable-ktls" configuration option. It must also be enabled at run time
+       using the SSSSLL__OOPP__EENNAABBLLEE__KKTTLLSS option.
+
+       New Algorithms
+
+       •   KDF algorithms "SINGLE STEP" and "SSH"
+
+           See EEVVPP__KKDDFF--SSSS(7) and EEVVPP__KKDDFF--SSSSHHKKDDFF(7)
+
+       •   MAC Algorithms "GMAC" and "KMAC"
+
+           See EEVVPP__MMAACC--GGMMAACC(7) and EEVVPP__MMAACC--KKMMAACC(7).
+
+       •   KEM Algorithm "RSASVE"
+
+           See EEVVPP__KKEEMM--RRSSAA(7).
+
+       •   Cipher Algorithm "AES‐SIV"
+
+           See "SIV Mode" in EEVVPP__EEnnccrryyppttIInniitt(3).
+
+       •   AES Key Wrap inverse ciphers supported by EVP layer.
+
+           The  inverse  ciphers  use  AES  decryption  for  wrapping, and AES
+           encryption for unwrapping. The algorithms are:  "AES-128-WRAP-INV",
+           "AES-192-WRAP-INV",   "AES-256-WRAP-INV",   "AES-128-WRAP-PAD-INV",
+           "AES-192-WRAP-PAD-INV" and "AES-256-WRAP-PAD-INV".
+
+       •   CTS ciphers added to EVP layer.
+
+           The   algorithms    are    "AES-128-CBC-CTS",    "AES-192-CBC-CTS",
+           "AES-256-CBC-CTS",  "CAMELLIA-128-CBC-CTS",  "CAMELLIA-192-CBC-CTS"
+           and  "CAMELLIA-256-CBC-CTS".   CS1,  CS2  and  CS3   variants   are
+           supported.
+
+       CMS and PKCS#7 updates
+
+       •   Added CAdES‐BES signature verification support.
+
+       •   Added  CAdES‐BES signature scheme and attributes support (RFC 5126)
+           to CMS API.
+
+       •   Added AuthEnvelopedData content type  structure  (RFC  5083)  using
+           AES_GCM
+
+           This  uses  the  AES‐GCM parameter (RFC 5084) for the Cryptographic
+           Message  Syntax.   Its  purpose  is  to  support   encryption   and
+           decryption  of  a  digital  envelope that is both authenticated and
+           encrypted using AES GCM mode.
+
+       •   PPKKCCSS77__ggeett__oocctteett__ssttrriinngg(3)  and  PPKKCCSS77__ttyyppee__iiss__ootthheerr(3)  were   made
+           public.
+
+       PKCS#12 API updates
+
+       The  default  algorithms  for  pkcs12 creation with the PPKKCCSS1122__ccrreeaattee(())
+       function were changed to more modern PBKDF2 and AES  based  algorithms.
+       The  default  MAC iteration count was changed to PKCS12_DEFAULT_ITER to
+       make it equal with the password‐based encryption iteration  count.  The
+       default  digest  algorithm  for  the  MAC  computation  was  changed to
+       SHA-256. The  pkcs12  application  now  supports  -legacy  option  that
+       restores  the  previous  default algorithms to support interoperability
+       with legacy systems.
+
+       Added enhanced PKCS#12 APIs which accept a library context OOSSSSLL__LLIIBB__CCTTXX
+       and (where relevant) a property query. Other APIs which  handle  PKCS#7
+       and  PKCS#8  objects  have  also  been  enhanced  where  required. This
+       includes:
+
+       PPKKCCSS1122__aadddd__kkeeyy__eexx(3),  PPKKCCSS1122__aadddd__ssaaffee__eexx(3),   PPKKCCSS1122__aadddd__ssaaffeess__eexx(3),
+       PPKKCCSS1122__ccrreeaattee__eexx(3),    PPKKCCSS1122__ddeeccrryypptt__sskkeeyy__eexx(3),   PPKKCCSS1122__iinniitt__eexx(3),
+       PPKKCCSS1122__iitteemm__ddeeccrryypptt__dd22ii__eexx(3),           PPKKCCSS1122__iitteemm__ii22dd__eennccrryypptt__eexx(3),
+       PPKKCCSS1122__kkeeyy__ggeenn__aasscc__eexx(3),                     PPKKCCSS1122__kkeeyy__ggeenn__uunnii__eexx(3),
+       PPKKCCSS1122__kkeeyy__ggeenn__uuttff88__eexx(3),                 PPKKCCSS1122__ppaacckk__pp77eennccddaattaa__eexx(3),
+       PPKKCCSS1122__ppbbee__ccrryypptt__eexx(3),                      PPKKCCSS1122__PPBBEE__kkeeyyiivvggeenn__eexx(3),
+       PPKKCCSS1122__SSAAFFEEBBAAGG__ccrreeaattee__ppkkccss88__eennccrryypptt__eexx(3),     PPKKCCSS55__ppbbee22__sseett__iivv__eexx(3),
+       PPKKCCSS55__ppbbee__sseett00__aallggoorr__eexx(3),                        PPKKCCSS55__ppbbee__sseett__eexx(3),
+       PPKKCCSS55__ppbbkkddff22__sseett__eexx(3),                    PPKKCCSS55__vv22__PPBBEE__kkeeyyiivvggeenn__eexx(3),
+       PPKKCCSS55__vv22__ssccrryypptt__kkeeyyiivvggeenn__eexx(3),                    PPKKCCSS88__ddeeccrryypptt__eexx(3),
+       PPKKCCSS88__eennccrryypptt__eexx(3), PPKKCCSS88__sseett00__ppbbee__eexx(3).
+
+       As part of this change the EVP_PBE_xxx APIs can also accept  a  library
+       context  and  property  query  and will call an extended version of the
+       key/IV  derivation  function  which  supports  these  parameters.  This
+       includes      EEVVPP__PPBBEE__CCiipphheerrIInniitt__eexx(3),      EEVVPP__PPBBEE__ffiinndd__eexx(3)     and
+       EEVVPP__PPBBEE__ssccrryypptt__eexx(3).
+
+       PKCS#12 KDF versus FIPS
+
+       Unlike in 1.x.y, the PKCS12KDF algorithm used when a PKCS#12  structure
+       is  created with a MAC that does not work with the FIPS provider as the
+       PKCS12KDF is not a FIPS approvable mechanism.
+
+       See    EEVVPP__KKDDFF--PPKKCCSS1122KKDDFF(7),    PPKKCCSS1122__ccrreeaattee(3),    ooppeennssssll--ppkkccss1122(1),
+       OOSSSSLL__PPRROOVVIIDDEERR--FFIIPPSS(7).
+
+       Windows thread synchronization changes
+
+       Windows  thread  synchronization  uses  read/write primitives (SRWLock)
+       when supported by the OS, otherwise  CriticalSection  continues  to  be
+       used.
+
+       Trace API
+
+       A  new  generic  trace  API  has  been added which provides support for
+       enabling instrumentation through trace output. This feature  is  mainly
+       intended  as  an  aid  for  developers  and  is disabled by default. To
+       utilize it, OpenSSL needs to  be  configured  with  the  "enable-trace"
+       option.
+
+       If  the  tracing  API  is  enabled,  the application can activate trace
+       output by registering BIOs as trace channels for a  number  of  tracing
+       and debugging categories. See OOSSSSLL__ttrraaccee__eennaabblleedd(3).
+
+       Key validation updates
+
+       EEVVPP__PPKKEEYY__ppuubblliicc__cchheecckk(3)  and EEVVPP__PPKKEEYY__ppaarraamm__cchheecckk(3) now work for more
+       key types. This includes RSA, DSA, ED25519,  X25519,  ED448  and  X448.
+       Previously  (in  1.1.1) they would return -2. For key types that do not
+       have parameters then EEVVPP__PPKKEEYY__ppaarraamm__cchheecckk(3) will always return 1.
+
+       _O_t_h_e_r _n_o_t_a_b_l_e _d_e_p_r_e_c_a_t_i_o_n_s _a_n_d _c_h_a_n_g_e_s
+
+       The function code part of an OpenSSL error code is no longer relevant
+
+       This code is now always set to zero. Related functions are deprecated.
+
+       STACK and HASH macros have been cleaned up
+
+       The type‐safe wrappers are declared everywhere  and  implemented  once.
+       See DDEEFFIINNEE__SSTTAACCKK__OOFF(3) and DDEECCLLAARREE__LLHHAASSHH__OOFF(3).
+
+       The RAND_DRBG subsystem has been removed
+
+       The  new  EEVVPP__RRAANNDD(3)  is  a  partial  replacement:  the  DRBG callback
+       framework is absent. The RAND_DRBG API did not fit well  into  the  new
+       provider concept as implemented by EVP_RAND and EVP_RAND_CTX.
+
+       Removed FFIIPPSS__mmooddee(()) and FFIIPPSS__mmooddee__sseett(())
+
+       These  functions  are  legacy  APIs  that are not applicable to the new
+       provider     model.      Applications      should      instead      use
+       EEVVPP__ddeeffaauulltt__pprrooppeerrttiieess__iiss__ffiippss__eennaabblleedd(3)                           and
+       EEVVPP__ddeeffaauulltt__pprrooppeerrttiieess__eennaabbllee__ffiippss(3).
+
+       Key generation is slower
+
+       The Miller‐Rabin test now uses 64 rounds, which is used for  all  prime
+       generation,  including  RSA  key  generation. This affects the time for
+       larger keys sizes.
+
+       The default key generation method for the regular 2-prime RSA keys  was
+       changed  to  the  FIPS186-4 B.3.6 method (Generation of Probable Primes
+       with Conditions Based on Auxiliary Probable  Primes).  This  method  is
+       slower than the original method.
+
+       Change  PBKDF2  to  conform  to  SP800-132  instead  of the older PKCS5
+       RFC2898
+
+       This checks that the salt length is at least 128 bits, the derived  key
+       length  is  at least 112 bits, and that the iteration count is at least
+       1000.  For backwards compatibility these checks are disabled by default
+       in the default provider,  but  are  enabled  by  default  in  the  FIPS
+       provider.
+
+       To   enable   or   disable   the  checks  see  OOSSSSLL__KKDDFF__PPAARRAAMM__PPKKCCSS55  in
+       EEVVPP__KKDDFF--PPBBKKDDFF22(7). The parameter can be set using EEVVPP__KKDDFF__ddeerriivvee(3).
+
+       Enforce a minimum DH modulus size of 512 bits
+
+       Smaller sizes now result in an error.
+
+       SM2 key changes
+
+       EC EVP_PKEYs with the SM2 curve have  been  reworked  to  automatically
+       become EVP_PKEY_SM2 rather than EVP_PKEY_EC.
+
+       Unlike  in  previous  OpenSSL  versions,  this  means that applications
+       cannot call "EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2)"  to  get  SM2
+       computations.
+
+       Parameter  and  key  generation is also reworked to make it possible to
+       generate  EVP_PKEY_SM2  parameters  and  keys.  Applications  must  now
+       generate  SM2  keys  directly  and  must  not create an EVP_PKEY_EC key
+       first. It is no longer possible  to  import  an  SM2  key  with  domain
+       parameters other than the SM2 elliptic curve ones.
+
+       Validation  of  SM2  keys  has  been  separated  from the validation of
+       regular EC keys, allowing to improve  the  SM2  validation  process  to
+       reject  loaded  private  keys  that  are  not conforming to the SM2 ISO
+       standard.  In particular, a private scalar _k outside the range _1 _<_= _k _<
+       _n_-_1 is now correctly rejected.
+
+       EEVVPP__PPKKEEYY__sseett__aalliiaass__ttyyppee(()) method has been removed
+
+       This function made a EEVVPP__PPKKEEYY object mutable after it had been set  up.
+       In OpenSSL 3.0 it was decided that a provided key should not be able to
+       change its type, so this function has been removed.
+
+       Functions that return an internal key should be treated as read only
+
+       Functions  such  as EEVVPP__PPKKEEYY__ggeett00__RRSSAA(3) behave slightly differently in
+       OpenSSL 3.0. Previously they returned a pointer to  the  low‐level  key
+       used internally by libcrypto. From OpenSSL 3.0 this key may now be held
+       in a provider. Calling these functions will only return a handle on the
+       internal  key  where the EVP_PKEY was constructed using this key in the
+       first  place,  for  example  using  a  function  or   macro   such   as
+       EEVVPP__PPKKEEYY__aassssiiggnn__RRSSAA(3),  EEVVPP__PPKKEEYY__sseett11__RRSSAA(3), etc.  Where the EVP_PKEY
+       holds a provider managed key, then these functions now return a  cached
+       copy  of  the key. Changes to the internal provider key that take place
+       after the first time the cached key is accessed will not  be  reflected
+       back  in the cached copy. Similarly any changes made to the cached copy
+       by application code will not be reflected back in the internal provider
+       key.
+
+       For the above reasons the keys returned  from  these  functions  should
+       typically be treated as read‐only. To emphasise this the value returned
+       from             EEVVPP__PPKKEEYY__ggeett00__RRSSAA(3),            EEVVPP__PPKKEEYY__ggeett00__DDSSAA(3),
+       EEVVPP__PPKKEEYY__ggeett00__EECC__KKEEYY(3) and EEVVPP__PPKKEEYY__ggeett00__DDHH(3) have been  made  const.
+       This  may break some existing code.  Applications broken by this change
+       should be modified. The preferred solution is to refactor the  code  to
+       avoid  the  use  of  these  deprecated functions. Failing this the code
+       should  be  modified   to   use   a   const   pointer   instead.    The
+       EEVVPP__PPKKEEYY__ggeett11__RRSSAA(3), EEVVPP__PPKKEEYY__ggeett11__DDSSAA(3), EEVVPP__PPKKEEYY__ggeett11__EECC__KKEEYY(3) and
+       EEVVPP__PPKKEEYY__ggeett11__DDHH(3) functions continue to return a non‐const pointer to
+       enable them to be "freed". However they should also be treated as read‐
+       only.
+
+       The   public   key   check   has   moved   from   EEVVPP__PPKKEEYY__ddeerriivvee(())  to
+       EEVVPP__PPKKEEYY__ddeerriivvee__sseett__ppeeeerr(())
+
+       This may mean result in an error in EEVVPP__PPKKEEYY__ddeerriivvee__sseett__ppeeeerr(3)  rather
+       than   during   EEVVPP__PPKKEEYY__ddeerriivvee(3).    To   disable   this   check  use
+       EVP_PKEY_derive_set_peer_ex(dh, peer, 0).
+
+       The print format has cosmetic changes for some functions
+
+       The   output   from   numerous    "printing"    functions    such    as
+       XX550099__ssiiggnnaattuurree__pprriinntt(3),  XX550099__pprriinntt__eexx(3),  XX550099__CCRRLL__pprriinntt__eexx(3),  and
+       other similar functions  has  been  amended  such  that  there  may  be
+       cosmetic differences between the output observed in 1.1.1 and 3.0. This
+       also  applies to the --tteexxtt output from the ooppeennssssll xx550099 and ooppeennssssll ccrrll
+       applications.
+
+       Interactive mode from the ooppeennssssll program has been removed
+
+       From now on, running it without  arguments  is  equivalent  to  ooppeennssssll
+       hheellpp.
+
+       The error return values from some control calls (ctrl) have changed
+
+       One  significant  change  is  that controls which used to return -2 for
+       invalid inputs, now return -1  indicating  a  generic  error  condition
+       instead.
+
+       DH and DHX key types have different settable parameters
+
+       Previously  (in  1.1.1)  these conflicting parameters were allowed, but
+       will now result in errors. See EEVVPP__PPKKEEYY--DDHH(7) for further details. This
+       affects  the  behaviour  of   ooppeennssssll--ggeennppkkeeyy(1)   for   DH   parameter
+       generation.
+
+       EEVVPP__CCIIPPHHEERR__CCTTXX__sseett__ffllaaggss(()) ordering change
+
+       If  using  a  cipher from a provider the EEVVPP__CCIIPPHH__FFLLAAGG__LLEENNGGTTHH__BBIITTSS flag
+       can only be set aafftteerr the  cipher  has  been  assigned  to  the  cipher
+       context.  See "FLAGS" in EEVVPP__EEnnccrryyppttIInniitt(3) for more information.
+
+       Validation of operation context parameters
+
+       Due  to  move  of the implementation of cryptographic operations to the
+       providers, validation of various operation parameters can be  postponed
+       until  the  actual  operation  is executed where previously it happened
+       immediately when an operation parameter was set.
+
+       For    example    when    setting    an    unsupported    curve    with
+       EEVVPP__PPKKEEYY__CCTTXX__sseett__eecc__ppaarraammggeenn__ccuurrvvee__nniidd(())  this  function  call will not
+       fail but later keygen operations with the EVP_PKEY_CTX will fail.
+
+       Removal of function code from the error codes
+
+       The function code part of the error code is now always set  to  0.  For
+       that  reason  the  EERRRR__GGEETT__FFUUNNCC(())  macro was removed. Applications must
+       resolve the error codes only using the library number  and  the  reason
+       code.
+
+       ChaCha20-Poly1305  cipher  does  not  allow a truncated IV length to be
+       used
+
+       In OpenSSL 3.0 setting the IV length to any value other  than  12  will
+       result  in  an  error.  Prior to OpenSSL 3.0 the ivlen could be smaller
+       that  the  required  12  byte  length,  using  EVP_CIPHER_CTX_ctrl(ctx,
+       EVP_CRTL_AEAD_SET_IVLEN,  ivlen, NULL). This resulted in an IV that had
+       leading zero padding.
+
+   IInnssttaallllaattiioonn aanndd CCoommppiillaattiioonn
+       Please refer to the INSTALL.md file in the top of the distribution  for
+       instructions on how to build and install OpenSSL 3.0. Please also refer
+       to  the  various  platform  specific  NOTES  files  for  your  specific
+       platform.
+
+   UUppggrraaddiinngg ffrroomm OOppeennSSSSLL 11..11..11
+       Upgrading to OpenSSL  3.0  from  OpenSSL  1.1.1  should  be  relatively
+       straight  forward  in  most  cases. The most likely area where you will
+       encounter problems is if you have used low level APIs in your code  (as
+       discussed  above).  In  that  case  you  are  likely  to  start  seeing
+       deprecation warnings when compiling your application. If  this  happens
+       you have 3 options:
+
+       1.  Ignore  the  warnings.  They  are  just  warnings.  The  deprecated
+           functions are still present and you may still use them. However  be
+           aware that they may be removed from a future version of OpenSSL.
+
+       2.  Suppress  the warnings. Refer to your compiler documentation on how
+           to do this.
+
+       3.  Remove your usage of the low level APIs. In this case you will need
+           to rewrite your code to use the high level APIs instead
+
+       _E_r_r_o_r _c_o_d_e _c_h_a_n_g_e_s
+
+       As OpenSSL 3.0 provides  a  brand  new  Encoder/Decoder  mechanism  for
+       working with widely used file formats, application code that checks for
+       particular  error  reason  codes  on key loading failures might need an
+       update.
+
+       Password‐protected keys may deserve special  attention.  If  only  some
+       errors  are treated as an indicator that the user should be asked about
+       the password again, it’s worth testing these scenarios  and  processing
+       the newly relevant codes.
+
+       There  may  be  more cases to treat specially, depending on the calling
+       application code.
+
+   UUppggrraaddiinngg ffrroomm OOppeennSSSSLL 11..00..22
+       Upgrading  to  OpenSSL  3.0  from  OpenSSL  1.0.2  is  likely   to   be
+       significantly more difficult. In addition to the issues discussed above
+       in the section about "Upgrading from OpenSSL 1.1.1", the main things to
+       be aware of are:
+
+       1.  The build and installation procedure has changed significantly.
+
+           Check  the  file  INSTALL.md  in  the  top  of the installation for
+           instructions on how to build and install OpenSSL for your platform.
+           Also read the  various  NOTES  files  in  the  same  directory,  as
+           applicable for your platform.
+
+       2.  Many structures have been made opaque in OpenSSL 3.0.
+
+           The  structure definitions have been removed from the public header
+           files and moved to internal header files. In  practice  this  means
+           that you can no longer stack allocate some structures. Instead they
+           must  be heap allocated through some function call (typically those
+           function names have a "_new" suffix  to  them).   Additionally  you
+           must use "setter" or "getter" functions to access the fields within
+           those structures.
+
+           For example code that previously looked like this:
+
+            EVP_MD_CTX md_ctx;
+
+            /* This line will now generate compiler errors */
+            EVP_MD_CTX_init(&md_ctx);
+
+           The code needs to be amended to look like this:
+
+            EVP_MD_CTX *md_ctx;
+
+            md_ctx = EVP_MD_CTX_new();
+            ...
+            ...
+            EVP_MD_CTX_free(md_ctx);
+
+       3.  Support for TLSv1.3 has been added.
+
+           This has a number of implications for SSL/TLS applications. See the
+           TLS1.3 page <https://wiki.openssl.org/index.php/TLS1.3> for further
+           details.
+
+       More  details about the breaking changes between OpenSSL versions 1.0.2
+       and  1.1.0  can  be  found  on   the   OpenSSL   1.1.0   Changes   page
+       <https://wiki.openssl.org/index.php/OpenSSL_1.1.0_Changes>.
+
+       _U_p_g_r_a_d_i_n_g _f_r_o_m _t_h_e _O_p_e_n_S_S_L _2_._0 _F_I_P_S _O_b_j_e_c_t _M_o_d_u_l_e
+
+       The  OpenSSL 2.0 FIPS Object Module was a separate download that had to
+       be built separately and then integrated into your  main  OpenSSL  1.0.2
+       build.   In  OpenSSL  3.0 the FIPS support is fully integrated into the
+       mainline version of OpenSSL and is no longer a separate  download.  For
+       further  information  see  "Completing  the  installation  of  the FIPS
+       Module".
+
+       The function calls FFIIPPSS__mmooddee(()) and FFIIPPSS__mmooddee__sseett(())  have  been  removed
+       from  OpenSSL 3.0. You should rewrite your application to not use them.
+       See ffiippss__mmoodduullee(7) and OOSSSSLL__PPRROOVVIIDDEERR--FFIIPPSS(7) for details.
+
+   CCoommpplleettiinngg tthhee iinnssttaallllaattiioonn ooff tthhee FFIIPPSS MMoodduullee
+       The FIPS Module will be  built  and  installed  automatically  if  FIPS
+       support  has been configured. The current documentation can be found in
+       the README‐FIPS <https://github.com/openssl/openssl/blob/master/README‐
+       FIPS.md> file.
+
+   PPrrooggrraammmmiinngg
+       Applications written to work with OpenSSL 1.1.1 will mostly  just  work
+       with  OpenSSL 3.0. However changes will be required if you want to take
+       advantage of some of the new features that OpenSSL 3.0 makes available.
+       In order to do that you need to understand some new concepts introduced
+       in OpenSSL 3.0.  Read  "Library  contexts"  in  ccrryyppttoo(7)  for  further
+       information.
+
+       _L_i_b_r_a_r_y _C_o_n_t_e_x_t
+
+       A  library context allows different components of a complex application
+       to each use a different library context and  have  different  providers
+       loaded  with  different configuration settings.  See "Library contexts"
+       in ccrryyppttoo(7) for further info.
+
+       If the user creates an OOSSSSLL__LLIIBB__CCTTXX via OOSSSSLL__LLIIBB__CCTTXX__nneeww(3)  then  many
+       functions  may  need  to  be  changed  to pass additional parameters to
+       handle the library context.
+
+       Using a Library Context - Old functions that should be changed
+
+       If a library context is needed then all  EVP_*  digest  functions  that
+       return  a ccoonnsstt EEVVPP__MMDD ** such as EEVVPP__sshhaa225566(()) should be replaced with a
+       call to EEVVPP__MMDD__ffeettcchh(3). See "ALGORITHM FETCHING" in ccrryyppttoo(7).
+
+       If a library context is needed then all  EVP_*  cipher  functions  that
+       return  a  ccoonnsstt  EEVVPP__CCIIPPHHEERR  **  such  as  EEVVPP__aaeess__112288__ccbbcc(())  should be
+       replaced vith a call to EEVVPP__CCIIPPHHEERR__ffeettcchh(3). See  "ALGORITHM  FETCHING"
+       in ccrryyppttoo(7).
+
+       Some  functions  can  be  passed an object that has already been set up
+       with  a  library  context   such   as   dd22ii__XX550099(3),   dd22ii__XX550099__CCRRLL(3),
+       dd22ii__XX550099__RREEQQ(3)  and dd22ii__XX550099__PPUUBBKKEEYY(3). If NULL is passed instead then
+       the created object will be set up with the default library context. Use
+       XX550099__nneeww__eexx(3),     XX550099__CCRRLL__nneeww__eexx(3),     XX550099__RREEQQ__nneeww__eexx(3)      and
+       XX550099__PPUUBBKKEEYY__nneeww__eexx(3) if a library context is required.
+
+       All  functions  listed  below  with  a _N_A_M_E have a replacement function
+       _N_A_M_E___e_x that takes OOSSSSLL__LLIIBB__CCTTXX as an  additional  argument.  Functions
+       that have other mappings are listed along with the respective name.
+
+       •   AASSNN11__iitteemm__nneeww(3),       AASSNN11__iitteemm__dd22ii(3),      AASSNN11__iitteemm__dd22ii__ffpp(3),
+           AASSNN11__iitteemm__dd22ii__bbiioo(3), AASSNN11__iitteemm__ssiiggnn(3) and AASSNN11__iitteemm__vveerriiffyy(3)
+
+       •   BBIIOO__nneeww(3)
+
+       •   bb22ii__RRSSAA__PPVVKK__bbiioo(()) and ii22bb__PPVVKK__bbiioo(())
+
+       •   BBNN__CCTTXX__nneeww(3) and BBNN__CCTTXX__sseeccuurree__nneeww(3)
+
+       •   CCMMSS__AAuutthhEEnnvveellooppeeddDDaattaa__ccrreeaattee(3),            CCMMSS__CCoonntteennttIInnffoo__nneeww(3),
+           CCMMSS__ddaattaa__ccrreeaattee(3),                           CCMMSS__ddiiggeesstt__ccrreeaattee(3),
+           CCMMSS__EEnnccrryypptteeddDDaattaa__eennccrryypptt(3),                       CCMMSS__eennccrryypptt(3),
+           CCMMSS__EEnnvveellooppeeddDDaattaa__ccrreeaattee(3),    CCMMSS__RReecceeiippttRReeqquueesstt__ccrreeaattee00(3)   and
+           CCMMSS__ssiiggnn(3)
+
+       •   CCOONNFF__mmoodduulleess__llooaadd__ffiillee(3)
+
+       •   CCTTLLOOGG__nneeww(3), CCTTLLOOGG__nneeww__ffrroomm__bbaassee6644(3) and CCTTLLOOGG__SSTTOORREE__nneeww(3)
+
+       •   CCTT__PPOOLLIICCYY__EEVVAALL__CCTTXX__nneeww(3)
+
+       •   dd22ii__AAuuttooPPrriivvaatteeKKeeyy(3), dd22ii__PPrriivvaatteeKKeeyy(3) and dd22ii__PPUUBBKKEEYY(3)
+
+       •   dd22ii__PPrriivvaatteeKKeeyy__bbiioo(3) and dd22ii__PPrriivvaatteeKKeeyy__ffpp(3)
+
+           Use dd22ii__PPrriivvaatteeKKeeyy__eexx__bbiioo(3) and dd22ii__PPrriivvaatteeKKeeyy__eexx__ffpp(3)
+
+       •   EECC__GGRROOUUPP__nneeww(3)
+
+           Use               EECC__GGRROOUUPP__nneeww__bbyy__ccuurrvvee__nnaammee__eexx(3)               or
+           EECC__GGRROOUUPP__nneeww__ffrroomm__ppaarraammss(3).
+
+       •   EEVVPP__DDiiggeessttSSiiggnnIInniitt(3) and EEVVPP__DDiiggeessttVVeerriiffyyIInniitt(3)
+
+       •   EEVVPP__PPBBEE__CCiipphheerrIInniitt(3), EEVVPP__PPBBEE__ffiinndd(3) and EEVVPP__PPBBEE__ssccrryypptt(3)
+
+       •   PPKKCCSS55__PPBBEE__kkeeyyiivvggeenn(3)
+
+       •   EEVVPP__PPKKCCSS8822PPKKEEYY(3)
+
+       •   EEVVPP__PPKKEEYY__CCTTXX__nneeww__iidd(3)
+
+           Use EEVVPP__PPKKEEYY__CCTTXX__nneeww__ffrroomm__nnaammee(3)
+
+       •   EEVVPP__PPKKEEYY__ddeerriivvee__sseett__ppeeeerr(3),   EEVVPP__PPKKEEYY__nneeww__rraaww__pprriivvaattee__kkeeyy(3)  and
+           EEVVPP__PPKKEEYY__nneeww__rraaww__ppuubblliicc__kkeeyy(3)
+
+       •   EEVVPP__SSiiggnnFFiinnaall(3) and EEVVPP__VVeerriiffyyFFiinnaall(3)
+
+       •   NNCCOONNFF__nneeww(3)
+
+       •   OOCCSSPP__RREESSPPIIDD__mmaattcchh(3) and OOCCSSPP__RREESSPPIIDD__sseett__bbyy__kkeeyy(3)
+
+       •   OOPPEENNSSSSLL__tthhrreeaadd__ssttoopp(3)
+
+       •   OOSSSSLL__SSTTOORREE__ooppeenn(3)
+
+       •   PPEEMM__rreeaadd__bbiioo__PPaarraammeetteerrss(3),             PPEEMM__rreeaadd__bbiioo__PPrriivvaatteeKKeeyy(3),
+           PPEEMM__rreeaadd__bbiioo__PPUUBBKKEEYY(3),          PPEEMM__rreeaadd__PPrriivvaatteeKKeeyy(3)         and
+           PPEEMM__rreeaadd__PPUUBBKKEEYY(3)
+
+       •   PPEEMM__wwrriittee__bbiioo__PPrriivvaatteeKKeeyy(3),               PPEEMM__wwrriittee__bbiioo__PPUUBBKKEEYY(3),
+           PPEEMM__wwrriittee__PPrriivvaatteeKKeeyy(3) and PPEEMM__wwrriittee__PPUUBBKKEEYY(3)
+
+       •   PPEEMM__XX550099__IINNFFOO__rreeaadd__bbiioo(3) and PPEEMM__XX550099__IINNFFOO__rreeaadd(3)
+
+       •   PPKKCCSS1122__aadddd__kkeeyy(3),     PPKKCCSS1122__aadddd__ssaaffee(3),     PPKKCCSS1122__aadddd__ssaaffeess(3),
+           PPKKCCSS1122__ccrreeaattee(3),      PPKKCCSS1122__ddeeccrryypptt__sskkeeyy(3),      PPKKCCSS1122__iinniitt(3),
+           PPKKCCSS1122__iitteemm__ddeeccrryypptt__dd22ii(3),             PPKKCCSS1122__iitteemm__ii22dd__eennccrryypptt(3),
+           PPKKCCSS1122__kkeeyy__ggeenn__aasscc(3),                       PPKKCCSS1122__kkeeyy__ggeenn__uunnii(3),
+           PPKKCCSS1122__kkeeyy__ggeenn__uuttff88(3),                   PPKKCCSS1122__ppaacckk__pp77eennccddaattaa(3),
+           PPKKCCSS1122__ppbbee__ccrryypptt(3),                        PPKKCCSS1122__PPBBEE__kkeeyyiivvggeenn(3),
+           PPKKCCSS1122__SSAAFFEEBBAAGG__ccrreeaattee__ppkkccss88__eennccrryypptt(3)
+
+       •   PPKKCCSS55__ppbbee__sseett00__aallggoorr(3),   PPKKCCSS55__ppbbee__sseett(3),  PPKKCCSS55__ppbbee22__sseett__iivv(3),
+           PPKKCCSS55__ppbbkkddff22__sseett(3) and PPKKCCSS55__vv22__ssccrryypptt__kkeeyyiivvggeenn(3)
+
+       •   PPKKCCSS77__eennccrryypptt(3), PPKKCCSS77__nneeww(3) and PPKKCCSS77__ssiiggnn(3)
+
+       •   PPKKCCSS88__ddeeccrryypptt(3), PPKKCCSS88__eennccrryypptt(3) and PPKKCCSS88__sseett00__ppbbee(3)
+
+       •   RRAANNDD__bbyytteess(3) and RRAANNDD__pprriivv__bbyytteess(3)
+
+       •   SSMMIIMMEE__wwrriittee__AASSNN11(3)
+
+       •   SSSSLL__llooaadd__cclliieenntt__CCAA__ffiillee(3)
+
+       •   SSSSLL__CCTTXX__nneeww(3)
+
+       •   TTSS__RREESSPP__CCTTXX__nneeww(3)
+
+       •   XX550099__CCRRLL__nneeww(3)
+
+       •   XX550099__llooaadd__cceerrtt__ccrrll__ffiillee(3) and XX550099__llooaadd__cceerrtt__ffiillee(3)
+
+       •   XX550099__LLOOOOKKUUPP__bbyy__ssuubbjjeecctt(3) and XX550099__LLOOOOKKUUPP__ccttrrll(3)
+
+       •   XX550099__NNAAMMEE__hhaasshh(3)
+
+       •   XX550099__nneeww(3)
+
+       •   XX550099__RREEQQ__nneeww(3) and XX550099__RREEQQ__vveerriiffyy(3)
+
+       •   XX550099__SSTTOORREE__CCTTXX__nneeww(3),             XX550099__SSTTOORREE__sseett__ddeeffaauulltt__ppaatthhss(3),
+           XX550099__SSTTOORREE__llooaadd__ffiillee(3),      XX550099__SSTTOORREE__llooaadd__llooccaattiioonnss(3)      and
+           XX550099__SSTTOORREE__llooaadd__ssttoorree(3)
+
+       New functions that use a Library context
+
+       The following functions can be passed a library  context  if  required.
+       Passing NULL will use the default library context.
+
+       •   BBIIOO__nneeww__ffrroomm__ccoorree__bbiioo(3)
+
+       •   EEVVPP__AASSYYMM__CCIIPPHHEERR__ffeettcchh(3) and EEVVPP__AASSYYMM__CCIIPPHHEERR__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__CCIIPPHHEERR__ffeettcchh(3) and EEVVPP__CCIIPPHHEERR__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__ddeeffaauulltt__pprrooppeerrttiieess__eennaabbllee__ffiippss(3)                           and
+           EEVVPP__ddeeffaauulltt__pprrooppeerrttiieess__iiss__ffiippss__eennaabblleedd(3)
+
+       •   EEVVPP__KKDDFF__ffeettcchh(3) and EEVVPP__KKDDFF__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__KKEEMM__ffeettcchh(3) and EEVVPP__KKEEMM__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__KKEEYYEEXXCCHH__ffeettcchh(3) and EEVVPP__KKEEYYEEXXCCHH__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__KKEEYYMMGGMMTT__ffeettcchh(3) and EEVVPP__KKEEYYMMGGMMTT__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__MMAACC__ffeettcchh(3) and EEVVPP__MMAACC__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__MMDD__ffeettcchh(3) and EEVVPP__MMDD__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__PPKKEEYY__CCTTXX__nneeww__ffrroomm__ppkkeeyy(3)
+
+       •   EEVVPP__PPKKEEYY__QQ__kkeeyyggeenn(3)
+
+       •   EEVVPP__QQ__mmaacc(3) and EEVVPP__QQ__ddiiggeesstt(3)
+
+       •   EEVVPP__RRAANNDD(3) and EEVVPP__RRAANNDD__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   EEVVPP__sseett__ddeeffaauulltt__pprrooppeerrttiieess(3)
+
+       •   EEVVPP__SSIIGGNNAATTUURREE__ffeettcchh(3) and EEVVPP__SSIIGGNNAATTUURREE__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   OOSSSSLL__CCMMPP__CCTTXX__nneeww(3) and OOSSSSLL__CCMMPP__SSRRVV__CCTTXX__nneeww(3)
+
+       •   OOSSSSLL__CCRRMMFF__EENNCCRRYYPPTTEEDDVVAALLUUEE__ggeett11__eennccCCeerrtt(3)
+
+       •   OOSSSSLL__CCRRMMFF__MMSSGG__ccrreeaattee__ppooppoo(3) and OOSSSSLL__CCRRMMFF__MMSSGGSS__vveerriiffyy__ppooppoo(3)
+
+       •   OOSSSSLL__CCRRMMFF__ppbbmm__nneeww(3) and OOSSSSLL__CCRRMMFF__ppbbmmpp__nneeww(3)
+
+       •   OOSSSSLL__DDEECCOODDEERR__CCTTXX__aadddd__eexxttrraa(3) and OOSSSSLL__DDEECCOODDEERR__CCTTXX__nneeww__ffoorr__ppkkeeyy(3)
+
+       •   OOSSSSLL__DDEECCOODDEERR__ffeettcchh(3) and OOSSSSLL__DDEECCOODDEERR__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   OOSSSSLL__EENNCCOODDEERR__CCTTXX__aadddd__eexxttrraa(3)
+
+       •   OOSSSSLL__EENNCCOODDEERR__ffeettcchh(3) and OOSSSSLL__EENNCCOODDEERR__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   OOSSSSLL__LLIIBB__CCTTXX__ffrreeee(3),        OOSSSSLL__LLIIBB__CCTTXX__llooaadd__ccoonnffiigg(3)        and
+           OOSSSSLL__LLIIBB__CCTTXX__sseett00__ddeeffaauulltt(3)
+
+       •   OOSSSSLL__PPRROOVVIIDDEERR__aadddd__bbuuiillttiinn(3),           OOSSSSLL__PPRROOVVIIDDEERR__aavvaaiillaabbllee(3),
+           OOSSSSLL__PPRROOVVIIDDEERR__ddoo__aallll(3),                     OOSSSSLL__PPRROOVVIIDDEERR__llooaadd(3),
+           OOSSSSLL__PPRROOVVIIDDEERR__sseett__ddeeffaauulltt__sseeaarrcchh__ppaatthh(3)                        and
+           OOSSSSLL__PPRROOVVIIDDEERR__ttrryy__llooaadd(3)
+
+       •   OOSSSSLL__SSEELLFF__TTEESSTT__ggeett__ccaallllbbaacckk(3) and OOSSSSLL__SSEELLFF__TTEESSTT__sseett__ccaallllbbaacckk(3)
+
+       •   OOSSSSLL__SSTTOORREE__aattttaacchh(3)
+
+       •   OOSSSSLL__SSTTOORREE__LLOOAADDEERR__ffeettcchh(3) and OOSSSSLL__SSTTOORREE__LLOOAADDEERR__ddoo__aallll__pprroovviiddeedd(3)
+
+       •   RRAANNDD__ggeett00__pprriimmaarryy(3),  RRAANNDD__ggeett00__pprriivvaattee(3),   RRAANNDD__ggeett00__ppuubblliicc(3),
+           RRAANNDD__sseett__DDRRBBGG__ttyyppee(3) and RRAANNDD__sseett__sseeeedd__ssoouurrccee__ttyyppee(3)
+
+       _P_r_o_v_i_d_e_r_s
+
+       Providers  are  described in detail here "Providers" in ccrryyppttoo(7).  See
+       also "OPENSSL PROVIDERS" in ccrryyppttoo(7).
+
+       _F_e_t_c_h_i_n_g _a_l_g_o_r_i_t_h_m_s _a_n_d _p_r_o_p_e_r_t_y _q_u_e_r_i_e_s
+
+       Implicit and Explicit Fetching is described in detail  here  "ALGORITHM
+       FETCHING" in ccrryyppttoo(7).
+
+       _M_a_p_p_i_n_g _E_V_P _c_o_n_t_r_o_l_s _a_n_d _f_l_a_g_s _t_o _p_r_o_v_i_d_e_r _OO_SS_SS_LL____PP_AA_RR_AA_MM_(_3_) _p_a_r_a_m_e_t_e_r_s
+
+       The  existing  functions  for controls (such as EEVVPP__CCIIPPHHEERR__CCTTXX__ccttrrll(3))
+       and manipulating flags (such as EEVVPP__MMDD__CCTTXX__sseett__ffllaaggss(3))internally  use
+       OOSSSSLL__PPAARRAAMMSS   to   pass  information  to/from  provider  objects.   See
+       OOSSSSLL__PPAARRAAMM(3) for additional information related to parameters.
+
+       For  ciphers  see  "CONTROLS"   in   EEVVPP__EEnnccrryyppttIInniitt(3),   "FLAGS"   in
+       EEVVPP__EEnnccrryyppttIInniitt(3) and "PARAMETERS" in EEVVPP__EEnnccrryyppttIInniitt(3).
+
+       For   digests   see   "CONTROLS"   in   EEVVPP__DDiiggeessttIInniitt(3),  "FLAGS"  in
+       EEVVPP__DDiiggeessttIInniitt(3) and "PARAMETERS" in EEVVPP__DDiiggeessttIInniitt(3).
+
+       _D_e_p_r_e_c_a_t_i_o_n _o_f _L_o_w _L_e_v_e_l _F_u_n_c_t_i_o_n_s
+
+       A significant number of APIs have been deprecated in OpenSSL 3.0.  This
+       section  describes  some  common  categories  of   deprecations.    See
+       "Deprecated  function  mappings"  for  the list of deprecated functions
+       that refer to these categories.
+
+       Providers are a replacement for engines and low‐level method overrides
+
+       Any  accessor  that   uses   an   ENGINE   is   deprecated   (such   as
+       EEVVPP__PPKKEEYY__sseett11__eennggiinnee(())).  Applications using engines should instead use
+       providers.
+
+       Before  providers were added algorithms were overridden by changing the
+       methods used by algorithms. All these methods such as  RRSSAA__nneeww__mmeetthhoodd(())
+       and  RRSSAA__mmeetthh__nneeww(())  are  now  deprecated  and can be replaced by using
+       providers instead.
+
+       Deprecated i2d and d2i functions for low‐level key types
+
+       Any i2d and d2i functions such as dd22ii__DDHHppaarraammss(()) that take a  low‐level
+       key  type  have  been  deprecated.  Applications should instead use the
+       OOSSSSLL__DDEECCOODDEERR(3) and OOSSSSLL__EENNCCOODDEERR(3) APIs to read and write files.   See
+       "Migration" in dd22ii__RRSSAAPPrriivvaatteeKKeeyy(3) for further details.
+
+       Deprecated low‐level key object getters and setters
+
+       Applications   that   set   or  get  low‐level  key  objects  (such  as
+       EEVVPP__PPKKEEYY__sseett11__DDHH(())  or  EEVVPP__PPKKEEYY__ggeett00(()))   should   instead   use   the
+       OSSL_ENCODER   (See   OOSSSSLL__EENNCCOODDEERR__ttoo__bbiioo(3))   or   OSSL_DECODER  (See
+       OOSSSSLL__DDEECCOODDEERR__ffrroomm__bbiioo(3))     APIs,      or      alternatively      use
+       EEVVPP__PPKKEEYY__ffrroommddaattaa(3) or EEVVPP__PPKKEEYY__ttooddaattaa(3).
+
+       Deprecated low‐level key parameter getters
+
+       Functions  that access low‐level objects directly such as RRSSAA__ggeett00__nn(3)
+       are    now    deprecated.    Applications    should    use    one    of
+       EEVVPP__PPKKEEYY__ggeett__bbnn__ppaarraamm(3),                    EEVVPP__PPKKEEYY__ggeett__iinntt__ppaarraamm(3),
+       l<EEVVPP__PPKKEEYY__ggeett__ssiizzee__tt__ppaarraamm(3)>,     EEVVPP__PPKKEEYY__ggeett__uuttff88__ssttrriinngg__ppaarraamm(3),
+       EEVVPP__PPKKEEYY__ggeett__oocctteett__ssttrriinngg__ppaarraamm(3)  or EEVVPP__PPKKEEYY__ggeett__ppaarraammss(3) to access
+       fields from an EVP_PKEY.  Gettable parameters are listed in "Common RSA
+       parameters" in EEVVPP__PPKKEEYY--RRSSAA(7), "DH parameters" in EEVVPP__PPKKEEYY--DDHH(7), "DSA
+       parameters" in EEVVPP__PPKKEEYY--DDSSAA(7), "FFC  parameters"  in  EEVVPP__PPKKEEYY--FFFFCC(7),
+       "Common  EC  parameters"  in  EEVVPP__PPKKEEYY--EECC(7)  and "Common X25519, X448,
+       ED25519 and ED448 parameters" in EEVVPP__PPKKEEYY--XX2255551199(7).  Applications  may
+       also use EEVVPP__PPKKEEYY__ttooddaattaa(3) to return all fields.
+
+       Deprecated low‐level key parameter setters
+
+       Functions    that   access   low‐level   objects   directly   such   as
+       RRSSAA__sseett00__ccrrtt__ppaarraammss(3) are  now  deprecated.  Applications  should  use
+       EEVVPP__PPKKEEYY__ffrroommddaattaa(3)  to  create  new keys from user provided key data.
+       Keys should be immutable once they are created, so if required the user
+       may     use      EEVVPP__PPKKEEYY__ttooddaattaa(3),      OOSSSSLL__PPAARRAAMM__mmeerrggee(3),      and
+       EEVVPP__PPKKEEYY__ffrroommddaattaa(3)  to  create  a  modified  key.   See "Examples" in
+       EEVVPP__PPKKEEYY--DDHH(7) for more information.   See  "Deprecated  low‐level  key
+       generation  functions"  for  information  on  generating  a  key  using
+       parameters.
+
+       Deprecated low‐level object creation
+
+       Low‐level objects  were  created  using  methods  such  as  RRSSAA__nneeww(3),
+       RRSSAA__uupp__rreeff(3)  and  RRSSAA__ffrreeee(3).  Applications  should  instead use the
+       high‐level EVP_PKEY APIs, e.g. EEVVPP__PPKKEEYY__nneeww(3), EEVVPP__PPKKEEYY__uupp__rreeff(3)  and
+       EEVVPP__PPKKEEYY__ffrreeee(3).     See    also   EEVVPP__PPKKEEYY__CCTTXX__nneeww__ffrroomm__nnaammee(3)   and
+       EEVVPP__PPKKEEYY__CCTTXX__nneeww__ffrroomm__ppkkeeyy(3).
+
+       EVP_PKEYs may be created in a variety of  ways:  See  also  "Deprecated
+       low‐level  key generation functions", "Deprecated low‐level key reading
+       and  writing  functions"  and  "Deprecated  low‐level   key   parameter
+       setters".
+
+       Deprecated low‐level encryption functions
+
+       Low‐level    encryption    functions   such   as   AAEESS__eennccrryypptt(3)   and
+       AAEESS__ddeeccrryypptt(3) have been informally discouraged from  use  for  a  long
+       time.   Applications  should  instead  use  the  high  level  EVP  APIs
+       EEVVPP__EEnnccrryyppttIInniitt__eexx(3), EEVVPP__EEnnccrryyppttUUppddaattee(3), and EEVVPP__EEnnccrryyppttFFiinnaall__eexx(3)
+       or        EEVVPP__DDeeccrryyppttIInniitt__eexx(3),        EEVVPP__DDeeccrryyppttUUppddaattee(3)        and
+       EEVVPP__DDeeccrryyppttFFiinnaall__eexx(3).
+
+       Deprecated low‐level digest functions
+
+       Use  of  low‐level  digest  functions  such  as  SSHHAA11__IInniitt(3) have been
+       informally discouraged from use for a long time.   Applications  should
+       instead   use   the  the  high  level  EVP  APIs  EEVVPP__DDiiggeessttIInniitt__eexx(3),
+       EEVVPP__DDiiggeessttUUppddaattee(3) and EEVVPP__DDiiggeessttFFiinnaall__eexx(3), or  the  quick  one‐shot
+       EEVVPP__QQ__ddiiggeesstt(3).
+
+       Note  that  the  functions SSHHAA11(3), SSHHAA222244(3), SSHHAA225566(3), SSHHAA338844(3) and
+       SSHHAA551122(3) have changed to macros that use EEVVPP__QQ__ddiiggeesstt(3).
+
+       Deprecated low‐level signing functions
+
+       Use of low‐level  signing  functions  such  as  DDSSAA__ssiiggnn(3)  have  been
+       informally discouraged for a long time. Instead applications should use
+       EEVVPP__DDiiggeessttSSiiggnn(3)      and      EEVVPP__DDiiggeessttVVeerriiffyy(3).       See     also
+       EEVVPP__SSIIGGNNAATTUURREE--RRSSAA(7), EEVVPP__SSIIGGNNAATTUURREE--DDSSAA(7), EEVVPP__SSIIGGNNAATTUURREE--EECCDDSSAA(7)  and
+       EEVVPP__SSIIGGNNAATTUURREE--EEDD2255551199(7).
+
+       Deprecated low‐level MAC functions
+
+       Low‐level   mac   functions   such   as  CCMMAACC__IInniitt(3)  are  deprecated.
+       Applications should instead use the  new  EEVVPP__MMAACC(3)  interface,  using
+       EEVVPP__MMAACC__CCTTXX__nneeww(3),        EEVVPP__MMAACC__CCTTXX__ffrreeee(3),        EEVVPP__MMAACC__iinniitt(3),
+       EEVVPP__MMAACC__uuppddaattee(3) and EEVVPP__MMAACC__ffiinnaall(3) or the single‐shot MAC  function
+       EEVVPP__QQ__mmaacc(3).    See   EEVVPP__MMAACC(3),   EEVVPP__MMAACC--HHMMAACC(7),  EEVVPP__MMAACC--CCMMAACC(7),
+       EEVVPP__MMAACC--GGMMAACC(7),          EEVVPP__MMAACC--KKMMAACC(7),           EEVVPP__MMAACC--BBLLAAKKEE22(7),
+       EEVVPP__MMAACC--PPoollyy11330055(7) and EEVVPP__MMAACC--SSiipphhaasshh(7) for additional information.
+
+       Note   that   the   one‐shot  method  HHMMAACC(())  is  still  available  for
+       compatibility  purposes,  but  this  can  also  be  replaced  by  using
+       EVP_Q_MAC if a library context is required.
+
+       Deprecated low‐level validation functions
+
+       Low‐level validation functions such as DDHH__cchheecckk(3) have been informally
+       discouraged  from  use for a long time. Applications should instead use
+       the   high‐level   EVP_PKEY    APIs    such    as    EEVVPP__PPKKEEYY__cchheecckk(3),
+       EEVVPP__PPKKEEYY__ppaarraamm__cchheecckk(3),                 EEVVPP__PPKKEEYY__ppaarraamm__cchheecckk__qquuiicckk(3),
+       EEVVPP__PPKKEEYY__ppuubblliicc__cchheecckk(3),               EEVVPP__PPKKEEYY__ppuubblliicc__cchheecckk__qquuiicckk(3),
+       EEVVPP__PPKKEEYY__pprriivvaattee__cchheecckk(3), and EEVVPP__PPKKEEYY__ppaaiirrwwiissee__cchheecckk(3).
+
+       Deprecated low‐level key exchange functions
+
+       Many  low‐level functions have been informally discouraged from use for
+       a long time. Applications should instead use  EEVVPP__PPKKEEYY__ddeerriivvee(3).   See
+       EEVVPP__KKEEYYEEXXCCHH--DDHH(7), EEVVPP__KKEEYYEEXXCCHH--EECCDDHH(7) and EEVVPP__KKEEYYEEXXCCHH--XX2255551199(7).
+
+       Deprecated low‐level key generation functions
+
+       Many  low‐level functions have been informally discouraged from use for
+       a long time. Applications should  instead  use  EEVVPP__PPKKEEYY__kkeeyyggeenn__iinniitt(3)
+       and    EEVVPP__PPKKEEYY__ggeenneerraattee(3)    as    described    in   EEVVPP__PPKKEEYY--DDSSAA(7),
+       EEVVPP__PPKKEEYY--DDHH(7), EEVVPP__PPKKEEYY--RRSSAA(7), EEVVPP__PPKKEEYY--EECC(7) and EEVVPP__PPKKEEYY--XX2255551199(7).
+       The ’quick’ one‐shot function EEVVPP__PPKKEEYY__QQ__kkeeyyggeenn(3) and macros  for  the
+       most common cases: <EEVVPP__RRSSAA__ggeenn(3)> and EEVVPP__EECC__ggeenn(3) may also be used.
+
+       Deprecated low‐level key reading and writing functions
+
+       Use  of low‐level objects (such as DSA) has been informally discouraged
+       from use for a long time. Functions to read and write  these  low‐level
+       objects   (such   as   PPEEMM__rreeaadd__DDSSAA__PPUUBBKKEEYY(()))   should   be   replaced.
+       Applications   should   instead    use    OOSSSSLL__EENNCCOODDEERR__ttoo__bbiioo(3)    and
+       OOSSSSLL__DDEECCOODDEERR__ffrroomm__bbiioo(3).
+
+       Deprecated low‐level key printing functions
+
+       Use  of low‐level objects (such as DSA) has been informally discouraged
+       from use for a long time. Functions to print  these  low‐level  objects
+       such  as  DDSSAA__pprriinntt(())  should  be replaced with the equivalent EVP_PKEY
+       functions.  Application should  use  one  of  EEVVPP__PPKKEEYY__pprriinntt__ppuubblliicc(3),
+       EEVVPP__PPKKEEYY__pprriinntt__pprriivvaattee(3),                    EEVVPP__PPKKEEYY__pprriinntt__ppaarraammss(3),
+       EEVVPP__PPKKEEYY__pprriinntt__ppuubblliicc__ffpp(3),      EEVVPP__PPKKEEYY__pprriinntt__pprriivvaattee__ffpp(3)       or
+       EEVVPP__PPKKEEYY__pprriinntt__ppaarraammss__ffpp(3).    Note    that   internally   these   use
+       OOSSSSLL__EENNCCOODDEERR__ttoo__bbiioo(3) and OOSSSSLL__DDEECCOODDEERR__ffrroomm__bbiioo(3).
+
+       _D_e_p_r_e_c_a_t_e_d _f_u_n_c_t_i_o_n _m_a_p_p_i_n_g_s
+
+       The following functions have been deprecated in 3.0.
+
+       •   AAEESS__bbii__iiggee__eennccrryypptt(()) and AAEESS__iiggee__eennccrryypptt(())
+
+           There is no replacement for the IGE functions. New code should  not
+           use   these   modes.    These  undocumented  functions  were  never
+           integrated into the EVP layer.  They implemented the  AES  Infinite
+           Garble  Extension (IGE) mode and AES Bi‐directional IGE mode. These
+           modes were never formally standardised and usage of these functions
+           is believed to be very small.  In  particular  AAEESS__bbii__iiggee__eennccrryypptt(())
+           has  a known bug. It accepts 2 AES keys, but only one is ever used.
+           The security implications are believed  to  be  minimal,  but  this
+           issue was never fixed for backwards compatibility reasons.
+
+       •   AAEESS__eennccrryypptt(()),         AAEESS__ddeeccrryypptt(()),        AAEESS__sseett__eennccrryypptt__kkeeyy(()),
+           AAEESS__sseett__ddeeccrryypptt__kkeeyy(()),   AAEESS__ccbbcc__eennccrryypptt(()),   AAEESS__ccffbb112288__eennccrryypptt(()),
+           AAEESS__ccffbb11__eennccrryypptt(()),      AAEESS__ccffbb88__eennccrryypptt(()),     AAEESS__eeccbb__eennccrryypptt(()),
+           AAEESS__ooffbb112288__eennccrryypptt(())
+
+       •   AAEESS__uunnwwrraapp__kkeeyy(()), AAEESS__wwrraapp__kkeeyy(())
+
+           See "Deprecated low‐level encryption functions"
+
+       •   AAEESS__ooppttiioonnss(())
+
+           There is no replacement. It returned a string indicating if the AES
+           code was unrolled.
+
+       •   AASSNN11__ddiiggeesstt(()), AASSNN11__ssiiggnn(()), AASSNN11__vveerriiffyy(())
+
+           There are no replacements. These old functions are  not  used,  and
+           could be disabled with the macro NO_ASN1_OLD since OpenSSL 0.9.7.
+
+       •   AASSNN11__SSTTRRIINNGG__lleennggtthh__sseett(())
+
+           Use  AASSNN11__SSTTRRIINNGG__sseett(3) or AASSNN11__SSTTRRIINNGG__sseett00(3) instead.  This was a
+           potentially unsafe function that  could  change  the  bounds  of  a
+           previously passed in pointer.
+
+       •   BBFF__eennccrryypptt(()),    BBFF__ddeeccrryypptt(()),    BBFF__sseett__kkeeyy(()),   BBFF__ccbbcc__eennccrryypptt(()),
+           BBFF__ccffbb6644__eennccrryypptt(()), BBFF__eeccbb__eennccrryypptt(()), BBFF__ooffbb6644__eennccrryypptt(())
+
+           See "Deprecated  low‐level  encryption  functions".   The  Blowfish
+           algorithm has been moved to the Legacy Provider.
+
+       •   BBFF__ooppttiioonnss(())
+
+           There is no replacement. This option returned a constant string.
+
+       •   BBIIOO__ggeett__ccaallllbbaacckk(()), BBIIOO__sseett__ccaallllbbaacckk(()), BBIIOO__ddeebbuugg__ccaallllbbaacckk(())
+
+           Use the respective non‐deprecated __eexx(()) functions.
+
+       •   BBNN__iiss__pprriimmee__eexx(()), BBNN__iiss__pprriimmee__ffaasstttteesstt__eexx(())
+
+           Use  BBNN__cchheecckk__pprriimmee(3) which avoids possible misuse and always uses
+           at least 64 rounds of the Miller‐Rabin primality test.
+
+       •   BBNN__ppsseeuuddoo__rraanndd(()), BBNN__ppsseeuuddoo__rraanndd__rraannggee(())
+
+           Use BBNN__rraanndd(3) and BBNN__rraanndd__rraannggee(3).
+
+       •   BBNN__XX993311__ddeerriivvee__pprriimmee__eexx(()),             BBNN__XX993311__ggeenneerraattee__pprriimmee__eexx(()),
+           BBNN__XX993311__ggeenneerraattee__XXppqq(())
+
+           There  are no replacements for these low‐level functions. They were
+           used       internally       by       RRSSAA__XX993311__ddeerriivvee__eexx(())       and
+           RRSSAA__XX993311__ggeenneerraattee__kkeeyy__eexx(())   which   are   also   deprecated.   Use
+           EEVVPP__PPKKEEYY__kkeeyyggeenn(3) instead.
+
+       •   CCaammeelllliiaa__eennccrryypptt(()),     CCaammeelllliiaa__ddeeccrryypptt(()),     CCaammeelllliiaa__sseett__kkeeyy(()),
+           CCaammeelllliiaa__ccbbcc__eennccrryypptt(()),                  CCaammeelllliiaa__ccffbb112288__eennccrryypptt(()),
+           CCaammeelllliiaa__ccffbb11__eennccrryypptt(()),                   CCaammeelllliiaa__ccffbb88__eennccrryypptt(()),
+           CCaammeelllliiaa__ccttrr112288__eennccrryypptt(()),                  CCaammeelllliiaa__eeccbb__eennccrryypptt(()),
+           CCaammeelllliiaa__ooffbb112288__eennccrryypptt(())
+
+           See "Deprecated low‐level encryption functions".
+
+       •   CCAASSTT__eennccrryypptt(()), CCAASSTT__ddeeccrryypptt(()), CCAASSTT__sseett__kkeeyy(()), CCAASSTT__ccbbcc__eennccrryypptt(()),
+           CCAASSTT__ccffbb6644__eennccrryypptt(()), CCAASSTT__eeccbb__eennccrryypptt(()), CCAASSTT__ooffbb6644__eennccrryypptt(())
+
+           See  "Deprecated  low‐level  encryption   functions".    The   CAST
+           algorithm has been moved to the Legacy Provider.
+
+       •   CCMMAACC__CCTTXX__nneeww(()),         CCMMAACC__CCTTXX__cclleeaannuupp(()),        CCMMAACC__CCTTXX__ccooppyy(()),
+           CCMMAACC__CCTTXX__ffrreeee(()), CCMMAACC__CCTTXX__ggeett00__cciipphheerr__ccttxx(())
+
+           See "Deprecated low‐level MAC functions".
+
+       •   CCMMAACC__IInniitt(()), CCMMAACC__UUppddaattee(()), CCMMAACC__FFiinnaall(()), CCMMAACC__rreessuummee(())
+
+           See "Deprecated low‐level MAC functions".
+
+       •   CCRRYYPPTTOO__mmeemm__ccttrrll(()),                         CCRRYYPPTTOO__mmeemm__ddeebbuugg__ffrreeee(()),
+           CCRRYYPPTTOO__mmeemm__ddeebbuugg__mmaalllloocc(()),                  CCRRYYPPTTOO__mmeemm__ddeebbuugg__ppoopp(()),
+           CCRRYYPPTTOO__mmeemm__ddeebbuugg__ppuusshh(()),                CCRRYYPPTTOO__mmeemm__ddeebbuugg__rreeaalllloocc(()),
+           CCRRYYPPTTOO__mmeemm__lleeaakkss(()),  CCRRYYPPTTOO__mmeemm__lleeaakkss__ccbb(()),  CCRRYYPPTTOO__mmeemm__lleeaakkss__ffpp(()),
+           CCRRYYPPTTOO__sseett__mmeemm__ddeebbuugg(())
+
+           Memory‐leak checking has been deprecated in favor  of  more  modern
+           development  tools,  such as compiler memory and leak sanitizers or
+           Valgrind.
+
+       •   CCRRYYPPTTOO__ccttss112288__eennccrryypptt__bblloocckk(()),             CCRRYYPPTTOO__ccttss112288__eennccrryypptt(()),
+           CCRRYYPPTTOO__ccttss112288__ddeeccrryypptt__bblloocckk(()),             CCRRYYPPTTOO__ccttss112288__ddeeccrryypptt(()),
+           CCRRYYPPTTOO__nniissttccttss112288__eennccrryypptt__bblloocckk(()),     CCRRYYPPTTOO__nniissttccttss112288__eennccrryypptt(()),
+           CCRRYYPPTTOO__nniissttccttss112288__ddeeccrryypptt__bblloocckk(()), CCRRYYPPTTOO__nniissttccttss112288__ddeeccrryypptt(())
+
+           Use    the    higher    level    functions    EEVVPP__CCiipphheerrIInniitt__eexx22(()),
+           EEVVPP__CCiipphheerrUUppddaattee(())  and  EEVVPP__CCiipphheerrFFiinnaall__eexx(())  instead.   See   the
+           "cts_mode"  parameter  in  "Gettable  and  Settable  EVP_CIPHER_CTX
+           parameters"   in    EEVVPP__EEnnccrryyppttIInniitt(3).     See    "EXAMPLES"    in
+           EEVVPP__EEnnccrryyppttIInniitt(3) for a AES-256-CBC-CTS example.
+
+       •   dd22ii__DDHHppaarraammss(()),          dd22ii__DDHHxxppaarraammss(()),          dd22ii__DDSSAAppaarraammss(()),
+           dd22ii__DDSSAAPPrriivvaatteeKKeeyy(()),                       dd22ii__DDSSAAPPrriivvaatteeKKeeyy__bbiioo(()),
+           dd22ii__DDSSAAPPrriivvaatteeKKeeyy__ffpp(()),   dd22ii__DDSSAA__PPUUBBKKEEYY(()),   dd22ii__DDSSAA__PPUUBBKKEEYY__bbiioo(()),
+           dd22ii__DDSSAA__PPUUBBKKEEYY__ffpp(()),    dd22ii__DDSSAAPPuubblliiccKKeeyy(()),     dd22ii__EECCPPaarraammeetteerrss(()),
+           dd22ii__EECCPPrriivvaatteeKKeeyy(()),  dd22ii__EECCPPrriivvaatteeKKeeyy__bbiioo(()), dd22ii__EECCPPrriivvaatteeKKeeyy__ffpp(()),
+           dd22ii__EECC__PPUUBBKKEEYY(()),      dd22ii__EECC__PPUUBBKKEEYY__bbiioo(()),      dd22ii__EECC__PPUUBBKKEEYY__ffpp(()),
+           oo22ii__EECCPPuubblliiccKKeeyy(()),   dd22ii__RRSSAAPPrriivvaatteeKKeeyy(()),  dd22ii__RRSSAAPPrriivvaatteeKKeeyy__bbiioo(()),
+           dd22ii__RRSSAAPPrriivvaatteeKKeeyy__ffpp(()),   dd22ii__RRSSAA__PPUUBBKKEEYY(()),   dd22ii__RRSSAA__PPUUBBKKEEYY__bbiioo(()),
+           dd22ii__RRSSAA__PPUUBBKKEEYY__ffpp(()),   dd22ii__RRSSAAPPuubblliiccKKeeyy(()),  dd22ii__RRSSAAPPuubblliiccKKeeyy__bbiioo(()),
+           dd22ii__RRSSAAPPuubblliiccKKeeyy__ffpp(())
+
+           See "Deprecated i2d and d2i functions for low‐level key types"
+
+       •   DDEESS__ccrryypptt(()),    DDEESS__ffccrryypptt(()),    DDEESS__eennccrryypptt11(()),    DDEESS__eennccrryypptt22(()),
+           DDEESS__eennccrryypptt33(()),       DDEESS__ddeeccrryypptt33(()),       DDEESS__eeddee33__ccbbcc__eennccrryypptt(()),
+           DDEESS__eeddee33__ccffbb6644__eennccrryypptt(()),
+           DDEESS__eeddee33__ccffbb__eennccrryypptt(()),DDEESS__eeddee33__ooffbb6644__eennccrryypptt(()), DDEESS__eeccbb__eennccrryypptt(()),
+           DDEESS__eeccbb33__eennccrryypptt(()),     DDEESS__ooffbb6644__eennccrryypptt(()),     DDEESS__ooffbb__eennccrryypptt(()),
+           DES_cfb64_encrypt       DDEESS__ccffbb__eennccrryypptt(()),       DDEESS__ccbbcc__eennccrryypptt(()),
+           DDEESS__nnccbbcc__eennccrryypptt(()),     DDEESS__ppccbbcc__eennccrryypptt(()),     DDEESS__xxccbbcc__eennccrryypptt(()),
+           DDEESS__ccbbcc__cckkssuumm(()),      DDEESS__qquuaadd__cckkssuumm(()),     DDEESS__cchheecckk__kkeeyy__ppaarriittyy(()),
+           DDEESS__iiss__wweeaakk__kkeeyy(()),         DDEESS__kkeeyy__sscchheedd(()),          DDEESS__ooppttiioonnss(()),
+           DDEESS__rraannddoomm__kkeeyy(()),       DDEESS__sseett__kkeeyy(()),       DDEESS__sseett__kkeeyy__cchheecckkeedd(()),
+           DDEESS__sseett__kkeeyy__uunncchheecckkeedd(()),                      DDEESS__sseett__oodddd__ppaarriittyy(()),
+           DDEESS__ssttrriinngg__ttoo__22kkeeyyss(()), DDEESS__ssttrriinngg__ttoo__kkeeyy(())
+
+           See  "Deprecated  low‐level  encryption functions".  Algorithms for
+           "DESX‐CBC", "DES‐ECB", "DES‐CBC", "DES‐OFB", "DES‐CFB",  "DES-CFB1"
+           and "DES-CFB8" have been moved to the Legacy Provider.
+
+       •   DDHH__bbiittss(()), DDHH__sseeccuurriittyy__bbiittss(()), DDHH__ssiizzee(())
+
+           Use    EEVVPP__PPKKEEYY__ggeett__bbiittss(3),    EEVVPP__PPKKEEYY__ggeett__sseeccuurriittyy__bbiittss(3)   and
+           EEVVPP__PPKKEEYY__ggeett__ssiizzee(3).
+
+       •   DDHH__cchheecckk(()), DDHH__cchheecckk__eexx(()), DDHH__cchheecckk__ppaarraammss(()), DDHH__cchheecckk__ppaarraammss__eexx(()),
+           DDHH__cchheecckk__ppuubb__kkeeyy(()), DDHH__cchheecckk__ppuubb__kkeeyy__eexx(())
+
+           See "Deprecated low‐level validation functions"
+
+       •   DDHH__cclleeaarr__ffllaaggss(()), DDHH__tteesstt__ffllaaggss(()), DDHH__sseett__ffllaaggss(())
+
+           The  DDHH__FFLLAAGG__CCAACCHHEE__MMOONNTT__PP  flag   has   been   deprecated   without
+           replacement.   The  DDHH__FFLLAAGG__TTYYPPEE__DDHH  and DDHH__FFLLAAGG__TTYYPPEE__DDHHXX have been
+           deprecated.  Use EEVVPP__PPKKEEYY__iiss__aa(()) to determine the type  of  a  key.
+           There is no replacement for setting these flags.
+
+       •   DDHH__ccoommppuuttee__kkeeyy(()) DDHH__ccoommppuuttee__kkeeyy__ppaaddddeedd(())
+
+           See "Deprecated low‐level key exchange functions".
+
+       •   DDHH__nneeww(()), DDHH__nneeww__bbyy__nniidd(()), DDHH__ffrreeee(()), DDHH__uupp__rreeff(())
+
+           See "Deprecated low‐level object creation"
+
+       •   DDHH__ggeenneerraattee__kkeeyy(()), DDHH__ggeenneerraattee__ppaarraammeetteerrss__eexx(())
+
+           See "Deprecated low‐level key generation functions".
+
+       •   DDHH__ggeett00__ppqqgg(()),      DDHH__ggeett00__pp(()),      DDHH__ggeett00__qq(()),     DDHH__ggeett00__gg(()),
+           DDHH__ggeett00__kkeeyy(()),        DDHH__ggeett00__pprriivv__kkeeyy(()),        DDHH__ggeett00__ppuubb__kkeeyy(()),
+           DDHH__ggeett__lleennggtthh(()), DDHH__ggeett__nniidd(())
+
+           See "Deprecated low‐level key parameter getters"
+
+       •   DDHH__ggeett__11002244__116600(()), DDHH__ggeett__22004488__222244(()), DDHH__ggeett__22004488__225566(())
+
+           Applications  should  instead set the OOSSSSLL__PPKKEEYY__PPAARRAAMM__GGRROOUUPP__NNAAMMEE as
+           specified  in  "DH  parameters"  in  EEVVPP__PPKKEEYY--DDHH(7))  to   one   of
+           "dh_1024_160",  "dh_2048_224" or "dh_2048_256" when generating a DH
+           key.
+
+       •   DDHH__KKDDFF__XX99__4422(())
+
+           Applications should use EEVVPP__PPKKEEYY__CCTTXX__sseett__ddhh__kkddff__ttyyppee(3) instead.
+
+       •   DDHH__ggeett__ddeeffaauulltt__mmeetthhoodd(()),       DDHH__ggeett00__eennggiinnee(()),       DH_meth_*(),
+           DDHH__nneeww__mmeetthhoodd(()),           DDHH__OOppeennSSSSLL(()),          DDHH__ggeett__eexx__ddaattaa(()),
+           DDHH__sseett__ddeeffaauulltt__mmeetthhoodd(()), DDHH__sseett__mmeetthhoodd(()), DDHH__sseett__eexx__ddaattaa(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides"
+
+       •   DDHHppaarraammss__pprriinntt(()), DDHHppaarraammss__pprriinntt__ffpp(())
+
+           See "Deprecated low‐level key printing functions"
+
+       •   DDHH__sseett00__kkeeyy(()), DDHH__sseett00__ppqqgg(()), DDHH__sseett__lleennggtthh(())
+
+           See "Deprecated low‐level key parameter setters"
+
+       •   DDSSAA__bbiittss(()), DDSSAA__sseeccuurriittyy__bbiittss(()), DDSSAA__ssiizzee(())
+
+           Use    EEVVPP__PPKKEEYY__ggeett__bbiittss(3),    EEVVPP__PPKKEEYY__ggeett__sseeccuurriittyy__bbiittss(3)   and
+           EEVVPP__PPKKEEYY__ggeett__ssiizzee(3).
+
+       •   DDHHppaarraammss__dduupp(()), DDSSAA__dduupp__DDHH(())
+
+           There   is   no   direct   replacement.   Applications   may    use
+           EEVVPP__PPKKEEYY__ccooppyy__ppaarraammeetteerrss(3) and EEVVPP__PPKKEEYY__dduupp(3) instead.
+
+       •   DDSSAA__ggeenneerraattee__kkeeyy(()), DDSSAA__ggeenneerraattee__ppaarraammeetteerrss__eexx(())
+
+           See "Deprecated low‐level key generation functions".
+
+       •   DDSSAA__ggeett00__eennggiinnee(()),   DDSSAA__ggeett__ddeeffaauulltt__mmeetthhoodd(()),   DDSSAA__ggeett__eexx__ddaattaa(()),
+           DDSSAA__ggeett__mmeetthhoodd(()),  DSA_meth_*(),  DDSSAA__nneeww__mmeetthhoodd(()),  DDSSAA__OOppeennSSSSLL(()),
+           DDSSAA__sseett__ddeeffaauulltt__mmeetthhoodd(()), DDSSAA__sseett__eexx__ddaattaa(()), DDSSAA__sseett__mmeetthhoodd(())
+
+           See  "Providers  are a replacement for engines and low‐level method
+           overrides".
+
+       •   DDSSAA__ggeett00__pp(()),    DDSSAA__ggeett00__qq(()),    DDSSAA__ggeett00__gg(()),     DDSSAA__ggeett00__ppqqgg(()),
+           DDSSAA__ggeett00__kkeeyy(()), DDSSAA__ggeett00__pprriivv__kkeeyy(()), DDSSAA__ggeett00__ppuubb__kkeeyy(())
+
+           See "Deprecated low‐level key parameter getters".
+
+       •   DDSSAA__nneeww(()), DDSSAA__ffrreeee(()), DDSSAA__uupp__rreeff(())
+
+           See "Deprecated low‐level object creation"
+
+       •   DDSSAAppaarraammss__dduupp(())
+
+           There    is   no   direct   replacement.   Applications   may   use
+           EEVVPP__PPKKEEYY__ccooppyy__ppaarraammeetteerrss(3) and EEVVPP__PPKKEEYY__dduupp(3) instead.
+
+       •   DDSSAAppaarraammss__pprriinntt(()),        DDSSAAppaarraammss__pprriinntt__ffpp(()),        DDSSAA__pprriinntt(()),
+           DDSSAA__pprriinntt__ffpp(())
+
+           See "Deprecated low‐level key printing functions"
+
+       •   DDSSAA__sseett00__kkeeyy(()), DDSSAA__sseett00__ppqqgg(())
+
+           See "Deprecated low‐level key parameter setters"
+
+       •   DDSSAA__sseett__ffllaaggss(()), DDSSAA__cclleeaarr__ffllaaggss(()), DDSSAA__tteesstt__ffllaaggss(())
+
+           The   DDSSAA__FFLLAAGG__CCAACCHHEE__MMOONNTT__PP   flag   has  been  deprecated  without
+           replacement.
+
+       •   DDSSAA__ssiiggnn(()),    DDSSAA__ddoo__ssiiggnn(()),    DDSSAA__ssiiggnn__sseettuupp(()),    DDSSAA__vveerriiffyy(()),
+           DDSSAA__ddoo__vveerriiffyy(())
+
+           See "Deprecated low‐level signing functions".
+
+       •   EECCDDHH__ccoommppuuttee__kkeeyy(())
+
+           See "Deprecated low‐level key exchange functions".
+
+       •   EECCDDHH__KKDDFF__XX99__6622(())
+
+           Applications   may  either  set  this  using  the  helper  function
+           EEVVPP__PPKKEEYY__CCTTXX__sseett__eeccddhh__kkddff__ttyyppee(3) or by  setting  an  OOSSSSLL__PPAARRAAMM(3)
+           using the "kdf‐type" as shown in "EXAMPLES" in EEVVPP__KKEEYYEEXXCCHH--EECCDDHH(7)
+
+       •   EECCDDSSAA__ssiiggnn(()), EECCDDSSAA__ssiiggnn__eexx(()), EECCDDSSAA__ssiiggnn__sseettuupp(()), EECCDDSSAA__ddoo__ssiiggnn(()),
+           EECCDDSSAA__ddoo__ssiiggnn__eexx(()), EECCDDSSAA__vveerriiffyy(()), EECCDDSSAA__ddoo__vveerriiffyy(())
+
+           See "Deprecated low‐level signing functions".
+
+       •   EECCDDSSAA__ssiizzee(())
+
+           Applications should use EEVVPP__PPKKEEYY__ggeett__ssiizzee(3).
+
+       •   EECC__GGFF22mm__ssiimmppllee__mmeetthhoodd(()),                      EECC__GGFFpp__mmoonntt__mmeetthhoodd(()),
+           EECC__GGFFpp__nniisstt__mmeetthhoodd(()),                     EECC__GGFFpp__nniissttpp222244__mmeetthhoodd(()),
+           EECC__GGFFpp__nniissttpp225566__mmeetthhoodd(()),                 EECC__GGFFpp__nniissttpp552211__mmeetthhoodd(()),
+           EECC__GGFFpp__ssiimmppllee__mmeetthhoodd(())
+
+           There are no replacements for these functions. Applications  should
+           rely  on  the  library  automatically  assigning  a suitable method
+           internally when an EC_GROUP is constructed.
+
+       •   EECC__GGRROOUUPP__cclleeaarr__ffrreeee(())
+
+           Use EECC__GGRROOUUPP__ffrreeee(3) instead.
+
+       •   EECC__GGRROOUUPP__ggeett__ccuurrvvee__GGFF22mm(()),                EECC__GGRROOUUPP__ggeett__ccuurrvvee__GGFFpp(()),
+           EECC__GGRROOUUPP__sseett__ccuurrvvee__GGFF22mm(()), EECC__GGRROOUUPP__sseett__ccuurrvvee__GGFFpp(())
+
+           Applications      should      use     EECC__GGRROOUUPP__ggeett__ccuurrvvee(3)     and
+           EECC__GGRROOUUPP__sseett__ccuurrvvee(3).
+
+       •   EECC__GGRROOUUPP__hhaavvee__pprreeccoommppuuttee__mmuulltt(()),        EECC__GGRROOUUPP__pprreeccoommppuuttee__mmuulltt(()),
+           EECC__KKEEYY__pprreeccoommppuuttee__mmuulltt(())
+
+           These  functions  are  not widely used. Applications should instead
+           switch to named curves which OpenSSL has  hardcoded  lookup  tables
+           for.
+
+       •   EECC__GGRROOUUPP__nneeww(()), EECC__GGRROOUUPP__mmeetthhoodd__ooff(()), EECC__PPOOIINNTT__mmeetthhoodd__ooff(())
+
+           EC_METHOD  is now an internal‐only concept and a suitable EC_METHOD
+           is assigned internally without application intervention.  Users  of
+           EECC__GGRROOUUPP__nneeww(()) should switch to a different suitable constructor.
+
+       •   EECC__KKEEYY__ccaann__ssiiggnn(())
+
+           Applications should use EEVVPP__PPKKEEYY__ccaann__ssiiggnn(3) instead.
+
+       •   EECC__KKEEYY__cchheecckk__kkeeyy(())
+
+           See "Deprecated low‐level validation functions"
+
+       •   EECC__KKEEYY__sseett__ffllaaggss(()), EECC__KKEEYY__ggeett__ffllaaggss(()), EECC__KKEEYY__cclleeaarr__ffllaaggss(())
+
+           See "Common EC parameters" in EEVVPP__PPKKEEYY--EECC(7) which handles flags as
+           separate parameters for OOSSSSLL__PPKKEEYY__PPAARRAAMM__EECC__PPOOIINNTT__CCOONNVVEERRSSIIOONN__FFOORRMMAATT,
+           OOSSSSLL__PPKKEEYY__PPAARRAAMM__EECC__GGRROOUUPP__CCHHEECCKK__TTYYPPEE,   OOSSSSLL__PPKKEEYY__PPAARRAAMM__EECC__EENNCCOODDIINNGG,
+           OOSSSSLL__PPKKEEYY__PPAARRAAMM__UUSSEE__CCOOFFAACCTTOORR__EECCDDHH                               and
+           OOSSSSLL__PPKKEEYY__PPAARRAAMM__EECC__IINNCCLLUUDDEE__PPUUBBLLIICC.     See   also   "EXAMPLES"   in
+           EEVVPP__PPKKEEYY--EECC(7)
+
+       •   EECC__KKEEYY__dduupp(()), EECC__KKEEYY__ccooppyy(())
+
+           There   is   no   direct   replacement.   Applications   may    use
+           EEVVPP__PPKKEEYY__ccooppyy__ppaarraammeetteerrss(3) and EEVVPP__PPKKEEYY__dduupp(3) instead.
+
+       •   EECC__KKEEYY__ddeeccooddeedd__ffrroomm__eexxpplliicciitt__ppaarraammss(())
+
+           There is no replacement.
+
+       •   EECC__KKEEYY__ggeenneerraattee__kkeeyy(())
+
+           See "Deprecated low‐level key generation functions".
+
+       •   EECC__KKEEYY__ggeett00__ggrroouupp(()),                     EECC__KKEEYY__ggeett00__pprriivvaattee__kkeeyy(()),
+           EECC__KKEEYY__ggeett00__ppuubblliicc__kkeeyy(()),                   EECC__KKEEYY__ggeett__ccoonnvv__ffoorrmm(()),
+           EECC__KKEEYY__ggeett__eenncc__ffllaaggss(())
+
+           See "Deprecated low‐level key parameter getters".
+
+       •   EECC__KKEEYY__ggeett00__eennggiinnee(()),                  EECC__KKEEYY__ggeett__ddeeffaauulltt__mmeetthhoodd(()),
+           EECC__KKEEYY__ggeett__mmeetthhoodd(()),   EECC__KKEEYY__nneeww__mmeetthhoodd(()),   EECC__KKEEYY__ggeett__eexx__ddaattaa(()),
+           EECC__KKEEYY__OOppeennSSSSLL(()),                             EECC__KKEEYY__sseett__eexx__ddaattaa(()),
+           EECC__KKEEYY__sseett__ddeeffaauulltt__mmeetthhoodd(()), EC_KEY_METHOD_*(), EECC__KKEEYY__sseett__mmeetthhoodd(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides"
+
+       •   EECC__MMEETTHHOODD__ggeett__ffiieelldd__ttyyppee(())
+
+           Use  EECC__GGRROOUUPP__ggeett__ffiieelldd__ttyyppee(3)  instead.   See  "Providers  are  a
+           replacement for engines and low‐level method overrides"
+
+       •   EECC__KKEEYY__kkeeyy22bbuuff(()),       EECC__KKEEYY__oocctt22kkeeyy(()),        EECC__KKEEYY__oocctt22pprriivv(()),
+           EECC__KKEEYY__pprriivv22bbuuff(()), EECC__KKEEYY__pprriivv22oocctt(())
+
+           There are no replacements for these.
+
+       •   EECC__KKEEYY__nneeww(()),       EECC__KKEEYY__nneeww__bbyy__ccuurrvvee__nnaammee(()),      EECC__KKEEYY__ffrreeee(()),
+           EECC__KKEEYY__uupp__rreeff(())
+
+           See "Deprecated low‐level object creation"
+
+       •   EECC__KKEEYY__pprriinntt(()), EECC__KKEEYY__pprriinntt__ffpp(())
+
+           See "Deprecated low‐level key printing functions"
+
+       •   EECC__KKEEYY__sseett__aassnn11__ffllaagg(()),                     EECC__KKEEYY__sseett__ccoonnvv__ffoorrmm(()),
+           EECC__KKEEYY__sseett__eenncc__ffllaaggss(())
+
+           See "Deprecated low‐level key parameter setters".
+
+       •   EECC__KKEEYY__sseett__ggrroouupp(()),                       EECC__KKEEYY__sseett__pprriivvaattee__kkeeyy(()),
+           EECC__KKEEYY__sseett__ppuubblliicc__kkeeyy(()), EECC__KKEEYY__sseett__ppuubblliicc__kkeeyy__aaffffiinnee__ccoooorrddiinnaatteess(())
+
+           See "Deprecated low‐level key parameter setters".
+
+       •   EECCPPaarraammeetteerrss__pprriinntt(()),                      EECCPPaarraammeetteerrss__pprriinntt__ffpp(()),
+           EECCPPKKPPaarraammeetteerrss__pprriinntt(()), EECCPPKKPPaarraammeetteerrss__pprriinntt__ffpp(())
+
+           See "Deprecated low‐level key printing functions"
+
+       •   EECC__PPOOIINNTT__bbnn22ppooiinntt(()), EECC__PPOOIINNTT__ppooiinntt22bbnn(())
+
+           These  functions  were  not  particularly  useful,  since  EC point
+           serialization formats are not individual big‐endian integers.
+
+       •   EECC__PPOOIINNTT__ggeett__aaffffiinnee__ccoooorrddiinnaatteess__GGFF22mm(()),
+           EECC__PPOOIINNTT__ggeett__aaffffiinnee__ccoooorrddiinnaatteess__GGFFpp(()),
+           EECC__PPOOIINNTT__sseett__aaffffiinnee__ccoooorrddiinnaatteess__GGFF22mm(()),
+           EECC__PPOOIINNTT__sseett__aaffffiinnee__ccoooorrddiinnaatteess__GGFFpp(())
+
+           Applications  should  use  EECC__PPOOIINNTT__ggeett__aaffffiinnee__ccoooorrddiinnaatteess(3)   and
+           EECC__PPOOIINNTT__sseett__aaffffiinnee__ccoooorrddiinnaatteess(3) instead.
+
+       •   EECC__PPOOIINNTT__ggeett__JJpprroojjeeccttiivvee__ccoooorrddiinnaatteess__GGFFpp(()),
+           EECC__PPOOIINNTT__sseett__JJpprroojjeeccttiivvee__ccoooorrddiinnaatteess__GGFFpp(())
+
+           These  functions  are  not widely used. Applications should instead
+           use        the        EECC__PPOOIINNTT__sseett__aaffffiinnee__ccoooorrddiinnaatteess(3)        and
+           EECC__PPOOIINNTT__ggeett__aaffffiinnee__ccoooorrddiinnaatteess(3) functions.
+
+       •   EECC__PPOOIINNTT__mmaakkee__aaffffiinnee(()), EECC__PPOOIINNTTss__mmaakkee__aaffffiinnee(())
+
+           There  is no replacement. These functions were not widely used, and
+           OpenSSL automatically performs this conversion when needed.
+
+       •   EECC__PPOOIINNTT__sseett__ccoommpprreesssseedd__ccoooorrddiinnaatteess__GGFF22mm(()),
+           EECC__PPOOIINNTT__sseett__ccoommpprreesssseedd__ccoooorrddiinnaatteess__GGFFpp(())
+
+           Applications  should   use   EECC__PPOOIINNTT__sseett__ccoommpprreesssseedd__ccoooorrddiinnaatteess(3)
+           instead.
+
+       •   EECC__PPOOIINNTTss__mmuull(())
+
+           This  function  is not widely used. Applications should instead use
+           the EECC__PPOOIINNTT__mmuull(3) function.
+
+       •   EENNGGIINNEE__**(())
+
+           All engine functions are deprecated. An engine should be  rewritten
+           as  a  provider.   See "Providers are a replacement for engines and
+           low‐level method overrides".
+
+       •   EERRRR__llooaadd__**(()),    EERRRR__ffuunncc__eerrrroorr__ssttrriinngg(()),     EERRRR__ggeett__eerrrroorr__lliinnee(()),
+           EERRRR__ggeett__eerrrroorr__lliinnee__ddaattaa(()), EERRRR__ggeett__ssttaattee(())
+
+           OpenSSL  now  loads  error strings automatically so these functions
+           are not needed.
+
+       •   EERRRR__ppeeeekk__eerrrroorr__lliinnee__ddaattaa(()), EERRRR__ppeeeekk__llaasstt__eerrrroorr__lliinnee__ddaattaa(())
+
+           The      new      functions       are       EERRRR__ppeeeekk__eerrrroorr__ffuunncc(3),
+           EERRRR__ppeeeekk__llaasstt__eerrrroorr__ffuunncc(3),                EERRRR__ppeeeekk__eerrrroorr__ddaattaa(3),
+           EERRRR__ppeeeekk__llaasstt__eerrrroorr__ddaattaa(3),                  EERRRR__ggeett__eerrrroorr__aallll(3),
+           EERRRR__ppeeeekk__eerrrroorr__aallll(3) and EERRRR__ppeeeekk__llaasstt__eerrrroorr__aallll(3).  Applications
+           should  use EERRRR__ggeett__eerrrroorr__aallll(3), or pick information with ERR_peek
+           functions and finish off with  getting  the  error  code  by  using
+           EERRRR__ggeett__eerrrroorr(3).
+
+       •   EEVVPP__CCIIPPHHEERR__CCTTXX__iivv(()),                   EEVVPP__CCIIPPHHEERR__CCTTXX__iivv__nnooccoonnsstt(()),
+           EEVVPP__CCIIPPHHEERR__CCTTXX__oorriiggiinnaall__iivv(())
+
+           Applications should instead  use  EEVVPP__CCIIPPHHEERR__CCTTXX__ggeett__uuppddaatteedd__iivv(3),
+           EEVVPP__CCIIPPHHEERR__CCTTXX__ggeett__uuppddaatteedd__iivv(3)                                and
+           EEVVPP__CCIIPPHHEERR__CCTTXX__ggeett__oorriiggiinnaall__iivv(3)        respectively.          See
+           EEVVPP__CCIIPPHHEERR__CCTTXX__ggeett__oorriiggiinnaall__iivv(3) for further information.
+
+       •   EEVVPP__CCIIPPHHEERR__mmeetthh__**(()),                    EEVVPP__MMDD__CCTTXX__sseett__uuppddaattee__ffnn(()),
+           EEVVPP__MMDD__CCTTXX__uuppddaattee__ffnn(()), EEVVPP__MMDD__mmeetthh__**(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides".
+
+       •   EEVVPP__PPKKEEYY__CCTTRRLL__PPKKCCSS77__EENNCCRRYYPPTT(()),       EEVVPP__PPKKEEYY__CCTTRRLL__PPKKCCSS77__DDEECCRRYYPPTT(()),
+           EEVVPP__PPKKEEYY__CCTTRRLL__PPKKCCSS77__SSIIGGNN(()),            EEVVPP__PPKKEEYY__CCTTRRLL__CCMMSS__EENNCCRRYYPPTT(()),
+           EEVVPP__PPKKEEYY__CCTTRRLL__CCMMSS__DDEECCRRYYPPTT(()), and EEVVPP__PPKKEEYY__CCTTRRLL__CCMMSS__SSIIGGNN(())
+
+           These  control  operations  are  not invoked by the OpenSSL library
+           anymore and are replaced by direct  checks  of  the  key  operation
+           against the key type when the operation is initialized.
+
+       •   EEVVPP__PPKKEEYY__CCTTXX__ggeett00__ddhh__kkddff__uukkmm(()), EEVVPP__PPKKEEYY__CCTTXX__ggeett00__eeccddhh__kkddff__uukkmm(())
+
+           See   the  "kdf‐ukm"  item  in  "DH  key  exchange  parameters"  in
+           EEVVPP__KKEEYYEEXXCCHH--DDHH(7)   and   "ECDH   Key   Exchange   parameters"   in
+           EEVVPP__KKEEYYEEXXCCHH--EECCDDHH(7).   These  functions are obsolete and should not
+           be required.
+
+       •   EEVVPP__PPKKEEYY__CCTTXX__sseett__rrssaa__kkeeyyggeenn__ppuubbeexxpp(())
+
+           Applications  should   use   EEVVPP__PPKKEEYY__CCTTXX__sseett11__rrssaa__kkeeyyggeenn__ppuubbeexxpp(3)
+           instead.
+
+       •   EEVVPP__PPKKEEYY__ccmmpp(()), EEVVPP__PPKKEEYY__ccmmpp__ppaarraammeetteerrss(())
+
+           Applications        should       use       EEVVPP__PPKKEEYY__eeqq(3)       and
+           EEVVPP__PPKKEEYY__ppaarraammeetteerrss__eeqq(3) instead.  See EEVVPP__PPKKEEYY__ccooppyy__ppaarraammeetteerrss(3)
+           for further details.
+
+       •   EEVVPP__PPKKEEYY__eennccrryypptt__oolldd(()), EEVVPP__PPKKEEYY__ddeeccrryypptt__oolldd(()),
+
+           Applications    should     use     EEVVPP__PPKKEEYY__eennccrryypptt__iinniitt(3)     and
+           EEVVPP__PPKKEEYY__eennccrryypptt(3)       or      EEVVPP__PPKKEEYY__ddeeccrryypptt__iinniitt(3)      and
+           EEVVPP__PPKKEEYY__ddeeccrryypptt(3) instead.
+
+       •   EEVVPP__PPKKEEYY__ggeett00(())
+
+           This function returns NULL if the key comes from a provider.
+
+       •   EEVVPP__PPKKEEYY__ggeett00__DDHH(()),  EEVVPP__PPKKEEYY__ggeett00__DDSSAA(()),   EEVVPP__PPKKEEYY__ggeett00__EECC__KKEEYY(()),
+           EEVVPP__PPKKEEYY__ggeett00__RRSSAA(()),    EEVVPP__PPKKEEYY__ggeett11__DDHH(()),    EEVVPP__PPKKEEYY__ggeett11__DDSSAA(()),
+           EVP_PKEY_get1_EC_KEY and EEVVPP__PPKKEEYY__ggeett11__RRSSAA(()), EEVVPP__PPKKEEYY__ggeett00__hhmmaacc(()),
+           EEVVPP__PPKKEEYY__ggeett00__ppoollyy11330055(()), EEVVPP__PPKKEEYY__ggeett00__ssiipphhaasshh(())
+
+           See "Functions that return an internal key  should  be  treated  as
+           read only".
+
+       •   EEVVPP__PPKKEEYY__mmeetthh__**(())
+
+           See  "Providers  are a replacement for engines and low‐level method
+           overrides".
+
+       •   EEVVPP__PPKKEEYY__nneeww__CCMMAACC__kkeeyy(())
+
+           See "Deprecated low‐level MAC functions".
+
+       •   EEVVPP__PPKKEEYY__aassssiiggnn(()),     EEVVPP__PPKKEEYY__sseett11__DDHH(()),     EEVVPP__PPKKEEYY__sseett11__DDSSAA(()),
+           EEVVPP__PPKKEEYY__sseett11__EECC__KKEEYY(()), EEVVPP__PPKKEEYY__sseett11__RRSSAA(())
+
+           See "Deprecated low‐level key object getters and setters"
+
+       •   EEVVPP__PPKKEEYY__sseett11__ttllss__eennccooddeeddppooiinntt(()) EEVVPP__PPKKEEYY__ggeett11__ttllss__eennccooddeeddppooiinntt(())
+
+           These  functions  were  previously  used by libssl to set or get an
+           encoded public key into/from an EVP_PKEY object. With  OpenSSL  3.0
+           these    are    replaced    by    the    more   generic   functions
+           EEVVPP__PPKKEEYY__sseett11__eennccooddeedd__ppuubblliicc__kkeeyy(3)                             and
+           EEVVPP__PPKKEEYY__ggeett11__eennccooddeedd__ppuubblliicc__kkeeyy(3).   The  old  versions have been
+           converted to deprecated macros that just call the new functions.
+
+       •   EEVVPP__PPKKEEYY__sseett11__eennggiinnee(()), EEVVPP__PPKKEEYY__ggeett00__eennggiinnee(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides".
+
+       •   EEVVPP__PPKKEEYY__sseett__aalliiaass__ttyyppee(())
+
+           This  function  has  been  removed.  There  is no replacement.  See
+           "EEVVPP__PPKKEEYY__sseett__aalliiaass__ttyyppee(()) method has been removed"
+
+       •   HHMMAACC__IInniitt__eexx(()), HHMMAACC__UUppddaattee(()), HHMMAACC__FFiinnaall(()), HHMMAACC__ssiizzee(())
+
+           See "Deprecated low‐level MAC functions".
+
+       •   HHMMAACC__CCTTXX__nneeww(()), HHMMAACC__CCTTXX__ffrreeee(()), HHMMAACC__CCTTXX__ccooppyy(()), HHMMAACC__CCTTXX__rreesseett(()),
+           HHMMAACC__CCTTXX__sseett__ffllaaggss(()), HHMMAACC__CCTTXX__ggeett__mmdd(())
+
+           See "Deprecated low‐level MAC functions".
+
+       •   ii22dd__DDHHppaarraammss(()), ii22dd__DDHHxxppaarraammss(())
+
+           See "Deprecated low‐level key reading and  writing  functions"  and
+           "Migration" in dd22ii__RRSSAAPPrriivvaatteeKKeeyy(3)
+
+       •   ii22dd__DDSSAAppaarraammss(()),    ii22dd__DDSSAAPPrriivvaatteeKKeeyy(()),   ii22dd__DDSSAAPPrriivvaatteeKKeeyy__bbiioo(()),
+           ii22dd__DDSSAAPPrriivvaatteeKKeeyy__ffpp(()),   ii22dd__DDSSAA__PPUUBBKKEEYY(()),   ii22dd__DDSSAA__PPUUBBKKEEYY__bbiioo(()),
+           ii22dd__DDSSAA__PPUUBBKKEEYY__ffpp(()), ii22dd__DDSSAAPPuubblliiccKKeeyy(())
+
+           See  "Deprecated  low‐level  key reading and writing functions" and
+           "Migration" in dd22ii__RRSSAAPPrriivvaatteeKKeeyy(3)
+
+       •   ii22dd__EECCPPaarraammeetteerrss(()),   ii22dd__EECCPPrriivvaatteeKKeeyy(()),   ii22dd__EECCPPrriivvaatteeKKeeyy__bbiioo(()),
+           ii22dd__EECCPPrriivvaatteeKKeeyy__ffpp(()),     ii22dd__EECC__PPUUBBKKEEYY(()),    ii22dd__EECC__PPUUBBKKEEYY__bbiioo(()),
+           ii22dd__EECC__PPUUBBKKEEYY__ffpp(()), ii22oo__EECCPPuubblliiccKKeeyy(())
+
+           See "Deprecated low‐level key reading and  writing  functions"  and
+           "Migration" in dd22ii__RRSSAAPPrriivvaatteeKKeeyy(3)
+
+       •   ii22dd__RRSSAAPPrriivvaatteeKKeeyy(()),                       ii22dd__RRSSAAPPrriivvaatteeKKeeyy__bbiioo(()),
+           ii22dd__RRSSAAPPrriivvaatteeKKeeyy__ffpp(()),   ii22dd__RRSSAA__PPUUBBKKEEYY(()),   ii22dd__RRSSAA__PPUUBBKKEEYY__bbiioo(()),
+           ii22dd__RRSSAA__PPUUBBKKEEYY__ffpp(()),   ii22dd__RRSSAAPPuubblliiccKKeeyy(()),  ii22dd__RRSSAAPPuubblliiccKKeeyy__bbiioo(()),
+           ii22dd__RRSSAAPPuubblliiccKKeeyy__ffpp(())
+
+           See "Deprecated low‐level key reading and  writing  functions"  and
+           "Migration" in dd22ii__RRSSAAPPrriivvaatteeKKeeyy(3)
+
+       •   IIDDEEAA__eennccrryypptt(()),   IIDDEEAA__sseett__ddeeccrryypptt__kkeeyy(()),   IIDDEEAA__sseett__eennccrryypptt__kkeeyy(()),
+           IIDDEEAA__ccbbcc__eennccrryypptt(()),    IIDDEEAA__ccffbb6644__eennccrryypptt(()),    IIDDEEAA__eeccbb__eennccrryypptt(()),
+           IIDDEEAA__ooffbb6644__eennccrryypptt(())
+
+           See  "Deprecated  low‐level  encryption  functions".  IDEA has been
+           moved to the Legacy Provider.
+
+       •   IIDDEEAA__ooppttiioonnss(())
+
+           There is no replacement. This function returned a constant string.
+
+       •   MMDD22(()), MMDD22__IInniitt(()), MMDD22__UUppddaattee(()), MMDD22__FFiinnaall(())
+
+           See "Deprecated low‐level  encryption  functions".   MD2  has  been
+           moved to the Legacy Provider.
+
+       •   MMDD22__ooppttiioonnss(())
+
+           There is no replacement. This function returned a constant string.
+
+       •   MMDD44(()), MMDD44__IInniitt(()), MMDD44__UUppddaattee(()), MMDD44__FFiinnaall(()), MMDD44__TTrraannssffoorrmm(())
+
+           See  "Deprecated  low‐level  encryption  functions".   MD4 has been
+           moved to the Legacy Provider.
+
+       •   MMDDCC22(()), MMDDCC22__IInniitt(()), MMDDCC22__UUppddaattee(()), MMDDCC22__FFiinnaall(())
+
+           See "Deprecated low‐level encryption  functions".   MDC2  has  been
+           moved to the Legacy Provider.
+
+       •   MMDD55(()), MMDD55__IInniitt(()), MMDD55__UUppddaattee(()), MMDD55__FFiinnaall(()), MMDD55__TTrraannssffoorrmm(())
+
+           See "Deprecated low‐level encryption functions".
+
+       •   NNCCOONNFF__WWIINN3322(())
+
+           This  undocumented  function  has no replacement.  See "HISTORY" in
+           ccoonnffiigg(5) for more details.
+
+       •   OOCCSSPP__ppaarrssee__uurrll(())
+
+           Use OOSSSSLL__HHTTTTPP__ppaarrssee__uurrll(3) instead.
+
+       •   OOCCSSPP__RREEQQ__CCTTXX type and OOCCSSPP__RREEQQ__CCTTXX__**(()) functions
+
+           These methods were used to collect all necessary  data  to  form  a
+           HTTP  request,  and to perform the HTTP transfer with that request.
+           With OpenSSL 3.0, the type is OOSSSSLL__HHTTTTPP__RREEQQ__CCTTXX, and the deprecated
+           functions   are   replaced    with    OOSSSSLL__HHTTTTPP__RREEQQ__CCTTXX__**(()).    See
+           OOSSSSLL__HHTTTTPP__RREEQQ__CCTTXX(3) for additional details.
+
+       •   OOPPEENNSSSSLL__ffoorrkk__cchhiilldd(()), OOPPEENNSSSSLL__ffoorrkk__ppaarreenntt(()), OOPPEENNSSSSLL__ffoorrkk__pprreeppaarree(())
+
+           There  is  no  replacement  for these functions. These pthread fork
+           support methods were unused by OpenSSL.
+
+       •   OOSSSSLL__SSTTOORREE__ccttrrll(()),                     OOSSSSLL__SSTTOORREE__ddoo__aallll__llooaaddeerrss(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__ggeett00__eennggiinnee(()),   OOSSSSLL__SSTTOORREE__LLOOAADDEERR__ggeett00__sscchheemmee(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__nneeww(()),            OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__aattttaacchh(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__cclloossee(()),        OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__ccttrrll(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__eeooff(()),         OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__eerrrroorr(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__eexxppeecctt(()),       OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__ffiinndd(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__llooaadd(()),         OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__ooppeenn(()),
+           OOSSSSLL__SSTTOORREE__LLOOAADDEERR__sseett__ooppeenn__eexx(()),      OOSSSSLL__SSTTOORREE__rreeggiisstteerr__llooaaddeerr(()),
+           OOSSSSLL__SSTTOORREE__uunnrreeggiisstteerr__llooaaddeerr(()), OOSSSSLL__SSTTOORREE__vvccttrrll(())
+
+           These functions helped applications and engines create loaders  for
+           schemes  they  supported.  These are all deprecated and discouraged
+           in favour of provider implementations, see pprroovviiddeerr--ssttoorreemmggmmtt(7).
+
+       •   PPEEMM__rreeaadd__DDHHppaarraammss(()), PPEEMM__rreeaadd__bbiioo__DDHHppaarraammss(()), PPEEMM__rreeaadd__DDSSAAppaarraammss(()),
+           PPEEMM__rreeaadd__bbiioo__DDSSAAppaarraammss(()),                 PPEEMM__rreeaadd__DDSSAAPPrriivvaatteeKKeeyy(()),
+           PPEEMM__rreeaadd__DDSSAA__PPUUBBKKEEYY(()),        PEM_read_bio_DSAPrivateKey        and
+           PPEEMM__rreeaadd__bbiioo__DDSSAA__PPUUBBKKEEYY(()),               PPEEMM__rreeaadd__EECCPPKKPPaarraammeetteerrss(()),
+           PPEEMM__rreeaadd__EECCPPrriivvaatteeKKeeyy(()),                      PPEEMM__rreeaadd__EECC__PPUUBBKKEEYY(()),
+           PPEEMM__rreeaadd__bbiioo__EECCPPKKPPaarraammeetteerrss(()),         PPEEMM__rreeaadd__bbiioo__EECCPPrriivvaatteeKKeeyy(()),
+           PPEEMM__rreeaadd__bbiioo__EECC__PPUUBBKKEEYY(()),                 PPEEMM__rreeaadd__RRSSAAPPrriivvaatteeKKeeyy(()),
+           PPEEMM__rreeaadd__RRSSAA__PPUUBBKKEEYY(()),                     PPEEMM__rreeaadd__RRSSAAPPuubblliiccKKeeyy(()),
+           PPEEMM__rreeaadd__bbiioo__RRSSAAPPrriivvaatteeKKeeyy(()),            PPEEMM__rreeaadd__bbiioo__RRSSAA__PPUUBBKKEEYY(()),
+           PPEEMM__rreeaadd__bbiioo__RRSSAAPPuubblliiccKKeeyy(()),              PPEEMM__wwrriittee__bbiioo__DDHHppaarraammss(()),
+           PPEEMM__wwrriittee__bbiioo__DDHHxxppaarraammss(()),                    PPEEMM__wwrriittee__DDHHppaarraammss(()),
+           PPEEMM__wwrriittee__DDHHxxppaarraammss(()),                       PPEEMM__wwrriittee__DDSSAAppaarraammss(()),
+           PPEEMM__wwrriittee__DDSSAAPPrriivvaatteeKKeeyy(()),                  PPEEMM__wwrriittee__DDSSAA__PPUUBBKKEEYY(()),
+           PPEEMM__wwrriittee__bbiioo__DDSSAAppaarraammss(()),           PPEEMM__wwrriittee__bbiioo__DDSSAAPPrriivvaatteeKKeeyy(()),
+           PPEEMM__wwrriittee__bbiioo__DDSSAA__PPUUBBKKEEYY(()),             PPEEMM__wwrriittee__EECCPPKKPPaarraammeetteerrss(()),
+           PPEEMM__wwrriittee__EECCPPrriivvaatteeKKeeyy(()),                    PPEEMM__wwrriittee__EECC__PPUUBBKKEEYY(()),
+           PPEEMM__wwrriittee__bbiioo__EECCPPKKPPaarraammeetteerrss(()),       PPEEMM__wwrriittee__bbiioo__EECCPPrriivvaatteeKKeeyy(()),
+           PPEEMM__wwrriittee__bbiioo__EECC__PPUUBBKKEEYY(()),               PPEEMM__wwrriittee__RRSSAAPPrriivvaatteeKKeeyy(()),
+           PPEEMM__wwrriittee__RRSSAA__PPUUBBKKEEYY(()),                   PPEEMM__wwrriittee__RRSSAAPPuubblliiccKKeeyy(()),
+           PPEEMM__wwrriittee__bbiioo__RRSSAAPPrriivvaatteeKKeeyy(()),          PPEEMM__wwrriittee__bbiioo__RRSSAA__PPUUBBKKEEYY(()),
+           PPEEMM__wwrriittee__bbiioo__RRSSAAPPuubblliiccKKeeyy(()),
+
+           See "Deprecated low‐level key reading and writing functions"
+
+       •   PPKKCCSS11__MMGGFF11(())
+
+           See "Deprecated low‐level encryption functions".
+
+       •   RRAANNDD__ggeett__rraanndd__mmeetthhoodd(()),   RRAANNDD__sseett__rraanndd__mmeetthhoodd(()),   RRAANNDD__OOppeennSSSSLL(()),
+           RRAANNDD__sseett__rraanndd__eennggiinnee(())
+
+           Applications should instead use RRAANNDD__sseett__DDRRBBGG__ttyyppee(3),  EEVVPP__RRAANNDD(3)
+           and EEVVPP__RRAANNDD(7).  See RRAANNDD__sseett__rraanndd__mmeetthhoodd(3) for more details.
+
+       •   RRCC22__eennccrryypptt(()),   RRCC22__ddeeccrryypptt(()),  RRCC22__sseett__kkeeyy(()),  RRCC22__ccbbcc__eennccrryypptt(()),
+           RRCC22__ccffbb6644__eennccrryypptt(()), RRCC22__eeccbb__eennccrryypptt(()), RRCC22__ooffbb6644__eennccrryypptt(()), RRCC44(()),
+           RRCC44__sseett__kkeeyy(()), RRCC44__ooppttiioonnss(()),  RRCC55__3322__eennccrryypptt(()),  RRCC55__3322__sseett__kkeeyy(()),
+           RRCC55__3322__ddeeccrryypptt(()),   RRCC55__3322__ccbbcc__eennccrryypptt(()),   RRCC55__3322__ccffbb6644__eennccrryypptt(()),
+           RRCC55__3322__eeccbb__eennccrryypptt(()), RRCC55__3322__ooffbb6644__eennccrryypptt(())
+
+           See "Deprecated low‐level encryption  functions".   The  Algorithms
+           "RC2", "RC4" and "RC5" have been moved to the Legacy Provider.
+
+       •   RRIIPPEEMMDD116600(()),          RRIIPPEEMMDD116600__IInniitt(()),         RRIIPPEEMMDD116600__UUppddaattee(()),
+           RRIIPPEEMMDD116600__FFiinnaall(()), RRIIPPEEMMDD116600__TTrraannssffoorrmm(())
+
+           See "Deprecated low‐level digest functions".   The  RIPE  algorithm
+           has been moved to the Legacy Provider.
+
+       •   RRSSAA__bbiittss(()), RRSSAA__sseeccuurriittyy__bbiittss(()), RRSSAA__ssiizzee(())
+
+           Use    EEVVPP__PPKKEEYY__ggeett__bbiittss(3),    EEVVPP__PPKKEEYY__ggeett__sseeccuurriittyy__bbiittss(3)   and
+           EEVVPP__PPKKEEYY__ggeett__ssiizzee(3).
+
+       •   RRSSAA__cchheecckk__kkeeyy(()), RRSSAA__cchheecckk__kkeeyy__eexx(())
+
+           See "Deprecated low‐level validation functions"
+
+       •   RRSSAA__cclleeaarr__ffllaaggss(()), RRSSAA__ffllaaggss(()), RRSSAA__sseett__ffllaaggss(()),  RRSSAA__tteesstt__ffllaaggss(()),
+           RRSSAA__sseettuupp__bblliinnddiinngg(()), RRSSAA__bblliinnddiinngg__ooffff(()), RRSSAA__bblliinnddiinngg__oonn(())
+
+           All of these RSA flags have been deprecated without replacement:
+
+           RRSSAA__FFLLAAGG__BBLLIINNDDIINNGG,  RRSSAA__FFLLAAGG__CCAACCHHEE__PPRRIIVVAATTEE,  RRSSAA__FFLLAAGG__CCAACCHHEE__PPUUBBLLIICC,
+           RRSSAA__FFLLAAGG__EEXXTT__PPKKEEYY,    RRSSAA__FFLLAAGG__NNOO__BBLLIINNDDIINNGG,    RRSSAA__FFLLAAGG__TTHHRREEAADD__SSAAFFEE
+           RRSSAA__MMEETTHHOODD__FFLLAAGG__NNOO__CCHHEECCKK
+
+       •   RRSSAA__ggeenneerraattee__kkeeyy__eexx(()), RRSSAA__ggeenneerraattee__mmuullttii__pprriimmee__kkeeyy(())
+
+           See "Deprecated low‐level key generation functions".
+
+       •   RRSSAA__ggeett00__eennggiinnee(())
+
+           See  "Providers  are a replacement for engines and low‐level method
+           overrides"
+
+       •   RRSSAA__ggeett00__ccrrtt__ppaarraammss(()),        RRSSAA__ggeett00__dd(()),        RRSSAA__ggeett00__ddmmpp11(()),
+           RRSSAA__ggeett00__ddmmqq11(()), RRSSAA__ggeett00__ee(()), RRSSAA__ggeett00__ffaaccttoorrss(()), RRSSAA__ggeett00__iiqqmmpp(()),
+           RRSSAA__ggeett00__kkeeyy(()),                  RRSSAA__ggeett00__mmuullttii__pprriimmee__ccrrtt__ppaarraammss(()),
+           RRSSAA__ggeett00__mmuullttii__pprriimmee__ffaaccttoorrss(()),     RRSSAA__ggeett00__nn(()),     RRSSAA__ggeett00__pp(()),
+           RRSSAA__ggeett00__ppssss__ppaarraammss(()),                                RRSSAA__ggeett00__qq(()),
+           RRSSAA__ggeett__mmuullttii__pprriimmee__eexxttrraa__ccoouunntt(())
+
+           See "Deprecated low‐level key parameter getters"
+
+       •   RRSSAA__nneeww(()), RRSSAA__ffrreeee(()), RRSSAA__uupp__rreeff(())
+
+           See "Deprecated low‐level object creation".
+
+       •   RRSSAA__ggeett__ddeeffaauulltt__mmeetthhoodd(()), RSA_get_ex_data and RRSSAA__ggeett__mmeetthhoodd(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides".
+
+       •   RRSSAA__ggeett__vveerrssiioonn(())
+
+           There is no replacement.
+
+       •   RRSSAA__mmeetthh__**(()),       RRSSAA__nneeww__mmeetthhoodd(()),      RSA_null_method      and
+           RRSSAA__PPKKCCSS11__OOppeennSSSSLL(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides".
+
+       •   RRSSAA__ppaaddddiinngg__aadddd__**(()), RRSSAA__ppaaddddiinngg__cchheecckk__**(())
+
+           See  "Deprecated  low‐level signing functions" and "Deprecated low‐
+           level encryption functions".
+
+       •   RRSSAA__pprriinntt(()), RRSSAA__pprriinntt__ffpp(())
+
+           See "Deprecated low‐level key printing functions"
+
+       •   RRSSAA__ppuubblliicc__eennccrryypptt(()), RRSSAA__pprriivvaattee__ddeeccrryypptt(())
+
+           See "Deprecated low‐level encryption functions"
+
+       •   RRSSAA__pprriivvaattee__eennccrryypptt(()), RRSSAA__ppuubblliicc__ddeeccrryypptt(())
+
+           This is equivalent to doing  sign  and  verify  recover  operations
+           (with  a  padding  mode of none). See "Deprecated low‐level signing
+           functions".
+
+       •   RRSSAAPPrriivvaatteeKKeeyy__dduupp(()), RRSSAAPPuubblliiccKKeeyy__dduupp(())
+
+           There   is   no   direct   replacement.   Applications   may    use
+           EEVVPP__PPKKEEYY__dduupp(3).
+
+       •   RRSSAAPPuubblliiccKKeeyy__iitt(()), RRSSAAPPrriivvaatteeKKeeyy__iitt(())
+
+           See "Deprecated low‐level key reading and writing functions"
+
+       •   RRSSAA__sseett00__ccrrtt__ppaarraammss(()),      RRSSAA__sseett00__ffaaccttoorrss(()),     RRSSAA__sseett00__kkeeyy(()),
+           RRSSAA__sseett00__mmuullttii__pprriimmee__ppaarraammss(())
+
+           See "Deprecated low‐level key parameter setters".
+
+       •   RRSSAA__sseett__ddeeffaauulltt__mmeetthhoodd(()), RRSSAA__sseett__mmeetthhoodd(()), RRSSAA__sseett__eexx__ddaattaa(())
+
+           See "Providers are a replacement for engines and  low‐level  method
+           overrides"
+
+       •   RRSSAA__ssiiggnn(()),       RRSSAA__ssiiggnn__AASSNN11__OOCCTTEETT__SSTTRRIINNGG(()),       RRSSAA__vveerriiffyy(()),
+           RRSSAA__vveerriiffyy__AASSNN11__OOCCTTEETT__SSTTRRIINNGG(()),             RRSSAA__vveerriiffyy__PPKKCCSS11__PPSSSS(()),
+           RRSSAA__vveerriiffyy__PPKKCCSS11__PPSSSS__mmggff11(())
+
+           See "Deprecated low‐level signing functions".
+
+       •   RRSSAA__XX993311__ddeerriivvee__eexx(()),                   RRSSAA__XX993311__ggeenneerraattee__kkeeyy__eexx(()),
+           RRSSAA__XX993311__hhaasshh__iidd(())
+
+           There are no replacements for these functions.  X931 padding can be
+           set using  "Signature  Parameters"  in  EEVVPP__SSIIGGNNAATTUURREE--RRSSAA(7).   See
+           OOSSSSLL__SSIIGGNNAATTUURREE__PPAARRAAMM__PPAADD__MMOODDEE.
+
+       •   SSEEEEDD__eennccrryypptt(()), SSEEEEDD__ddeeccrryypptt(()), SSEEEEDD__sseett__kkeeyy(()), SSEEEEDD__ccbbcc__eennccrryypptt(()),
+           SSEEEEDD__ccffbb112288__eennccrryypptt(()), SSEEEEDD__eeccbb__eennccrryypptt(()), SSEEEEDD__ooffbb112288__eennccrryypptt(())
+
+           See   "Deprecated   low‐level   encryption  functions".   The  SEED
+           algorithm has been moved to the Legacy Provider.
+
+       •   SSHHAA11__IInniitt(()),   SSHHAA11__UUppddaattee(()),    SSHHAA11__FFiinnaall(()),    SSHHAA11__TTrraannssffoorrmm(()),
+           SSHHAA222244__IInniitt(()),   SSHHAA222244__UUppddaattee(()),   SSHHAA222244__FFiinnaall(()),  SSHHAA225566__IInniitt(()),
+           SSHHAA225566__UUppddaattee(()), SSHHAA225566__FFiinnaall(()), SSHHAA225566__TTrraannssffoorrmm(()), SSHHAA338844__IInniitt(()),
+           SSHHAA338844__UUppddaattee(()),  SSHHAA338844__FFiinnaall(()),  SSHHAA551122__IInniitt(()),  SSHHAA551122__UUppddaattee(()),
+           SSHHAA551122__FFiinnaall(()), SSHHAA551122__TTrraannssffoorrmm(())
+
+           See "Deprecated low‐level digest functions".
+
+       •   SSRRPP__CCaallcc__AA(()),          SSRRPP__CCaallcc__BB(()),         SSRRPP__CCaallcc__cclliieenntt__kkeeyy(()),
+           SSRRPP__CCaallcc__sseerrvveerr__kkeeyy(()),         SSRRPP__CCaallcc__uu(()),          SSRRPP__CCaallcc__xx(()),
+           SSRRPP__cchheecckk__kknnoowwnn__ggNN__ppaarraamm(()),                  SSRRPP__ccrreeaattee__vveerriiffiieerr(()),
+           SSRRPP__ccrreeaattee__vveerriiffiieerr__BBNN(()),                     SSRRPP__ggeett__ddeeffaauulltt__ggNN(()),
+           SSRRPP__uusseerr__ppwwdd__ffrreeee(()),   SSRRPP__uusseerr__ppwwdd__nneeww(()),  SSRRPP__uusseerr__ppwwdd__sseett00__ssvv(()),
+           SSRRPP__uusseerr__ppwwdd__sseett11__iiddss(()),                     SSRRPP__uusseerr__ppwwdd__sseett__ggNN(()),
+           SSRRPP__VVBBAASSEE__aadddd00__uusseerr(()),  SSRRPP__VVBBAASSEE__ffrreeee(()), SSRRPP__VVBBAASSEE__ggeett11__bbyy__uusseerr(()),
+           SSRRPP__VVBBAASSEE__iinniitt(()),      SSRRPP__VVBBAASSEE__nneeww(()),       SSRRPP__VVeerriiffyy__AA__mmoodd__NN(()),
+           SSRRPP__VVeerriiffyy__BB__mmoodd__NN(())
+
+           There are no replacements for the SRP functions.
+
+       •   SSSSLL__CCTTXX__sseett__ttmmpp__ddhh__ccaallllbbaacckk(()),           SSSSLL__sseett__ttmmpp__ddhh__ccaallllbbaacckk(()),
+           SSSSLL__CCTTXX__sseett__ttmmpp__ddhh(()), SSSSLL__sseett__ttmmpp__ddhh(())
+
+           These are used to set the Diffie‐Hellman (DH) parameters  that  are
+           to  be  used  by  servers  requiring  ephemeral  DH  keys.  Instead
+           applications should consider using the built‐in DH parameters  that
+           are     available     by    calling    SSSSLL__CCTTXX__sseett__ddhh__aauuttoo(3)    or
+           SSSSLL__sseett__ddhh__aauuttoo(3).  If  custom  parameters  are   necessary   then
+           applications      can     use     the     alternative     functions
+           SSSSLL__CCTTXX__sseett00__ttmmpp__ddhh__ppkkeeyy(3) and SSSSLL__sseett00__ttmmpp__ddhh__ppkkeeyy(3).  There  is
+           no  direct  replacement  for the "callback" functions. The callback
+           was originally useful in order to  have  different  parameters  for
+           export  and  non‐export  ciphersuites.  Export  ciphersuites are no
+           longer supported by OpenSSL. Use of the callback  functions  should
+           be replaced by one of the other methods described above.
+
+       •   SSSSLL__CCTTXX__sseett__ttllsseexxtt__ttiicckkeett__kkeeyy__ccbb(())
+
+           Use   the   new   SSSSLL__CCTTXX__sseett__ttllsseexxtt__ttiicckkeett__kkeeyy__eevvpp__ccbb(3)  function
+           instead.
+
+       •   WWHHIIRRLLPPOOOOLL(()),         WWHHIIRRLLPPOOOOLL__IInniitt(()),          WWHHIIRRLLPPOOOOLL__UUppddaattee(()),
+           WWHHIIRRLLPPOOOOLL__FFiinnaall(()), WWHHIIRRLLPPOOOOLL__BBiittUUppddaattee(())
+
+           See   "Deprecated   low‐level  digest  functions".   The  Whirlpool
+           algorithm has been moved to the Legacy Provider.
+
+       •   XX550099__cceerrttiiffiiccaattee__ttyyppee(())
+
+           This  was  an   undocumented   function.   Applications   can   use
+           XX550099__ggeett00__ppuubbkkeeyy(3) and XX550099__ggeett00__ssiiggnnaattuurree(3) instead.
+
+       •   XX550099__hhttttpp__nnbbiioo(()), XX550099__CCRRLL__hhttttpp__nnbbiioo(())
+
+           Use XX550099__llooaadd__hhttttpp(3) and XX550099__CCRRLL__llooaadd__hhttttpp(3) instead.
+
+       _N_I_D _h_a_n_d_l_i_n_g _f_o_r _p_r_o_v_i_d_e_d _k_e_y_s _a_n_d _a_l_g_o_r_i_t_h_m_s
+
+       The  following  functions  for  NID  (numeric id) handling have changed
+       semantics.
+
+       •   EEVVPP__PPKKEEYY__iidd(()), EEVVPP__PPKKEEYY__ggeett__iidd(())
+
+           This function was previously used to reliably return the NID of  an
+           EVP_PKEY object, e.g., to look up the name of the algorithm of such
+           EVP_PKEY   by  calling  OOBBJJ__nniidd22ssnn(3).  With  the  introduction  of
+           pprroovviiddeerr(7)s EEVVPP__PPKKEEYY__iidd(()) or its new equivalent EEVVPP__PPKKEEYY__ggeett__iidd(3)
+           might now also return the value  -1  (EEVVPP__PPKKEEYY__KKEEYYMMGGMMTT)  indicating
+           the  use of a provider to implement the EVP_PKEY object. Therefore,
+           the use of EEVVPP__PPKKEEYY__ggeett00__ttyyppee__nnaammee(3) is recommended for retrieving
+           the name of the EVP_PKEY algorithm.
+
+   UUssiinngg tthhee FFIIPPSS MMoodduullee iinn aapppplliiccaattiioonnss
+       See ffiippss__mmoodduullee(7) and OOSSSSLL__PPRROOVVIIDDEERR--FFIIPPSS(7) for details.
+
+   OOppeennSSSSLL ccoommmmaanndd lliinnee aapppplliiccaattiioonn cchhaannggeess
+       _N_e_w _a_p_p_l_i_c_a_t_i_o_n_s
+
+       ooppeennssssll kkddff uses the new EEVVPP__KKDDFF(3) API.   ooppeennssssll  kkddff  uses  the  new
+       EEVVPP__MMAACC(3) API.
+
+       _A_d_d_e_d _o_p_t_i_o_n_s
+
+       --pprroovviiddeerr__ppaatthh  and --pprroovviiddeerr are available to all apps and can be used
+       multiple times to load any providers, such as the ’legacy’ provider  or
+       third  party  providers. If used then the ’default’ provider would also
+       need to be specified if required. The --pprroovviiddeerr__ppaatthh must be  specified
+       before the --pprroovviiddeerr option.
+
+       The  lliisstt  app  has  many  new  options.  See  ooppeennssssll--lliisstt(1) for more
+       information.
+
+       --ccrrll__llaassttuuppddaattee and --ccrrll__nneexxttuuppddaattee used by ooppeennssssll ccaa allows  explicit
+       setting of fields in the generated CRL.
+
+       _R_e_m_o_v_e_d _o_p_t_i_o_n_s
+
+       Interactive mode is not longer available.
+
+       The  --ccrryypptt  option  used  by  ooppeennssssll  ppaasssswwdd.   The --cc option used by
+       ooppeennssssll xx550099, ooppeennssssll ddhhppaarraamm, ooppeennssssll ddssaappaarraamm, and ooppeennssssll eeccppaarraamm.
+
+       _O_t_h_e_r _C_h_a_n_g_e_s
+
+       The output of Command line applications may have minor changes.   These
+       are  primarily  changes in capitalisation and white space.  However, in
+       some cases, there are additional  differences.   For  example,  the  DH
+       parameters  output  from  ooppeennssssll  ddhhppaarraamm  now lists ’P’, ’Q’, ’G’ and
+       ’pcounter’  instead  of  ’prime’,  ’generator’,  ’subgroup  order’  and
+       ’counter’ respectively.
+
+       The  ooppeennssssll  commands  that  read  keys,  certificates,  and  CRLs now
+       automatically detect the PEM or DER format of the input files so it  is
+       not  necessary  to explicitly specify the input format anymore. However
+       if the input format  option  is  used  the  specified  format  will  be
+       required.
+
+       ooppeennssssll ssppeeeedd no longer uses low‐level API calls.  This implies some of
+       the  performance  numbers  might  not  be  comparable with the previous
+       releases due to higher overhead. This applies particularly to measuring
+       performance on smaller data chunks.
+
+       b<openssl dhparam>, ooppeennssssll  ddssaa,  ooppeennssssll  ggeennddssaa,  ooppeennssssll  ddssaappaarraamm,
+       ooppeennssssll  ggeennrrssaa  and  ooppeennssssll  rrssaa have been modified to use PKEY APIs.
+       ooppeennssssll ggeennrrssaa and ooppeennssssll rrssaa now write PKCS #8 keys by default.
+
+       _D_e_f_a_u_l_t _s_e_t_t_i_n_g_s
+
+       "SHA256" is now the default digest for TS query used by ooppeennssssll ttss.
+
+       _D_e_p_r_e_c_a_t_e_d _a_p_p_s
+
+       ooppeennssssll rrssaauuttll is deprecated, use  ooppeennssssll  ppkkeeyyuuttll  instead.   ooppeennssssll
+       ddhhppaarraamm, ooppeennssssll ddssaa, ooppeennssssll ggeennddssaa, ooppeennssssll ddssaappaarraamm, ooppeennssssll ggeennrrssaa,
+       ooppeennssssll rrssaa, ooppeennssssll ggeennrrssaa and ooppeennssssll rrssaa are now in maintenance mode
+       and no new features will be added to them.
+
+   TTLLSS CChhaannggeess
+       •   TLS 1.3 FFDHE key exchange support added
+
+           This uses DH safe prime named groups.
+
+       •   Support for fully "pluggable" TLSv1.3 groups.
+
+           This   means   that   providers   may   supply   their   own  group
+           implementations (using  either  the  "key  exchange"  or  the  "key
+           encapsulation"  methods)  which  will automatically be detected and
+           used by libssl.
+
+       •   SSL and SSL_CTX options are now 64 bit instead of 32 bit.
+
+           The signatures of the functions to get and set options on  SSL  and
+           SSL_CTX objects changed from "unsigned long" to "uint64_t" type.
+
+           This  may  require source code changes. For example it is no longer
+           possible to use the SSSSLL__OOPP__  macro  values  in  preprocessor  "#if"
+           conditions.   However  it  is  still possible to test whether these
+           macros are defined or not.
+
+           See         SSSSLL__CCTTXX__ggeett__ooppttiioonnss(3),         SSSSLL__CCTTXX__sseett__ooppttiioonnss(3),
+           SSSSLL__ggeett__ooppttiioonnss(3) and SSSSLL__sseett__ooppttiioonnss(3).
+
+       •   SSSSLL__sseett11__hhoosstt(()) and SSSSLL__aadddd11__hhoosstt(()) Changes
+
+           These  functions  now  take  IP literal addresses as well as actual
+           hostnames.
+
+       •   Added SSL option SSL_OP_CLEANSE_PLAINTEXT
+
+           If the option is set, openssl cleanses (zeroizes)  plaintext  bytes
+           from  internal  buffers  after  delivering them to the application.
+           Note, the application is  still  responsible  for  cleansing  other
+           copies (e.g.: data received by SSSSLL__rreeaadd(3)).
+
+       •   Client‐initiated renegotiation is disabled by default.
+
+           To   allow   it,   use   the   --cclliieenntt__rreenneeggoottiiaattiioonn   option,  the
+           SSSSLL__OOPP__AALLLLOOWW__CCLLIIEENNTT__RREENNEEGGOOTTIIAATTIIOONN        flag,        or        the
+           "ClientRenegotiation" config parameter as appropriate.
+
+       •   Secure renegotiation is now required by default for TLS connections
+
+           Support  for  RFC  5746  secure  renegotiation  is  now required by
+           default for SSL or TLS connections to succeed.   Applications  that
+           require  the  ability  to  connect  to  legacy  peers  will need to
+           explicitly    set    SSL_OP_LEGACY_SERVER_CONNECT.     Accordingly,
+           SSL_OP_LEGACY_SERVER_CONNECT   is   no   longer   set  as  part  of
+           SSL_OP_ALL.
+
+       •   Combining the Configure options no‐ec and no‐dh no longer  disables
+           TLSv1.3
+
+           Typically  if  OpenSSL  has  no  EC or DH algorithms then it cannot
+           support connections with  TLSv1.3.  However  OpenSSL  now  supports
+           "pluggable"   groups   through  providers.  Therefore  third  party
+           providers may supply group implementations even where there are  no
+           built‐in ones. Attempting to create TLS connections in such a build
+           without  also  disabling  TLSv1.3  at run time or using third party
+           provider groups may result in handshake failures.  TLSv1.3  can  be
+           disabled at compile time using the "no-tls1_3" Configure option.
+
+       •   SSSSLL__CCTTXX__sseett__cciipphheerrssuuiitteess(()) and SSSSLL__sseett__cciipphheerrssuuiitteess(()) changes.
+
+           The methods now ignore unknown ciphers.
+
+       •   Security callback change.
+
+           The security callback, which can be customised by application code,
+           supports  the  security operation SSL_SECOP_TMP_DH. This is defined
+           to take an EVP_PKEY in the "other" parameter. In most  places  this
+           is  what  is  passed.  All  these places occur server side. However
+           there was one client side call of this security  operation  and  it
+           passed  a  DH  object  instead.  This is incorrect according to the
+           definition of SSL_SECOP_TMP_DH, and is inconsistent with all of the
+           other locations. Therefore this client side call has  been  changed
+           to pass an EVP_PKEY instead.
+
+       •   New SSL option SSL_OP_IGNORE_UNEXPECTED_EOF
+
+           The  SSL option SSL_OP_IGNORE_UNEXPECTED_EOF is introduced. If that
+           option is set, an unexpected EOF is ignored, it  pretends  a  close
+           notify  was  received  instead  and  so  the returned error becomes
+           SSL_ERROR_ZERO_RETURN.
+
+       •   The security strength of SHA1 and MD5 based signatures in  TLS  has
+           been reduced.
+
+           This  results  in  SSL  3,  TLS 1.0, TLS 1.1 and DTLS 1.0 no longer
+           working at the default security level of  1  and  instead  requires
+           security  level  0.  The security level can be changed either using
+           the    cipher     string     with     @SECLEVEL,     or     calling
+           SSSSLL__CCTTXX__sseett__sseeccuurriittyy__lleevveell(3).  This  also  means  that  where  the
+           signature algorithms extension is missing from a  ClientHello  then
+           the  handshake  will  fail  in TLS 1.2 at security level 1. This is
+           because, although this extension is optional,  failing  to  provide
+           one  means that OpenSSL will fallback to a default set of signature
+           algorithms. This default set requires the availability of SHA1.
+
+       •   X509 certificates signed  using  SHA1  are  no  longer  allowed  at
+           security level 1 and above.
+
+           In  TLS/SSL  the  default security level is 1. It can be set either
+           using   the   cipher   string   with    @SECLEVEL,    or    calling
+           SSSSLL__CCTTXX__sseett__sseeccuurriittyy__lleevveell(3).  If  the  leaf certificate is signed
+           with SHA-1, a call to SSSSLL__CCTTXX__uussee__cceerrttiiffiiccaattee(3) will fail  if  the
+           security  level is not lowered first.  Outside TLS/SSL, the default
+           security  level  is  -1  (effectively  0).  It  can  be  set  using
+           XX550099__VVEERRIIFFYY__PPAARRAAMM__sseett__aauutthh__lleevveell(3)   or   using   the  --aauutthh__lleevveell
+           options of the commands.
+
+SSEEEE AALLSSOO
+       ffiippss__mmoodduullee(7)
+
+HHIISSTTOORRYY
+       The migration guide was created for OpenSSL 3.0.
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2021-2023 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in   the   file   LICENSE   in   the   source   distribution   or    at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐10‐25                _M_I_G_R_A_T_I_O_N___G_U_I_D_E(7)

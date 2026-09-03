@@ -1,0 +1,226 @@
+SENDFILE(2)                 BSD System Calls Manual                SENDFILE(2)
+
+NNAAMMEE
+     sseennddffiillee — send a file to a socket
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+     ##iinncclluuddee <<ssyyss//uuiioo..hh>>
+
+     _i_n_t
+     sseennddffiillee(_i_n_t _f_d, _i_n_t _s, _o_f_f___t _o_f_f_s_e_t, _s_i_z_e___t _n_b_y_t_e_s,
+         _s_t_r_u_c_t _s_f___h_d_t_r _*_h_d_t_r, _o_f_f___t _*_s_b_y_t_e_s, _i_n_t _f_l_a_g_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     The sseennddffiillee() system call sends a regular file or shared memory object
+     specified by descriptor _f_d out a stream socket specified by descriptor _s.
+
+     The _o_f_f_s_e_t argument specifies where to begin in the file.  Should _o_f_f_s_e_t
+     fall beyond the end of file, the system will return success and report 0
+     bytes sent as described below.  The _n_b_y_t_e_s argument specifies how many
+     bytes of the file should be sent, with 0 having the special meaning of
+     send until the end of file has been reached.
+
+     An optional header and/or trailer can be sent before and after the file
+     data by specifying a pointer to a _s_t_r_u_c_t _s_f___h_d_t_r, which has the following
+     structure:
+
+           struct sf_hdtr {
+                   struct iovec *headers;  /* pointer to header iovecs */
+                   int hdr_cnt;            /* number of header iovecs */
+                   struct iovec *trailers; /* pointer to trailer iovecs */
+                   int trl_cnt;            /* number of trailer iovecs */
+           };
+
+     The _h_e_a_d_e_r_s and _t_r_a_i_l_e_r_s pointers, if non-NULL, point to arrays of _s_t_r_u_c_t
+     _i_o_v_e_c structures.  See the wwrriitteevv() system call for information on the
+     iovec structure.  The number of iovecs in these arrays is specified by
+     _h_d_r___c_n_t and _t_r_l___c_n_t.
+
+     If non-NULL, the system will write the total number of bytes sent on the
+     socket to the variable pointed to by _s_b_y_t_e_s.
+
+     The least significant 16 bits of _f_l_a_g_s argument is a bitmap of these val‐
+     ues:
+
+           SF_NODISKIO        This flag causes sseennddffiillee to return EBUSY in‐
+                              stead of blocking when a busy page is encoun‐
+                              tered.  This rare situation can happen if some
+                              other process is now working with the same re‐
+                              gion of the file.  It is advised to retry the
+                              operation after a short period.
+
+                              Note that in older FreeBSD versions the
+                              SF_NODISKIO had slightly different notion.  The
+                              flag prevented sseennddffiillee to run I/O operations in
+                              case if an invalid (not cached) page is encoun‐
+                              tered, thus avoiding blocking on I/O.  Starting
+                              with FreeBSD 11 sseennddffiillee sending files off the
+                              ffs(7) filesystem does not block on I/O (see
+                              _I_M_P_L_E_M_E_N_T_A_T_I_O_N _N_O_T_E_S ), so the condition no
+                              longer applies.  However, it is safe if an ap‐
+                              plication utilizes SF_NODISKIO and on EBUSY per‐
+                              forms the same action as it did in older FreeBSD
+                              versions, e.g., aio_read(2), read(2) or sseennddffiillee
+                              in a different context.
+
+           SF_NOCACHE         The data sent to socket will not be cached by
+                              the virtual memory system, and will be freed di‐
+                              rectly to the pool of free pages.
+
+           SF_SYNC            sseennddffiillee sleeps until the network stack no
+                              longer references the VM pages of the file, mak‐
+                              ing subsequent modifications to it safe.  Please
+                              note that this is not a guarantee that the data
+                              has actually been sent.
+
+           SF_USER_READAHEAD  sseennddffiillee has some internal heuristics to do
+                              readahead when sending data.  This flag forces
+                              sseennddffiillee to override any heuristically calcu‐
+                              lated readahead and use exactly the application
+                              specified readahead.  See _S_E_T_T_I_N_G _R_E_A_D_A_H_E_A_D for
+                              more details on readahead.
+
+     When using a socket marked for non-blocking I/O, sseennddffiillee() may send
+     fewer bytes than requested.  In this case, the number of bytes success‐
+     fully written is returned in _*_s_b_y_t_e_s (if specified), and the error EAGAIN
+     is returned.
+
+SSEETTTTIINNGG RREEAADDAAHHEEAADD
+     sseennddffiillee uses internal heuristics based on request size and file system
+     layout to do readahead.  Additionally application may request extra
+     readahead.  The most significant 16 bits of _f_l_a_g_s specify amount of pages
+     that sseennddffiillee may read ahead when reading the file.  A macro SSFF__FFLLAAGGSS()
+     is provided to combine readahead amount and flags.  An example showing
+     specifying readahead of 16 pages and SF_NOCACHE flag:
+
+                   SF_FLAGS(16, SF_NOCACHE)
+
+     sseennddffiillee will use either application specified readahead or internally
+     calculated, whichever is bigger.  Setting flag SF_USER_READAHEAD would
+     turn off any heuristics and set maximum possible readahead length to the
+     number of pages specified via flags.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     The FreeBSD implementation of sseennddffiillee() does not block on disk I/O when
+     it sends a file off the ffs(7) filesystem.  The syscall returns success
+     before the actual I/O completes, and data is put into the socket later
+     unattended.  However, the order of data in the socket is preserved, so it
+     is safe to do further writes to the socket.
+
+     The FreeBSD implementation of sseennddffiillee() is "zero-copy", meaning that it
+     has been optimized so that copying of the file data is avoided.
+
+TTUUNNIINNGG
+   pphhyyssiiccaall ppaaggiinngg bbuuffffeerrss
+     sseennddffiillee() uses vnode pager to read file pages into memory.  The pager
+     uses a pool of physical buffers to run its I/O operations.  When system
+     runs out of pbufs, sendfile will block and report state “zonelimit”.
+     Size of the pool can be tuned with _v_m_._v_n_o_d_e___p_b_u_f_s loader.conf(5) tunable
+     and can be checked with sysctl(8) OID of the same name at runtime.
+
+   sseennddffiillee((22)) bbuuffffeerrss
+     On some architectures, this system call internally uses a special
+     sseennddffiillee() buffer (_s_t_r_u_c_t _s_f___b_u_f) to handle sending file data to the
+     client.  If the sending socket is blocking, and there are not enough
+     sseennddffiillee() buffers available, sseennddffiillee() will block and report a state of
+     “sfbufa”.  If the sending socket is non-blocking and there are not enough
+     sseennddffiillee() buffers available, the call will block and wait for the neces‐
+     sary buffers to become available before finishing the call.
+
+     The number of _s_f___b_u_f's allocated should be proportional to the number of
+     nmbclusters used to send data to a client via sseennddffiillee().  Tune accord‐
+     ingly to avoid blocking!  Busy installations that make extensive use of
+     sseennddffiillee() may want to increase these values to be inline with their
+     _k_e_r_n_._i_p_c_._n_m_b_c_l_u_s_t_e_r_s (see tuning(7) for details).
+
+     The number of sseennddffiillee() buffers available is determined at boot time by
+     either the _k_e_r_n_._i_p_c_._n_s_f_b_u_f_s loader.conf(5) variable or the NSFBUFS kernel
+     configuration tunable.  The number of sseennddffiillee() buffers scales with
+     _k_e_r_n_._m_a_x_u_s_e_r_s.  The _k_e_r_n_._i_p_c_._n_s_f_b_u_f_s_u_s_e_d and _k_e_r_n_._i_p_c_._n_s_f_b_u_f_s_p_e_a_k read-
+     only sysctl(8) variables show current and peak sseennddffiillee() buffers usage
+     respectively.  These values may also be viewed through nneettssttaatt --mm.
+
+     If sysctl(8) OID _k_e_r_n_._i_p_c_._n_s_f_b_u_f_s doesn't exist, your architecture does
+     not need to use sseennddffiillee() buffers because their task can be efficiently
+     performed by the generic virtual memory structures.
+
+RREETTUURRNN VVAALLUUEESS
+     The sseennddffiillee() function returns the value 0 if successful; otherwise the
+     value -1 is returned and the global variable _e_r_r_n_o is set to indicate the
+     error.
+
+EERRRROORRSS
+     [EAGAIN]           The socket is marked for non-blocking I/O and not all
+                        data was sent due to the socket buffer being filled.
+                        If specified, the number of bytes successfully sent
+                        will be returned in _*_s_b_y_t_e_s.
+
+     [EBADF]            The _f_d argument is not a valid file descriptor.
+
+     [EBADF]            The _s argument is not a valid socket descriptor.
+
+     [EBUSY]            A busy page was encountered and SF_NODISKIO had been
+                        specified.  Partial data may have been sent.
+
+     [EFAULT]           An invalid address was specified for an argument.
+
+     [EINTR]            A signal interrupted sseennddffiillee() before it could be
+                        completed.  If specified, the number of bytes success‐
+                        fully sent will be returned in _*_s_b_y_t_e_s.
+
+     [EINVAL]           The _f_d argument is not a regular file.
+
+     [EINVAL]           The _s argument is not a SOCK_STREAM type socket.
+
+     [EINVAL]           The _o_f_f_s_e_t argument is negative.
+
+     [EIO]              An error occurred while reading from _f_d.
+
+     [EINTEGRITY]       Corrupted data was detected while reading from _f_d.
+
+     [ENOTCAPABLE]      The _f_d or the _s argument has insufficient rights.
+
+     [ENOBUFS]          The system was unable to allocate an internal buffer.
+
+     [ENOTCONN]         The _s argument points to an unconnected socket.
+
+     [ENOTSOCK]         The _s argument is not a socket.
+
+     [EOPNOTSUPP]       The file system for descriptor _f_d does not support
+                        sseennddffiillee().
+
+     [EPIPE]            The socket peer has closed the connection.
+
+SSEEEE AALLSSOO
+     netstat(1), open(2), send(2), socket(2), writev(2), loader.conf(5),
+     tuning(7), sysctl(8)
+
+     K. Elmeleegy, A. Chanda, A. L. Cox, and W. Zwaenepoel, “A Portable Kernel
+     Abstraction for Low-Overhead Ephemeral Mapping Management”, _T_h_e
+     _P_r_o_c_e_e_d_i_n_g_s _o_f _t_h_e _2_0_0_5 _U_S_E_N_I_X _A_n_n_u_a_l _T_e_c_h_n_i_c_a_l _C_o_n_f_e_r_e_n_c_e, pp 223-236,
+     2005.
+
+HHIISSTTOORRYY
+     The sseennddffiillee() system call first appeared in FreeBSD 3.0.  This manual
+     page first appeared in FreeBSD 3.1.  In FreeBSD 10 support for sending
+     shared memory descriptors had been introduced.  In FreeBSD 11 a non-
+     blocking implementation had been introduced.
+
+AAUUTTHHOORRSS
+     The initial implementation of sseennddffiillee() system call and this manual page
+     were written by David G. Lawrence <_d_g_@_d_g_l_a_w_r_e_n_c_e_._c_o_m>.  The FreeBSD 11
+     implementation was written by
+     Gleb Smirnoff <_g_l_e_b_i_u_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     The sseennddffiillee() system call will not fail, i.e., return -1 and set _e_r_r_n_o
+     to EFAULT, if provided an invalid address for _s_b_y_t_e_s.  The sseennddffiillee()
+     system call does not support SCTP sockets, it will return -1 and set
+     _e_r_r_n_o to EINVAL.
+
+BSD                             March 30, 2020                             BSD

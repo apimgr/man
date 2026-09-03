@@ -1,0 +1,137 @@
+WATCHDOG(4)              BSD Kernel Interfaces Manual              WATCHDOG(4)
+
+NNAAMMEE
+     wwaattcchhddoogg — hardware and software watchdog
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//wwaattcchhddoogg..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The wwaattcchhddoogg facility is used for controlling hardware and software
+     watchdogs.
+
+     The device _/_d_e_v_/_f_i_d_o supports several optional ioctl(2) calls for config‐
+     uration, and responds to a single operational ioctl(2) call, WDIOCPATPAT.
+     It takes a single argument which represents a timeout value specified as
+     a power of two nanoseconds, or-ed with a flag selecting active or passive
+     control of the watchdog.
+
+     WD_ACTIVE indicates that the wwaattcchhddoogg will be kept from timing out from
+     userland, for instance by the watchdogd(8) daemon.  WD_PASSIVE indicates
+     that the wwaattcchhddoogg will be kept from timing out from the kernel.
+
+     The WDIOCPATPAT ioctl(2) call will return success if just one of the
+     available watchdog(9) implementations supports setting the timeout to the
+     specified timeout.  This means that at least one watchdog is armed.  By
+     default, this will be a hardware watchdog if one is present, but if no
+     hardware watchdog is able to process the request, a default software
+     watchdog is enabled.  If the call fails, for instance if none of
+     watchdog(9) implementations support the timeout length, all watchdogs are
+     disabled and must be explicitly re-enabled.
+
+     To disable the watchdogs pass WD_TO_NEVER.  If disarming the watchdog(s)
+     failed an error is returned.  The watchdog might still be armed!
+
+     The optional configuration ioctl(2) commands are listed here, along with
+     the type of the parameter used.  Examples of their use can be found in
+     watchdogd(8).
+
+     WDIOC_SETTIMEOUT _i_n_t           set/reset the timer
+
+     WDIOC_GETTIMEOUT _i_n_t           get total timeout
+
+     WDIOC_GETTIMELEFT _i_n_t          get time left
+
+     WDIOC_GETPRETIMEOUT _i_n_t        get the pre-timeout
+
+     WDIOC_SETPRETIMEOUT _i_n_t        set the pre-timeout
+
+     WDIOC_SETPRETIMEOUTACT _i_n_t     Set the action when a pre-timeout occurs
+                                    (see WD_SOFT_* below).
+
+     WDIOC_SETSOFT _i_n_t              Use an internal software watchdog instead
+                                    of hardware.  There is also an external
+                                    software watchdog, which is used by de‐
+                                    fault if no hardware watchdog was at‐
+                                    tached.
+
+     WDIOC_SETSOFTTIMEOUTACT _i_n_t    Set the action whan a soft timeout occurs.
+
+     The actions that may be specified for the pre-timeout or the internal
+     software watchdog are listed here.  Multiple actions can be specified by
+     ORing values together.
+
+     WD_SOFT_PANIC  panic
+
+     WD_SOFT_DDB    enter debugger
+
+     WD_SOFT_LOG    log(9)
+
+     WD_SOFT_PRINT  printf(9)
+
+RREETTUURRNN VVAALLUUEESS
+     The WDIOCPATPAT ioctl(2) returns zero on success and non-zero on failure.
+
+     [EOPNOTSUPP]       No watchdog present in the kernel or none of the
+                        watchdogs supports the requested timeout value (time‐
+                        out value other than 0).
+
+     [EOPNOTSUPP]       Watchdog could not be disabled (timeout value of 0).
+
+     [EINVAL]           Invalid flag combination passed.
+
+     The configuration ioctl(2) operations return zero on success and non-zero
+     on failure.
+
+EEXXAAMMPPLLEESS
+           #include <paths.h>
+           #include <sys/watchdog.h>
+
+           #define WDPATH  "/dev/" _PATH_WATCHDOG
+           int wdfd = -1;
+
+           static void
+           wd_init(void)
+           {
+                   wdfd = open(WDPATH, O_RDWR);
+                   if (wdfd == -1)
+                           err(1, WDPATH);
+           }
+           static void
+           wd_reset(u_int timeout)
+           {
+                   if (ioctl(wdfd, WDIOCPATPAT, &timeout) == -1)
+                           err(1, "WDIOCPATPAT");
+           }
+
+           /* in main() */
+           wd_init();
+           wd_reset(WD_ACTIVE|WD_TO_8SEC);
+           /* potential freeze point */
+           wd_reset(WD_TO_NEVER);
+
+     Enables a watchdog to recover from a potentially freezing piece of code.
+
+           options SW_WATCHDOG
+
+     in your kernel config forces a software watchdog in the kernel to be con‐
+     figured even if a hardware watchdog is configured, dropping to KDB or
+     panicking when firing, depending on the KDB and KDB_UNATTENDED kernel
+     configuration options.
+
+SSEEEE AALLSSOO
+     watchdogd(8), watchdog(9)
+
+HHIISSTTOORRYY
+     The wwaattcchhddoogg code first appeared in FreeBSD 5.1.
+
+AAUUTTHHOORRSS
+     The wwaattcchhddoogg facility was written by Poul-Henning Kamp <_p_h_k_@_F_r_e_e_B_S_D_._o_r_g>.
+     The software watchdog code and this manual page were written by Sean
+     Kelly <_s_m_k_e_l_l_y_@_F_r_e_e_B_S_D_._o_r_g>.  Some contributions were made by Jeff
+     Roberson <_j_e_f_f_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     The WD_PASSIVE option has not yet been implemented.
+
+BSD                             January 2, 2018                            BSD

@@ -1,0 +1,248 @@
+KMSAN(9)                 BSD Kernel Developer's Manual                KMSAN(9)
+
+NNAAMMEE
+     KKMMSSAANN — Kernel Memory SANitizer
+
+SSYYNNOOPPSSIISS
+     The _G_E_N_E_R_I_C_-_K_M_S_A_N kernel configuration can be used to compile a KMSAN-en‐
+     abled kernel using _G_E_N_E_R_I_C as a base configuration.  Alternately, to com‐
+     pile KMSAN into the kernel, place the following line in your kernel con‐
+     figuration file:
+
+           ooppttiioonnss KKMMSSAANN
+
+     ##iinncclluuddee <<ssyyss//mmssaann..hh>>
+
+     _v_o_i_d
+     kkmmssaann__mmaarrkk(_c_o_n_s_t _v_o_i_d _*_a_d_d_r, _s_i_z_e___t _s_i_z_e, _u_i_n_t_8___t _c_o_d_e);
+
+     _v_o_i_d
+     kkmmssaann__oorriigg(_c_o_n_s_t _v_o_i_d _*_a_d_d_r, _s_i_z_e___t _s_i_z_e, _i_n_t _t_y_p_e, _u_i_n_t_p_t_r___t _p_c);
+
+     _v_o_i_d
+     kkmmssaann__cchheecckk(_c_o_n_s_t _v_o_i_d _*_a_d_d_r, _s_i_z_e___t _s_i_z_e, _c_o_n_s_t _c_h_a_r _*_d_e_s_c_r);
+
+     _v_o_i_d
+     kkmmssaann__cchheecckk__bbiioo(_c_o_n_s_t _s_t_r_u_c_t _b_i_o _*, _c_o_n_s_t _c_h_a_r _*_d_e_s_c_r);
+
+     _v_o_i_d
+     kkmmssaann__cchheecckk__ccccbb(_c_o_n_s_t _u_n_i_o_n _c_c_b _*, _c_o_n_s_t _c_h_a_r _*_d_e_s_c_r);
+
+     _v_o_i_d
+     kkmmssaann__cchheecckk__mmbbuuff(_c_o_n_s_t _s_t_r_u_c_t _m_b_u_f _*, _c_o_n_s_t _c_h_a_r _*_d_e_s_c_r);
+
+     _v_o_i_d
+     kkmmssaann__cchheecckk__uuiioo(_c_o_n_s_t _s_t_r_u_c_t _u_i_o _*, _c_o_n_s_t _c_h_a_r _*_d_e_s_c_r);
+
+DDEESSCCRRIIPPTTIIOONN
+     KKMMSSAANN is a subsystem which leverages compiler instrumentation to detect
+     uses of uninitialized memory in the kernel.  Currently it is implemented
+     only on the amd64 platform.
+
+     When KKMMSSAANN is compiled into the kernel, the compiler is configured to
+     emit function calls preceding memory accesses.  The functions are imple‐
+     mented by the KKMMSSAANN runtime component and use hidden, byte-granular
+     shadow state to determine whether the source operand has been initial‐
+     ized.  When uninitialized memory is used as a source operand in certain
+     operations, such as control flow expressions or memory accesses, the run‐
+     time reports an error.  Otherwise, the shadow state is propagated to des‐
+     tination operand.  For example, a variable assignment or a mmeemmccppyy() call
+     which copies uninitialized memory will cause the destination buffer or
+     variable to be marked uninitialized.
+
+     To report an error, the KKMMSSAANN runtime will either trigger a kernel panic
+     or print a message to the console, depending on the value of the
+     ddeebbuugg..kkmmssaann..ppaanniicc__oonn__vviioollaattiioonn sysctl.  In both cases, a stack trace and
+     information about the origin of the uninitialized memory is included.
+
+     In addition to compiler-detected uses of uninitialized memory, various
+     kernel I/O “exit points”, such as copyout(9), perform validation of the
+     input's shadow state and will raise an error if any uninitialized bytes
+     are detected.
+
+     The KKMMSSAANN option imposes a significant performance penalty.  Kernel code
+     typically runs two or three times slower, and each byte mapped in the
+     kernel map requires two bytes of shadow state.  As a result, KKMMSSAANN should
+     be used only for kernel testing and development.  It is not recommended
+     to enable KKMMSSAANN in systems with less than 8GB of physical RAM.
+
+     The sanitizer in a KMSAN-configured kernel can be disabled by setting the
+     loader tunable ddeebbuugg..kkmmssaann..ddiissaabbllee==11.
+
+FFUUNNCCTTIIOONNSS
+     The kkmmssaann__mmaarrkk() and kkmmssaann__oorriigg() functions update KKMMSSAANN shadow state.
+     kkmmssaann__mmaarrkk() marks an address range as valid or invalid according to the
+     value of the _c_o_d_e parameter.  The valid values for this parameter are
+     KMSAN_STATE_INITED and KMSAN_STATE_UNINIT, which mark the range as ini‐
+     tialized and uninitialized, respectively.  For example, when a piece of
+     memory is freed to a kernel allocator, it will typically have been marked
+     initialized; before the memory is reused for a new allocation, the allo‐
+     cator should mark it as uninitialized.  As another example, writes to
+     host memory performed by devices, e.g., via DMA, are not intercepted by
+     the sanitizer; to avoid false positives, drivers should mark device-writ‐
+     ten memory as initialized.  For many drivers this is handled internally
+     by the busdma(9) subsystem.
+
+     The kkmmssaann__oorriigg() function updates “origin” shadow state.  In particular,
+     it associates a given uninitialized buffer with a memory type and code
+     address.  This is used by the KKMMSSAANN runtime to track the source of unini‐
+     tialized memory and is only for debugging purposes.  See _I_M_P_L_E_M_E_N_T_A_T_I_O_N
+     _N_O_T_E_S for more details.
+
+     The kkmmssaann__cchheecckk() function and its sub-typed siblings validate the shadow
+     state of the region(s) of kernel memory passed as input parameters.  If
+     any byte of the input is marked as uninitialized, the runtime will gener‐
+     ate a report.  These functions are useful during debugging, as they can
+     be strategically inserted into code paths to narrow down the source of
+     uninitialized memory.  They are also used to perform validation in vari‐
+     ous kernel I/O paths, helping ensure that, for example, packets transmit‐
+     ted over a network do not contain uninitialized kernel memory.
+     kkmmssaann__cchheecckk() and related functions also take a _d_e_s_c_r parameter which is
+     inserted into any reports raised by the check.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+   SShhaaddooww MMaappss
+     The KKMMSSAANN runtime makes use of two shadows of the kernel map.  Each ad‐
+     dress in the kernel map has a linear mapping to addresses in the two
+     shadows.  The first, simply called the shadow map, tracks the state of
+     the corresponding kernel memory.  A non-zero byte in the shadow map indi‐
+     cates that the corresponding byte of kernel memory is uninitialized.  The
+     KKMMSSAANN instrumentation automatically propagates shadow state as the con‐
+     tents of kernel memory are transformed and copied.
+
+     The second shadow is called the origin map, and exists only to help debug
+     reports from the sanitizer.  To avoid false positives, KKMMSSAANN does not
+     raise reports for certain operations on uninitialized memory, such as
+     copying or arithmetic.  Thus, operations on uninitialized state which
+     raise a report may be far removed from the source of the bug, complicat‐
+     ing debugging.  The origin map contains information which can help pin‐
+     point the root cause of a particular KKMMSSAANN report; when generating a re‐
+     port, the runtime uses state from the origin map to provide extra de‐
+     tails.
+
+     Unlike the shadow map, the origin map is not byte-granular, but consists
+     of 4-byte “cells”.  Each cell describes the corresponding four bytes of
+     mapped kernel memory and holds a type and compressed code address.  When
+     kernel memory is allocated for some purpose, its origin is initialized
+     either by the compiler instrumentation or by runtime hooks in the alloca‐
+     tor.  The type indicates the specific allocator, e.g., uma(9), and the
+     address provides the location in the kernel code where the memory was al‐
+     located.
+
+   AAsssseemmbbllyy CCooddee
+     When KKMMSSAANN is configured, the compiler will only emit instrumentation for
+     C code.  Files containing assembly code are left un-instrumented.  In
+     some cases this is handled by the sanitizer runtime, which defines wrap‐
+     pers for subroutines implemented in assembly.  These wrappers are re‐
+     ferred to as interceptors and handle updating shadow state to reflect the
+     operations performed by the original subroutines.  In other cases, C code
+     which calls assembly code or is called from assembly code may need to use
+     kkmmssaann__mmaarrkk() to manually update shadow state.  This is typically only
+     necessary in machine-dependent code.
+
+     Inline assembly is instrumented by the compiler to update shadow state
+     based on the output operands of the code, and thus does not usually re‐
+     quire any special handling to avoid false positives.
+
+   IInntteerrrruuppttss aanndd EExxcceeppttiioonnss
+     In addition to the shadow maps, the sanitizer requires some thread-local
+     storage (TLS) to track initialization and origin state for function pa‐
+     rameters and return values.  The sanitizer instrumentation will automati‐
+     cally fetch, update and verify this state.  In particular, this storage
+     block has a layout defined by the sanitizer ABI.
+
+     Most kernel code runs in a context where interrupts or exceptions may re‐
+     direct the CPU to begin execution of unrelated code.  To ensure that
+     thread-local sanitizer state remains consistent, the runtime maintains a
+     stack of TLS blocks for each thread.  When machine-dependent interrupt
+     and exception handlers begin execution, they push a new entry onto the
+     stack before calling into any C code, and pop the stack before resuming
+     execution of the interrupted code.  These operations are performed by the
+     kkmmssaann__iinnttrr__eenntteerr() and kkmmssaann__iinnttrr__lleeaavvee() functions in the sanitizer run‐
+     time.
+
+EEXXAAMMPPLLEESS
+     The following contrived example demonstrates some of the types of bugs
+     that are automatically detected by KKMMSSAANN:
+
+           int
+           f(size_t osz)
+           {
+                   struct {
+                           uint32_t bar;
+                           uint16_t baz;
+                           /* A 2-byte hole is here. */
+                   } foo;
+                   char *buf;
+                   size_t sz;
+                   int error;
+
+                   /*
+                    * This will raise a report since "sz" is uninitialized
+                    * here.  If it is initialized, and "osz" was left uninitialized
+                    * by the caller, a report would also be raised.
+                    */
+                   if (sz < osz)
+                           return (1);
+
+                   buf = malloc(32, M_TEMP, M_WAITOK);
+
+                   /*
+                    * This will raise a report since "buf" has not been
+                    * initialized and contains whatever data is left over from the
+                    * previous use of that memory.
+                    */
+                   for (i = 0; i < 32; i++)
+                           if (buf[i] != ' ')
+                                   foo.bar++;
+                   foo.baz = 0;
+
+                   /*
+                    * This will raise a report since the pad bytes in "foo" have
+                    * not been initialized, e.g., by memset(), and this call will
+                    * thus copy uninitialized kernel stack memory into userspace.
+                    */
+                   copyout(&foo, uaddr, sizeof(foo));
+
+                   /*
+                    * This line itself will not raise a report, but may trigger
+                    * a report in the caller depending on how the return value is
+                    * used.
+                    */
+                   return (error);
+           }
+
+SSEEEE AALLSSOO
+     build(7), busdma(9), copyout(9), KASAN(9), uio(9), uma(9)
+
+     Evgeniy Stepanov and Konstantin Serebryany, “MemorySanitizer: fast
+     detector of uninitialized memory use in C++”, _2_0_1_5 _I_E_E_E_/_A_C_M _I_n_t_e_r_n_a_t_i_o_n_a_l
+     _S_y_m_p_o_s_i_u_m _o_n _C_o_d_e _G_e_n_e_r_a_t_i_o_n _a_n_d _O_p_t_i_m_i_z_a_t_i_o_n _(_C_G_O_), 2015.
+
+HHIISSTTOORRYY
+     KKMMSSAANN was ported from NetBSD and first appeared in FreeBSD 14.0.
+
+BBUUGGSS
+     Accesses to kernel memory outside of the kernel map are ignored by the
+     KKMMSSAANN runtime.  In particular, memory accesses via the direct map are not
+     validated.  When memory is copied from outside the kernel map into the
+     kernel map, that region of the kernel map is marked as initialized.  When
+     KKMMSSAANN is configured, kernel memory allocators are configured to use the
+     kernel map, and filesystems are configured to always map data buffers
+     into the kernel map, so usage of the direct map is minimized.  However,
+     some uses of the direct map remain.  This is a conservative policy which
+     aims to avoid false positives, but it will mask bug in some kernel sub‐
+     systems.
+
+     On amd64, global variables and the physical page array _v_m___p_a_g_e___a_r_r_a_y are
+     not sanitized.  This is intentional, as it reduces memory usage by avoid‐
+     ing creating shadows of large regions of the kernel map.  However, this
+     can allow bugs to go undetected by KKMMSSAANN.
+
+     Some kernel memory allocators provide type-stable objects, and code which
+     uses them frequently depends on object data being preserved across allo‐
+     cations.  Such allocations cannot be sanitized by KKMMSSAANN.  However, in
+     some cases it may be possible to use kkmmssaann__mmaarrkk() to manually annotate
+     fields which are known to contain invalid data upon allocation.
+
+BSD                            December 6, 2023                            BSD

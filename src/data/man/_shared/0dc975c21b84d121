@@ -1,0 +1,622 @@
+_L_O_C_A_L(8)                    System Manager’s Manual                   _L_O_C_A_L(8)
+
+NNAAMMEE
+       local - Postfix local mail delivery
+
+SSYYNNOOPPSSIISS
+       llooccaall [generic Postfix daemon options]
+
+DDEESSCCRRIIPPTTIIOONN
+       The  llooccaall(8) daemon processes delivery requests from the Postfix queue
+       manager to deliver mail to local  recipients.   Each  delivery  request
+       specifies  a  queue file, a sender address, a domain or host to deliver
+       to, and one or more recipients.  This program expects to  be  run  from
+       the mmaasstteerr(8) process manager.
+
+       The  llooccaall(8)  daemon  updates queue files and marks recipients as fin‐
+       ished, or it informs the queue manager that delivery  should  be  tried
+       again  at  a  later  time.  Delivery  status  reports  are  sent to the
+       bboouunnccee(8), ddeeffeerr(8) or ttrraaccee(8) daemon as appropriate.
+
+CCAASSEE FFOOLLDDIINNGG
+       All delivery decisions are made using the bare recipient name (i.e. the
+       address localpart), folded to lower case.  See also under  ADDRESS  EX‐
+       TENSION below for a few exceptions.
+
+SSYYSSTTEEMM‐‐WWIIDDEE AANNDD UUSSEERR‐‐LLEEVVEELL AALLIIAASSIINNGG
+       The  system  administrator  can  set  up  one or more system-wide sseenndd‐‐
+       mmaaiill-style alias databases.  Users can have  sseennddmmaaiill-style  ˜/.ffoorrwwaarrdd
+       files.   Mail  for _n_a_m_e is delivered to the alias _n_a_m_e, to destinations
+       in ˜_n_a_m_e/.ffoorrwwaarrdd, to the mailbox owned by the user _n_a_m_e, or it is sent
+       back as undeliverable.
+
+       The system administrator can specify a comma/space  separated  list  of
+       ˜/.ffoorrwwaarrdd like files through the ffoorrwwaarrdd__ppaatthh configuration parameter.
+       Upon delivery, the local delivery agent tries each pathname in the list
+       until a file is found.
+
+       Delivery via ˜/.ffoorrwwaarrdd files is done with the privileges of the recip‐
+       ient.   Thus,  ˜/.ffoorrwwaarrdd like files must be readable by the recipient,
+       and their parent directory needs to have "execute" permission  for  the
+       recipient.
+
+       The ffoorrwwaarrdd__ppaatthh parameter is subject to interpolation of $$uusseerr (recip‐
+       ient  username),  $$hhoommee  (recipient  home directory), $$sshheellll (recipient
+       shell), $$rreecciippiieenntt (complete recipient address), $$eexxtteennssiioonn  (recipient
+       address  extension), $$ddoommaaiinn (recipient domain), $$llooccaall (entire recipi‐
+       ent   address   localpart)   and   $$rreecciippiieenntt__ddeelliimmiitteerr..   The    forms
+       _$_{_n_a_m_e_?_v_a_l_u_e_} and _$_{_n_a_m_e_?_{_v_a_l_u_e_}_} (Postfix 3.0 and later) expand condi‐
+       tionally  to  _v_a_l_u_e  when _$_n_a_m_e is defined, and the forms _$_{_n_a_m_e_:_v_a_l_u_e_}
+       _$_{_n_a_m_e_:_{_v_a_l_u_e_}_} (Postfix 3.0 and later) expand conditionally  to  _v_a_l_u_e
+       when _$_n_a_m_e is not defined.  The form _$_{_n_a_m_e_?_{_v_a_l_u_e_1_}_:_{_v_a_l_u_e_2_}_} (Postfix
+       3.0  and  later) expands conditionally to _v_a_l_u_e_1 when _$_n_a_m_e is defined,
+       or _v_a_l_u_e_2 otherwise. Characters that may have special  meaning  to  the
+       shell or file system are replaced with underscores. The list of accept‐
+       able characters is specified with the ffoorrwwaarrdd__eexxppaannssiioonn__ffiilltteerr configu‐
+       ration parameter.
+
+       An  alias  or ˜/.ffoorrwwaarrdd file may list any combination of external com‐
+       mands, destination file names, ::iinncclluuddee:: directives, or mail addresses.
+       See aalliiaasseess(5) for a precise description. Each line in a  user’s  .ffoorr‐‐
+       wwaarrdd file has the same syntax as the right-hand part of an alias.
+
+       When  an  address is found in its own alias expansion, delivery is made
+       to the user instead. When a user is listed in the user’s own ˜/.ffoorrwwaarrdd
+       file, delivery is made to the user’s mailbox instead.  An empty ˜/.ffoorr‐‐
+       wwaarrdd file means do not forward mail.
+
+       In order to prevent the mail system from using up unreasonable  amounts
+       of  memory,  input records read from ::iinncclluuddee:: or from ˜/.ffoorrwwaarrdd files
+       are broken up into chunks of length lliinnee__lleennggtthh__lliimmiitt.
+
+       While expanding aliases, ˜/.ffoorrwwaarrdd files, and so on, the  program  at‐
+       tempts  to  avoid duplicate deliveries. The dduupplliiccaattee__ffiilltteerr__lliimmiitt con‐
+       figuration parameter limits the number of remembered recipients.
+
+MMAAIILL FFOORRWWAARRDDIINNGG
+       For the sake of reliability, forwarded mail is re-submitted  as  a  new
+       message,  so that each recipient has a separate on-file delivery status
+       record.
+
+       In order to stop mail forwarding loops early, the software adds an  op‐
+       tional  DDeelliivveerreedd--TToo:: header with the final envelope recipient address.
+       If mail arrives for a recipient that is  already  listed  in  a  DDeelliivv‐‐
+       eerreedd--TToo:: header, the message is bounced.
+
+MMAAIILLBBOOXX DDEELLIIVVEERRYY
+       The default per-user mailbox is a file in the UNIX mail spool directory
+       (//vvaarr//mmaaiill//_u_s_e_r or //vvaarr//ssppooooll//mmaaiill//_u_s_e_r); the location can be specified
+       with  the  mmaaiill__ssppooooll__ddiirreeccttoorryy configuration parameter. Specify a name
+       ending in // for qqmmaaiill-compatible mmaaiillddiirr delivery.
+
+       Alternatively, the per-user mailbox can be a file in  the  user’s  home
+       directory  with a name specified via the hhoommee__mmaaiillbbooxx configuration pa‐
+       rameter. Specify a relative path name. Specify a name ending in  //  for
+       qqmmaaiill-compatible mmaaiillddiirr delivery.
+
+       Mailbox delivery can be delegated to an external command specified with
+       the  mmaaiillbbooxx__ccoommmmaanndd__mmaappss and mmaaiillbbooxx__ccoommmmaanndd configuration parameters.
+       The command executes with the privileges of the recipient user  (excep‐
+       tions:  secondary  groups are not enabled; in case of delivery as root,
+       the command executes with the privileges of ddeeffaauulltt__pprriivvss).
+
+       Mailbox delivery can be delegated  to  alternative  message  transports
+       specified  in the mmaasstteerr..ccff file.  The mmaaiillbbooxx__ttrraannssppoorrtt__mmaappss and mmaaiill‐‐
+       bbooxx__ttrraannssppoorrtt configuration  parameters  specify  an  optional  message
+       transport  that  is  to be used for all local recipients, regardless of
+       whether they  are  found  in  the  UNIX  passwd  database.   The  ffaallll‐‐
+       bbaacckk__ttrraannssppoorrtt__mmaappss  and  ffaallllbbaacckk__ttrraannssppoorrtt  parameters specify an op‐
+       tional message transport for recipients  that  are  not  found  in  the
+       aliases(5) or UNIX passwd database.
+
+       In  the  case  of  UNIX-style  mailbox  delivery,  the  llooccaall(8) daemon
+       prepends a "FFrroomm _s_e_n_d_e_r _t_i_m_e___s_t_a_m_p" envelope header  to  each  message,
+       prepends  an  XX--OOrriiggiinnaall--TToo:: header with the recipient address as given
+       to Postfix, prepends an optional DDeelliivveerreedd--TToo:: header  with  the  final
+       envelope recipient address, prepends a RReettuurrnn--PPaatthh:: header with the en‐
+       velope  sender  address, prepends a >> character to lines beginning with
+       "FFrroomm ", and appends an empty line.  The mailbox is locked  for  exclu‐
+       sive  access while delivery is in progress. In case of problems, an at‐
+       tempt is made to truncate the mailbox to its original length.
+
+       In the case of mmaaiillddiirr delivery, the local daemon prepends an  optional
+       DDeelliivveerreedd--TToo::   header  with  the  final  envelope  recipient  address,
+       prepends an XX--OOrriiggiinnaall--TToo:: header with the recipient address  as  given
+       to Postfix, and prepends a RReettuurrnn--PPaatthh:: header with the envelope sender
+       address.
+
+EEXXTTEERRNNAALL CCOOMMMMAANNDD DDEELLIIVVEERRYY
+       The  aallllooww__mmaaiill__ttoo__ccoommmmaannddss  configuration parameter restricts delivery
+       to external commands. The default setting (aalliiaass,, ffoorrwwaarrdd) forbids com‐
+       mand destinations in ::iinncclluuddee:: files.
+
+       Optionally, the process working directory is changed to the path speci‐
+       fied with ccoommmmaanndd__eexxeeccuuttiioonn__ddiirreeccttoorryy (Postfix 2.2 and later).  Failure
+       to change directory causes mail to be deferred.
+
+       The  ccoommmmaanndd__eexxeeccuuttiioonn__ddiirreeccttoorryy parameter value is subject to interpo‐
+       lation of $$uusseerr (recipient username), $$hhoommee (recipient home directory),
+       $$sshheellll (recipient shell), $$rreecciippiieenntt (complete recipient address), $$eexx‐‐
+       tteennssiioonn (recipient address extension), $$ddoommaaiinn (recipient domain), $$lloo‐‐
+       ccaall (entire recipient address localpart) and $$rreecciippiieenntt__ddeelliimmiitteerr..  The
+       forms _$_{_n_a_m_e_?_v_a_l_u_e_} and _$_{_n_a_m_e_?_{_v_a_l_u_e_}_} (Postfix 3.0 and later)  expand
+       conditionally   to   _v_a_l_u_e   when  _$_n_a_m_e  is  defined,  and  the  forms
+       _$_{_n_a_m_e_:_v_a_l_u_e_} and _$_{_n_a_m_e_:_{_v_a_l_u_e_}_} (Postfix 3.0 and later) expand condi‐
+       tionally  to   _v_a_l_u_e   when   _$_n_a_m_e   is   not   defined.    The   form
+       _$_{_n_a_m_e_?_{_v_a_l_u_e_1_}_:_{_v_a_l_u_e_2_}_} (Postfix 3.0 and later) expands conditionally
+       to  _v_a_l_u_e_1  when _$_n_a_m_e is defined, or _v_a_l_u_e_2 otherwise. Characters that
+       may have special meaning to the shell or file system are replaced  with
+       underscores.  The  list  of acceptable characters is specified with the
+       eexxeeccuuttiioonn__ddiirreeccttoorryy__eexxppaannssiioonn__ffiilltteerr configuration parameter.
+
+       The command is executed directly  where  possible.  Assistance  by  the
+       shell  (//bbiinn//sshh on UNIX systems) is used only when the command contains
+       shell magic characters, or when the command invokes  a  shell  built-in
+       command.
+
+       A limited amount of command output (standard output and standard error)
+       is  captured for inclusion with non-delivery status reports.  A command
+       is  forcibly  terminated  if  it  does   not   complete   within   ccoomm‐‐
+       mmaanndd__ttiimmee__lliimmiitt  seconds.   Command  exit  status codes are expected to
+       follow the conventions defined in <ssyysseexxiittss..hh>.  Exit  status  0  means
+       normal successful completion.
+
+       Postfix  version  2.3  and later support RFC 3463-style enhanced status
+       codes.  If a command terminates with a non-zero exit  status,  and  the
+       command  output  begins  with an enhanced status code, this status code
+       takes precedence over the non-zero exit status.
+
+       A limited amount of message context is exported via  environment  vari‐
+       ables.  Characters  that  may have special meaning to the shell are re‐
+       placed with underscores.  The list of acceptable characters  is  speci‐
+       fied with the ccoommmmaanndd__eexxppaannssiioonn__ffiilltteerr configuration parameter.
+
+       SSHHEELLLL  The recipient user’s login shell.
+
+       HHOOMMEE   The recipient user’s home directory.
+
+       UUSSEERR   The bare recipient name.
+
+       EEXXTTEENNSSIIOONN
+              The optional recipient address extension.
+
+       DDOOMMAAIINN The recipient address domain part.
+
+       LLOOGGNNAAMMEE
+              The bare recipient name.
+
+       LLOOCCAALL  The  entire recipient address localpart (text to the left of the
+              rightmost @ character).
+
+       OORRIIGGIINNAALL__RREECCIIPPIIEENNTT
+              The entire recipient address, before any  address  rewriting  or
+              aliasing (Postfix 2.5 and later).
+
+       RREECCIIPPIIEENNTT
+              The entire recipient address.
+
+       SSEENNDDEERR The entire sender address.
+
+       Additional  remote client information is made available via the follow‐
+       ing environment variables:
+
+       CCLLIIEENNTT__AADDDDRREESSSS
+              Remote client network address. Available as of Postfix 2.2.
+
+       CCLLIIEENNTT__HHEELLOO
+              Remote client EHLO command parameter. Available  as  of  Postfix
+              2.2.
+
+       CCLLIIEENNTT__HHOOSSTTNNAAMMEE
+              Remote client hostname. Available as of Postfix 2.2.
+
+       CCLLIIEENNTT__PPRROOTTOOCCOOLL
+              Remote client protocol. Available as of Postfix 2.2.
+
+       SSAASSLL__MMEETTHHOODD
+              SASL  authentication  method specified in the remote client AUTH
+              command. Available as of Postfix 2.2.
+
+       SSAASSLL__SSEENNDDEERR
+              SASL sender address specified in the  remote  client  MAIL  FROM
+              command. Available as of Postfix 2.2.
+
+       SSAASSLL__UUSSEERRNNAAMMEE
+              SASL  username  specified  in  the  remote  client AUTH command.
+              Available as of Postfix 2.2.
+
+       The PPAATTHH environment variable is always reset to a system-dependent de‐
+       fault path, and environment variables whose names are  blessed  by  the
+       eexxppoorrtt__eennvviirroonnmmeenntt configuration parameter are exported unchanged.
+
+       The current working directory is the mail queue directory.
+
+       The llooccaall(8) daemon prepends a "FFrroomm _s_e_n_d_e_r _t_i_m_e___s_t_a_m_p" envelope header
+       to  each  message, prepends an XX--OOrriiggiinnaall--TToo:: header with the recipient
+       address as given to Postfix, prepends an optional DDeelliivveerreedd--TToo::  header
+       with  the  final  recipient  envelope  address, prepends a RReettuurrnn--PPaatthh::
+       header with the sender envelope address, and appends no empty line.
+
+EEXXTTEERRNNAALL FFIILLEE DDEELLIIVVEERRYY
+       The delivery format depends on the destination  filename  syntax.   The
+       default  is to use UNIX-style mailbox format.  Specify a name ending in
+       // for qqmmaaiill-compatible mmaaiillddiirr delivery.
+
+       The aallllooww__mmaaiill__ttoo__ffiilleess configuration parameter restricts  delivery  to
+       external  files. The default setting (aalliiaass,, ffoorrwwaarrdd) forbids file des‐
+       tinations in ::iinncclluuddee:: files.
+
+       In the  case  of  UNIX-style  mailbox  delivery,  the  llooccaall(8)  daemon
+       prepends  a  "FFrroomm  _s_e_n_d_e_r _t_i_m_e___s_t_a_m_p" envelope header to each message,
+       prepends an XX--OOrriiggiinnaall--TToo:: header with the recipient address  as  given
+       to  Postfix,  prepends  an optional DDeelliivveerreedd--TToo:: header with the final
+       recipient envelope address, prepends a >> character to  lines  beginning
+       with  "FFrroomm  ", and appends an empty line.  The envelope sender address
+       is available in the RReettuurrnn--PPaatthh:: header.  When  the  destination  is  a
+       regular  file,  it  is locked for exclusive access while delivery is in
+       progress. In case of problems, an attempt is made to truncate a regular
+       file to its original length.
+
+       In the case of mmaaiillddiirr delivery, the local daemon prepends an  optional
+       DDeelliivveerreedd--TToo::  header  with  the  final envelope recipient address, and
+       prepends an XX--OOrriiggiinnaall--TToo:: header with the recipient address  as  given
+       to  Postfix.   The  envelope  sender  address  is  available in the RRee‐‐
+       ttuurrnn--PPaatthh:: header.
+
+AADDDDRREESSSS EEXXTTEENNSSIIOONN
+       The optional rreecciippiieenntt__ddeelliimmiitteerr configuration parameter specifies  how
+       to separate address extensions from local recipient names.
+
+       For  example,  with "rreecciippiieenntt__ddeelliimmiitteerr == ++", mail for _n_a_m_e+_f_o_o is de‐
+       livered to the alias _n_a_m_e+_f_o_o or to the alias _n_a_m_e, to the destinations
+       listed in ˜_n_a_m_e/.ffoorrwwaarrdd+_f_o_o or in ˜_n_a_m_e/.ffoorrwwaarrdd, to the mailbox owned
+       by the user _n_a_m_e, or it is sent back as undeliverable.
+
+DDEELLIIVVEERRYY RRIIGGHHTTSS
+       Deliveries to external files and external commands are  made  with  the
+       rights  of the receiving user on whose behalf the delivery is made.  In
+       the absence of a user context,  the  llooccaall(8)  daemon  uses  the  owner
+       rights  of  the ::iinncclluuddee:: file or alias database.  When those files are
+       owned by the superuser, delivery is made with the rights specified with
+       the ddeeffaauulltt__pprriivvss configuration parameter.
+
+SSTTAANNDDAARRDDSS
+       RFC 822 (ARPA Internet Text Messages)
+       RFC 3463 (Enhanced status codes)
+
+DDIIAAGGNNOOSSTTIICCSS
+       Problems and transactions are  logged  to  ssyyssllooggdd(8)  or  ppoossttllooggdd(8).
+       Corrupted  message  files are marked so that the queue manager can move
+       them to the ccoorrrruupptt queue afterwards.
+
+       Depending on the setting of the nnoottiiffyy__ccllaasssseess parameter, the  postmas‐
+       ter is notified of bounces and of other trouble.
+
+SSEECCUURRIITTYY
+       The  llooccaall(8)  delivery agent needs a dual personality 1) to access the
+       private Postfix queue and IPC mechanisms, 2) to impersonate the recipi‐
+       ent and deliver to recipient-specified files or commands. It is  there‐
+       fore security sensitive.
+
+       The  llooccaall(8)  delivery agent disallows regular expression substitution
+       of $1 etc. in aalliiaass__mmaappss, because that would open a security hole.
+
+       The llooccaall(8) delivery agent will silently ignore requests  to  use  the
+       pprrooxxyymmaapp(8)  server  within  aalliiaass__mmaappss. Instead it will open the table
+       directly.  Before Postfix version 2.2, the llooccaall(8) delivery agent will
+       terminate with a fatal error.
+
+BBUUGGSS
+       For security reasons, the message delivery status of external  commands
+       or  of  external  files is never checkpointed to file. As a result, the
+       program may occasionally deliver more than once to a command or  exter‐
+       nal file. Better safe than sorry.
+
+       Mutually-recursive  aliases or ˜/.ffoorrwwaarrdd files are not detected early.
+       The resulting mail forwarding loop is broken by the use of  the  DDeelliivv‐‐
+       eerreedd--TToo:: message header.
+
+CCOONNFFIIGGUURRAATTIIOONN PPAARRAAMMEETTEERRSS
+       Changes  to  mmaaiinn..ccff are picked up automatically, as llooccaall(8) processes
+       run for only a limited amount of time. Use the command "ppoossttffiixx rreellooaadd"
+       to speed up a change.
+
+       The text below provides only a parameter summary. See  ppoossttccoonnff(5)  for
+       more details including examples.
+
+CCOOMMPPAATTIIBBIILLIITTYY CCOONNTTRROOLLSS
+       bbiiffff ((yyeess))
+              Whether or not to use the local biff service.
+
+       eexxppaanndd__oowwnneerr__aalliiaass ((nnoo))
+              When   delivering   to   an   alias   "_a_l_i_a_s_n_a_m_e"  that  has  an
+              "owner-_a_l_i_a_s_n_a_m_e" companion alias, set the envelope  sender  ad‐
+              dress to the expansion of the "owner-_a_l_i_a_s_n_a_m_e" alias.
+
+       oowwnneerr__rreeqquueesstt__ssppeecciiaall ((yyeess))
+              Enable  special  treatment  for  owner-_l_i_s_t_n_a_m_e  entries  in the
+              aalliiaasseess(5) file, and don’t split owner-_l_i_s_t_n_a_m_e and _l_i_s_t_n_a_m_e-re‐
+              quest address localparts when the recipient_delimiter is set  to
+              "-".
+
+       ssuunn__mmaaiillttooooll__ccoommppaattiibbiilliittyy ((nnoo))
+              Obsolete SUN mailtool compatibility feature.
+
+       Available in Postfix version 2.3 and later:
+
+       ffrroozzeenn__ddeelliivveerreedd__ttoo ((yyeess))
+              Update  the  llooccaall(8) delivery agent’s idea of the Delivered-To:
+              address (see prepend_delivered_header) only once, at  the  start
+              of  a  delivery attempt; do not update the Delivered-To: address
+              while expanding aliases or .forward files.
+
+       Available in Postfix version 2.5.3 and later:
+
+       ssttrriicctt__mmaaiillbbooxx__oowwnneerrsshhiipp ((yyeess))
+              Defer delivery when a mailbox file is not owned by  its  recipi‐
+              ent.
+
+       rreesseett__oowwnneerr__aalliiaass ((nnoo))
+              Reset  the llooccaall(8) delivery agent’s idea of the owner-alias at‐
+              tribute, when delivering mail to a child  alias  that  does  not
+              have its own owner alias.
+
+       Available in Postfix version 3.0 and later:
+
+       llooccaall__ddeelliivveerryy__ssttaattuuss__ffiilltteerr (($$ddeeffaauulltt__ddeelliivveerryy__ssttaattuuss__ffiilltteerr))
+              Optional  filter  for  the llooccaall(8) delivery agent to change the
+              status code or explanatory text of  successful  or  unsuccessful
+              deliveries.
+
+DDEELLIIVVEERRYY MMEETTHHOODD CCOONNTTRROOLLSS
+       The  precedence  of  llooccaall(8)  delivery  methods  from  high to low is:
+       aliases,  .forward  files,  mailbox_transport_maps,  mailbox_transport,
+       mailbox_command_maps,  mailbox_command, home_mailbox, mail_spool_direc‐
+       tory, fallback_transport_maps, fallback_transport, and luser_relay.
+
+       aalliiaass__mmaappss ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The alias databases that are used for llooccaall(8) delivery.
+
+       ffoorrwwaarrdd__ppaatthh ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The llooccaall(8) delivery agent search list for finding  a  .forward
+              file with user-specified delivery methods.
+
+       mmaaiillbbooxx__ttrraannssppoorrtt__mmaappss ((eemmppttyy))
+              Optional  lookup  tables  with  per-recipient  message  delivery
+              transports to use for llooccaall(8) mailbox delivery, whether or  not
+              the recipients are found in the UNIX passwd database.
+
+       mmaaiillbbooxx__ttrraannssppoorrtt ((eemmppttyy))
+              Optional  message  delivery transport that the llooccaall(8) delivery
+              agent should use for mailbox delivery to all  local  recipients,
+              whether or not they are found in the UNIX passwd database.
+
+       mmaaiillbbooxx__ccoommmmaanndd__mmaappss ((eemmppttyy))
+              Optional  lookup  tables with per-recipient external commands to
+              use for llooccaall(8) mailbox delivery.
+
+       mmaaiillbbooxx__ccoommmmaanndd ((eemmppttyy))
+              Optional external  command  that  the  llooccaall(8)  delivery  agent
+              should use for mailbox delivery.
+
+       hhoommee__mmaaiillbbooxx ((eemmppttyy))
+              Optional  pathname  of  a  mailbox  file  relative to a llooccaall(8)
+              user’s home directory.
+
+       mmaaiill__ssppooooll__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The directory where llooccaall(8) UNIX-style mailboxes are kept.
+
+       ffaallllbbaacckk__ttrraannssppoorrtt__mmaappss ((eemmppttyy))
+              Optional  lookup  tables  with  per-recipient  message  delivery
+              transports for recipients that the llooccaall(8) delivery agent could
+              not find in the aalliiaasseess(5) or UNIX password database.
+
+       ffaallllbbaacckk__ttrraannssppoorrtt ((eemmppttyy))
+              Optional  message  delivery transport that the llooccaall(8) delivery
+              agent should use for names that are not found in the  aalliiaasseess(5)
+              or UNIX password database.
+
+       lluusseerr__rreellaayy ((eemmppttyy))
+              Optional catch-all destination for unknown llooccaall(8) recipients.
+
+       Available in Postfix version 2.2 and later:
+
+       ccoommmmaanndd__eexxeeccuuttiioonn__ddiirreeccttoorryy ((eemmppttyy))
+              The  llooccaall(8)  delivery  agent working directory for delivery to
+              external commands.
+
+MMAAIILLBBOOXX LLOOCCKKIINNGG CCOONNTTRROOLLSS
+       ddeelliivveerr__lloocckk__aatttteemmppttss ((2200))
+              The maximal number of attempts to acquire an exclusive lock on a
+              mailbox file or bboouunnccee(8) logfile.
+
+       ddeelliivveerr__lloocckk__ddeellaayy ((11ss))
+              The time between attempts to acquire  an  exclusive  lock  on  a
+              mailbox file or bboouunnccee(8) logfile.
+
+       ssttaallee__lloocckk__ttiimmee ((550000ss))
+              The  time  after which a stale exclusive mailbox lockfile is re‐
+              moved.
+
+       mmaaiillbbooxx__ddeelliivveerryy__lloocckk ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              How to lock a UNIX-style llooccaall(8) mailbox before attempting  de‐
+              livery.
+
+RREESSOOUURRCCEE AANNDD RRAATTEE CCOONNTTRROOLLSS
+       ccoommmmaanndd__ttiimmee__lliimmiitt ((11000000ss))
+              Time limit for delivery to external commands.
+
+       dduupplliiccaattee__ffiilltteerr__lliimmiitt ((11000000))
+              The maximal number of addresses remembered by the address dupli‐
+              cate filter for aalliiaasseess(5) or vviirrttuuaall(5) alias expansion, or for
+              sshhoowwqq(8) queue displays.
+
+       mmaaiillbbooxx__ssiizzee__lliimmiitt ((5511220000000000))
+              The  maximal  size of any llooccaall(8) individual mailbox or maildir
+              file, or zero (no limit).
+
+       Implemented in the qmgr(8) daemon:
+
+       llooccaall__ddeessttiinnaattiioonn__ccoonnccuurrrreennccyy__lliimmiitt ((22))
+              The maximal number of parallel deliveries via the local mail de‐
+              livery transport to the  same  recipient  (when  "local_destina‐
+              tion_recipient_limit = 1") or the maximal number of parallel de‐
+              liveries  to  the same local domain (when "local_destination_re‐
+              cipient_limit > 1").
+
+       llooccaall__ddeessttiinnaattiioonn__rreecciippiieenntt__lliimmiitt ((11))
+              The maximal number of recipients per message  delivery  via  the
+              local mail delivery transport.
+
+SSEECCUURRIITTYY CCOONNTTRROOLLSS
+       aallllooww__mmaaiill__ttoo__ccoommmmaannddss ((aalliiaass,, ffoorrwwaarrdd))
+              Restrict llooccaall(8) mail delivery to external commands.
+
+       aallllooww__mmaaiill__ttoo__ffiilleess ((aalliiaass,, ffoorrwwaarrdd))
+              Restrict llooccaall(8) mail delivery to external files.
+
+       ccoommmmaanndd__eexxppaannssiioonn__ffiilltteerr ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              Restrict  the characters that the llooccaall(8) delivery agent allows
+              in $name  expansions  of  $mailbox_command  and  $command_execu‐
+              tion_directory.
+
+       ddeeffaauulltt__pprriivvss ((nnoobbooddyy))
+              The  default  rights used by the llooccaall(8) delivery agent for de‐
+              livery to an external file or command.
+
+       ffoorrwwaarrdd__eexxppaannssiioonn__ffiilltteerr ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              Restrict the characters that the llooccaall(8) delivery agent  allows
+              in $name expansions of $forward_path.
+
+       Available in Postfix version 2.2 and later:
+
+       eexxeeccuuttiioonn__ddiirreeccttoorryy__eexxppaannssiioonn__ffiilltteerr ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              Restrict  the characters that the llooccaall(8) delivery agent allows
+              in $name expansions of $command_execution_directory.
+
+       Available in Postfix version 2.5.3 and later:
+
+       ssttrriicctt__mmaaiillbbooxx__oowwnneerrsshhiipp ((yyeess))
+              Defer delivery when a mailbox file is not owned by  its  recipi‐
+              ent.
+
+MMIISSCCEELLLLAANNEEOOUUSS CCOONNTTRROOLLSS
+       ccoonnffiigg__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The  default  location of the Postfix main.cf and master.cf con‐
+              figuration files.
+
+       ddaaeemmoonn__ttiimmeeoouutt ((1188000000ss))
+              How much time a Postfix daemon process may take to handle a  re‐
+              quest before it is terminated by a built-in watchdog timer.
+
+       ddeellaayy__llooggggiinngg__rreessoolluuttiioonn__lliimmiitt ((22))
+              The  maximal  number of digits after the decimal point when log‐
+              ging sub-second delay values.
+
+       eexxppoorrtt__eennvviirroonnmmeenntt ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The list of environment variables that a  Postfix  process  will
+              export to non-Postfix processes.
+
+       iippcc__ttiimmeeoouutt ((33660000ss))
+              The  time limit for sending or receiving information over an in‐
+              ternal communication channel.
+
+       llooccaall__ccoommmmaanndd__sshheellll ((eemmppttyy))
+              Optional shell program for llooccaall(8) delivery to non-Postfix com‐
+              mands.
+
+       mmaaxx__iiddllee ((110000ss))
+              The maximum amount of time that an idle Postfix  daemon  process
+              waits for an incoming connection before terminating voluntarily.
+
+       mmaaxx__uussee ((110000))
+              The maximal number of incoming connections that a Postfix daemon
+              process will service before terminating voluntarily.
+
+       pprreeppeenndd__ddeelliivveerreedd__hheeaaddeerr ((ccoommmmaanndd,, ffiillee,, ffoorrwwaarrdd))
+              The  message delivery contexts where the Postfix llooccaall(8) deliv‐
+              ery agent prepends a Delivered-To:  message header with the  ad‐
+              dress that the mail was delivered to.
+
+       pprroocceessss__iidd ((rreeaadd--oonnllyy))
+              The process ID of a Postfix command or daemon process.
+
+       pprroocceessss__nnaammee ((rreeaadd--oonnllyy))
+              The process name of a Postfix command or daemon process.
+
+       pprrooppaaggaattee__uunnmmaattcchheedd__eexxtteennssiioonnss ((ccaannoonniiccaall,, vviirrttuuaall))
+              What  address  lookup  tables copy an address extension from the
+              lookup key to the lookup result.
+
+       qquueeuuee__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The location of the Postfix top-level queue directory.
+
+       rreecciippiieenntt__ddeelliimmiitteerr ((eemmppttyy))
+              The set of characters that can separate an email address  local‐
+              part, user name, or a .forward file name from its extension.
+
+       rreeqquuiirree__hhoommee__ddiirreeccttoorryy ((nnoo))
+              Require that a llooccaall(8) recipient’s home directory exists before
+              mail delivery is attempted.
+
+       ssyysslloogg__ffaacciilliittyy ((mmaaiill))
+              The syslog facility of Postfix logging.
+
+       ssyysslloogg__nnaammee ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              A  prefix  that  is  prepended  to  the  process  name in syslog
+              records, so that, for example, "smtpd" becomes "prefix/smtpd".
+
+       Available in Postfix version 3.3 and later:
+
+       eennaabbllee__oorriiggiinnaall__rreecciippiieenntt ((yyeess))
+              Enable support for the original recipient address after  an  ad‐
+              dress  is  rewritten  to  a  different address (for example with
+              aliasing or with canonical mapping).
+
+       sseerrvviiccee__nnaammee ((rreeaadd--oonnllyy))
+              The master.cf service name of a Postfix daemon process.
+
+       Available in Postfix 3.5 and later:
+
+       iinnffoo__lloogg__aaddddrreessss__ffoorrmmaatt ((eexxtteerrnnaall))
+              The email address form that will be used  in  non-debug  logging
+              (info, warning, etc.).
+
+FFIILLEESS
+       The following are examples; details differ between systems.
+       $HOME/.forward, per-user aliasing
+       /etc/aliases, system-wide alias database
+       /var/spool/mail, system mailboxes
+
+SSEEEE AALLSSOO
+       qmgr(8), queue manager
+       bounce(8), delivery status reports
+       newaliases(1), create/update alias database
+       postalias(1), create/update alias database
+       aliases(5), format of alias database
+       postconf(5), configuration parameters
+       master(5), generic daemon options
+       postlogd(8), Postfix logging
+       syslogd(8), system logging
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+HHIISSTTOORRYY
+       The  DDeelliivveerreedd--TToo:: message header appears in the qqmmaaiill system by Daniel
+       Bernstein.
+
+       The _m_a_i_l_d_i_r structure appears in the qqmmaaiill system by Daniel Bernstein.
+
+AAUUTTHHOORR((SS))
+       Wietse Venema
+       IBM T.J. Watson Research
+       P.O. Box 704
+       Yorktown Heights, NY 10598, USA
+
+       Wietse Venema
+       Google, Inc.
+       111 8th Avenue
+       New York, NY 10011, USA
+
+                                                                      _L_O_C_A_L(8)

@@ -1,0 +1,147 @@
+UIO(9)                   BSD Kernel Developer's Manual                  UIO(9)
+
+NNAAMMEE
+     uuiioo, uuiioommoovvee, uuiioommoovvee__ffrroommbbuuff, uuiioommoovvee__nnooffaauulltt — device driver I/O rou‐
+     tines
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//uuiioo..hh>>
+
+     struct uio {
+             struct  iovec *uio_iov;         /* scatter/gather list */
+             int     uio_iovcnt;             /* length of scatter/gather list */
+             off_t   uio_offset;             /* offset in target object */
+             ssize_t uio_resid;              /* remaining bytes to copy */
+             enum    uio_seg uio_segflg;     /* address space */
+             enum    uio_rw uio_rw;          /* operation */
+             struct  thread *uio_td;         /* owner */
+     };
+
+     _i_n_t
+     uuiioommoovvee(_v_o_i_d _*_b_u_f, _i_n_t _h_o_w_m_u_c_h, _s_t_r_u_c_t _u_i_o _*_u_i_o_p);
+
+     _i_n_t
+     uuiioommoovvee__ffrroommbbuuff(_v_o_i_d _*_b_u_f, _i_n_t _h_o_w_m_u_c_h, _s_t_r_u_c_t _u_i_o _*_u_i_o_p);
+
+     _i_n_t
+     uuiioommoovvee__nnooffaauulltt(_v_o_i_d _*_b_u_f, _i_n_t _h_o_w_m_u_c_h, _s_t_r_u_c_t _u_i_o _*_u_i_o_p);
+
+DDEESSCCRRIIPPTTIIOONN
+     The functions uuiioommoovvee(), uuiioommoovvee__ffrroommbbuuff(), and uuiioommoovvee__nnooffaauulltt() are
+     used to transfer data between buffers and I/O vectors that might possibly
+     cross the user/kernel space boundary.
+
+     As a result of any read(2), write(2), readv(2), or writev(2) system call
+     that is being passed to a character-device driver, the appropriate driver
+     _d___r_e_a_d or _d___w_r_i_t_e entry will be called with a pointer to a _s_t_r_u_c_t _u_i_o be‐
+     ing passed.  The transfer request is encoded in this structure.  The
+     driver itself should use uuiioommoovvee() or uuiioommoovvee__nnooffaauulltt() to get at the
+     data in this structure.
+
+     The fields in the _u_i_o structure are:
+
+     _u_i_o___i_o_v     The array of I/O vectors to be processed.  In the case of
+                 scatter/gather I/O, this will be more than one vector.
+
+     _u_i_o___i_o_v_c_n_t  The number of I/O vectors present.
+
+     _u_i_o___o_f_f_s_e_t  The offset into the device.
+
+     _u_i_o___r_e_s_i_d   The remaining number of bytes to process, updated after
+                 transfer.
+
+     _u_i_o___s_e_g_f_l_g  One of the following flags:
+
+                 UIO_USERSPACE  The I/O vector points into a process's address
+                                space.
+
+                 UIO_SYSSPACE   The I/O vector points into the kernel address
+                                space.
+
+                 UIO_NOCOPY     Do not copy, already in object.
+
+     _u_i_o___r_w      The direction of the desired transfer, either UIO_READ or
+                 UIO_WRITE.
+
+     _u_i_o___t_d      The pointer to a _s_t_r_u_c_t _t_h_r_e_a_d for the associated thread;
+                 used if _u_i_o___s_e_g_f_l_g indicates that the transfer is to be made
+                 from/to a process's address space.
+
+     The function uuiioommoovvee__nnooffaauulltt() requires that the buffer and I/O vectors
+     be accessible without incurring a page fault.  The source and destination
+     addresses must be physically mapped for read and write access, respec‐
+     tively, and neither the source nor destination addresses may be pageable.
+     Thus, the function uuiioommoovvee__nnooffaauulltt() can be called from contexts where
+     acquiring virtual memory system locks or sleeping are prohibited.
+
+     The uuiioommoovvee__ffrroommbbuuff() function is a convenience wrapper around uuiioommoovvee()
+     for drivers that serve data which is wholly contained within an existing
+     buffer in memory.  It validates the _u_i_o___o_f_f_s_e_t and _u_i_o___r_e_s_i_d values
+     against the size of the existing buffer, handling short transfers when
+     the request partially overlaps the buffer.  When _u_i_o___o_f_f_s_e_t is greater
+     than or equal to the buffer size, the result is success with no bytes
+     transferred, effectively signaling EOF.
+
+RREETTUURRNN VVAALLUUEESS
+     On success uuiioommoovvee(), uuiioommoovvee__ffrroommbbuuff(), and uuiioommoovvee__nnooffaauulltt() will re‐
+     turn 0; on error they will return an appropriate error code.
+
+EEXXAAMMPPLLEESS
+     The idea is that the driver maintains a private buffer for its data, and
+     processes the request in chunks of maximal the size of this buffer.  Note
+     that the buffer handling below is very simplified and will not work (the
+     buffer pointer is not being advanced in case of a partial read), it is
+     just here to demonstrate the uuiioo handling.
+
+     /* MIN() can be found there: */
+     #include <sys/param.h>
+
+     #define BUFSIZE 512
+     static char buffer[BUFSIZE];
+
+     static int data_available;      /* amount of data that can be read */
+
+     static int
+     fooread(struct cdev *dev, struct uio *uio, int flag)
+     {
+             int rv, amnt;
+
+             rv = 0;
+             while (uio->uio_resid > 0) {
+                     if (data_available > 0) {
+                             amnt = MIN(uio->uio_resid, data_available);
+                             rv = uiomove(buffer, amnt, uio);
+                             if (rv != 0)
+                                     break;
+                             data_available -= amnt;
+                     } else
+                             tsleep(...);    /* wait for a better time */
+             }
+             if (rv != 0) {
+                     /* do error cleanup here */
+             }
+             return (rv);
+     }
+
+EERRRROORRSS
+     uuiioommoovvee() and uuiioommoovvee__nnooffaauulltt() will fail and return the following error
+     code if:
+
+     [EFAULT]           The invoked copyin(9) or copyout(9) returned EFAULT
+
+     In addition, uuiioommoovvee__nnooffaauulltt() will fail and return the following error
+     code if:
+
+     [EFAULT]           A page fault occurs.
+
+SSEEEE AALLSSOO
+     read(2), readv(2), write(2), writev(2), copyin(9), copyout(9), sleep(9)
+
+HHIISSTTOORRYY
+     The uuiioo mechanism appeared in some early version of UNIX.
+
+AAUUTTHHOORRSS
+     This manual page was written by Jörg Wunsch.
+
+BSD                             March 11, 2017                             BSD

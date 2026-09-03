@@ -1,0 +1,260 @@
+LIBARCHIVE_CHANGES(3)    BSD Library Functions Manual    LIBARCHIVE_CHANGES(3)
+
+NNAAMMEE
+     lliibbaarrcchhiivvee__cchhaannggeess — changes in libarchive interface
+
+CCHHAANNGGEESS IINN LLIIBBAARRCCHHIIVVEE 33
+     This page describes user-visible changes in libarchive3, and lists public
+     functions and other symbols changed, deprecated or removed in
+     libarchive3, along with their replacements if any.
+
+   MMuullttiippllee FFiilltteerrss
+     Libarchive2 permitted a single (input or output) filter active on an ar‐
+     chive.  Libarchive3 extends this into a variable-length stack.  Where
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__XXXXXX() would replace any existing filter,
+     aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__XXXXXX() extends the write pipeline with another
+     filter.
+
+   CChhaarraacctteerr SSeett HHaannddlliinngg
+     Libarchive2 assumed that the local platform uses Unicode as the native
+     wchar_t encoding, which is true on Windows, modern Linux, and a few other
+     systems, but is certainly not universal.  As a result, pax format ar‐
+     chives were written incorrectly on some systems, since pax format re‐
+     quires UTF-8 and libarchive 2 incorrectly assumed that wchar_t strings
+     can be easily converted to UTF-8.
+
+     Libarchive3 uses the standard iconv library to convert between character
+     sets and is introducing the notion of a “default character set for the
+     archive”.  To support this, archive_entry objects can now be bound to a
+     particular archive when they are created.  The automatic character set
+     conversions performed by archive_entry objects when reading and writing
+     filenames, usernames, and other strings will now use an appropriate de‐
+     fault character set:
+
+     If the archive_entry object is bound to an archive, it will use the de‐
+     fault character set for that archive.
+
+     The platform default character encoding (as returned by
+     nnll__llaannggiinnffoo(_C_H_A_R_S_E_T)) will be used if nothing else is specified.
+
+     Libarchive3 also introduces charset options to many of the archive read‐
+     ers and writers to control the character set that will be used for file‐
+     names written in those archives.  When possible, this will be set auto‐
+     matically based on information in the archive itself.  Combining this
+     with the notion of a default character set for the archive should allow
+     you to configure libarchive to read archives from other platforms and
+     have the filenames and other information transparently converted to the
+     character encoding suitable for your application.
+
+   PPrroottoottyyppee CChhaannggeess
+     These changes break binary compatibility; libarchive3 has a new shared
+     library version to reflect these changes.  The library now uses portable
+     wide types such as int64_t instead of less-portable types such as off_t,
+     gid_t, uid_t, and ino_t.
+
+     There are a few cases where these changes will affect your source code:
+
+     ••    In some cases, libarchive's wider types will introduce the possibil‐
+          ity of truncation: for example, on a system with a 16-bit uid_t, you
+          risk having uid 65536 be truncated to uid 0, which can cause serious
+          security problems.
+
+     ••    Typedef function pointer types will be incompatible.  For example,
+          if you define custom skip callbacks, you may have to use code simi‐
+          lar to the following if you want to support building against
+          libarchive2 and libarchive3:
+
+          #if ARCHIVE_VERSION_NUMBER < 3000000
+          typedef off_t myoff_t;
+          #else
+          typedef int64_t myoff_t;
+          #endif
+
+          myoff_t
+          my_skip_function(struct archive *a, void *v, myoff_t o)
+          {
+              ... implementation ...
+          }
+
+     Affected functions:
+
+     ••   aarrcchhiivvee__eennttrryy__ggiidd(), aarrcchhiivvee__eennttrryy__sseett__ggiidd()
+     ••   aarrcchhiivvee__eennttrryy__uuiidd(), aarrcchhiivvee__eennttrryy__sseett__uuiidd()
+     ••   aarrcchhiivvee__eennttrryy__iinnoo(), aarrcchhiivvee__eennttrryy__sseett__iinnoo()
+     ••   aarrcchhiivvee__rreeaadd__ddaattaa__bblloocckk(), aarrcchhiivvee__wwrriittee__ddaattaa__bblloocckk()
+     ••   aarrcchhiivvee__rreeaadd__ddiisskk__ggnnaammee(), aarrcchhiivvee__rreeaadd__ddiisskk__uunnaammee()
+     ••   aarrcchhiivvee__rreeaadd__ddiisskk__sseett__ggnnaammee__llooookkuupp(),
+         aarrcchhiivvee__rreeaadd__ddiisskk__sseett__ggrroouupp__llooookkuupp(),
+         aarrcchhiivvee__rreeaadd__ddiisskk__sseett__uunnaammee__llooookkuupp(),
+         aarrcchhiivvee__rreeaadd__ddiisskk__sseett__uusseerr__llooookkuupp()
+     ••   aarrcchhiivvee__sskkiipp__ccaallllbbaacckk()
+     ••   aarrcchhiivvee__rreeaadd__eexxttrraacctt__sseett__sskkiipp__ffiillee(),
+         aarrcchhiivvee__wwrriittee__ddiisskk__sseett__sskkiipp__ffiillee(), aarrcchhiivvee__wwrriittee__sseett__sskkiipp__ffiillee()
+     ••   aarrcchhiivvee__wwrriittee__ddiisskk__sseett__ggrroouupp__llooookkuupp(),
+         aarrcchhiivvee__wwrriittee__ddiisskk__sseett__uusseerr__llooookkuupp()
+
+     Where these functions or their arguments took or returned gid_t, ino_t,
+     off_t, or uid_t they now take or return int64_t or equivalent.
+
+   DDeepprreeccaatteedd SSyymmbboollss
+     Symbols deprecated in libarchive3 will be removed in libarchive4.  These
+     symbols, along with their replacements if any, are listed below:
+
+     aarrcchhiivvee__ppoossiittiioonn__ccoommpprreesssseedd(), aarrcchhiivvee__ppoossiittiioonn__uunnccoommpprreesssseedd()
+          aarrcchhiivvee__ffiilltteerr__bbyytteess()
+
+     aarrcchhiivvee__ccoommpprreessssiioonn()
+          aarrcchhiivvee__ffiilltteerr__ccooddee()
+
+     aarrcchhiivvee__ccoommpprreessssiioonn__nnaammee()
+          aarrcchhiivvee__ffiilltteerr__nnaammee()
+
+     aarrcchhiivvee__rreeaadd__ffiinniisshh(), aarrcchhiivvee__wwrriittee__ffiinniisshh()
+          aarrcchhiivvee__rreeaadd__ffrreeee(), aarrcchhiivvee__wwrriittee__ffrreeee()
+
+     aarrcchhiivvee__rreeaadd__ooppeenn__ffiillee(), aarrcchhiivvee__wwrriittee__ooppeenn__ffiillee()
+          aarrcchhiivvee__rreeaadd__ooppeenn__ffiilleennaammee(), aarrcchhiivvee__wwrriittee__ooppeenn__ffiilleennaammee()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__aallll()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__aallll()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__bbzziipp22()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__bbzziipp22()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__ccoommpprreessss()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__ccoommpprreessss()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__ggzziipp()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__ggzziipp()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__llzziipp()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__llzziipp()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__llzzmmaa()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__llzzmmaa()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__nnoonnee()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__nnoonnee()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__pprrooggrraamm()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__pprrooggrraamm()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__pprrooggrraamm__ssiiggnnaattuurree()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__pprrooggrraamm__ssiiggnnaattuurree()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__rrppmm()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__rrppmm()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__uuuu()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__uuuu()
+
+     aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ccoommpprreessssiioonn__xxzz()
+          aarrcchhiivvee__rreeaadd__ssuuppppoorrtt__ffiilltteerr__xxzz()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__bbzziipp22()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__bbzziipp22()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__ccoommpprreessss()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__ccoommpprreessss()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__ggzziipp()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__ggzziipp()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__llzziipp()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__llzziipp()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__llzzmmaa()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__llzzmmaa()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__nnoonnee()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__nnoonnee()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__pprrooggrraamm()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__pprrooggrraamm()
+
+     aarrcchhiivvee__wwrriittee__sseett__ccoommpprreessssiioonn__ffiilltteerr()
+          aarrcchhiivvee__wwrriittee__aadddd__ffiilltteerr__ffiilltteerr()
+
+   RReemmoovveedd SSyymmbboollss
+     These symbols, listed below along with their replacements if any, were
+     deprecated in libarchive2, and are not part of libarchive3.
+
+     aarrcchhiivvee__aappii__ffeeaattuurree()
+          aarrcchhiivvee__vveerrssiioonn__nnuummbbeerr()
+
+     aarrcchhiivvee__aappii__vveerrssiioonn()
+          aarrcchhiivvee__vveerrssiioonn__nnuummbbeerr()
+
+     aarrcchhiivvee__vveerrssiioonn()
+          aarrcchhiivvee__vveerrssiioonn__ssttrriinngg()
+
+     aarrcchhiivvee__vveerrssiioonn__ssttaammpp()
+          aarrcchhiivvee__vveerrssiioonn__nnuummbbeerr()
+
+     aarrcchhiivvee__rreeaadd__sseett__ffiilltteerr__ooppttiioonnss()
+          aarrcchhiivvee__rreeaadd__sseett__ooppttiioonnss() or aarrcchhiivvee__rreeaadd__sseett__ffiilltteerr__ooppttiioonn()
+
+     aarrcchhiivvee__rreeaadd__sseett__ffoorrmmaatt__ooppttiioonnss()
+          aarrcchhiivvee__rreeaadd__sseett__ooppttiioonnss() or aarrcchhiivvee__rreeaadd__sseett__ffoorrmmaatt__ooppttiioonn()
+
+     aarrcchhiivvee__wwrriittee__sseett__ffiilltteerr__ooppttiioonnss()
+          aarrcchhiivvee__wwrriittee__sseett__ooppttiioonnss() or aarrcchhiivvee__wwrriittee__sseett__ffiilltteerr__ooppttiioonn()
+
+     aarrcchhiivvee__wwrriittee__sseett__ffoorrmmaatt__ooppttiioonnss()
+          aarrcchhiivvee__wwrriittee__sseett__ooppttiioonnss() or aarrcchhiivvee__wwrriittee__sseett__ffoorrmmaatt__ooppttiioonn()
+
+     ARCHIVE_API_FEATURE
+          ARCHIVE_VERSION_NUMBER
+
+     ARCHIVE_API_VERSION
+          ARCHIVE_VERSION_NUMBER
+
+     ARCHIVE_VERSION_STAMP
+          ARCHIVE_VERSION_NUMBER
+
+     ARCHIVE_LIBRARY_VERSION
+          ARCHIVE_VERSION_STRING
+
+     ARCHIVE_COMPRESSION_NONE
+          ARCHIVE_FILTER_NONE
+
+     ARCHIVE_COMPRESSION_GZIP
+          ARCHIVE_FILTER_GZIP
+
+     ARCHIVE_COMPRESSION_BZIP2
+          ARCHIVE_FILTER_BZIP2
+
+     ARCHIVE_COMPRESSION_COMPRESS
+          ARCHIVE_FILTER_COMPRESS
+
+     ARCHIVE_COMPRESSION_PROGRAM
+          ARCHIVE_FILTER_PROGRAM
+
+     ARCHIVE_COMPRESSION_LZMA
+          ARCHIVE_FILTER_LZMA
+
+     ARCHIVE_COMPRESSION_XZ
+          ARCHIVE_FILTER_XZ
+
+     ARCHIVE_COMPRESSION_UU
+          ARCHIVE_FILTER_UU
+
+     ARCHIVE_COMPRESSION_RPM
+          ARCHIVE_FILTER_RPM
+
+     ARCHIVE_COMPRESSION_LZIP
+          ARCHIVE_FILTER_LZIP
+
+     ARCHIVE_BYTES_PER_RECORD
+          512
+
+     ARCHIVE_DEFAULT_BYTES_PER_BLOCK
+          10240
+
+SSEEEE AALLSSOO
+     archive_read(3), archive_read_filter(3), archive_read_format(3),
+     archive_read_set_options(3), archive_util(3), archive_write(3),
+     archive_write_filter(3), archive_write_format(3),
+     archive_write_set_options(3), libarchive(3)
+
+BSD                            December 23, 2011                           BSD

@@ -1,0 +1,600 @@
+BPF(4)                   BSD Kernel Interfaces Manual                   BPF(4)
+
+NNAAMMEE
+     bbppff — Berkeley Packet Filter
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee bbppffiilltteerr
+
+DDEESSCCRRIIPPTTIIOONN
+     The Berkeley Packet Filter provides a raw interface to data link layers
+     in a protocol-independent fashion.  All packets on the network, even
+     those destined for other hosts, are accessible through this mechanism.
+
+     The packet filter appears as a character special device, _/_d_e_v_/_b_p_f.  After
+     opening the device, the file descriptor must be bound to a specific net‐
+     work interface with the BIOCSETIF ioctl(2).  A given interface can be
+     shared between multiple listeners, and the filter underlying each de‐
+     scriptor will see an identical packet stream.
+
+     Associated with each open instance of a bbppff file is a user-settable
+     packet filter.  Whenever a packet is received by an interface, all file
+     descriptors listening on that interface apply their filter.  Each de‐
+     scriptor that accepts the packet receives its own copy.
+
+     Reads from these files return the next group of packets that have matched
+     the filter.  To improve performance, the buffer passed to read must be
+     the same size as the buffers used internally by bbppff.  This size is re‐
+     turned by the BIOCGBLEN ioctl(2) and can be set with BIOCSBLEN.  Note
+     that an individual packet larger than this size is necessarily truncated.
+
+     A packet can be sent out on the network by writing to a bbppff file descrip‐
+     tor.  Each descriptor can also have a user-settable filter for control‐
+     ling the writes.  Only packets matching the filter are sent out of the
+     interface.  The writes are unbuffered, meaning only one packet can be
+     processed per write.
+
+     Once a descriptor is configured, further changes to the configuration can
+     be prevented using the BIOCLOCK ioctl(2).
+
+IIOOCCTTLL IINNTTEERRFFAACCEE
+     The ioctl(2) command codes below are defined in <_n_e_t_/_b_p_f_._h>.  All com‐
+     mands require these includes:
+
+     <_s_y_s_/_t_y_p_e_s_._h> <_s_y_s_/_t_i_m_e_._h> <_s_y_s_/_i_o_c_t_l_._h> <_n_e_t_/_b_p_f_._h>
+
+     Additionally, BIOCGETIF and BIOCSETIF require <_s_y_s_/_s_o_c_k_e_t_._h> and
+     <_n_e_t_/_i_f_._h>.
+
+     The (third) argument to the ioctl(2) call should be a pointer to the type
+     indicated.
+
+     BIOCGBLEN _u___i_n_t _*
+             Returns the required buffer length for reads on bbppff files.
+
+     BIOCSBLEN _u___i_n_t _*
+             Sets the buffer length for reads on bbppff files.  The buffer must
+             be set before the file is attached to an interface with
+             BIOCSETIF.  If the requested buffer size cannot be accommodated,
+             the closest allowable size will be set and returned in the argu‐
+             ment.  A read call will result in EINVAL if it is passed a buffer
+             that is not this size.
+
+     BIOCGDLT _u___i_n_t _*
+             Returns the type of the data link layer underlying the attached
+             interface.  EINVAL is returned if no interface has been speci‐
+             fied.  The device types, prefixed with “DLT_”, are defined in
+             <_n_e_t_/_b_p_f_._h>.
+
+     BIOCGDLTLIST _s_t_r_u_c_t _b_p_f___d_l_t_l_i_s_t _*
+             Returns an array of the available types of the data link layer
+             underlying the attached interface:
+
+                   struct bpf_dltlist {
+                           u_int bfl_len;
+                           u_int *bfl_list;
+                   };
+
+             The available types are returned in the array pointed to by the
+             _b_f_l___l_i_s_t field while their length in _u___i_n_t is supplied to the
+             _b_f_l___l_e_n field.  ENOMEM is returned if there is not enough buffer
+             space and EFAULT is returned if a bad address is encountered.
+             The _b_f_l___l_e_n field is modified on return to indicate the actual
+             length in _u___i_n_t of the array returned.  If _b_f_l___l_i_s_t is NULL, the
+             _b_f_l___l_e_n field is set to indicate the required length of the array
+             in _u___i_n_t.
+
+     BIOCSDLT _u___i_n_t _*
+             Changes the type of the data link layer underlying the attached
+             interface.  EINVAL is returned if no interface has been specified
+             or the specified type is not available for the interface.
+
+     BIOCPROMISC
+             Forces the interface into promiscuous mode.  All packets, not
+             just those destined for the local host, are processed.  Since
+             more than one file can be listening on a given interface, a lis‐
+             tener that opened its interface non-promiscuously may receive
+             packets promiscuously.  This problem can be remedied with an ap‐
+             propriate filter.
+
+             The interface remains in promiscuous mode until all files listen‐
+             ing promiscuously are closed.
+
+     BIOCFLUSH
+             Flushes the buffer of incoming packets and resets the statistics
+             that are returned by BIOCGSTATS.
+
+     BIOCLOCK
+             This ioctl is designed to prevent the security issues associated
+             with an open bbppff descriptor in unprivileged programs.  Even with
+             dropped privileges, an open bbppff descriptor can be abused by a
+             rogue program to listen on any interface on the system, send
+             packets on these interfaces if the descriptor was opened read-
+             write and send signals to arbitrary processes using the signaling
+             mechanism of bbppff.  By allowing only “known safe” ioctls, the
+             BIOCLOCK ioctl prevents this abuse.  The allowable ioctls are
+             BIOCFLUSH, BIOCGBLEN, BIOCGDIRFILT, BIOCGDLT, BIOCGDIRFILT,
+             BIOCGDLTLIST, BIOCGETIF, BIOCGHDRCMPLT, BIOCGRSIG, BIOCGRTIMEOUT,
+             BIOCGSTATS, BIOCIMMEDIATE, BIOCLOCK, BIOCSRTIMEOUT,
+             BIOCSWTIMEOUT, BIOCDWTIMEOUT, BIOCVERSION, TIOCGPGRP, and
+             FIONREAD.  Use of any other ioctl is denied with error EPERM.
+             Once a descriptor is locked, it is not possible to unlock it.  A
+             process with root privileges is not affected by the lock.
+
+             A privileged program can open a bbppff device, drop privileges, set
+             the interface, filters and modes on the descriptor, and lock it.
+             Once the descriptor is locked, the system is safe from further
+             abuse through the descriptor.  Locking a descriptor does not pre‐
+             vent writes.  If the application does not need to send packets
+             through bbppff, it can open the device read-only to prevent writing.
+             If sending packets is necessary, a write-filter can be set before
+             locking the descriptor to prevent arbitrary packets from being
+             sent out.
+
+     BIOCGETIF _s_t_r_u_c_t _i_f_r_e_q _*
+             Returns the name of the hardware interface that the file is lis‐
+             tening on.  The name is returned in the _i_f_r___n_a_m_e field of the
+             _s_t_r_u_c_t _i_f_r_e_q.  All other fields are undefined.
+
+     BIOCSETIF _s_t_r_u_c_t _i_f_r_e_q _*
+             Sets the hardware interface associated with the file.  This com‐
+             mand must be performed before any packets can be read.  The de‐
+             vice is indicated by name using the _i_f_r___n_a_m_e field of the _s_t_r_u_c_t
+             _i_f_r_e_q.  Additionally, performs the actions of BIOCFLUSH.
+
+     BIOCSRTIMEOUT _s_t_r_u_c_t _t_i_m_e_v_a_l _*
+     BIOCGRTIMEOUT _s_t_r_u_c_t _t_i_m_e_v_a_l _*
+             Sets or gets the read timeout parameter.  The _t_i_m_e_v_a_l specifies
+             the length of time to wait before timing out on a read request.
+             This parameter is initialized to zero by open(2), indicating no
+             timeout.
+
+     BIOCGSTATS _s_t_r_u_c_t _b_p_f___s_t_a_t _*
+             Returns the following structure of packet statistics:
+
+                   struct bpf_stat {
+                           u_int bs_recv;
+                           u_int bs_drop;
+                   };
+
+             The fields are:
+
+             _b_s___r_e_c_v  Number of packets received by the descriptor since
+                      opened or reset (including any buffered since the last
+                      read call).
+
+             _b_s___d_r_o_p  Number of packets which were accepted by the filter but
+                      dropped by the kernel because of buffer overflows (i.e.,
+                      the application's reads aren't keeping up with the
+                      packet traffic).
+
+     BIOCIMMEDIATE _u___i_n_t _*
+             Enables or disables “immediate mode”, based on the truth value of
+             the argument.  When immediate mode is enabled, reads return imme‐
+             diately upon packet reception.  Otherwise, a read will block un‐
+             til either the kernel buffer becomes full or a timeout occurs.
+             This is useful for programs like rarpd(8), which must respond to
+             messages in real time.  The default for a new file is off.
+
+     BIOCSWTIMEOUT _s_t_r_u_c_t _t_i_m_e_v_a_l _*
+     BIOCGWTIMEOUT _s_t_r_u_c_t _t_i_m_e_v_a_l _*
+     BIOCDWTIMEOUT
+             Sets, gets, or deletes (resets) the wait timeout parameter.  The
+             _t_i_m_e_v_a_l specifies the length of time to wait between receiving a
+             packet and the kernel buffer becoming readable.  By default, or
+             when reset, the wait timeout is infinite, meaning the age of
+             packets in the kernel buffer does not make the buffer readable.
+             The maximum wait time that can be set is 5 minutes (300 seconds).
+
+     BIOCSETF _s_t_r_u_c_t _b_p_f___p_r_o_g_r_a_m _*
+     BIOCSETFNR _s_t_r_u_c_t _b_p_f___p_r_o_g_r_a_m _*
+             Sets the filter program used by the kernel to discard uninterest‐
+             ing packets.  An array of instructions and its length are passed
+             in using the following structure:
+
+                   struct bpf_program {
+                           u_int bf_len;
+                           struct bpf_insn *bf_insns;
+                   };
+
+             The filter program is pointed to by the _b_f___i_n_s_n_s field, while its
+             length in units of _s_t_r_u_c_t _b_p_f___i_n_s_n is given by the _b_f___l_e_n field.
+             If BIOCSETF is used, the actions of BIOCFLUSH are also performed.
+
+             See section _F_I_L_T_E_R _M_A_C_H_I_N_E for an explanation of the filter lan‐
+             guage.
+
+     BIOCSETWF _s_t_r_u_c_t _b_p_f___p_r_o_g_r_a_m _*
+             Sets the filter program used by the kernel to filter the packets
+             written to the descriptor before the packets are sent out on the
+             network.  See BIOCSETF for a description of the filter program.
+
+             Note that the filter operates on the packet data written to the
+             descriptor.  If the “header complete” flag is not set, the kernel
+             sets the link-layer source address of the packet after filtering.
+
+     BIOCVERSION _s_t_r_u_c_t _b_p_f___v_e_r_s_i_o_n _*
+             Returns the major and minor version numbers of the filter lan‐
+             guage currently recognized by the kernel.  Before installing a
+             filter, applications must check that the current version is com‐
+             patible with the running kernel.  Version numbers are compatible
+             if the major numbers match and the application minor is less than
+             or equal to the kernel minor.  The kernel version number is re‐
+             turned in the following structure:
+
+                   struct bpf_version {
+                           u_short bv_major;
+                           u_short bv_minor;
+                   };
+
+             The current version numbers are given by BPF_MAJOR_VERSION and
+             BPF_MINOR_VERSION from <_n_e_t_/_b_p_f_._h>.  An incompatible filter may
+             result in undefined behavior (most likely, an error returned by
+             ioctl(2) or haphazard packet matching).
+
+     BIOCSRSIG _u___i_n_t _*
+     BIOCGRSIG _u___i_n_t _*
+             Sets or gets the receive signal.  This signal will be sent to the
+             process or process group specified by FIOSETOWN.  It defaults to
+             SIGIO.
+
+     BIOCSHDRCMPLT _u___i_n_t _*
+     BIOCGHDRCMPLT _u___i_n_t _*
+             Sets or gets the status of the “header complete” flag.  Set to
+             zero if the link level source address should be filled in auto‐
+             matically by the interface output routine.  Set to one if the
+             link level source address will be written, as provided, to the
+             wire.  This flag is initialized to zero by default.
+
+     BIOCSFILDROP _u___i_n_t _*
+     BIOCGFILDROP _u___i_n_t _*
+             Sets or gets the “filter drop” action.  The supported actions for
+             packets matching the filter are:
+
+             BPF_FILDROP_PASS     Accept and capture
+             BPF_FILDROP_CAPTURE  Drop and capture
+             BPF_FILDROP_DROP     Drop and do not capture
+
+             Packets matching any filter configured to drop packets will be
+             reported to the associated interface so that they can be dropped.
+             The default action is BPF_FILDROP_PASS.
+
+     BIOCSDIRFILT _u___i_n_t _*
+     BIOCGDIRFILT _u___i_n_t _*
+             Sets or gets the status of the “direction filter” flag.  If non-
+             zero, packets matching the specified direction (either
+             BPF_DIRECTION_IN or BPF_DIRECTION_OUT) will be ignored.
+
+   SSttaannddaarrdd iiooccttllss
+     bbppff now supports several standard ioctls which allow the user to do asyn‐
+     chronous and/or non-blocking I/O to an open bbppff file descriptor.
+
+     FIONREAD _i_n_t _*
+             Returns the number of bytes that are immediately available for
+             reading.
+
+     FIONBIO _i_n_t _*
+             Sets or clears non-blocking I/O.  If the argument is non-zero,
+             enable non-blocking I/O.  If the argument is zero, disable non-
+             blocking I/O.  If non-blocking I/O is enabled, the return value
+             of a read while no data is available will be 0.  The non-blocking
+             read behavior is different from performing non-blocking reads on
+             other file descriptors, which will return -1 and set _e_r_r_n_o to
+             EAGAIN if no data is available.  Note: setting this overrides the
+             timeout set by BIOCSRTIMEOUT.
+
+     FIOASYNC _i_n_t _*
+             Enables or disables asynchronous I/O.  When enabled (argument is
+             non-zero), the process or process group specified by FIOSETOWN
+             will start receiving SIGIO signals when packets arrive.  Note
+             that you must perform an FIOSETOWN command in order for this to
+             take effect, as the system will not do it by default.  The signal
+             may be changed via BIOCSRSIG.
+
+     FIOSETOWN _i_n_t _*
+     FIOGETOWN _i_n_t _*
+             Sets or gets the process or process group (if negative) that
+             should receive SIGIO when packets are available.  The signal may
+             be changed using BIOCSRSIG (see above).
+
+   BBPPFF hheeaaddeerr
+     The following structure is prepended to each packet returned by read(2):
+
+           struct bpf_hdr {
+                   struct bpf_timeval bh_tstamp;
+                   u_int32_t       bh_caplen;
+                   u_int32_t       bh_datalen;
+                   u_int16_t       bh_hdrlen;
+           };
+
+     The fields, stored in host order, are as follows:
+
+     _b_h___t_s_t_a_m_p
+             Time at which the packet was processed by the packet filter.
+
+     _b_h___c_a_p_l_e_n
+             Length of the captured portion of the packet.  This is the mini‐
+             mum of the truncation amount specified by the filter and the
+             length of the packet.
+
+     _b_h___d_a_t_a_l_e_n
+             Length of the packet off the wire.  This value is independent of
+             the truncation amount specified by the filter.
+
+     _b_h___h_d_r_l_e_n
+             Length of the BPF header, which may not be equal to sizeof(struct
+             bpf_hdr).
+
+     The _b_h___h_d_r_l_e_n field exists to account for padding between the header and
+     the link level protocol.  The purpose here is to guarantee proper align‐
+     ment of the packet data structures, which is required on alignment-sensi‐
+     tive architectures and improves performance on many other architectures.
+     The packet filter ensures that the _b_p_f___h_d_r and the network layer header
+     will be word aligned.  Suitable precautions must be taken when accessing
+     the link layer protocol fields on alignment restricted machines.  (This
+     isn't a problem on an Ethernet, since the type field is a _s_h_o_r_t falling
+     on an even offset, and the addresses are probably accessed in a bytewise
+     fashion).
+
+     Additionally, individual packets are padded so that each starts on a word
+     boundary.  This requires that an application has some knowledge of how to
+     get from packet to packet.  The macro BPF_WORDALIGN is defined in
+     <_n_e_t_/_b_p_f_._h> to facilitate this process.  It rounds up its argument to the
+     nearest word aligned value (where a word is BPF_ALIGNMENT bytes wide).
+     For example, if _p points to the start of a packet, this expression will
+     advance it to the next packet:
+
+           p = (char *)p + BPF_WORDALIGN(p->bh_hdrlen + p->bh_caplen);
+
+     For the alignment mechanisms to work properly, the buffer passed to
+     read(2) must itself be word aligned.  malloc(3) will always return an
+     aligned buffer.
+
+   FFiilltteerr mmaacchhiinnee
+     A filter program is an array of instructions with all branches forwardly
+     directed, terminated by a “return” instruction.  Each instruction per‐
+     forms some action on the pseudo-machine state, which consists of an accu‐
+     mulator, index register, scratch memory store, and implicit program
+     counter.
+
+     The following structure defines the instruction format:
+
+           struct bpf_insn {
+                   u_int16_t       code;
+                   u_char          jt;
+                   u_char          jf;
+                   u_int32_t       k;
+           };
+
+     The _k field is used in different ways by different instructions, and the
+     _j_t and _j_f fields are used as offsets by the branch instructions.  The op‐
+     codes are encoded in a semi-hierarchical fashion.  There are eight
+     classes of instructions: BPF_LD, BPF_LDX, BPF_ST, BPF_STX, BPF_ALU,
+     BPF_JMP, BPF_RET, and BPF_MISC.  Various other mode and operator bits are
+     logically OR'd into the class to give the actual instructions.  The
+     classes and modes are defined in <_n_e_t_/_b_p_f_._h>.  Below are the semantics
+     for each defined bbppff instruction.  We use the convention that A is the
+     accumulator, X is the index register, P[] packet data, and M[] scratch
+     memory store.  P[i:n] gives the data at byte offset “i” in the packet,
+     interpreted as a word (n=4), unsigned halfword (n=2), or unsigned byte
+     (n=1).  M[i] gives the i'th word in the scratch memory store, which is
+     only addressed in word units.  The memory store is indexed from 0 to
+     BPF_MEMWORDS-1.  _k, _j_t, and _j_f are the corresponding fields in the in‐
+     struction definition.  “len” refers to the length of the packet.
+
+     BPF_LD  These instructions copy a value into the accumulator.  The type
+             of the source operand is specified by an “addressing mode” and
+             can be a constant (BPF_IMM), packet data at a fixed offset
+             (BPF_ABS), packet data at a variable offset (BPF_IND), the packet
+             length (BPF_LEN), a random number (BPF_RND), or a word in the
+             scratch memory store (BPF_MEM).  For BPF_IND and BPF_ABS, the
+             data size must be specified as a word (BPF_W), halfword (BPF_H),
+             or byte (BPF_B).  The semantics of all recognized BPF_LD instruc‐
+             tions follow.
+
+             BPF_LD+BPF_W+BPF_ABS              A <- P[k:4]
+             BPF_LD+BPF_H+BPF_ABS              A <- P[k:2]
+             BPF_LD+BPF_B+BPF_ABS              A <- P[k:1]
+             BPF_LD+BPF_W+BPF_IND              A <- P[X+k:4]
+             BPF_LD+BPF_H+BPF_IND              A <- P[X+k:2]
+             BPF_LD+BPF_B+BPF_IND              A <- P[X+k:1]
+             BPF_LD+BPF_W+BPF_LEN              A <- len
+             BPF_LD+BPF_W+BPF_RND              A <- arc4random()
+             BPF_LD+BPF_IMM                    A <- k
+             BPF_LD+BPF_MEM                    A <- M[k]
+
+     BPF_LDX
+             These instructions load a value into the index register.  Note
+             that the addressing modes are more restricted than those of the
+             accumulator loads, but they include BPF_MSH, a hack for effi‐
+             ciently loading the IP header length.
+
+             BPF_LDX+BPF_W+BPF_IMM             X <- k
+             BPF_LDX+BPF_W+BPF_MEM             X <- M[k]
+             BPF_LDX+BPF_W+BPF_LEN             X <- len
+             BPF_LDX+BPF_B+BPF_MSH             X <- 4*(P[k:1]&0xf)
+
+     BPF_ST  This instruction stores the accumulator into the scratch memory.
+             We do not need an addressing mode since there is only one possi‐
+             bility for the destination.
+
+             BPF_ST                            M[k] <- A
+
+     BPF_STX
+             This instruction stores the index register in the scratch memory
+             store.
+
+             BPF_STX                           M[k] <- X
+
+     BPF_ALU
+             The ALU instructions perform operations between the accumulator
+             and index register or constant, and store the result back in the
+             accumulator.  For binary operations, a source mode is required
+             (BPF_K or BPF_X).
+
+             BPF_ALU+BPF_ADD+BPF_K             A <- A + k
+             BPF_ALU+BPF_SUB+BPF_K             A <- A - k
+             BPF_ALU+BPF_MUL+BPF_K             A <- A * k
+             BPF_ALU+BPF_DIV+BPF_K             A <- A / k
+             BPF_ALU+BPF_AND+BPF_K             A <- A & k
+             BPF_ALU+BPF_OR+BPF_K              A <- A | k
+             BPF_ALU+BPF_LSH+BPF_K             A <- A << k
+             BPF_ALU+BPF_RSH+BPF_K             A <- A >> k
+             BPF_ALU+BPF_ADD+BPF_X             A <- A + X
+             BPF_ALU+BPF_SUB+BPF_X             A <- A - X
+             BPF_ALU+BPF_MUL+BPF_X             A <- A * X
+             BPF_ALU+BPF_DIV+BPF_X             A <- A / X
+             BPF_ALU+BPF_AND+BPF_X             A <- A & X
+             BPF_ALU+BPF_OR+BPF_X              A <- A | X
+             BPF_ALU+BPF_LSH+BPF_X             A <- A << X
+             BPF_ALU+BPF_RSH+BPF_X             A <- A >> X
+             BPF_ALU+BPF_NEG                   A <- -A
+
+     BPF_JMP
+             The jump instructions alter flow of control.  Conditional jumps
+             compare the accumulator against a constant (BPF_K) or the index
+             register (BPF_X).  If the result is true (or non-zero), the true
+             branch is taken, otherwise the false branch is taken.  Jump off‐
+             sets are encoded in 8 bits so the longest jump is 256 instruc‐
+             tions.  However, the jump always (BPF_JA) opcode uses the 32-bit
+             _k field as the offset, allowing arbitrarily distant destinations.
+             All conditionals use unsigned comparison conventions.
+
+             BPF_JMP+BPF_JA                    pc += k
+             BPF_JMP+BPF_JGT+BPF_K             pc += (A > k) ? jt : jf
+             BPF_JMP+BPF_JGE+BPF_K             pc += (A >= k) ? jt : jf
+             BPF_JMP+BPF_JEQ+BPF_K             pc += (A == k) ? jt : jf
+             BPF_JMP+BPF_JSET+BPF_K            pc += (A & k) ? jt : jf
+             BPF_JMP+BPF_JGT+BPF_X             pc += (A > X) ? jt : jf
+             BPF_JMP+BPF_JGE+BPF_X             pc += (A >= X) ? jt : jf
+             BPF_JMP+BPF_JEQ+BPF_X             pc += (A == X) ? jt : jf
+             BPF_JMP+BPF_JSET+BPF_X            pc += (A & X) ? jt : jf
+
+     BPF_RET
+             The return instructions terminate the filter program and specify
+             the amount of packet to accept (i.e., they return the truncation
+             amount) or, for the write filter, the maximum acceptable size for
+             the packet (i.e., the packet is dropped if it is larger than the
+             returned amount).  A return value of zero indicates that the
+             packet should be ignored/dropped.  The return value is either a
+             constant (BPF_K) or the accumulator (BPF_A).
+
+             BPF_RET + BPF_A                   Accept A bytes.
+             BPF_RET + BPF_K                   Accept k bytes.
+
+     BPF_MISC
+             The miscellaneous category was created for anything that doesn't
+             fit into the above classes, and for any new instructions that
+             might need to be added.  Currently, these are the register trans‐
+             fer instructions that copy the index register to the accumulator
+             or vice versa.
+
+             BPF_MISC+BPF_TAX                  X <- A
+             BPF_MISC+BPF_TXA                  A <- X
+
+     The bbppff interface provides the following macros to facilitate array ini‐
+     tializers:
+
+           BPF_STMT (_o_p_c_o_d_e, _o_p_e_r_a_n_d)
+
+           BPF_JUMP (_o_p_c_o_d_e, _o_p_e_r_a_n_d, _t_r_u_e___o_f_f_s_e_t, _f_a_l_s_e___o_f_f_s_e_t)
+
+FFIILLEESS
+     /dev/bpf  bbppff device
+
+EEXXAAMMPPLLEESS
+     The following filter is taken from the Reverse ARP daemon.  It accepts
+     only Reverse ARP requests.
+
+           struct bpf_insn insns[] = {
+                   BPF_STMT(BPF_LD+BPF_H+BPF_ABS, 12),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, ETHERTYPE_REVARP, 0, 3),
+                   BPF_STMT(BPF_LD+BPF_H+BPF_ABS, 20),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, REVARP_REQUEST, 0, 1),
+                   BPF_STMT(BPF_RET+BPF_K, sizeof(struct ether_arp) +
+                       sizeof(struct ether_header)),
+                   BPF_STMT(BPF_RET+BPF_K, 0),
+           };
+
+     This filter accepts only IP packets between host 128.3.112.15 and
+     128.3.112.35.
+
+           struct bpf_insn insns[] = {
+                   BPF_STMT(BPF_LD+BPF_H+BPF_ABS, 12),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, ETHERTYPE_IP, 0, 8),
+                   BPF_STMT(BPF_LD+BPF_W+BPF_ABS, 26),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, 0x8003700f, 0, 2),
+                   BPF_STMT(BPF_LD+BPF_W+BPF_ABS, 30),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, 0x80037023, 3, 4),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, 0x80037023, 0, 3),
+                   BPF_STMT(BPF_LD+BPF_W+BPF_ABS, 30),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, 0x8003700f, 0, 1),
+                   BPF_STMT(BPF_RET+BPF_K, (u_int)-1),
+                   BPF_STMT(BPF_RET+BPF_K, 0),
+           };
+
+     Finally, this filter returns only TCP finger packets.  We must parse the
+     IP header to reach the TCP header.  The BPF_JSET instruction checks that
+     the IP fragment offset is 0 so we are sure that we have a TCP header.
+
+           struct bpf_insn insns[] = {
+                   BPF_STMT(BPF_LD+BPF_H+BPF_ABS, 12),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, ETHERTYPE_IP, 0, 10),
+                   BPF_STMT(BPF_LD+BPF_B+BPF_ABS, 23),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, IPPROTO_TCP, 0, 8),
+                   BPF_STMT(BPF_LD+BPF_H+BPF_ABS, 20),
+                   BPF_JUMP(BPF_JMP+BPF_JSET+BPF_K, 0x1fff, 6, 0),
+                   BPF_STMT(BPF_LDX+BPF_B+BPF_MSH, 14),
+                   BPF_STMT(BPF_LD+BPF_H+BPF_IND, 14),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, 79, 2, 0),
+                   BPF_STMT(BPF_LD+BPF_H+BPF_IND, 16),
+                   BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, 79, 0, 1),
+                   BPF_STMT(BPF_RET+BPF_K, (u_int)-1),
+                   BPF_STMT(BPF_RET+BPF_K, 0),
+           };
+
+EERRRROORRSS
+     If the ioctl(2) call fails, errno(2) is set to one of the following val‐
+     ues:
+
+     [EINVAL]           The timeout used in a BIOCSRTIMEOUT request is nega‐
+                        tive.
+
+     [EINVAL]           The timeout used in a BIOCSRTIMEOUT request specified
+                        a microsecond value less than zero or greater than or
+                        equal to 1 million.
+
+     [EOVERFLOW]        The timeout used in a BIOCSRTIMEOUT request is too
+                        large to be represented by an _i_n_t.
+
+SSEEEE AALLSSOO
+     ioctl(2), read(2), select(2), signal(3), MAKEDEV(8), tcpdump(8),
+     arc4random(9)
+
+     McCanne, S.  and Jacobson, V., “The BSD Packet Filter: A New Architecture
+     for User-level Packet Capture”, _1_9_9_3 _W_i_n_t_e_r _U_S_E_N_I_X _C_o_n_f_e_r_e_n_c_e, January
+     1993.
+
+HHIISSTTOORRYY
+     The Enet packet filter was created in 1980 by Mike Accetta and Rick
+     Rashid at Carnegie-Mellon University.  Jeffrey Mogul, at Stanford, ported
+     the code to BSD and continued its development from 1983 on.  Since then,
+     it has evolved into the Ultrix Packet Filter at DEC, a STREAMS NIT module
+     under SunOS 4.1, and BPF.
+
+AAUUTTHHOORRSS
+     Steve McCanne of Lawrence Berkeley Laboratory implemented BPF in Summer
+     1990.  Much of the design is due to Van Jacobson.
+
+BBUUGGSS
+     The read buffer must be of a fixed size (returned by the BIOCGBLEN
+     ioctl).
+
+     A file that does not request promiscuous mode may receive promiscuously
+     received packets as a side effect of another file requesting this mode on
+     the same hardware interface.  This could be fixed in the kernel with ad‐
+     ditional processing overhead.  However, we favor the model where all
+     files must assume that the interface is promiscuous, and if so desired,
+     must utilize a filter to reject foreign packets.
+
+BSD                             August 15, 2024                            BSD

@@ -1,0 +1,146 @@
+IBV_POST_SEND(3)        Libibverbs Programmer's Manual        IBV_POST_SEND(3)
+
+
+
+NNAAMMEE
+       ibv_post_send - post a list of work requests (WRs) to a send queue
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<iinnffiinniibbaanndd//vveerrbbss..hh>>
+
+       iinntt iibbvv__ppoosstt__sseenndd((ssttrruucctt iibbvv__qqpp _*_q_p,, ssttrruucctt iibbvv__sseenndd__wwrr _*_w_r,,
+                         ssttrruucctt iibbvv__sseenndd__wwrr _*_*_b_a_d___w_r));;
+
+DDEESSCCRRIIPPTTIIOONN
+       iibbvv__ppoosstt__sseenndd(())  posts  the linked list of work requests (WRs) starting
+       with _w_r to the send queue of the queue pair _q_p.   It  stops  processing
+       WRs  from  this list at the first failure (that can be detected immedi‐
+       ately while requests are being posted), and  returns  this  failing  WR
+       through _b_a_d___w_r.
+
+       The  argument  _w_r  is  an  ibv_send_wr  struct,  as defined in <infini‐
+       band/verbs.h>.
+
+       struct ibv_send_wr {
+               uint64_t                wr_id;                  /* User defined WR ID */
+               struct ibv_send_wr     *next;                   /* Pointer to next WR in list, NULL if last WR */
+               struct ibv_sge         *sg_list;                /* Pointer to the s/g array */
+               int                     num_sge;                /* Size of the s/g array */
+               enum ibv_wr_opcode      opcode;                 /* Operation type */
+               int                     send_flags;             /* Flags of the WR properties */
+               uint32_t                imm_data;               /* Immediate data (in network byte order) */
+               union {
+                       struct {
+                               uint64_t        remote_addr;    /* Start address of remote memory buffer */
+                               uint32_t        rkey;           /* Key of the remote Memory Region */
+                       } rdma;
+                       struct {
+                               uint64_t        remote_addr;    /* Start address of remote memory buffer */
+                               uint64_t        compare_add;    /* Compare operand */
+                               uint64_t        swap;           /* Swap operand */
+                               uint32_t        rkey;           /* Key of the remote Memory Region */
+                       } atomic;
+                       struct {
+                               struct ibv_ah  *ah;             /* Address handle (AH) for the remote node address */
+                               uint32_t        remote_qpn;     /* QP number of the destination QP */
+                               uint32_t        remote_qkey;    /* Q_Key number of the destination QP */
+                       } ud;
+               } wr;
+               union {
+                       struct {
+                               uint32_t remote_srqn;            /* Number of the remote SRQ */
+                       } xrc;
+               } qp_type;
+               union {
+                       struct {
+                               struct ibv_mw            *mw;             /* Memory window (MW) of type 2 to bind */
+                               uint32_t                 rkey;            /* The desired new rkey of the MW */
+                               struct ibv_mw_bind_info  bind_info;       /* MW additional bind information */
+                       } bind_mw;
+                       struct {
+                               void           *hdr;     /* Pointer address of inline header */
+                               uint16_t       hdr_sz;   /* Inline header size */
+                               uint16_t       mss; /* Maximum segment size for each TSO fragment */
+                       } tso;
+               };
+       };
+
+       struct ibv_mw_bind_info {
+               struct ibv_mr            *mr;             /* The Memory region (MR) to bind the MW to */
+               uint64_t                 addr;           /* The address the MW should start at */
+               uint64_t                 length;          /* The length (in bytes) the MW should span */
+               int                      mw_access_flags; /* Access flags to the MW. Use ibv_access_flags */
+       };
+
+       struct ibv_sge {
+               uint64_t                addr;                   /* Start address of the local memory buffer */
+               uint32_t                length;                 /* Length of the buffer */
+               uint32_t                lkey;                   /* Key of the local Memory Region */
+       };
+
+       Each QP Transport Service Type supports a specific set of  opcodes,  as
+       shown in the following table:
+
+       OPCODE                      | IBV_QPT_UD | IBV_QPT_UC | IBV_QPT_RC | IBV_QPT_XRC_SEND | IBV_QPT_RAW_PACKET
+       ----------------------------+------------+------------+------------+------------------+--------------------
+       IBV_WR_SEND                 |     X      |     X      |     X      |         X        |         X
+       IBV_WR_SEND_WITH_IMM        |     X      |     X      |     X      |         X        |
+       IBV_WR_RDMA_WRITE           |            |     X      |     X      |         X        |
+       IBV_WR_RDMA_WRITE_WITH_IMM  |            |     X      |     X      |         X        |
+       IBV_WR_RDMA_READ            |            |            |     X      |         X        |
+       IBV_WR_ATOMIC_CMP_AND_SWP   |            |            |     X      |         X        |
+       IBV_WR_ATOMIC_FETCH_AND_ADD |            |            |     X      |         X        |
+       IBV_WR_LOCAL_INV            |            |     X      |     X      |         X        |
+       IBV_WR_BIND_MW              |            |     X      |     X      |         X        |
+       IBV_WR_SEND_WITH_INV        |            |     X      |     X      |         X        |
+       IBV_WR_TSO                  |     X      |            |            |                  |         X
+
+       The  attribute send_flags describes the properties of the WR. It is ei‐
+       ther 0 or the bitwise OR of one or more of the following flags:
+
+       IIBBVV__SSEENNDD__FFEENNCCEE  Set the fence indicator. Valid only for QPs with Trans‐
+       port Service Type IIBBVV__QQPPTT__RRCC
+
+       IIBBVV__SSEENNDD__SSIIGGNNAALLEEDD   Set the completion notification indicator. Relevant
+       only if QP was created with sq_sig_all=0
+
+       IIBBVV__SSEENNDD__SSOOLLIICCIITTEEDD  Set the solicited event indicator. Valid  only  for
+       Send and RDMA Write with immediate
+
+       IIBBVV__SSEENNDD__IINNLLIINNEE  Send data in given gather list as inline data
+              in  a  send WQE.  Valid only for Send and RDMA Write.  The L_Key
+              will not be checked.
+
+       IIBBVV__SSEENNDD__IIPP__CCSSUUMM  Offload the IPv4 and TCP/UDP checksum calculation.
+              Valid only when ddeevviiccee__ccaapp__ffllaaggss in device_attr  indicates  cur‐
+              rent QP is supported by checksum offload.
+
+RREETTUURRNN VVAALLUUEE
+       iibbvv__ppoosstt__sseenndd(())  returns 0 on success, or the value of errno on failure
+       (which indicates the failure reason).
+
+NNOOTTEESS
+       The user should not alter or destroy AHs associated with WRs until  re‐
+       quest  is  fully executed and a work completion has been retrieved from
+       the corresponding completion queue (CQ) to avoid unexpected behavior.
+
+       The buffers used by a WR can only be safely reused after WR the request
+       is  fully  executed  and  a work completion has been retrieved from the
+       corresponding completion queue (CQ). However,  if  the  IBV_SEND_INLINE
+       flag  was  set, the buffer can be reused immediately after the call re‐
+       turns.
+
+SSEEEE AALLSSOO
+       iibbvv__ccrreeaattee__qqpp(3),          iibbvv__ccrreeaattee__aahh(3),          iibbvv__ppoosstt__rreeccvv(3),
+       iibbvv__ppoosstt__ssrrqq__rreeccvv(3), iibbvv__ppoollll__ccqq(3)
+
+AAUUTTHHOORRSS
+       Dotan Barak <dotanba@gmail.com>
+
+       Majd Dibbiny <majd@mellanox.com>
+
+       Yishai Hadas <yishaih@mellanox.com>
+
+
+
+libibverbs                        2006-10-31                  IBV_POST_SEND(3)

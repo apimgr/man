@@ -1,0 +1,212 @@
+The  function  iterates over the items in a directory and returns
+information about each directory entry like  Note:  when  returns
+information  about  a  symbolic link, the information returned is
+about the link itself, not the target of the link.  The order  of
+the  directory  entries (and their associated metadata) vended by
+is not specified.  Some file systems may return entries in  lexi‐
+cographic  sort order and others may not.  The function reads di‐
+rectory entries from the directory referenced  by  the  file  de‐
+scriptor  The  parameter  determines what attributes are returned
+for each entry.  Attributes of those directory entries are placed
+into the buffer specified by and The parameter allows you to mod‐
+ify the behaviour of the call.  The parameter must be a file  de‐
+scriptor  that  references  a  directory that you have opened for
+reading.  The parameter is a pointer to an structure.  All fields
+of this structure must be filled  before  calling  the  function.
+See  the discussion of the function for a detailed description of
+this structure.  To get an attribute, the  corresponding  bit  in
+the  appropriate  field of the structure must be set.  Volume at‐
+tributes  cannot be requested but all other supported getattrlist
+attributes can be used. For this function, and are  required  and
+the absence of these attributes in the attrList parameter results
+in  an  error.  Note  that not all attributes supported by may be
+vended back by this call, which is why  the  aforementioned  flag
+must be supplied. In particular may not be valid on all directory
+entries whose information is requested by this call.  The and pa‐
+rameters  specify  a  buffer  into  which the function places at‐
+tribute values.  The attributes for any given directory entry are
+grouped together and packed in exactly the same way as  they  are
+returned from and are subject to exactly the same alignment spec‐
+ifications  and  restrictions.  These groups are then placed into
+the buffer, one after another.  requested for and  returned.  The
+name  of  the  entry  itself  is provided by the attribute.  Each
+group starts with a leading , which will always be 8‐byte aligned
+that contains the overall length of the group.  You can step from
+one group to the next  by  simply  adding  this  length  to  your
+pointer.  The sample code (below) shows how to do this.  The ini‐
+tial contents of this buffer are ignored.  The parameter is a bit
+set  that controls the behaviour of The following option bits are
+defined.  If this is bit is set, then all requested   attributes,
+even  ones that are not supported by the object or file file sys‐
+tem, will be returned the attrBuf. The  attributes  actually  re‐
+turned can be determined by looking at the attribute_set_t struc‐
+ture  returned for the attribute. Default values will be returned
+for invalid attributes and should be ignored.  If this is bit  is
+set,  forkattrs are reinterpreted as a set of extended common at‐
+tributes.  Please refer to the manual page for  a  discussion  of
+the option flags.  If has been requested and an error specific to
+a  directory  entry  occurs,  an  error will be reported. The at‐
+tribute is a uint32_t which, if  non‐zero,  specifies  the  error
+code that was encountered during the processing of that directory
+entry.  The  attribute  will  be  after attribute in the returned
+buffer.  It is typical to ask for a combination of common,  file,
+and  directory attributes and then use the value of the attribute
+to parse the resulting attribute buffer.  A directory which is  a
+mount  point  for a file system, will have a value of set for its
+ATTR_DIR_MOUNTSTATUS attribute entry.  However the attributes for
+the mount point will be those from the (underlying) file  system.
+To  get the attributes of the mounted root directory, call on the
+mount point.  A directory which is a firmlink will have the  flag
+set  in its ATTR_CMN_FLAGS attribute entry.  However, the attrib‐
+utes returned by will be those from the firmlink, not  the  firm‐
+link’s  target.   To  get the attribute of the firmlink’s target,
+call on the firmlink.  Upon successful completion the numbers  of
+entries  successfully  read  is  returned. A value of 0 indicates
+there are no more entries. Once 0 is returned, no further entries
+are returned even if new entries are added to the directory.  Di‐
+rectory iteration should be restarted either by repostioning  the
+offset  to 0 by or by closing the file descriptor and opening the
+directory again. On error, a value of ‐1 is returned and  is  set
+to  indicate  the  error.  When iterating all entries in a direc‐
+tory, is called repeatedly until a 0 is returned. In such a  case
+if and calls on the same fd are mixed, the behavior is undefined.
+
+will fail if: is not a valid file descriptor for a directory open
+for  reading.   The  File  descriptor is not a directory.  Search
+permission is denied on the directory whose descriptor  is  given
+as  input.   or points to an invalid address.  The buffer was too
+small.  The field of is not An invalid attribute  was  requested.
+Volume  attributes  were  requested.  or was not requested in the
+attrList parameter.  An I/O error occurred while reading from  or
+writing  to  the  file system.  The following code lists the con‐
+tents of a directory using The listing includes  the  file  type.
+#include  <sys/syscall.h> #include <sys/attr.h> #include <sys/er‐
+rno.h> #include <sys/vnode.h> #include <unistd.h>  #include  <fc‐
+ntl.h> #include <stdio.h> #include <assert.h> #include <stddef.h>
+#include <string.h> #include <stdbool.h>
+
+typedef struct val_attrs {
+    uint32_t          length;
+    attribute_set_t   returned;
+    uint32_t          error;
+    attrreference_t   name_info;
+    char              *name;
+    fsobj_type_t      obj_type; } val_attrs_t;
+
+
+void demo(const char *dirpath) {
+    int error;
+    int dirfd;
+    struct attrlist attrList;
+    char *entry_start;
+    char attrBuf[256];
+
+    memset(&attrList, 0, sizeof(attrList));
+    attrList.bitmapcount = ATTR_BIT_MAP_COUNT;
+    attrList.commonattr  = ATTR_CMN_RETURNED_ATTRS |
+                           ATTR_CMN_NAME |
+                           ATTR_CMN_ERROR |
+                           ATTR_CMN_OBJTYPE;
+
+    error = 0;
+    dirfd = open(dirpath, O_RDONLY, 0);
+    if (dirfd < 0) {
+        error = errno;
+        printf("Could not open directory %s", dirpath);
+        perror("Error was ");
+    } else {
+        for (;;) {
+            int retcount;
+
+            retcount  =  getattrlistbulk(dirfd, &attrList, &attr‐
+Buf[0],
+                               sizeof(attrBuf), 0);
+            printf("\ngetattrlistbulk returned %d", retcount);
+            if (retcount == ‐1) {
+                error = errno;
+                perror("Error returned : ");
+                printf("\n");
+                break;
+            } else if (retcount == 0) {
+                /* No more entries in directory */
+                error = 0;
+                break;
+            } else {
+                int    index;
+                uint32_t total_length;
+                char   *field;
+
+                entry_start = &attrBuf[0];
+                total_length = 0;
+                printf(" ‐> entries returned");
+                for (index = 0; index < retcount; index++) {
+                    val_attrs_t    attrs = {0};
+
+                    printf("\n Entry %d", index);
+                    printf("  ‐‐  ");
+                    field = entry_start;
+                    attrs.length = *(uint32_t *)field;
+                    printf(" Length %d ", attrs.length);
+                    total_length += attrs.length;
+                    printf(" Total Length %d ", total_length);
+                    field += sizeof(uint32_t);
+                    printf("  ‐‐  ");
+
+                    /* set starting point for next entry */
+                    entry_start += attrs.length;
+
+                    attrs.returned = *(attribute_set_t *)field;
+                    field += sizeof(attribute_set_t);
+
+                    if (attrs.returned.commonattr &  ATTR_CMN_ER‐
+ROR) {
+                        attrs.error = *(uint32_t *)field;
+                        field += sizeof(uint32_t);
+                    }
+
+                    if        (attrs.returned.commonattr        &
+ATTR_CMN_NAME) {
+                        attrs.name =  field;
+                        attrs.name_info    =    *(attrreference_t
+*)field;
+                        field += sizeof(attrreference_t);
+                        printf("  %s ", (attrs.name +
+                            attrs.name_info.attr_dataoffset));
+                    }
+
+                    /* Check for error for this entry */
+                    if (attrs.error) {
+                        /*
+                         * Print error and move on to next
+                         * entry
+                         */
+                        printf("Error  in  reading attributes for
+directory                                entry %d", attrs.error);
+                        continue;
+                    }
+
+                    printf("  ‐‐  ");
+                    if (attrs.returned.commonattr & ATTR_CMN_OBJ‐
+TYPE) {
+                        attrs.obj_type = *(fsobj_type_t *)field;
+                        field += sizeof(fsobj_type_t);
+
+                        switch (attrs.obj_type) {
+                            case VREG:
+                                printf("file  ");
+                                break;
+                            case VDIR:
+                                printf("directory    ");
+                                break;
+                            default:
+                                printf("obj_type = %‐2d   ",  at‐
+trs.obj_type);
+                                break;
+                        }
+                    }
+                    printf("  ‐‐  ");
+                }
+            }
+        }
+        (void)close(dirfd);
+    } } A function call appeared in OS X version 10.10

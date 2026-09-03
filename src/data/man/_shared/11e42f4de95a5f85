@@ -1,0 +1,106 @@
+SIGFASTBLOCK(2)             BSD System Calls Manual            SIGFASTBLOCK(2)
+
+NNAAMMEE
+     ssiiggffaassttbblloocckk — controls signals blocking with a simple memory write
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ssiiggnnaallvvaarr..hh>>
+
+     _i_n_t
+     ssiiggffaassttbblloocckk(_i_n_t _c_m_d, _v_o_i_d _*_p_t_r);
+
+DDEESSCCRRIIPPTTIIOONN
+     TThhiiss ffuunnccttiioonn iiss nnoott iinntteennddeedd ffoorr aa ddiirreecctt uussaaggee bbyy aapppplliiccaattiioonnss..  TThhee
+     ffuunnccttiioonnaalliittyy iiss pprroovviiddeedd ffoorr iimmpplleemmeennttiinngg ssoommee ooppttiimmiizzaattiioonnss iinn
+     ld-elf.so.1(88) aanndd 11::11 TThhrreeaaddiinngg LLiibbrraarryy ((lliibbtthhrr,, --lltthhrr))..
+
+     The function configures the kernel facility that allows a thread to block
+     asynchronous signals delivery with a single write to userspace memory,
+     avoiding overhead of system calls like sigprocmask(2) for establishing
+     critical sections.  The C runtime uses it to optimize implementation of
+     async-signal-safe functionality.
+
+     A thread might register a sigblock variable of type _i_n_t as a location
+     which is consulted by kernel when calculating the blocked signal mask for
+     delivery of asynchronous signals.  If the variable indicates that block‐
+     ing is requested, then the kernel effectively operates as if the mask
+     containing all blockable signals was supplied to sigprocmask(2).
+
+     The variable is supposed to be modified only from the owning thread,
+     there is no way to guarantee visibility of update from other thread to
+     kernel when signals are delivered.
+
+     Lower bits of the sigblock variable are reserved as flags, which might be
+     set or cleared by kernel at arbitrary moments.  Userspace code should use
+     atomic(9) operations of incrementing and decrementing by SIGFASTBLOCK_INC
+     quantity to recursively block or unblock signals delivery.
+
+     If a signal would be delivered when unmasked, kernel might set the
+     SIGFASTBLOCK_PEND “pending signal” flag in the sigblock variable.
+     Userspace should perform SIGFASTBLOCK_UNBLOCK operation when clearing the
+     variable if it notes the pending signal bit is set, which would deliver
+     the pending signals immediately.  Otherwise, signals delivery might be
+     postponed.
+
+     The _c_m_d argument specifies one of the following operations:
+
+     SIGFASTBLOCK_SETPTR    Register the variable of type _i_n_t at location
+                            pointed to by the _p_t_r argument as sigblock vari‐
+                            able for the calling thread.
+
+     SIGFASTBLOCK_UNSETPTR  Unregister the currently registered sigblock loca‐
+                            tion.  Kernel stops inferring the blocked mask
+                            from non-zero value of its blocked count.  New lo‐
+                            cation can be registered after previous one is
+                            deregistered.
+
+     SIGFASTBLOCK_UNBLOCK   If there are pending signals which should be de‐
+                            livered to the calling thread, they are delivered
+                            before returning from the call.  The sigblock
+                            variable should have zero blocking count, and in‐
+                            dicate that the pending signal exists.  Effec‐
+                            tively this means that the variable should have
+                            the value SIGFASTBLOCK_PEND.
+
+RREETTUURRNN VVAALLUUEESS
+     Upon successful completion, the value 0 is returned; otherwise the
+     value -1 is returned and the global variable _e_r_r_n_o is set to indicate the
+     error.
+
+EERRRROORRSS
+     The operation may fail with the following errors:
+
+     [EBUSY]            The SIGFASTBLOCK_SETPTR attempted while the sigblock
+                        address was already registered.  The
+                        SIGFASTBLOCK_UNBLOCK was called while sigblock vari‐
+                        able value is not equal to SIGFASTBLOCK_PEND.
+
+     [EINVAL]           The variable address passed to SIGFASTBLOCK_SETPTR is
+                        not aligned naturally.  The SIGFASTBLOCK_UNSETPTR op‐
+                        eration was attempted without prior successful call to
+                        SIGFASTBLOCK_SETPTR.
+
+     [EFAULT]           Attempt to read or write to the sigblock variable
+                        failed.  Note that kernel generates the SIGSEGV signal
+                        if an attempt to read from the sigblock variable
+                        faulted during implicit accesses from syscall entry.
+
+SSEEEE AALLSSOO
+     kill(2), signal(2), sigprocmask(2), libthr(3), ld-elf.so.1(8)
+
+SSTTAANNDDAARRDDSS
+     The ssiiggffaassttbblloocckk function is non-standard, although a similar functional‐
+     ity is a common optimization provided by several other systems.
+
+HHIISSTTOORRYY
+     The ssiiggffaassttbblloocckk function was introduced in FreeBSD 13.0.
+
+BBUUGGSS
+     The ssiiggffaassttbblloocckk symbol is currently not exported by libc, on purpose.
+     Consumers should either use the __sys_fast_sigblock symbol from the pri‐
+     vate libc namespace, or utilize syscall(2).
+
+BSD                            December 13, 2019                           BSD

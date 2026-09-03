@@ -1,0 +1,159 @@
+DHCLIENT-SCRIPT(8)        BSD System Manager's Manual       DHCLIENT-SCRIPT(8)
+
+NNAAMMEE
+     ddhhcclliieenntt--ssccrriipptt — DHCP client network configuration script
+
+DDEESSCCRRIIPPTTIIOONN
+     The DHCP client network configuration script is invoked from time to time
+     by dhclient(8).  This script is used by the DHCP client to set each in‐
+     terface's initial configuration prior to requesting an address, to test
+     the address once it has been offered, and to set the interface's final
+     configuration once a lease has been acquired.  If no lease is acquired,
+     the script is used to test predefined leases, if any, and also called
+     once if no valid lease can be identified.
+
+     In general, customizations specific to a particular computer should be
+     done in the _/_e_t_c_/_d_h_c_l_i_e_n_t_._c_o_n_f file.
+
+OOPPEERRAATTIIOONN
+     When dhclient(8) needs to invoke the client configuration script, it sets
+     up a number of environment variables and runs ddhhcclliieenntt--ssccrriipptt.  In all
+     cases, _$_r_e_a_s_o_n is set to the name of the reason why the script has been
+     invoked.  The following reasons are currently defined: MEDIUM, PREINIT,
+     ARPCHECK, ARPSEND, BOUND, RENEW, REBIND, REBOOT, EXPIRE, FAIL and
+     TIMEOUT.
+
+     MEDIUM    The DHCP client is requesting that an interface's media type be
+               set.  The interface name is passed in _$_i_n_t_e_r_f_a_c_e, and the media
+               type is passed in _$_m_e_d_i_u_m.
+
+     PREINIT   The DHCP client is requesting that an interface be configured
+               as required in order to send packets prior to receiving an ac‐
+               tual address.  This means configuring the interface with an IP
+               address of 0.0.0.0 and a broadcast address of 255.255.255.255.
+               The interface name is passed in _$_i_n_t_e_r_f_a_c_e, and the media type
+               in _$_m_e_d_i_u_m.
+
+               If an IP alias has been declared in dhclient.conf(5), its ad‐
+               dress will be passed in _$_a_l_i_a_s___i_p___a_d_d_r_e_s_s, and that IP alias
+               should be deleted from the interface, along with any routes to
+               it.
+
+     ARPSEND   The DHCP client is requesting that an address that has been of‐
+               fered to it be checked to see if somebody else is using it, by
+               sending an ARP request for that address.  It is not clear how
+               to implement this, so no examples exist yet.  The IP address to
+               check is passed in _$_n_e_w___i_p___a_d_d_r_e_s_s, and the interface name is
+               passed in _$_i_n_t_e_r_f_a_c_e.
+
+     ARPCHECK  The DHCP client wants to know if a response to the ARP request
+               sent using ARPSEND has been received.  If one has, the script
+               should exit with a nonzero status, indicating that the offered
+               address has already been requested and should be declined.  The
+               _$_n_e_w___i_p___a_d_d_r_e_s_s and _$_i_n_t_e_r_f_a_c_e variables are set as with
+               ARPSEND.
+
+     BOUND     The DHCP client has done an initial binding to a new address.
+               The new IP address is passed in _$_n_e_w___i_p___a_d_d_r_e_s_s, and the inter‐
+               face name is passed in _$_i_n_t_e_r_f_a_c_e.  The media type is passed in
+               _$_m_e_d_i_u_m.  Any options acquired from the server are passed using
+               the option name described in dhcp-options(5), except that
+               dashes (‘-’) are replaced by underscores (‘_’) in order to make
+               valid shell variables, and the variable names start with
+               “new_”.  So for example, the new subnet mask would be passed in
+               _$_n_e_w___s_u_b_n_e_t___m_a_s_k.
+
+               When a binding has been completed, a lot of network parameters
+               are likely to need to be set up.  A new _/_e_t_c_/_r_e_s_o_l_v_._c_o_n_f needs
+               to be created, using the values of _$_n_e_w___d_o_m_a_i_n___n_a_m_e and
+               _$_n_e_w___d_o_m_a_i_n___n_a_m_e___s_e_r_v_e_r_s (which may list more than one server,
+               separated by spaces).  A default route should be set using
+               _$_n_e_w___r_o_u_t_e_r_s, and static routes may need to be set up using
+               _$_n_e_w___s_t_a_t_i_c___r_o_u_t_e_s.
+
+               If an IP alias has been declared, it must be set up here.  The
+               alias IP address will be written as _$_a_l_i_a_s___i_p___a_d_d_r_e_s_s, and
+               other DHCP options that are set for the alias (e.g., subnet
+               mask) will be passed in variables named as described previously
+               except starting with “$alias_” instead of “$new_”.  Care should
+               be taken that the alias IP address not be used if it is identi‐
+               cal to the bound IP address (_$_n_e_w___i_p___a_d_d_r_e_s_s), since the other
+               alias parameters may be incorrect in this case.
+
+     RENEW     When a binding has been renewed, the script is called as in
+               BOUND, except that in addition to all the variables starting
+               with “$new_”, there is another set of variables starting with
+               “$old_”.  Persistent settings that may have changed need to be
+               deleted - for example, if a local route to the bound address is
+               being configured, the old local route should be deleted.  If
+               the default route has changed, the old default route should be
+               deleted.  If the static routes have changed, the old ones
+               should be deleted.  Otherwise, processing can be done as with
+               BOUND.
+
+     REBIND    The DHCP client has rebound to a new DHCP server.  This can be
+               handled as with RENEW, except that if the IP address has
+               changed, the ARP table should be cleared.
+
+     REBOOT    The DHCP client has successfully reacquired its old address af‐
+               ter a reboot.  This can be processed as with BOUND.
+
+     EXPIRE    The DHCP client has failed to renew its lease or acquire a new
+               one, and the lease has expired.  The IP address must be relin‐
+               quished, and all related parameters should be deleted, as in
+               RENEW and REBIND.
+
+     FAIL      The DHCP client has been unable to contact any DHCP servers,
+               and any leases that have been tested have not proved to be
+               valid.  The parameters from the last lease tested should be de‐
+               configured.  This can be handled in the same way as EXPIRE.
+
+     TIMEOUT   The DHCP client has been unable to contact any DHCP servers.
+               However, an old lease has been identified, and its parameters
+               have been passed in as with BOUND.  The client configuration
+               script should test these parameters and, if it has reason to
+               believe they are valid, should exit with a value of zero.  If
+               not, it should exit with a nonzero value.
+
+     Before taking action according to _$_r_e_a_s_o_n, ddhhcclliieenntt--ssccrriipptt will check for
+     the existence of _/_e_t_c_/_d_h_c_l_i_e_n_t_-_e_n_t_e_r_-_h_o_o_k_s.  If found, it will be sourced
+     (see sh(1)).  After taking action according to _$_r_e_a_s_o_n, ddhhcclliieenntt--ssccrriipptt
+     will check for the existence of _/_e_t_c_/_d_h_c_l_i_e_n_t_-_e_x_i_t_-_h_o_o_k_s.  If found, it
+     will be sourced (see sh(1)).  These hooks scripts can be used to dynami‐
+     cally modify the environment at appropriate times during the DHCP negoti‐
+     ations.  For example, if the administrator wishes to disable alias IP
+     numbers on the DHCP interface, they might want to put the following in
+     _/_e_t_c_/_d_h_c_l_i_e_n_t_-_e_n_t_e_r_-_h_o_o_k_s:
+
+           [ ."$reason" = .PREINIT ] && ifconfig $interface 0.0.0.0
+
+     The usual way to test a lease is to set up the network as with REBIND
+     (since this may be called to test more than one lease) and then ping the
+     first router defined in _$_r_o_u_t_e_r_s.  If a response is received, the lease
+     must be valid for the network to which the interface is currently con‐
+     nected.  It would be more complete to try to ping all of the routers
+     listed in _$_n_e_w___r_o_u_t_e_r_s, as well as those listed in _$_n_e_w___s_t_a_t_i_c___r_o_u_t_e_s,
+     but current scripts do not do this.
+
+SSEEEE AALLSSOO
+     sh(1), dhclient.conf(5), dhclient.leases(5), dhclient(8), dhcpd(8),
+     dhcrelay(8)
+
+AAUUTTHHOORRSS
+     The original version of ddhhcclliieenntt--ssccrriipptt was written for the Internet
+     Software Consortium by Ted Lemon <_m_e_l_l_o_n_@_f_u_g_u_e_._c_o_m> in cooperation with
+     Vixie Enterprises.
+
+     The OpenBSD implementation of ddhhcclliieenntt--ssccrriipptt was written by Kenneth R.
+     Westerback <_k_r_w_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BBUUGGSS
+     If more than one interface is being used, there is no obvious way to
+     avoid clashes between server-supplied configuration parameters - for ex‐
+     ample, the stock ddhhcclliieenntt--ssccrriipptt rewrites _/_e_t_c_/_r_e_s_o_l_v_._c_o_n_f.  If more than
+     one interface is being configured, _/_e_t_c_/_r_e_s_o_l_v_._c_o_n_f will be repeatedly
+     initialized to the values provided by one server, and then the other.
+     Assuming the information provided by both servers is valid, this should
+     not cause any real problems, but it could be confusing.
+
+BSD                            September 6, 2010                           BSD

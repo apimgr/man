@@ -1,0 +1,119 @@
+IEEE8021_AMRR(9)         BSD Kernel Developer's Manual        IEEE8021_AMRR(9)
+
+NNAAMMEE
+     iieeeeee8800221111__aammrrrr — 802.11 network driver transmit rate control support
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneett8800221111//iieeeeee8800221111__aammrrrr..hh>>
+
+     _v_o_i_d
+     iieeeeee8800221111__aammrrrr__iinniitt(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r _*, _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_v_a_p _*,
+         _i_n_t _a_m_i_n, _i_n_t _a_m_a_x, _i_n_t _i_n_t_e_r_v_a_l);
+
+     _v_o_i_d
+     iieeeeee8800221111__aammrrrr__cclleeaannuupp(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r _*);
+
+     _v_o_i_d
+     iieeeeee8800221111__aammrrrr__sseettiinntteerrvvaall(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r _*, _i_n_t _i_n_t_e_r_v_a_l);
+
+     _v_o_i_d
+     iieeeeee8800221111__aammrrrr__nnooddee__iinniitt(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r _*,
+         _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r___n_o_d_e _*, _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___n_o_d_e _*);
+
+     _i_n_t
+     iieeeeee8800221111__aammrrrr__cchhoooossee(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___n_o_d_e _*,
+         _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r___n_o_d_e _*);
+
+     _v_o_i_d
+     iieeeeee8800221111__aammrrrr__ttxx__ccoommpplleettee(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r___n_o_d_e _*, _i_n_t _o_k,
+         _i_n_t _r_e_t_r_i_e_s);
+
+     _v_o_i_d
+     iieeeeee8800221111__aammrrrr__ttxx__uuppddaattee(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___a_m_r_r___n_o_d_e _*, _i_n_t _t_x_n_c_t,
+         _i_n_t _s_u_c_c_e_s_s, _i_n_t _r_e_t_r_y_c_n_t);
+
+DDEESSCCRRIIPPTTIIOONN
+     iieeeeee8800221111__aammrrrr is an implementation of the AMRR transmit rate control al‐
+     gorithm for drivers that use the nneett8800221111 software layer.  A rate control
+     algorithm is responsible for choosing the transmit rate for each frame.
+     To maximize throughput algorithms try to use the highest rate that is ap‐
+     propriate for the operating conditions.  The rate will vary as conditions
+     change; the distance between two stations may change, transient noise may
+     be present that affects signal quality, etc.  iieeeeee8800221111__aammrrrr uses very
+     simple information from a driver to do it's job: whether a frame was suc‐
+     cessfully delivered and how many transmit attempts were made.  While this
+     enables its use with virtually any wireless device it limits it's effec‐
+     tiveness--do not expect it to function well in difficult environments
+     and/or respond quickly to changing conditions.
+
+     iieeeeee8800221111__aammrrrr requires per-vap state and per-node state for each station
+     it is to select rates for.  The API's are designed for drivers to pre-al‐
+     locate state in the driver-private extension areas of each vap and node.
+     For example the ral(4) driver defines a vap as:
+
+           struct rt2560_vap {
+                   struct ieee80211vap     ral_vap;
+                   struct ieee80211_beacon_offsets ral_bo;
+                   struct ieee80211_amrr   amrr;
+
+                   int      (*ral_newstate)(struct ieee80211vap *,
+                                 enum ieee80211_state, int);
+           };
+
+     The _a_m_r_r structure member holds the per-vap state for iieeeeee8800221111__aammrrrr and
+     ral(4) initializes it in the vap create method with:
+
+           ieee80211_amrr_init(&rvp->amrr, vap,
+               IEEE80211_AMRR_MIN_SUCCESS_THRESHOLD,
+               IEEE80211_AMRR_MAX_SUCCESS_THRESHOLD,
+               500 /* ms */);
+
+     The node is defined as:
+
+           struct rt2560_node {
+                   struct ieee80211_node   ni;
+                   struct ieee80211_amrr_node amrr;
+           };
+
+     with initialization done in the driver's _i_v___n_e_w_a_s_s_o_c method:
+
+           static void
+           rt2560_newassoc(struct ieee80211_node *ni, int isnew)
+           {
+                   struct ieee80211vap *vap = ni->ni_vap;
+
+                   ieee80211_amrr_node_init(&RT2560_VAP(vap)->amrr,
+                       &RT2560_NODE(ni)->amrr, ni);
+           }
+
+     Once iieeeeee8800221111__aammrrrr state is setup, transmit rates are requested by call‐
+     ing iieeeeee8800221111__aammrrrr__cchhoooossee() in the transmit path; e.g.:
+
+           tp = &vap->iv_txparms[ieee80211_chan2mode(ni->ni_chan)];
+           if (IEEE80211_IS_MULTICAST(wh->i_addr1)) {
+                   rate = tp->mcastrate;
+           } else if (m0->m_flags & M_EAPOL) {
+                   rate = tp->mgmtrate;
+           } else if (tp->ucastrate != IEEE80211_FIXED_RATE_NONE) {
+                   rate = tp->ucastrate;
+           } else {
+                   (void) ieee80211_amrr_choose(ni, &RT2560_NODE(ni)->amrr);
+                   rate = ni->ni_txrate;
+           }
+
+     Note a rate is chosen only for unicast data frames when a fixed transmit
+     rate is not configured; the other cases are handled with the nneett8800221111
+     transmit parameters.  Note also that iieeeeee8800221111__aammrrrr__cchhoooossee() writes the
+     chosen rate in _n_i___t_x_r_a_t_e; this eliminates copying the value as it is ex‐
+     ported to user applications so they can display the current transmit rate
+     in status.
+
+     The remaining work a driver must do is feed status back to iieeeeee8800221111__aammrrrr
+     when a frame transmit completes using iieeeeee8800221111__aammrrrr__ttxx__ccoommpplleettee().
+     Drivers that poll a device to retrieve statistics can use
+     iieeeeee8800221111__aammrrrr__ttxx__uuppddaattee() (instead or in addition).
+
+SSEEEE AALLSSOO
+     ieee80211(9), ieee80211_output(9)
+
+BSD                             August 4, 2009                             BSD

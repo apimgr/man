@@ -1,0 +1,137 @@
+BULK(8)                   BSD System Manager's Manual                  BULK(8)
+
+NNAAMMEE
+     bbuullkk — building OpenBSD packages in bulk
+
+DDEESSCCRRIIPPTTIIOONN
+     There are quite a few steps necessary to build packages on a cluster.
+     They are:
+
+           1.   Choose master machine setup and create partitions.
+           2.   Setup chrooted builds on the master.
+           3.   Add slaves and do a full bulk.
+           4.   Clean up and do subsequent bulks.
+           5.   Perform additional maintenance.
+
+   11.. CChhoooossee mmaasstteerr mmaacchhiinnee sseettuupp aanndd ccrreeaattee ppaarrttiittiioonnss
+     Setup a master machine with enough room for a chroot, say _/_b_u_i_l_d.  Assum‐
+     ing you are using a cluster of machines, this chroot should contain NFS
+     exportable partitions for distfiles, plists, and packages (one single
+     partition can be used for simplicity).  A full setup currently requires
+     in the order of 120GB for distfiles and 80GB for packages.  Expect these
+     numbers to grow.  150GB for each should last a few years.
+
+     It is possible to build packages without a chroot, but the space require‐
+     ment difference is negligible (a full OpenBSD install is less than 2GB),
+     and having everything chrooted means you may install useful tools to help
+     with the process outside of the chroot (for instance rsync(1)).
+
+     Reserve one "scratch" partition under the chroot for WRKOBJDIR (for in‐
+     stance, mfs, async, or SSD).  This can often double as _/_t_m_p under the ch‐
+     root.  The largest ports can take in excess of 20GB each (more for a de‐
+     bug build) and you may have several of these built at the same time.
+     50GB is probably a reasonable minimum on an architecture which can build
+     chromium, though 100GB would not be overkill, especially if you have many
+     cores.
+
+     Alternately, you can setup your whole chroot as a scratch partition, and
+     reserve one more permanent space under it for distfiles, packages, and
+     plists.
+
+     Choose a strategy for the ports tree itself.  There must be a copy under
+     _/_b_u_i_l_d.  You can either copy it from outside the chroot, have it in an
+     NFS partition, or manually make sure all machines on the cluster have the
+     same ports tree (cvs checkout, rsync ...).
+
+     Note that logs are only produced on the master, and thus do not need to
+     be nfs exportable, nor even inside the chroot.
+
+     OpenBSD now comes with default users for package builds, namely _pbuild
+     and _pfetch.
+
+     The default login.conf(5) is appropriate for most setups, but _pbuild's
+     datasize-cur may need to be bumped for a few ports.  Likewise, maxproc-
+     cur is too small for machines with more than 4-6 cpus.
+
+     Note that _pbuild does not need network access, and is now blocked by de‐
+     fault in pf(4).
+
+     Recent OpenBSD systems do not need any kind of doas(1) setup for bulk
+     ports builds, as dpb(1) is run as root and drops permissions appropri‐
+     ately.
+
+     However, you may still want to setup doas(1) for root, if you want to
+     manually fix ports, as _P_O_R_T_S___P_R_I_V_S_E_P relies on it.
+
+   22.. SSeettuupp cchhrrooootteedd bbuuiillddss oonn tthhee mmaasstteerr
+     Populate the initial chroot with proot(1).  Point DISTDIR, PACKAGE_REPOS‐
+     ITORY, PLIST_REPOSITORY, WRKOBJDIR to appropriate locations.
+
+     Pay attention to nodev and wxallowed warnings.  A chroot setup that can't
+     have devices won't work at all.  A setup without wxallowed in /usr/local
+     and WRKOBJDIR won't build a lot of things.
+
+     Check that this setup can build ports by running dpb -B /build as root.
+     Fix any issues related to file ownership at this point.  See dpb(1) for
+     details.
+
+     If your WRKOBJDIR is a temporary partition, make sure it belongs to
+     _pbuild:_pbuild after a reboot.
+
+   33.. AAdddd ssllaavveess aanndd ddoo aa ffuullll bbuullkk
+     Create identical slave machines with the same release material.  Have
+     them import the NFS partitions from the master, they don't need root ac‐
+     cess to the partitions.  Set up ssh(1) so that the master can connect to
+     the slaves, using ssh protocol 2, as root, preferably without a password
+     or passphrase (however, dpb(1) uses a master connection, so a password
+     would be required just once per host).
+
+     Note that code on slave machines will only run as _pbuild (during builds)
+     or root (during dependency installation).  Slave machines only require
+     highly restricted network access.  They just need to act as nfs clients
+     to the master and to be reachable through ssh from the master.
+
+     Use a similar proot(1) config to populate each slave.
+
+     You should now be able to build ports on the slaves.  A simple config
+     will just have
+
+           DEFAULT chroot=/build
+           localhost
+           host1
+           ...
+
+     Check that the full config can still build ports.
+
+     You're now ready for a full bulk.  Beware that even fast configs (3 amd64
+     with 8 cores each) may take over 24 hours to finish.  It's generally ap‐
+     propriate to run dpb(1) under tmux(1).
+
+   44.. CClleeaann uupp aanndd ddoo ssuubbsseeqquueenntt bbuullkkss
+     Before running the next bulk, you should set up rotating logs and move
+     the PACKAGE_REPOSITORY away.  Save the PLIST_REPOSITORY and DISTDIR
+     though.  PLIST_REPOSITORY will catch problems in packing-lists.
+     _$_{_P_L_I_S_T___R_E_P_O_S_I_T_O_R_Y_}_/_$_{_A_R_C_H_}_/_h_i_s_t_o_r_y is also used to store sha256(1) his‐
+     tory, necessary to reorder files inside packages to speed updates up.
+
+     The DISTDIR contains history information as well as DISTDIR/build-stats
+     to speed further runs up.
+
+     How you wipe things out depends on your setup.  If you run proot(1) again
+     each time, most things will get cleaned up automatically
+     (_/_b_u_i_l_d_/_u_s_r_/_l_o_c_a_l, _/_b_u_i_l_d_/_v_a_r_/_d_b_/_p_k_g _._._.).  Note that known directories
+     such as WRKOBJDIR do not get cleaned up automatically, so you may want to
+     set up a STARTUP_SCRIPT in dpb(1).
+
+   55.. PPeerrffoorrmm aaddddiittiioonnaall mmaaiinntteennaannccee
+     clean-old-distfiles(1) should be run occasionally since the DISTDIR will
+     continue growing.
+
+     pkg_check-problems(1) should be run occasionally to find out conflicts
+     and dependency issues.
+
+SSEEEE AALLSSOO
+     clean-old-distfiles(1), dpb(1), pkg_check-problems(1), proot(1),
+     register-plist(1), tmux(1), bsd.port.mk(5), release(8)
+
+BSD                              June 15, 2025                             BSD

@@ -1,0 +1,469 @@
+BRIDGE(4)                BSD Kernel Interfaces Manual                BRIDGE(4)
+
+NNAAMMEE
+     bbrriiddggee — Ethernet bridge interface
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee bbrriiddggee
+
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneett//iiff..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+     ##iinncclluuddee <<nneettiinneett//iiff__eetthheerr..hh>>
+     ##iinncclluuddee <<nneett//iiff__bbrriiddggee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The bbrriiddggee device creates a logical link between two or more Ethernet in‐
+     terfaces or encapsulation interfaces (see etherip(4)).  This link between
+     the interfaces selectively forwards frames from each interface on the
+     bridge to every other interface on the bridge.  A bridge can serve sev‐
+     eral services, including isolation of traffic between sets of machines so
+     that traffic local to one set of machines is not available on the wire of
+     another set of machines, and it can act as a transparent filter for ip(4)
+     datagrams.
+
+     A bbrriiddggee interface can be created at runtime using the iiffccoonnffiigg bbrriiddggee_N
+     ccrreeaattee command or by setting up a hostname.if(5) configuration file for
+     netstart(8).
+
+     The bridges provided by this interface are learning bridges with filter‐
+     ing; see pf(4).  In general a bridge works like a hub, forwarding traffic
+     from one interface to another.  It differs from a hub in that it will
+     "learn" which machines are on each of its attached segments by actively
+     listening to incoming traffic and examining the headers of each frame.  A
+     table is built containing the MAC address and segment to which the MAC
+     address is attached.  This allows a bridge to be more selective about
+     what it forwards, which can be used to reduce traffic on a set of seg‐
+     ments and also to provide an IP firewall without changing the topology of
+     the network.
+
+     The algorithm works as follows by default, but can be modified via
+     ioctl(2) or the utility ifconfig(8).  When a frame comes in, the origin
+     segment and the source address are recorded.  If the bridge has no knowl‐
+     edge about where the destination is to be found, the bridge will forward
+     the frame to all attached segments.  If the destination is known to be on
+     a different segment from its origin, the bridge will forward the packet
+     only to the destination segment.  If the destination is on the same seg‐
+     ment as the origin segment, the bridge will drop the packet because the
+     receiver has already had a chance to see the frame.  Before forwarding a
+     frame, the bridge will check to see if the packet contains an ip(4) or
+     ip6(4) datagram; if so, the datagram is run through the pf interface so
+     that it can be filtered.  See the _N_O_T_E_S section for details.
+
+SSPPAANNNNIINNGG TTRREEEE
+     The bridge has support for 802.1D-2004 Spanning Tree Protocol (STP),
+     which can be used to detect and remove loops in a network topology.  Us‐
+     ing the ssttpp or --ssttpp commands to bbrriiddggee, STP can be enabled or disabled on
+     each port.
+
+     The bridge will use the Rapid Spanning Tree Protocol (RSTP) by default to
+     allow rapid transitions to the forwarding state.  The pprroottoo command to
+     bbrriiddggee can be used to force operation in the common Spanning Tree Proto‐
+     col without rapid state transitions.  Note that RSTP will be compatible
+     with remote bridges running common STP.
+
+SSPPAANN PPOORRTTSS
+     The bridge can have interfaces added to it as span ports.  Span ports
+     transmit a copy of every frame received by the bridge.  This is most use‐
+     ful for snooping a bridged network passively on another host connected to
+     one of the span ports of the bridge.  Span ports cannot be bridge mem‐
+     bers; instead, the aaddddssppaann and ddeellssppaann commands are used to add and
+     delete span ports to and from a bridge.
+
+IIOOCCTTLLSS
+     A bbrriiddggee interface responds to all of the ioctl(2) calls specific to
+     other interfaces listed in netintro(4).  The following ioctl(2) calls are
+     specific to bbrriiddggee devices.  They are defined in <_s_y_s_/_s_o_c_k_i_o_._h>.  Some
+     ioctl(2) calls are used by veb(4) and tpmr(4) as well.
+
+     SIOCBRDGIFS _s_t_r_u_c_t _i_f_b_i_f_c_o_n_f _*
+             Retrieve member interface list from a bridge.  This request takes
+             an _i_f_b_i_f_c_o_n_f structure (see below) as a value-result parameter.
+             The _i_f_b_i_c___l_e_n field should be initially set to the size of the
+             buffer pointed to by _i_f_b_i_c___b_u_f.  On return it will contain the
+             length, in bytes, of the configuration list.
+
+             Alternatively, if the _i_f_b_i_c___l_e_n passed in is set to 0,
+             SIOCBRDGIFS will set _i_f_b_i_c___l_e_n to the size that _i_f_b_i_c___b_u_f needs
+             to be to fit the entire configuration list, and will not fill in
+             the other parameters.  This is useful for determining the exact
+             size that _i_f_b_i_c___b_u_f needs to be in advance.
+
+             The argument structure is defined as follows:
+
+             struct ifbreq {
+                     char      ifbr_name[IFNAMSIZ];   /* bridge ifs name */
+                     char      ifbr_ifsname[IFNAMSIZ];/* member ifs name */
+                     u_int32_t ifbr_ifsflags;  /* member ifs flags */
+                     u_int8_t  ifbr_state;     /* member stp state */
+                     u_int8_t  ifbr_priority;  /* member stp priority */
+                     u_int32_t ifbr_portno;    /* member port number */
+                     u_int32_t ifbr_path_cost; /* member stp path cost */
+             };
+
+             /* ifbr_ifsflags flags about interfaces */
+             #define IFBIF_LEARNING   0x0001 /* ifs can learn */
+             #define IFBIF_DISCOVER   0x0002 /* sends packets w/unknown dst */
+             #define IFBIF_BLOCKNONIP 0x0004 /* ifs blocks non-IP/ARP in/out */
+             #define IFBIF_STP        0x0008 /* participate in spanning tree*/
+             #define IFBIF_SPAN       0x0100 /* ifs is a span port (ro) */
+             #define IFBIF_RO_MASK    0xff00 /* read only bits */
+
+             struct ifbifconf {
+                     char      ifbic_name[IFNAMSIZ]; /* bridge ifs name */
+                     u_int32_t ifbic_len;            /* buffer size */
+                     union {
+                             caddr_t ifbicu_buf;
+                             struct  ifbreq *ifbicu_req;
+                     } ifbic_ifbicu;
+             #define ifbic_buf       ifbic_ifbicu.ifbicu_buf
+             #define ifbic_req       ifbic_ifbicu.ifbicu_req
+             };
+
+     SIOCBRDGADD _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Add the interface named in _i_f_b_r___i_f_s_n_a_m_e to the bridge named in
+             _i_f_b_r___n_a_m_e.
+
+     SIOCBRDGDEL _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Delete the interface named in _i_f_b_r___i_f_s_n_a_m_e from the bridge named
+             in _i_f_b_r___n_a_m_e.
+
+     SIOCBRDGADDS _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Add the interface named in _i_f_b_r___i_f_s_n_a_m_e as a span port to the
+             bridge named in _i_f_b_r___n_a_m_e.
+
+     SIOCBRDGDELS _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Delete the interface named in _i_f_b_r___i_f_s_n_a_m_e from the list of span
+             ports of the bridge named in _i_f_b_r___n_a_m_e.
+
+     SIOCBRDGSIFFLGS _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Set the bridge member interface flags for the interface named in
+             _i_f_b_r___i_f_s_n_a_m_e attached to the bridge _i_f_b_r___n_a_m_e.  If the flag
+             IFBIF_LEARNING is set on an interface, source addresses from
+             frames received on the interface are recorded in the address
+             cache.  If the flag IFBIF_DISCOVER is set, the interface will re‐
+             ceive packets destined for unknown destinations, otherwise a
+             frame that has a destination not found in the address cache is
+             not forwarded to this interface.  The default for newly added in‐
+             terfaces has both flags set.  If the flag IFBIF_BLOCKNONIP is
+             set, only ip(4), ip6(4), arp(4), and Reverse ARP packets will be
+             bridged from and to the interface.
+
+     SIOCBRDGGIFFLGS _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Retrieve the bridge member interface flags for the interface
+             named in _i_f_b_r___i_f_s_n_a_m_e attached to the bridge _i_f_b_r___n_a_m_e.
+
+     SIOCBRDGRTS _s_t_r_u_c_t _i_f_b_a_c_o_n_f _*
+             Retrieve the address cache of the bridge named in _i_f_b_a_c___n_a_m_e.
+             This request takes an _i_f_b_a_c_o_n_f structure (see below) as a value-
+             result parameter.  The _i_f_b_a_c___l_e_n field should be initially set to
+             the size of the buffer pointed to by _i_f_b_a_c___b_u_f.  On return, it
+             will contain the length, in bytes, of the configuration list.
+
+             Alternatively, if the _i_f_b_a_c___l_e_n passed in is set to 0,
+             SIOCBRDGRTS will set it to the size that _i_f_b_a_c___b_u_f needs to be to
+             fit the entire configuration list, and will not fill in the other
+             parameters.  As with SIOCBRDGIFS, this is useful for determining
+             the exact size that _i_f_b_a_c___b_u_f needs to be in advance.
+
+             The argument structure is defined as follows:
+
+             struct ifbareq {
+                     char     ifba_name[IFNAMSIZ];   /* bridge name */
+                     char     ifba_ifsname[IFNAMSIZ];/* destination ifs */
+                     u_int8_t ifba_age;              /* address age */
+                     u_int8_t ifba_flags;            /* address flags */
+                     struct ether_addr ifba_dst;     /* destination addr */
+             };
+
+             #define IFBAF_TYPEMASK  0x03            /* address type mask */
+             #define IFBAF_DYNAMIC   0x00            /* dynamically learned */
+             #define IFBAF_STATIC    0x01            /* static address */
+
+             struct ifbaconf {
+                     char      ifbac_name[IFNAMSIZ]; /* bridge ifs name */
+                     u_int32_t ifbac_len;            /* buffer size */
+                     union {
+                             caddr_t ifbacu_buf;     /* buffer */
+                             struct ifbareq *ifbacu_req; /* request pointer */
+                     } ifbac_ifbacu;
+             #define ifbac_buf       ifbac_ifbacu.ifbacu_buf
+             #define ifbac_req       ifbac_ifbacu.ifbacu_req
+             };
+
+             Address cache entries with the type set to IFBAF_DYNAMIC in
+             _i_f_b_a___f_l_a_g_s are entries learned by the bridge.  Entries with the
+             type set to IFBAF_STATIC are manually added entries.
+
+     SIOCBRDGSADDR _s_t_r_u_c_t _i_f_b_a_r_e_q _*
+             Add an entry, manually, to the address cache for the bridge named
+             in _i_f_b_a___n_a_m_e.  The address and its associated interface and flags
+             are set in the _i_f_b_a___d_s_t, _i_f_b_a___i_f_s_n_a_m_e, and _i_f_b_a___f_l_a_g_s fields, re‐
+             spectively.
+
+     SIOCBRDGDADDR _s_t_r_u_c_t _i_f_b_a_r_e_q _*
+             Delete an entry from the address cache of the bridge named in
+             _i_f_b_a___n_a_m_e.  Entries are deleted strictly based on the address
+             field _i_f_b_a___d_s_t.
+
+     SIOCBRDGFLUSH _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Flush addresses from the cache.  _i_f_b_r___n_a_m_e contains the name of
+             the bridge device, and _i_f_b_r___i_f_s_f_l_a_g_s should be set to
+             IFBF_FLUSHALL to flush all addresses from the cache or
+             IFBF_FLUSHDYN to flush only the dynamically learned addresses
+             from the cache.
+
+     SIOCBRDGSCACHE _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Set the maximum address cache size for the bridge named in
+             _i_f_b_r_p___n_a_m_e to _i_f_b_r_p___c_s_i_z_e entries.
+
+             The argument structure is as follows:
+
+             struct ifbrparam {
+                     char              ifbrp_name[IFNAMSIZ];
+                     union {
+                             u_int32_t ifbrpu_csize;     /* cache size */
+                             int       ifbrpu_ctime;     /* cache time */
+                             u_int16_t ifbrpu_prio;      /* bridge priority */
+                             u_int8_t  ifbrpu_hellotime; /* hello time */
+                             u_int8_t  ifbrpu_fwddelay;  /* fwd delay */
+                             u_int8_t  ifbrpu_maxage;    /* max age */
+                             u_int64_t ifbrpu_datapath;  /* datapath-id */
+                             u_int32_t ifbrpu_maxgroup;  /* group size */
+                     } ifbrp_ifbrpu;
+             };
+             #define ifbrp_csize     ifbrp_ifbrpu.ifbrpu_csize
+             #define ifbrp_ctime     ifbrp_ifbrpu.ifbrpu_ctime
+             #define ifbrp_prio      ifbrp_ifbrpu.ifbrpu_prio
+             #define ifbrp_hellotime ifbrp_ifbrpu.ifbrpu_hellotime
+             #define ifbrp_fwddelay  ifbrp_ifbrpu.ifbrpu_fwddelay
+             #define ifbrp_maxage    ifbrp_ifbrpu.ifbrpu_maxage
+
+             Note that the _i_f_b_r_p___c_t_i_m_e, _i_f_b_r_p___h_e_l_l_o_t_i_m_e, _i_f_b_r_p___f_w_d_d_e_l_a_y and
+             _i_f_b_r_p___m_a_x_a_g_e fields are in seconds.
+
+     SIOCBRDGGCACHE _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Retrieve the maximum size of the address cache for the bridge
+             _i_f_b_r_p___n_a_m_e.
+
+     SIOCBRDGSTO _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Set the time, in seconds, for how long addresses which have not
+             been seen on the network (i.e., have not transmitted a packet)
+             will remain in the cache to the value _i_f_b_r_p___c_t_i_m_e.  If the time
+             is set to zero, no aging is performed on the address cache.
+
+     SIOCBRDGGTO _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Retrieve the address cache expiration time (see above).
+
+     SIOCBRDGARL _s_t_r_u_c_t _i_f_b_r_l_r_e_q _*
+             Add an Ethernet address filtering rule to the bridge on a spe‐
+             cific interface.  _i_f_b_r___n_a_m_e contains the name of the bridge de‐
+             vice, and _i_f_b_r___i_f_s_n_a_m_e contains the name of the bridge member in‐
+             terface.
+
+             Rules are applied in the order in which they were added to the
+             bridge, and the first matching rule's action parameter determines
+             the fate of the packet.  The _i_f_b_r___a_c_t_i_o_n field is one of
+             BRL_ACTION_PASS or BRL_ACTION_BLOCK, to pass or block matching
+             frames, respectively.  The _i_f_b_r___f_l_a_g_s field specifies whether the
+             rule should match on input, output, or both by using the flags
+             BRL_FLAG_IN and BRL_FLAG_OUT.  At least one of these flags must
+             be set.
+
+             The _i_f_b_r___f_l_a_g_s field also specifies whether either (or both) of
+             the source and destination addresses should be matched by using
+             the BRL_FLAG_SRCVALID and BRL_FLAG_DSTVALID flags.  The _i_f_b_r___s_r_c
+             field is the source address that triggers the rule (only consid‐
+             ered if _i_f_b_r___f_l_a_g_s has the BRL_FLAG_SRCVALID bit set).  The
+             _i_f_b_r___s_r_c field is the destination address that triggers the rule
+             (only considered if _i_f_b_r___f_l_a_g_s has the BRL_FLAG_DSTVALID bit
+             set).  If neither bit is set, the rule matches all frames.
+
+             The argument structure is as follows:
+
+             struct ifbrlreq {
+                     char     ifbr_name[IFNAMSIZ];    /* bridge ifs name */
+                     char     ifbr_ifsname[IFNAMSIZ]; /* member ifs name */
+                     u_int8_t ifbr_action;            /* disposition */
+                     u_int8_t ifbr_flags;             /* flags */
+                     struct ether_addr ifbr_src;      /* source mac */
+                     struct ether_addr ifbr_dst;      /* destination mac */
+                     char     ifbr_tagname[PF_TAG_NAME_SIZE]; /* pf tagname */
+             };
+             #define BRL_ACTION_BLOCK        0x01     /* block frame */
+             #define BRL_ACTION_PASS         0x02     /* pass frame */
+             #define BRL_FLAG_IN             0x08     /* input rule */
+             #define BRL_FLAG_OUT            0x04     /* output rule */
+             #define BRL_FLAG_SRCVALID       0x02     /* src valid */
+             #define BRL_FLAG_DSTVALID       0x01     /* dst valid */
+
+     SIOCBRDGFRL _s_t_r_u_c_t _i_f_b_r_l_r_e_q _*
+             Remove all filtering rules from a bridge interface member.
+             _i_f_b_r___n_a_m_e contains the name of the bridge device, and
+             _i_f_b_r___i_f_s_n_a_m_e contains the name of the bridge member interface.
+
+     SIOCBRDGGRL _s_t_r_u_c_t _i_f_b_r_l_c_o_n_f _*
+             Retrieve all of the rules from the bridge, _i_f_b_r_l___n_a_m_e, for the
+             member interface, _i_f_b_r_l___i_f_s_n_a_m_e.  This request takes an _i_f_b_r_l_c_o_n_f
+             structure (see below) as a value-result parameter.  The _i_f_b_r_l___l_e_n
+             field should be initially set to the size of the buffer pointed
+             to by _i_f_b_r_l___b_u_f.  On return, it will contain the length, in
+             bytes, of the configuration list.
+
+             Alternatively, if the _i_f_b_r_l___l_e_n passed in is set to 0,
+             SIOCBRDGGRL will set it to the size that _i_f_b_r_l___b_u_f needs to be to
+             fit the entire configuration list, and will not fill in the other
+             parameters.  As with SIOCBRDGIFS, this is useful for determining
+             the exact size that _i_f_b_r_l___b_u_f needs to be in advance.
+
+             The argument structure is defined as follows:
+
+             struct ifbrlconf {
+                     char      ifbrl_name[IFNAMSIZ];    /* bridge ifs name */
+                     char      ifbrl_ifsname[IFNAMSIZ]; /* member ifs name */
+                     u_int32_t ifbrl_len;               /* buffer size */
+                     union {
+                             caddr_t ifbrlu_buf;
+                             struct  ifbrlreq *ifbrlu_req;
+                     } ifbrl_ifbrlu;
+             #define ifbrl_buf ifbrl_ifbrlu.ifbrlu_buf
+             #define ifbrl_req ifbrl_ifbrlu.ifbrlu_req
+             };
+
+     SIOCBRDGGPRI _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Retrieve the Spanning Tree Protocol (STP) priority parameter of
+             the bridge into the _i_f_b_r_p___p_r_i_o field.
+
+     SIOCBRDGSPRI _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Set the STP priority parameter of the bridge to the value in
+             _i_f_b_r_p___p_r_i_o.
+
+     SIOCBRDGGHT _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Retrieve the STP hello time parameter, in seconds, of the bridge
+             into the _i_f_b_r_p___h_e_l_l_o_t_i_m_e field.
+
+     SIOCBRDGSHT _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Set the STP hello time parameter, in seconds, of the bridge to
+             the value in _i_f_b_r_p___h_e_l_l_o_t_i_m_e.  The value in _i_f_b_r_p___h_e_l_l_o_t_i_m_e can‐
+             not be zero.
+
+     SIOCBRDGGFD _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Retrieve the STP forward delay parameter, in seconds, of the
+             bridge into the _i_f_b_r_p___f_w_d_d_e_l_a_y field.
+
+     SIOCBRDGSFD _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Set the STP forward delay parameter, in seconds, of the bridge to
+             the value in _i_f_b_r_p___f_w_d_d_e_l_a_y.  The value in _i_f_b_r_p___f_w_d_d_e_l_a_y cannot
+             be zero.
+
+     SIOCBRDGGMA _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Retrieve the STP maximum age parameter, in seconds, of the bridge
+             into the _i_f_b_r_p___m_a_x_a_g_e field.
+
+     SIOCBRDGSMA _s_t_r_u_c_t _i_f_b_r_p_a_r_a_m _*
+             Set the STP maximum age parameter, in seconds, of the bridge to
+             the value in _i_f_b_r_p___m_a_x_a_g_e.  The value in _i_f_b_r_p___m_a_x_a_g_e cannot be
+             zero.
+
+     SIOCBRDGSIFPRIO _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Set the STP priority parameter of the interface named in
+             _i_f_b_r___i_f_s_n_a_m_e to the value in _i_f_b_r___p_r_i_o_r_i_t_y.
+
+     SIOCBRDGSIFCOST _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Set the STP cost parameter of the interface named in _i_f_b_r___i_f_s_n_a_m_e
+             to the value in _i_f_b_r___p_a_t_h___c_o_s_t.  The value in _i_f_b_r___p_a_t_h___c_o_s_t must
+             be greater than or equal to one.
+
+     SIOCBRDGSIFPROT _s_t_r_u_c_t _i_f_b_r_e_q _*
+             Set the protection domain membership of the interface named in
+             _i_f_b_r___i_f_s_n_a_m_e to the value in _i_f_b_r___p_r_o_t_e_c_t_e_d.
+
+EERRRROORRSS
+     If the ioctl(2) call fails, errno(2) is set to one of the following val‐
+     ues:
+
+     [ENOENT]           For an add request, this means that the named inter‐
+                        face is not configured into the system.  For a delete
+                        operation, it means that the named interface is not a
+                        member of the bridge.  For an address cache deletion,
+                        the address was not found in the table.
+
+     [ENOMEM]           Memory could not be allocated for an interface or
+                        cache entry to be added to the bridge.
+
+     [EEXIST]           The named interface is already a member of the bridge.
+
+     [EBUSY]            The named interface is already a member of another
+                        bridge.
+
+     [EINVAL]           The named interface is not an Ethernet interface, or
+                        an invalid ioctl was performed on the bridge.
+
+     [ENETDOWN]         Address cache operation (flush, add, or delete) on a
+                        bridge that is in the down state.
+
+     [EPERM]            Super-user privilege is required to add and delete in‐
+                        terfaces to and from bridges and to set the bridge in‐
+                        terface flags.
+
+     [EFAULT]           The buffer used in a SIOCBRDGIFS or SIOCBRDGRTS re‐
+                        quest points outside of the process's allocated ad‐
+                        dress space.
+
+     [ESRCH]            No such member interface in the bridge.
+
+NNOOTTEESS
+     Bridged packets pass through pf(4) filters once as input on the receiving
+     interface and once as output on all interfaces on which they are for‐
+     warded.  In order to pass through the bridge, packets must pass any _i_n
+     rules on the input and any _o_u_t rules on the output interface.  Packets
+     may be blocked either entering or leaving the bridge.
+
+     Return packets generated by pf itself are not routed using the kernel
+     routing table.  Instead, pf will send these replies back to the same Eth‐
+     ernet address that the original packet came from.  This applies to rules
+     with rreettuurrnn, rreettuurrnn--rrsstt, rreettuurrnn--iiccmmpp, rreettuurrnn--iiccmmpp66, or ssyynnpprrooxxyy defined.
+     At the moment, only rreettuurrnn--rrsstt on IPv4 is implemented and the other
+     packet generating rules are unsupported.
+
+     If an IP packet is too large for the outgoing interface, the bridge will
+     perform IP fragmentation.  This can happen when bridge members have dif‐
+     ferent MTUs or when IP fragments are reassembled by pf.  Non-IP packets
+     which are too large for the outgoing interface will be dropped.
+
+     If the IFF_LINK2 flag is set on the bbrriiddggee interface, the bridge will
+     also perform transparent ipsec(4) processing on the packets (encrypt or
+     decrypt them), according to the policies set with the ipsecctl(8) command
+     by the administrator.  If appropriate security associations (SAs) do not
+     exist, any key management daemons such as isakmpd(8) that are running on
+     the bridge will be invoked to establish the necessary SAs.  These daemons
+     have to be configured as if they were running on the host whose traffic
+     they are protecting (i.e., they need to have the appropriate authentica‐
+     tion and authorization material, such as keys and certificates, to imper‐
+     sonate the protected host(s)).
+
+SSEEEE AALLSSOO
+     errno(2), ioctl(2), arp(4), etherip(4), ip(4), ip6(4), ipsec(4),
+     netintro(4), pf(4), tpmr(4), vether(4), hostname.if(5), ifconfig(8),
+     ipsecctl(8), isakmpd(8), netstart(8)
+
+HHIISSTTOORRYY
+     The bbrriiddggee kernel interface first appeared in OpenBSD 2.5.
+
+AAUUTTHHOORRSS
+     The bbrriiddggee kernel interface was written by Jason L. Wright
+     <_j_a_s_o_n_@_t_h_o_u_g_h_t_._n_e_t> as part of an undergraduate independent study at the
+     University of North Carolina at Greensboro.
+
+     Support for rapid spanning tree reconfigurations (RSTP) was added by
+     Andrew Thompson <_t_h_o_m_p_s_a_@_f_r_e_e_b_s_d_._o_r_g> and ported to OpenBSD by
+     Reyk Floeter <_r_e_y_k_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BBUUGGSS
+     There are some rather special network interface chipsets which will not
+     work in a bridge configuration.  Some chipsets have serious flaws when
+     running in promiscuous mode, like the TI ThunderLAN (see tl(4)), which
+     receives its own transmissions (this renders the address learning cache
+     useless).  Most other chipsets work fine though.
+
+BSD                             March 31, 2022                             BSD

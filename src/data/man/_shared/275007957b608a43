@@ -1,0 +1,167 @@
+NG_VLAN_ROTATE(4)        BSD Kernel Interfaces Manual        NG_VLAN_ROTATE(4)
+
+NNAAMMEE
+     nngg__vvllaann__rroottaattee — IEEE 802.1ad VLAN manipulation netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__vvllaann__rroottaattee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The nngg__vvllaann__rroottaattee node type manipulates the order of VLAN tags of frames
+     tagged according to the IEEE 802.1ad (an extension of IEEE 802.1Q) stan‐
+     dard between different hooks.
+
+     Each node has four special hooks, _o_r_i_g_i_n_a_l, _o_r_d_e_r_e_d, _e_x_c_e_s_s_i_v_e, and
+     _i_n_c_o_m_p_l_e_t_e.
+
+     A frame tagged with an arbitrary number of ETHERTYPE_VLAN,
+     ETHERTYPE_QINQ, and 0x9100 tags received on the _o_r_i_g_i_n_a_l hook will be re‐
+     arranged to a new order of those tags and is sent out the “ordered” hook.
+     After successful processing the _h_i_s_t_o_g_r_a_m counter for the observed stack
+     size increments.
+
+     If it contains fewer VLANs in the stack than the configured _m_i_n limit,
+     the frame is sent out to the _i_n_c_o_m_p_l_e_t_e hook and the _i_n_c_o_m_p_l_e_t_e counter
+     increments.
+
+     If there are more VLANs in the stack than the configured _m_a_x limit, the
+     frame is sent out to the _e_x_c_e_s_s_i_v_e hook and the _e_x_c_e_s_s_i_v_e counter incre‐
+     ments.
+
+     If the destination hook is not connected, the frame is dropped and the
+     _d_r_o_p_s counter increments.
+
+     For Ethernet frames received on the _o_r_d_e_r_e_d hook, the transformation is
+     reversed and is passed to the _o_r_i_g_i_n_a_l hook.  Please note that this
+     process is identical to the one described above, besides the or‐
+     dered/original hooks are swapped and the transformation is reversed.
+
+     An Ethernet frame received on the _i_n_c_o_m_p_l_e_t_e or _e_x_c_e_s_s_i_v_e hook is for‐
+     warded to the _o_r_i_g_i_n_a_l hook without any modification.
+
+     This node supports only one operation at the moment: Rotation of the
+     VLANs in the stack.  Setting the configuration parameter _r_o_t to a posi‐
+     tive value, the stack will roll up by this amount.  Negative values will
+     roll down.  A typical scenario is setting the value to 1 in order to
+     bring the innermost VLAN tag to the outmost level.  Rotation includes the
+     VLAN id, the ether type, and the QOS parameters pcp and cfi.  Typical QOS
+     handling refers to the outmost setting, so be careful to keep your QOS
+     intact.
+
+HHOOOOKKSS
+     This node type supports the following hooks:
+
+     _o_r_i_g_i_n_a_l    Typically this hook would be connected to a ng_ether(4) node,
+                 using the _l_o_w_e_r hook connected to a carrier network.
+
+     _o_r_d_e_r_e_d     Typically this hook would be connected to a ng_vlan(4) type
+                 node using the _d_o_w_n_s_t_r_e_a_m hook in order to separate services.
+
+     _e_x_c_e_s_s_i_v_e   see below.
+
+     _i_n_c_o_m_p_l_e_t_e  Typically those hooks would be attached to a ng_eiface(4)
+                 type node using the _e_t_h_e_r hook for anomaly monitoring pur‐
+                 poses.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_VLANROTATE_GET_CONF (ggeettccoonnff)
+          Read the current configuration.
+
+     NGM_VLANROTATE_SET_CONF (sseettccoonnff)
+          Set the current configuration.
+
+     NGM_VLANROTATE_GET_STAT (ggeettssttaatt)
+          Read the current statistics.
+
+     NGM_VLANROTATE_CLR_STAT (ccllrrssttaatt)
+          Zeroize the statistics.
+
+     NGM_VLANROTATE_GETCLR_STAT (ggeettccllrrssttaatt)
+          Read the current statistics and zeroize it in one step.
+
+EEXXAAMMPPLLEESS
+     The first example demonstrates how to rotate double or triple tagged
+     frames so that the innermost C-VLAN can be used as service discriminator.
+     The single or double tagged frames (C-VLAN removed) are sent out to an
+     interface pointing to different infrastucture.
+
+     #!/bin/sh
+
+     BNG_IF=ixl3
+     VOIP_IF=bge2
+
+     ngctl -f- <<EOF
+     mkpeer ${BNG_IF}: vlan_rotate lower original
+     name ${BNG_IF}:lower rotate
+     msg rotate: setconf { min=2 max=3 rot=1 }
+     mkpeer rotate: vlan ordered downstream
+     name rotate:ordered services
+     connect services: ${VOIP_IF} voip lower
+     msg services: addfilter { vlan=123 hook="voip" }
+     EOF
+
+     Now inject the following sample frame on the BNG_IF interface:
+
+     00:00:00:00:01:01 > 00:01:02:03:04:05,
+      ethertype 802.1Q-9100 (0x9100), length 110: vlan 2, p 1,
+      ethertype 802.1Q-QinQ, vlan 101, p 0,
+      ethertype 802.1Q, vlan 123, p 7,
+      ethertype IPv4, (tos 0x0, ttl 64, id 15994, offset 0, flags [none],
+       proto ICMP (1), length 84) 192.168.140.101 > 192.168.140.1:
+       ICMP echo request, id 40234, seq 0, length 64
+
+     The frame ejected on the _o_r_d_e_r_e_d hook will look like this:
+
+     00:00:00:00:01:01 > 00:01:02:03:04:05,
+      ethertype 802.1Q (0x8100), length 110: vlan 123, p 7,
+      ethertype 802.1Q-9100, vlan 2, p 1,
+      ethertype 802.1Q-QinQ, vlan 101, p 0,
+      ethertype IPv4, (tos 0x0, ttl 64, id 15994, offset 0, flags [none],
+       proto ICMP (1), length 84) 192.168.140.101 > 192.168.140.1:
+       ICMP echo request, id 40234, seq 0, length 64
+
+     Hence, the frame pushed out to the VOIP_IF will have this form:
+
+     00:00:00:00:01:01 > 00:01:02:03:04:05,
+      ethertype 802.1Q-9100, vlan 2, p 1,
+      ethertype 802.1Q-QinQ, vlan 101, p 0,
+      ethertype IPv4, (tos 0x0, ttl 64, id 15994, offset 0, flags [none],
+       proto ICMP (1), length 84) 192.168.140.101 > 192.168.140.1:
+       ICMP echo request, id 40234, seq 0, length 64
+
+     The second example distinguishes between double tagged and single tagged
+     frames.
+
+     #!/bin/sh
+
+     IN_IF=bge1
+
+     ngctl -f- <<EOF
+     mkpeer ${IN_IF}: vlan_rotate lower original
+     name ${IN_IF}:lower separate
+     msg separate: setconf { min=1 max=1 rot=0 }
+     mkpeer separate: eiface incomplete ether
+     name separate:incomplete untagged
+     mkpeer separate: eiface ordered ether
+     name separate:ordered tagged
+     EOF
+
+     Setting the _r_o_t parameter to zero (or omitting it) does not change the
+     order of the tags within the frame.  Frames with more VLAN tags are
+     dropped.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_eiface(4), ng_ether(4), ng_vlan(4), ngctl(8)
+
+AAUUTTHHOORRSS
+     Lutz Donnerhacke <_l_u_t_z_@_d_o_n_n_e_r_h_a_c_k_e_._d_e>
+
+BSD                            January 26, 2021                            BSD

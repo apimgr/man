@@ -1,0 +1,167 @@
+NG_BPF(4)                BSD Kernel Interfaces Manual                NG_BPF(4)
+
+NNAAMMEE
+     nngg__bbppff — Berkeley packet filter netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneett//bbppff..hh>>
+     ##iinncclluuddee <<nneettggrraapphh..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__bbppff..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The bbppff node type allows Berkeley Packet Filter (see bpf(4)) filters to
+     be applied to data travelling through a Netgraph network.  Each node al‐
+     lows an arbitrary number of connections to arbitrarily named hooks.  With
+     each hook is associated a bpf(4) filter program which is applied to in‐
+     coming data only, a destination hook for matching packets, a destination
+     hook for non-matching packets, and various statistics counters.
+
+     A bpf(4) program returns an unsigned integer, which is normally inter‐
+     preted as the length of the prefix of the packet to return.  In the con‐
+     text of this node type, returning zero is considered a non-match, in
+     which case the entire packet is delivered out the non-match destination
+     hook.  Returning a value greater than zero causes the packet to be trun‐
+     cated to that length and delivered out the match destination hook.  Ei‐
+     ther or both destination hooks may be the empty string, or may not exist,
+     in which case the packet is dropped.
+
+     New hooks are initially configured to drop all packets.  A new filter
+     program may be installed using the NGM_BPF_SET_PROGRAM control message.
+
+HHOOOOKKSS
+     This node type supports any number of hooks having arbitrary names.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_BPF_SET_PROGRAM (sseettpprrooggrraamm)
+          This command sets the filter program that will be applied to incom‐
+          ing data on a hook.  The following structure must be supplied as an
+          argument:
+
+              struct ng_bpf_hookprog {
+                char            thisHook[NG_HOOKSIZ];     /* name of hook */
+                char            ifMatch[NG_HOOKSIZ];      /* match dest hook */
+                char            ifNotMatch[NG_HOOKSIZ];   /* !match dest hook */
+                int32_t         bpf_prog_len;             /* #insns in program */
+                struct bpf_insn bpf_prog[];               /* bpf program */
+              };
+
+          The hook to be updated is specified in thisHook.  The BPF program is
+          the sequence of instructions in the bpf_prog array; there must be
+          bpf_prog_len of them.  Matching and non-matching incoming packets
+          are delivered out the hooks named ifMatch and ifNotMatch, respec‐
+          tively.  The program must be a valid bpf(4) program or else EINVAL
+          is returned.
+
+     NGM_BPF_GET_PROGRAM (ggeettpprrooggrraamm)
+          This command takes an ASCII string argument, the hook name, and re‐
+          turns the corresponding struct ng_bpf_hookprog as shown above.
+
+     NGM_BPF_GET_STATS (ggeettssttaattss)
+          This command takes an ASCII string argument, the hook name, and re‐
+          turns the statistics associated with the hook as a struct
+          ng_bpf_hookstat.
+
+     NGM_BPF_CLR_STATS (ccllrrssttaattss)
+          This command takes an ASCII string argument, the hook name, and
+          clears the statistics associated with the hook.
+
+     NGM_BPF_GETCLR_STATS (ggeettccllrrssttaattss)
+          This command is identical to NGM_BPF_GET_STATS, except that the sta‐
+          tistics are also atomically cleared.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+EEXXAAMMPPLLEESS
+     It is possible to configure a node from the command line, using
+     tcpdump(1) to generate raw BPF instructions which are then transformed
+     into the ASCII form of a NGM_BPF_SET_PROGRAM control message, as demon‐
+     strated here:
+
+         #!/bin/sh
+
+         PATTERN="tcp dst port 80"
+         NODEPATH="my_node:"
+         INHOOK="hook1"
+         MATCHHOOK="hook2"
+         NOTMATCHHOOK="hook3"
+
+         BPFPROG=$( tcpdump -s 8192 -p -ddd ${PATTERN} | \
+                    ( read len ; \
+                      echo -n "bpf_prog_len=$len " ; \
+                      echo -n "bpf_prog=[" ; \
+                      while read code jt jf k ; do \
+                          echo -n " { code=$code jt=$jt jf=$jf k=$k }" ; \
+                      done ; \
+                      echo " ]" ) )
+
+         ngctl msg ${NODEPATH} setprogram { thisHook=\"${INHOOK}\" \
+           ifMatch=\"${MATCHHOOK}\" \
+           ifNotMatch=\"${NOTMATCHHOOK}\" \
+           ${BPFPROG} }
+
+     Based on the previous example, it is possible to prevent a jail (or a VM)
+     from spoofing by allowing only traffic that has the expected ethernet and
+     IP addresses:
+
+         #!/bin/sh
+
+         NODEPATH="my_node:"
+         JAIL_MAC="0a:00:de:ad:be:ef"
+         JAIL_IP="128.66.1.42"
+         JAIL_HOOK="jail"
+         HOST_HOOK="host"
+         DEBUG_HOOK="nomatch"
+
+         bpf_prog() {
+             local PATTERN=$1
+
+             tcpdump -s 8192 -p -ddd ${PATTERN} | (
+                 read len
+                 echo -n "bpf_prog_len=$len "
+                 echo -n "bpf_prog=["
+                 while read code jt jf k ; do
+                     echo -n " { code=$code jt=$jt jf=$jf k=$k }"
+                 done
+                 echo " ]"
+             )
+         }
+
+         # Prevent jail from spoofing (filter packets coming from jail)
+         ngctl msg ${NODEPATH} setprogram {                        \
+             thisHook=\"${JAIL_HOOK}\"                             \
+             ifMatch=\"${HOST_HOOK}\"                              \
+             ifNotMatch=\"${DEBUG_HOOK}\"                          \
+             $(bpf_prog "ether src ${JAIL_MAC} && src ${JAIL_IP}") \
+         }
+
+         # Prevent jail from receiving spoofed packets (filter packets
+         # coming from host)
+         ngctl msg ${NODEPATH} setprogram {                        \
+             thisHook=\"${HOST_HOOK}\"                             \
+             ifMatch=\"${JAIL_HOOK}\"                              \
+             ifNotMatch=\"${DEBUG_HOOK}\"                          \
+             $(bpf_prog "ether dst ${JAIL_MAC} && dst ${JAIL_IP}") \
+         }
+
+SSEEEE AALLSSOO
+     bpf(4), netgraph(4), ngctl(8)
+
+HHIISSTTOORRYY
+     The nngg__bbppff node type was implemented in FreeBSD 4.0.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     When built as a loadable kernel module, this module includes the file
+     _n_e_t_/_b_p_f___f_i_l_t_e_r_._c.  Although loading the module should fail if
+     _n_e_t_/_b_p_f___f_i_l_t_e_r_._c already exists in the kernel, currently it does not, and
+     the duplicate copies of the file do not interfere.  However, this may
+     change in the future.
+
+BSD                           September 20, 2020                           BSD

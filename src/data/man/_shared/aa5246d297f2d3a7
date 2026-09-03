@@ -1,0 +1,204 @@
+_p_i_d_f_d___o_p_e_n(2)                 System Calls Manual                _p_i_d_f_d___o_p_e_n(2)
+
+NNAAMMEE
+       pidfd_open - obtain a file descriptor that refers to a task
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__ppiiddffdd__ooppeenn,, ppiidd__tt _p_i_d,, uunnssiiggnneedd iinntt _f_l_a_g_s));;
+
+       _N_o_t_e: glibc provides no wrapper for ppiiddffdd__ooppeenn(), necessitating the use
+       of ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       The  ppiiddffdd__ooppeenn()  system call creates a file descriptor that refers to
+       the task referenced by _p_i_d.  The file descriptor  is  returned  as  the
+       function result; the close‐on‐exec flag is set on the file descriptor.
+
+       The  _f_l_a_g_s  argument  either has the value 0, or contains the following
+       flags:
+
+       PPIIDDFFDD__NNOONNBBLLOOCCKK (since Linux 5.10)
+              Return a nonblocking file descriptor.  If the task  referred  to
+              by  the  file descriptor has not yet terminated, then an attempt
+              to wait on the file descriptor using wwaaiittiidd(2) will  immediately
+              return the error EEAAGGAAIINN rather than blocking.
+
+       PPIIDDFFDD__TTHHRREEAADD (since Linux 6.9)
+              Create  a  file  descriptor  that  refers  to a specific thread,
+              rather than a process (thread‐group leader).  If  this  flag  is
+              not set, _p_i_d must refer to a process.
+
+RREETTUURRNN VVAALLUUEE
+       On success, ppiiddffdd__ooppeenn() returns a file descriptor (a nonnegative inte‐
+       ger).  On error, -1 is returned and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEIINNVVAALL _f_l_a_g_s is not valid.
+
+       EEIINNVVAALL _p_i_d is not valid.
+
+       EEMMFFIILLEE The per‐process limit on the number of open file descriptors has
+              been  reached  (see  the  description  of RRLLIIMMIITT__NNOOFFIILLEE in ggeettrr‐‐
+              lliimmiitt(2)).
+
+       EENNFFIILLEE The system‐wide limit on the total number of open files has been
+              reached.
+
+       EENNOODDEEVV The anonymous inode filesystem is not available in this kernel.
+
+       EENNOOMMEEMM Insufficient kernel memory was available.
+
+       EESSRRCCHH  The process specified by _p_i_d does not exist.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 5.3.
+
+NNOOTTEESS
+       The following code sequence can be used to obtain a file descriptor for
+       the child of ffoorrkk(2):
+
+           pid = fork();
+           if (pid > 0) {     /* If parent */
+               pidfd = pidfd_open(pid, 0);
+               ...
+           }
+
+       Even  if  the  child  has  already  terminated  by  the  time  of   the
+       ppiiddffdd__ooppeenn() call, its PID will not have been recycled and the returned
+       file descriptor will refer to the resulting zombie process.  Note, how‐
+       ever,  that  this  is  guaranteed only if the following conditions hold
+       true:
+
+       •  the disposition of SSIIGGCCHHLLDD has not been explicitly  set  to  SSIIGG__IIGGNN
+          (see ssiiggaaccttiioonn(2));
+
+       •  the SSAA__NNOOCCLLDDWWAAIITT flag was not specified while establishing a handler
+          for  SSIIGGCCHHLLDD  or  while  setting  the  disposition of that signal to
+          SSIIGG__DDFFLL (see ssiiggaaccttiioonn(2)); and
+
+       •  the zombie process was not reaped elsewhere in  the  program  (e.g.,
+          either by an asynchronously executed signal handler or by wwaaiitt(2) or
+          similar in another thread).
+
+       If any of these conditions does not hold, then the child process (along
+       with a PID file descriptor that refers to it) should instead be created
+       using cclloonnee(2) with the CCLLOONNEE__PPIIDDFFDD flag.
+
+   UUssee ccaasseess ffoorr PPIIDD ffiillee ddeessccrriippttoorrss
+       A PID file descriptor returned by ppiiddffdd__ooppeenn() (or by cclloonnee(2) with the
+       CCLLOONNEE__PPIIDD flag) can be used for the following purposes:
+
+       •  The ppiiddffdd__sseenndd__ssiiggnnaall(2) system call can be used to send a signal to
+          the process referred to by a PID file descriptor.
+
+       •  A PID file descriptor can be monitored using ppoollll(2), sseelleecctt(2), and
+          eeppoollll(7).
+
+          When  the  task  that  it refers to terminates and becomes a zombie,
+          these interfaces indicate the file descriptor as readable (EEPPOOLLLLIINN).
+          When the task is reaped, these interfaces  produce  a  hangup  event
+          (EEPPOOLLLLHHUUPP).
+
+          Note,  however,  that  in the current implementation, nothing can be
+          read from the file descriptor (rreeaadd(2) on the file descriptor  fails
+          with  the  error  EEIINNVVAALL).   The polling behavior depends on whether
+          PPIIDDFFDD__TTHHRREEAADD flag was used when obtaining the file descriptor:
+
+          •  With PPIIDDFFDD__TTHHRREEAADD, the file descriptor becomes readable when  the
+             task  exits and becomes a zombie, even if the thread‐group is not
+             empty.
+
+          •  Without PPIIDDFFDD__TTHHRREEAADD, the file descriptor becomes  readable  only
+             when the last thread in the thread group exits.
+
+       •  If the PID file descriptor refers to a child of the calling process,
+          then it can be waited on using wwaaiittiidd(2).
+
+       •  The  ppiiddffdd__ggeettffdd(2) system call can be used to obtain a duplicate of
+          a file descriptor of another process referred to by a PID  file  de‐
+          scriptor.
+
+       •  A PID file descriptor can be used as the argument of sseettnnss(2) in or‐
+          der  to  move into one or more of the same namespaces as the process
+          referred to by the file descriptor.
+
+       •  A PID file descriptor can be used as the  argument  of  pprroocceessss__mmaadd‐‐
+          vviissee(2)  in  order to provide advice on the memory usage patterns of
+          the process referred to by the file descriptor.
+
+       The ppiiddffdd__ooppeenn() system call is the preferred way of  obtaining  a  PID
+       file descriptor for an already existing process.  The alternative is to
+       obtain  a  file  descriptor by opening a _/_p_r_o_c_/pid directory.  However,
+       the latter technique is possible only  if  the  pprroocc(5)  filesystem  is
+       mounted;  furthermore,  the file descriptor obtained in this way is _n_o_t
+       pollable and can’t be waited on with wwaaiittiidd(2).
+
+EEXXAAMMPPLLEESS
+       The program below opens a PID file descriptor for the process whose PID
+       is specified as its command‐line argument.  It  then  uses  ppoollll(2)  to
+       monitor  the  file  descriptor  for  process  exit,  as indicated by an
+       EEPPOOLLLLIINN event.
+
+   PPrrooggrraamm ssoouurrccee
+
+       #define _GNU_SOURCE
+       #include <poll.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/syscall.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       static int
+       pidfd_open(pid_t pid, unsigned int flags)
+       {
+           return syscall(SYS_pidfd_open, pid, flags);
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           int            pidfd, ready;
+           struct pollfd  pollfd;
+
+           if (argc != 2) {
+               fprintf(stderr, "Usage: %s <pid>\n", argv[0]);
+               exit(EXIT_SUCCESS);
+           }
+
+           pidfd = pidfd_open(atoi(argv[1]), 0);
+           if (pidfd == -1) {
+               perror("pidfd_open");
+               exit(EXIT_FAILURE);
+           }
+
+           pollfd.fd = pidfd;
+           pollfd.events = POLLIN;
+
+           ready = poll(&pollfd, 1, -1);
+           if (ready == -1) {
+               perror("poll");
+               exit(EXIT_FAILURE);
+           }
+
+           printf("Events (%#x): POLLIN is %sset\n", pollfd.revents,
+                  (pollfd.revents & POLLIN) ? "" : "not ");
+
+           close(pidfd);
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       cclloonnee(2),  kkiillll(2),  ppiiddffdd__ggeettffdd(2),   ppiiddffdd__sseenndd__ssiiggnnaall(2),   ppoollll(2),
+       pprroocceessss__mmaaddvviissee(2), sseelleecctt(2), sseettnnss(2), wwaaiittiidd(2), eeppoollll(7)
+
+Linux man‐pages (unreleased)      2025‐10‐29                     _p_i_d_f_d___o_p_e_n(2)

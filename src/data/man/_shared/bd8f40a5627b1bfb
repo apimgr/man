@@ -1,0 +1,162 @@
+IBV_CREATE_CQ_EX(3)     Libibverbs Programmer's Manual     IBV_CREATE_CQ_EX(3)
+
+
+
+NNAAMMEE
+       ibv_create_cq_ex - create a completion queue (CQ)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<iinnffiinniibbaanndd//vveerrbbss..hh>>
+
+       ssttrruucctt iibbvv__ccqq__eexx **iibbvv__ccrreeaattee__ccqq__eexx((ssttrruucctt iibbvv__ccoonntteexxtt _*_c_o_n_t_e_x_t,,
+                                          ssttrruucctt iibbvv__ccrreeaattee__ccqq__aattttrr__eexx _*_c_q___a_t_t_r));;
+
+DDEESSCCRRIIPPTTIIOONN
+       iibbvv__ccrreeaattee__ccqq__eexx(()) creates a completion queue (CQ) for RDMA device con‐
+       text  _c_o_n_t_e_x_t.   The  argument  _c_q___a_t_t_r  is   a   pointer   to   struct
+       ibv_cq_init_attr_ex as defined in <infiniband/verbs.h>.
+
+       struct ibv_cq_init_attr_ex {
+               int                     cqe;               /* Minimum number of entries required for CQ */
+               void                    *cq_context;       /* Consumer-supplied context returned for completion events */
+               struct ibv_comp_channel *channel;          /* Completion channel where completion events will be queued. May be NULL if completion events will not be used. */
+               int                     comp_vector;       /* Completion vector used to signal completion events. Must be >= 0 and < context->num_comp_vectors. */
+               uint64_t                wc_flags;          /* The wc_flags that should be returned in ibv_poll_cq_ex. Or'ed bit of enum ibv_wc_flags_ex. */
+               uint32_t                comp_mask;         /* compatibility mask (extended verb). */
+               uint32_t                flags              /* One or more flags from enum ibv_create_cq_attr_flags */
+       };
+
+       enum ibv_wc_flags_ex {
+               IBV_WC_EX_WITH_BYTE_LEN              = 1 << 0,  /* Require byte len in WC */
+               IBV_WC_EX_WITH_IMM                   = 1 << 1,  /* Require immediate in WC */
+               IBV_WC_EX_WITH_QP_NUM                = 1 << 2,  /* Require QP number in WC */
+               IBV_WC_EX_WITH_SRC_QP                = 1 << 3,  /* Require source QP in WC */
+               IBV_WC_EX_WITH_SLID                  = 1 << 4,  /* Require slid in WC */
+               IBV_WC_EX_WITH_SL                    = 1 << 5,  /* Require sl in WC */
+               IBV_WC_EX_WITH_DLID_PATH_BITS        = 1 << 6,  /* Require dlid path bits in WC */
+               IBV_WC_EX_WITH_COMPLETION_TIMESTAMP  = 1 << 7,  /* Require completion timestamp in WC /*
+               IBV_WC_EX_WITH_CVLAN                 = 1 << 8,  /* Require VLAN info in WC */
+               IBV_WC_EX_WITH_FLOW_TAG              = 1 << 9,  /* Require flow tag in WC */
+       };
+
+       enum ibv_cq_init_attr_mask {
+               IBV_CQ_INIT_ATTR_MASK_FLAGS             = 1 << 0,
+       };
+
+       enum ibv_create_cq_attr_flags {
+               IBV_CREATE_CQ_ATTR_SINGLE_THREADED      = 1 << 0, /* This CQ is used from a single threaded, thus no locking is required */
+       };
+
+
+PPoolllliinngg aann eexxtteennddeedd CCQQ
+       In  order to poll an extended CQ efficiently, a user could use the fol‐
+       lowing functions.
+
+
+       CCoommpplleettiioonn iitteerraattoorr ffuunnccttiioonnss
+
+              iinntt iibbvv__ssttaarrtt__ppoollll((ssttrruucctt iibbvv__ccqq__eexx _*_c_q,, ssttrruucctt iibbvv__ppoollll__ccqq__aattttrr
+              _*_a_t_t_r))
+              Start polling a batch of work completions.  _a_t_t_r is given in or‐
+              der to make this function easily extensible in the future.  This
+              function either returns 0 on success or an error code otherwise.
+              When no completions are available on the CQ, ENOENT is returned,
+              but  the  CQ  remains in a valid state. On success, querying the
+              completion's attribute could be done using the  query  functions
+              described  below.  If an error code is given, end_poll shouldn't
+              be called.
+
+              iinntt iibbvv__nneexxtt__ppoollll((ssttrruucctt iibbvv__ccqq__eexx _*_c_q))
+              This function is called in order to get the  next  work  comple‐
+              tion.  It  has to be called after _s_t_a_r_t___p_o_l_l and before _e_n_d___p_o_l_l
+              are called. This function either returns 0 on success or an  er‐
+              ror code otherwise. When no completions are available on the CQ,
+              ENOENT is returned, but the CQ remains in a valid state. On suc‐
+              cess,  querying  the  completion's attribute could be done using
+              the query functions described below. If an error code is  given,
+              end_poll  should  still be called, indicating this is the end of
+              the polled batch.
+
+              vvooiidd iibbvv__eenndd__ppoollll((ssttrruucctt iibbvv__ccqq__eexx _*_c_q))
+              This function indicates the end of polling batch of work comple‐
+              tions.  After calling this function, the user should start a new
+              batch by calling _s_t_a_r_t___p_o_l_l_.
+
+
+       PPoolllliinngg ffiieellddss iinn tthhee ccoommpplleettiioonn
+              Below members and functions are used in order to poll  the  cur‐
+              rent  completion. The current completion is the completion which
+              the iterator points to (start_poll and next_poll  advances  this
+              iterator).  Only  fields that the user requested via wc_flags in
+              ibv_create_cq_ex could be queried. In addition, some fields  are
+              only valid in certain opcodes and status codes.
+
+              uuiinntt6644__tt wwrr__iidd -- CCaann bbee aacccceesssseedd ddiirreeccttllyy ffrroomm ssttrruucctt iibbvv__ccqq__eexx_.
+
+              eennuumm  iibbvv__wwcc__ssttaattuuss  --  CCaann  bbee  aacccceesssseedd  ddiirreeccttllyy  ffrroomm ssttrruucctt
+              iibbvv__ccqq__eexx_.
+
+              eennuumm iibbvv__wwcc__ooppccooddee iibbvv__wwcc__rreeaadd__ooppccooddee((ssttrruucctt iibbvv__ccqq__eexx _*_c_q));; Get
+              the opcode from the current completion.
+
+              uuiinntt3322__tt  iibbvv__wwcc__rreeaadd__vveennddoorr__eerrrr((ssttrruucctt  iibbvv__ccqq__eexx _*_c_q));; Get the
+              vendor error from the current completion.
+
+              uuiinntt3322__tt iibbvv__wwcc__rreeaadd__bbyyttee__lleenn((ssttrruucctt  iibbvv__ccqq__eexx  _*_c_q));;  Get  the
+              vendor error from the current completion.
+
+              uuiinntt3322__tt iibbvv__wwcc__rreeaadd__iimmmm__ddaattaa((ssttrruucctt iibbvv__ccqq__eexx _*_c_q));; Get the im‐
+              mediate data field from the current completion.
+
+              uuiinntt3322__tt iibbvv__wwcc__rreeaadd__qqpp__nnuumm((ssttrruucctt iibbvv__ccqq__eexx _*_c_q));;  Get  the  QP
+              number field from the current completion.
+
+              uuiinntt3322__tt   iibbvv__wwcc__rreeaadd__ssrrcc__qqpp((ssttrruucctt  iibbvv__ccqq__eexx  _*_c_q));;  Get  the
+              source QP number field from the current completion.
+
+              iinntt iibbvv__wwcc__rreeaadd__wwcc__ffllaaggss((ssttrruucctt iibbvv__ccqq__eexx _*_c_q));; Get the QP flags
+              field from the current completion.
+
+              uuiinntt1166__tt  iibbvv__wwcc__rreeaadd__ppkkeeyy__iinnddeexx((ssttrruucctt  iibbvv__ccqq__eexx _*_c_q));; Get the
+              pkey index field from the current completion.
+
+              uuiinntt3322__tt iibbvv__wwcc__rreeaadd__sslliidd((ssttrruucctt iibbvv__ccqq__eexx _*_c_q));;  Get  the  slid
+              field from the current completion.
+
+              uuiinntt88__tt  iibbvv__wwcc__rreeaadd__ssll((ssttrruucctt  iibbvv__ccqq__eexx _*_c_q));; Get the sl field
+              from the current completion.
+
+              uuiinntt88__tt iibbvv__wwcc__rreeaadd__ddlliidd__ppaatthh__bbiittss((ssttrruucctt  iibbvv__ccqq__eexx  _*_c_q));;  Get
+              the dlid_path_bits field from the current completion.
+
+              uuiinntt6644__tt  iibbvv__wwcc__rreeaadd__ccoommpplleettiioonn__ttss((ssttrruucctt  iibbvv__ccqq__eexx  _*_c_q));; Get
+              the completion timestamp from the current completion.
+
+              uuiinntt1166__tt iibbvv__wwcc__rreeaadd__ccvvllaann((ssttrruucctt iibbvv__ccqq__eexx _*_c_q));; Get the  CVLAN
+              field from the current completion.
+
+              uuiinntt3322__tt  iibbvv__wwcc__rreeaadd__ffllooww__ttaagg((ssttrruucctt  iibbvv__ccqq__eexx  _*_c_q));; Get flow
+              tag from the current completion.
+
+
+RREETTUURRNN VVAALLUUEE
+       iibbvv__ccrreeaattee__ccqq__eexx(()) returns a pointer to the CQ, or NULL if the  request
+       fails.
+
+NNOOTTEESS
+       iibbvv__ccrreeaattee__ccqq__eexx(())  may  create a CQ with size greater than or equal to
+       the requested size. Check the cqe attribute in the returned CQ for  the
+       actual size.
+
+       CQ should be destroyed with ibv_destroy_cq.
+
+SSEEEE AALLSSOO
+       iibbvv__ccrreeaattee__ccqq(3),   iibbvv__ddeessttrrooyy__ccqq(3),   iibbvv__rreessiizzee__ccqq(3),  iibbvv__rreeqq__nnoo‐‐
+       ttiiffyy__ccqq(3), iibbvv__aacckk__ccqq__eevveennttss(3), iibbvv__ccrreeaattee__qqpp(3)
+
+AAUUTTHHOORRSS
+       Matan Barak <matanb@mellanox.com>
+
+
+
+libibverbs                        2016-05-08               IBV_CREATE_CQ_EX(3)

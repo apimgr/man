@@ -1,0 +1,124 @@
+YPXFR(8)                  BSD System Manager's Manual                 YPXFR(8)
+
+NNAAMMEE
+     yyppxxffrr — transfer NIS database from remote server to local host
+
+SSYYNNOOPPSSIISS
+     //uussrr//lliibbeexxeecc//yyppxxffrr [--ff] [--cc] [--dd _t_a_r_g_e_t _d_o_m_a_i_n] [--hh _s_o_u_r_c_e _h_o_s_t]
+                        [--ss _s_o_u_r_c_e _d_o_m_a_i_n] [--pp _p_a_t_h]
+                        [--CC _t_a_s_k_i_d _p_r_o_g_r_a_m_-_n_u_m_b_e_r _i_p_a_d_d_r _p_o_r_t] _m_a_p_n_a_m_e
+
+DDEESSCCRRIIPPTTIIOONN
+     The yyppxxffrr utility copies an NIS database (or _m_a_p) from one NIS server to
+     another using NIS services.  In FreeBSD, yyppxxffrr is generally invoked by
+     ypserv(8) when it receives a map transfer request from yppush(8).  The
+     yyppxxffrr utility is used primarily in environments where several NIS servers
+     are in use in a single domain.  One server, the NIS master, maintains the
+     canonical copies of all NIS maps, and all the other servers, the NIS
+     slaves, copy new versions of the maps from the master whenever any up‐
+     dates are made (i.e., when a user updates their password via
+     yppasswd(1)).
+
+     When run, yyppxxffrr creates a temporary database file in
+     _/_v_a_r_/_y_p_/_[_d_o_m_a_i_n_n_a_m_e_], and fills it with the contents of _m_a_p_n_a_m_e as sup‐
+     plied by the specified _s_o_u_r_c_e _h_o_s_t.  When the entire map has been trans‐
+     ferred, yyppxxffrr deletes the original copy of _m_a_p_n_a_m_e and moves the tempo‐
+     rary copy into its place.  When the transfer is complete, yyppxxffrr will at‐
+     tempt to send a 'clear current map' request to the local ypserv(8)
+     process to clear any possible references it may still have to the stale
+     map.
+
+     Note that all files created by yyppxxffrr are owner readable and writable only
+     for security reasons.  Since the NIS maps and the directory in which they
+     reside are normally owned by root, this prevents non-privileged users
+     from making unauthorized modifications.
+
+     In order to maintain consistency across all NIS servers, yyppxxffrr can be run
+     periodically in a cron(8) job.  Maps which change infrequently need only
+     be updated once a day (preferably late at night when system usage is low‐
+     est), whereas those that are subject to frequent changes (such a
+     _p_a_s_s_w_d_._b_y_n_a_m_e and _p_a_s_s_w_d_._b_y_u_i_d) should be updated perhaps once every
+     hour.  Using cron(8) to automatically update the NIS maps is not strictly
+     mandatory since all updates should be propagated by yppush(8) when
+     _/_v_a_r_/_y_p_/_M_a_k_e_f_i_l_e is run on the NIS master server, however it is good
+     practice on large networks where possible outages could cause NIS servers
+     to fall out of sync with each other.
+
+     When yyppxxffrr is invoked without a controlling terminal, e.g. from inside
+     ypserv(8), it logs all its output using the syslog(3) facility.
+
+NNOOTTEESS
+     The FreeBSD version of yyppxxffrr has support for a special map transfer pro‐
+     tocol which works in conjunction with the FreeBSD rpc.ypxfrd(8) server.
+     This protocol allows it to transfer raw map database files from the NIS
+     master server and can be many times faster than the standard transfer
+     method, particularly for very large NIS maps.  The yyppxxffrr utility will
+     check to see if the rpc.ypxfrd(8) server is registered on the NIS master
+     server and attempt to use it if it is present.  If it is not it will fall
+     back to the standard transfer method, copying the map contents from
+     ypserv(8) and creating new maps instead.
+
+     Note that while the FreeBSD ypxfrd protocol is conceptually similar to
+     the SunOS ypxfrd protocol, the FreeBSD protocol is not compatible with
+     Sun's, therefore it will not work with Sun's ypxfrd server.  FreeBSD
+     slave systems can still transfer maps from any non-FreeBSD NIS server,
+     however they will only be able to take advantage of the faster protocol
+     if the master server is also running FreeBSD.
+
+OOPPTTIIOONNSS
+     The following options and flags are supported by yyppxxffrr:
+
+     --ff      Force a map transfer.  Normally, yyppxxffrr will not transfer a map if
+             it determines that the NIS master's copy is not newer than the
+             existing copy already on the local host: the --ff flag forces a
+             transfer regardless of which server's version is more recent.
+
+     --cc      Do not send a 'clear current map' request to the ypserv(8)
+             process running on the local host.  This flag is normally used
+             when invoking yyppxxffrr manually on a machine that is not yet running
+             ypserv(8).  Without this flag, failure to contact the local NIS
+             server will cause yyppxxffrr to abort the transfer.
+
+     --dd _t_a_r_g_e_t _d_o_m_a_i_n
+             Specify a target domain other than the current NIS domain.
+
+     --hh _s_o_u_r_c_e _h_o_s_t
+             Specify the name of the host from which to copy the NIS maps.
+             This option is used to ensure that yyppxxffrr only copies maps from
+             the NIS master server.
+
+     --ss _s_o_u_r_c_e _d_o_m_a_i_n
+             Specify the domain from which to transfer a map, in the event
+             that the transfer is being done across two different NIS domains.
+
+     --pp _p_a_t_h
+             Specify the top level directory containing the NIS maps.  By de‐
+             fault, this path is _/_v_a_r_/_y_p.  The --pp flag allows you to specify
+             an alternate path should you wish to store your NIS maps in a
+             different part of the file system.  The NIS server, ypserv(8),
+             passes this flag to yyppxxffrr if it too has been told to use an al‐
+             ternate path.
+
+     --CC _t_a_s_k_i_d _p_r_o_g_r_a_m_-_n_u_m_b_e_r _i_p_a_d_d_r _p_o_r_t
+             These options are used only when yyppxxffrr is invoked by ypserv(8) in
+             response to a map transfer request initiated by yppush(8).  In
+             this instance, yyppxxffrr needs to 'callback' to the yppush(8) process
+             and interact with it, so yppush(8) passes to it an IP address
+             _i_p_a_d_d_r, port number _p_o_r_t, registered program number
+             _p_r_o_g_r_a_m_-_n_u_m_b_e_r and a transaction ID _t_a_s_k_i_d that it can use to
+             contact the waiting yppush(8) process on the master server.
+
+     _m_a_p_n_a_m_e
+             The name of the map to transfer.
+
+FFIILLEESS
+     /var/yp/[domainname]/[maps]       The NIS maps for a particular NIS do‐
+                                       main.
+
+SSEEEE AALLSSOO
+     yp(8), yppush(8), ypserv(8)
+
+AAUUTTHHOORRSS
+     Bill Paul <_w_p_a_u_l_@_c_t_r_._c_o_l_u_m_b_i_a_._e_d_u>
+
+BSD                            February 5, 1995                            BSD

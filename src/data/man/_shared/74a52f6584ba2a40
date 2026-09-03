@@ -1,0 +1,522 @@
+PCI(4)                   BSD Kernel Interfaces Manual                   PCI(4)
+
+NNAAMMEE
+     ppccii — generic PCI/PCIe bus driver
+
+SSYYNNOOPPSSIISS
+     To compile the PCI bus driver into the kernel, place the following line
+     in your kernel configuration file:
+
+           ddeevviiccee ppccii
+
+     To compile in support for Single Root I/O Virtualization (SR-IOV):
+
+           ooppttiioonnss PPCCII__IIOOVV
+
+     To compile in support for native PCI-express HotPlug:
+
+           ooppttiioonnss PPCCII__HHPP
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppccii driver provides support for PCI and PCIe devices in the kernel
+     and limited access to PCI devices for userland.
+
+     The ppccii driver provides a _/_d_e_v_/_p_c_i character device that can be used by
+     userland programs to read and write PCI configuration registers.  Pro‐
+     grams can also use this device to get a list of all PCI devices, or all
+     PCI devices that match various patterns.
+
+     Since the ppccii driver provides a write interface for PCI configuration
+     registers, system administrators should exercise caution when granting
+     access to the ppccii device.  If used improperly, this driver can allow
+     userland applications to crash a machine or cause data loss.  In particu‐
+     lar, driver only allows operations on the opened _/_d_e_v_/_p_c_i to modify sys‐
+     tem state if the file descriptor was opened for writing.  For instance,
+     the PCIOCREAD and PCIOCBARMMAP operations require a writeable descriptor,
+     because reading a config register or a BAR read access could have func‐
+     tion-specific side-effects.
+
+     The ppccii driver implements the PCI bus in the kernel.  It enumerates any
+     devices on the PCI bus and gives PCI client drivers the chance to attach
+     to them.  It assigns resources to children, when the BIOS does not.  It
+     takes care of routing interrupts when necessary.  It reprobes the unat‐
+     tached PCI children when PCI client drivers are dynamically loaded at
+     runtime.  The ppccii driver also includes support for PCI-PCI bridges, vari‐
+     ous platform-specific Host-PCI bridges, and basic support for PCI VGA
+     adapters.
+
+IIOOCCTTLLSS
+     The following ioctl(2) calls are supported by the ppccii driver.  They are
+     defined in the header file <_s_y_s_/_p_c_i_i_o_._h>.
+
+     PCIOCGETCONF     This ioctl(2) takes a _p_c_i___c_o_n_f___i_o structure.  It allows
+                      the user to retrieve information on all PCI devices in
+                      the system, or on PCI devices matching patterns supplied
+                      by the user.  The call may set _e_r_r_n_o to any value speci‐
+                      fied in either copyin(9) or copyout(9).  The _p_c_i___c_o_n_f___i_o
+                      structure consists of a number of fields:
+
+                      pat_buf_len    The length, in bytes, of the buffer
+                                     filled with user-supplied patterns.
+
+                      num_patterns   The number of user-supplied patterns.
+
+                      patterns       Pointer to a buffer filled with user-sup‐
+                                     plied patterns.  _p_a_t_t_e_r_n_s is a pointer to
+                                     _n_u_m___p_a_t_t_e_r_n_s _p_c_i___m_a_t_c_h___c_o_n_f structures.
+                                     The _p_c_i___m_a_t_c_h___c_o_n_f structure consists of
+                                     the following elements:
+
+                                     pc_sel     PCI domain, bus, slot and
+                                                function.
+
+                                     pd_name    PCI device driver name.
+
+                                     pd_unit    PCI device driver unit number.
+
+                                     pc_vendor  PCI vendor ID.
+
+                                     pc_device  PCI device ID.
+
+                                     pc_class   PCI device class.
+
+                                     flags      The flags describe which of
+                                                the fields the kernel should
+                                                match against.  A device must
+                                                match all specified fields in
+                                                order to be returned.  The
+                                                match flags are enumerated in
+                                                the _p_c_i___g_e_t_c_o_n_f___f_l_a_g_s struc‐
+                                                ture.  Hopefully the flag val‐
+                                                ues are obvious enough that
+                                                they do not need to described
+                                                in detail.
+
+                      match_buf_len  Length of the _m_a_t_c_h_e_s buffer allocated by
+                                     the user to hold the results of the
+                                     PCIOCGETCONF query.
+
+                      num_matches    Number of matches returned by the kernel.
+
+                      matches        Buffer containing matching devices re‐
+                                     turned by the kernel.  The items in this
+                                     buffer are of type _p_c_i___c_o_n_f, which con‐
+                                     sists of the following items:
+
+                                     pc_sel        PCI domain, bus, slot and
+                                                   function.
+
+                                     pc_hdr        PCI header type.
+
+                                     pc_subvendor  PCI subvendor ID.
+
+                                     pc_subdevice  PCI subdevice ID.
+
+                                     pc_vendor     PCI vendor ID.
+
+                                     pc_device     PCI device ID.
+
+                                     pc_class      PCI device class.
+
+                                     pc_subclass   PCI device subclass.
+
+                                     pc_progif     PCI device programming in‐
+                                                   terface.
+
+                                     pc_revid      PCI revision ID.
+
+                                     pd_name       Driver name.
+
+                                     pd_unit       Driver unit number.
+
+                      offset         The offset is passed in by the user to
+                                     tell the kernel where it should start
+                                     traversing the device list.  The value
+                                     passed out by the kernel points to the
+                                     record immediately after the last one re‐
+                                     turned.  The user may pass the value re‐
+                                     turned by the kernel in subsequent calls
+                                     to the PCIOCGETCONF ioctl.  If the user
+                                     does not intend to use the offset, it
+                                     must be set to zero.
+
+                      generation     PCI configuration generation.  This value
+                                     only needs to be set if the offset is
+                                     set.  The kernel will compare the current
+                                     generation number of its internal device
+                                     list to the generation passed in by the
+                                     user to determine whether its device list
+                                     has changed since the user last called
+                                     the PCIOCGETCONF ioctl.  If the device
+                                     list has changed, a status of
+                                     _P_C_I___G_E_T_C_O_N_F___L_I_S_T___C_H_A_N_G_E_D will be passed
+                                     back.
+
+                      status         The status tells the user the disposition
+                                     of his request for a device list.  The
+                                     possible status values are:
+
+                                     PCI_GETCONF_LAST_DEVICE
+                                     This means that there are no more devices
+                                     in the PCI device list matching the spec‐
+                                     ified criteria after the ones returned in
+                                     the _m_a_t_c_h_e_s buffer.
+
+                                     PCI_GETCONF_LIST_CHANGED
+                                     This status tells the user that the PCI
+                                     device list has changed since his last
+                                     call to the PCIOCGETCONF ioctl and he
+                                     must reset the _o_f_f_s_e_t and _g_e_n_e_r_a_t_i_o_n to
+                                     zero to start over at the beginning of
+                                     the list.
+
+                                     PCI_GETCONF_MORE_DEVS
+                                     This tells the user that his buffer was
+                                     not large enough to hold all of the re‐
+                                     maining devices in the device list that
+                                     match his criteria.
+
+                                     PCI_GETCONF_ERROR
+                                     This indicates a general error while ser‐
+                                     vicing the user's request.  If the
+                                     _p_a_t___b_u_f___l_e_n is not equal to _n_u_m___p_a_t_t_e_r_n_s
+                                     times ssiizzeeooff(_s_t_r_u_c_t _p_c_i___m_a_t_c_h___c_o_n_f),
+                                     _e_r_r_n_o will be set to EINVAL.
+
+     PCIOCREAD        This ioctl(2) reads the PCI configuration registers
+                      specified by the passed-in _p_c_i___i_o structure.  The _p_c_i___i_o
+                      structure consists of the following fields:
+
+                      pi_sel    A _p_c_i_s_e_l structure which specifies the domain,
+                                bus, slot and function the user would like to
+                                query.  If the specific bus is not found, er‐
+                                rno will be set to ENODEV and -1 returned from
+                                the ioctl.
+
+                      pi_reg    The PCI configuration registers the user would
+                                like to access.
+
+                      pi_width  The width, in bytes, of the data the user
+                                would like to read.  This value may be either
+                                1, 2, or 4.  3-byte reads and reads larger
+                                than 4 bytes are not supported.  If an invalid
+                                width is passed, errno will be set to EINVAL.
+
+                      pi_data   The data returned by the kernel.
+
+     PCIOCWRITE       This ioctl(2) allows users to write to the PCI configu‐
+                      ration registers specified in the passed-in _p_c_i___i_o
+                      structure.  The _p_c_i___i_o structure is described above.
+                      The limitations on data width described for reading reg‐
+                      isters, above, also apply to writing PCI configuration
+                      registers.
+
+     PCIOCATTACHED    This ioctl(2) allows users to query if a driver is at‐
+                      tached to the PCI device specified in the passed-in
+                      _p_c_i___i_o structure.  The _p_c_i___i_o structure is described
+                      above, however, the _p_i___r_e_g and _p_i___w_i_d_t_h fields are not
+                      used.  The status of the device is stored in the _p_i___d_a_t_a
+                      field.  A value of 0 indicates no driver is attached,
+                      while a value larger than 0 indicates that a driver is
+                      attached.
+
+     PCIOCBARMMAP     This ioctl(2) command allows userspace processes to
+                      mmap(2) the memory-mapped PCI BAR into its address
+                      space.  The input parameters and results are passed in
+                      the _p_c_i___b_a_r___m_m_a_p structure, which has the following
+                      fields:
+
+                      _v_o_i_d _*_p_b_m___m_a_p___b_a_s_e
+                                Reports the established mapping base to the
+                                caller.  If _P_C_I_I_O___B_A_R___M_M_A_P___F_I_X_E_D flag was
+                                specified, then this field must be filled be‐
+                                fore the call with the desired address for the
+                                mapping.
+
+                      _s_i_z_e___t _p_b_m___m_a_p___l_e_n_g_t_h
+                                Reports the mapped length of the BAR, in
+                                bytes.  Its _s_i_z_e___t value is always multiple of
+                                machine pages.
+
+                      _u_i_n_t_6_4___t _p_b_m___b_a_r___l_e_n_g_t_h
+                                Reports length of the bar as exposed by the
+                                device.
+
+                      _i_n_t _p_b_m___b_a_r___o_f_f
+                                Reports offset from the mapped base to the
+                                start of the first register in the bar.
+
+                      _s_t_r_u_c_t _p_c_i_s_e_l _p_b_m___s_e_l
+                                Should be filled before the call.  Describes
+                                the device to operate on.
+
+                      _i_n_t _p_b_m___r_e_g
+                                The BAR index to mmap.
+
+                      _i_n_t _p_b_m___f_l_a_g_s
+                                Flags which augments the operation.  See be‐
+                                low.
+
+                      _i_n_t _p_b_m___m_e_m_a_t_t_r
+                                The caching attribute for the mapping.  Typi‐
+                                cal values are VM_MEMATTR_UNCACHEABLE for con‐
+                                trol registers BARs, and
+                                VM_MEMATTR_WRITE_COMBINING for frame buffers.
+                                Regular memory-like BAR should be mapped with
+                                VM_MEMATTR_DEFAULT attribute.
+
+                      Currently defined flags are:
+
+                      PCIIO_BAR_MMAP_FIXED     The resulted mappings should be
+                                               established at the address
+                                               specified by the _p_b_m___m_a_p___b_a_s_e
+                                               member, otherwise fail.
+
+                      PCIIO_BAR_MMAP_EXCL      Must be used together with
+                                               PCIIO_BAR_MMAP_FIXED If the
+                                               specified base contains already
+                                               established mappings, the oper‐
+                                               ation fails instead of implic‐
+                                               itly unmapping them.
+
+                      PCIIO_BAR_MMAP_RW        The requested mapping allows
+                                               both reading and writing.
+                                               Without the flag, read-only
+                                               mapping is established.  Note
+                                               that it is common for the de‐
+                                               vice registers to have side-ef‐
+                                               fects even on reads.
+
+                      PCIIO_BAR_MMAP_ACTIVATE  (Unimplemented) If the BAR is
+                                               not activated, activate it in
+                                               the course of mapping.  Cur‐
+                                               rently attempt to mmap an inac‐
+                                               tive BAR results in error.
+
+     PCIOCBARIO       This ioctl(2) command allows users to read from and
+                      write to BARs.  The I/O request parameters are passed in
+                      a _s_t_r_u_c_t _p_c_i___b_a_r___i_o_r_e_q structure, which has the follow‐
+                      ing fields:
+
+                      _s_t_r_u_c_t _p_c_i_s_e_l _p_b_i___s_e_l
+                              Describes the device to operate on.
+
+                      _i_n_t _p_b_i___o_p
+                              The operation to perform.  Currently supported
+                              values are PCIBARIO_READ and PCIBARIO_WRITE.
+
+                      _u_i_n_t_3_2___t _p_b_i___b_a_r
+                              The index of the BAR on which to operate.
+
+                      _u_i_n_t_3_2___t _p_b_i___o_f_f_s_e_t
+                              The offset into the BAR at which to operate.
+
+                      _u_i_n_t_3_2___t _p_b_i___w_i_d_t_h
+                              The size, in bytes, of the I/O operation.
+                              1-byte, 2-byte, 4-byte and 8-byte perations are
+                              supported.
+
+                      _u_i_n_t_3_2___t _p_b_i___v_a_l_u_e
+                              For reads, the value is returned in this field.
+                              For writes, the caller specifies the value to be
+                              written in this field.
+
+                              Note that this operation maps and unmaps the
+                              corresponding resource and so is relatively ex‐
+                              pensive for memory BARs.  The _P_C_I_O_C_B_A_R_M_M_A_P
+                              ioctl(2) can be used to create a persistent
+                              userspace mapping for such BARs instead.
+
+LLOOAADDEERR TTUUNNAABBLLEESS
+     Tunables can be set at the loader(8) prompt before booting the kernel, or
+     stored in loader.conf(5).  The current value of these tunables can be ex‐
+     amined at runtime via sysctl(8) nodes of the same name.  Unless otherwise
+     specified, each of these tunables is a boolean that can be enabled by
+     setting the tunable to a non-zero value.
+
+     _h_w_._p_c_i_._c_l_e_a_r___b_a_r_s (Defaults to 0)
+             Ignore any firmware-assigned memory and I/O port resources.  This
+             forces the PCI bus driver to allocate resource ranges for memory
+             and I/O port resources from scratch.
+
+     _h_w_._p_c_i_._c_l_e_a_r___b_u_s_e_s (Defaults to 0)
+             Ignore any firmware-assigned bus number registers in PCI-PCI
+             bridges.  This forces the PCI bus driver and PCI-PCI bridge
+             driver to allocate bus numbers for secondary buses behind PCI-PCI
+             bridges.
+
+     _h_w_._p_c_i_._c_l_e_a_r___p_c_i_b (Defaults to 0)
+             Ignore any firmware-assigned memory and I/O port resource windows
+             in PCI-PCI bridges.  This forces the PCI-PCI bridge driver to al‐
+             locate memory and I/O port resources for resource windows from
+             scratch.
+
+             By default the PCI-PCI bridge driver will allocate windows that
+             contain the firmware-assigned resources devices behind the
+             bridge.  In addition, the PCI-PCI bridge driver will suballocate
+             from existing window regions when possible to satisfy a resource
+             request.  As a result, both _h_w_._p_c_i_._c_l_e_a_r___b_a_r_s and
+             _h_w_._p_c_i_._c_l_e_a_r___p_c_i_b must be enabled to fully ignore firmware-sup‐
+             plied resource assignments.
+
+     _h_w_._p_c_i_._d_e_f_a_u_l_t___v_g_a_p_c_i___u_n_i_t (Defaults to -1)
+             By default, the first PCI VGA adapter encountered by the system
+             is assumed to be the boot display device.  This tunable can be
+             set to choose a specific VGA adapter by specifying the unit num‐
+             ber of the associated _v_g_a_p_c_i_X device.
+
+     _h_w_._p_c_i_._d_o___p_o_w_e_r___n_o_d_r_i_v_e_r (Defaults to 0)
+             Place devices into a low power state (D3) when a suitable device
+             driver is not found.  Can be set to one of the following values:
+
+             3       Powers down all PCI devices without a device driver.
+
+             2       Powers down most devices without a device driver.  PCI
+                     devices with the display, memory, and base peripheral de‐
+                     vice classes are not powered down.
+
+             1       Similar to a setting of 2 except that storage controllers
+                     are also not powered down.
+
+             0       All devices are left fully powered.
+
+             A PCI device must support power management to be powered down.
+             Placing a device into a low power state may not reduce power con‐
+             sumption.
+
+     _h_w_._p_c_i_._d_o___p_o_w_e_r___r_e_s_u_m_e (Defaults to 1)
+             Place PCI devices into the fully powered state when resuming ei‐
+             ther the system or an individual device.  Setting this to zero is
+             discouraged as the system will not attempt to power up non-pow‐
+             ered PCI devices after a suspend.
+
+     _h_w_._p_c_i_._d_o___p_o_w_e_r___s_u_s_p_e_n_d (Defaults to 1)
+             Place PCI devices into a low power state when suspending either
+             the system or individual devices.  Normally the D3 state is used
+             as the low power state, but firmware may override the desired
+             power state during a system suspend.
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___a_r_i (Defaults to 1)
+             Enable support for PCI-express Alternative RID Interpretation.
+             This is often used in conjunction with SR-IOV.
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___i_o___m_o_d_e_s (Defaults to 1)
+             Enable memory or I/O port decoding in a PCI device's command reg‐
+             ister if it has firmware-assigned memory or I/O port resources.
+             The firmware (BIOS) in some systems does not enable memory or I/O
+             port decoding for some devices even when it has assigned re‐
+             sources to the device.  This enables decoding for such resources
+             during bus probe.
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___m_s_i (Defaults to 1)
+             Enable support for Message Signalled Interrupts (MSI).  MSI in‐
+             terrupts can be disabled by setting this tunable to 0.
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___m_s_i_x (Defaults to 1)
+             Enable support for extended Message Signalled Interrupts (MSI-X).
+             MSI-X interrupts can be disabled by setting this tunable to 0.
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___p_c_i_e___e_i (Defaults to 0)
+             Enable support for PCI-express Electromechanical Interlock.
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___p_c_i_e___h_p (Defaults to 1)
+             Enable support for native PCI-express HotPlug.
+
+     _h_w_._p_c_i_._h_o_n_o_r___m_s_i___b_l_a_c_k_l_i_s_t (Defaults to 1)
+             MSI and MSI-X interrupts are disabled for certain chipsets known
+             to have broken MSI and MSI-X implementations when this tunable is
+             set.  It can be set to zero to permit use of MSI and MSI-X inter‐
+             rupts if the chipset match is a false positive.
+
+     _h_w_._p_c_i_._i_o_v___m_a_x___c_o_n_f_i_g (Defaults to 1MB)
+             The maximum amount of memory permitted for the configuration pa‐
+             rameters used when creating Virtual Functions via SR-IOV.  This
+             tunable can also be changed at runtime via sysctl(8).
+
+     _h_w_._p_c_i_._r_e_a_l_l_o_c___b_a_r_s (Defaults to 0)
+             Attempt to allocate a new resource range during the initial de‐
+             vice scan for any memory or I/O port resources with firmware-as‐
+             signed ranges that conflict with another active resource.
+
+     _h_w_._p_c_i_._u_s_b___e_a_r_l_y___t_a_k_e_o_v_e_r (Defaults to 1 on amd64 and i386)
+             Disable legacy device emulation of USB devices during the initial
+             device scan.  Set this tunable to zero to use USB devices via
+             legacy emulation when using a custom kernel without USB con‐
+             troller drivers.
+
+     _h_w_._p_c_i_<_D_>_._<_B_>_._<_S_>_._I_N_T_<_P_>_._i_r_q
+             These tunables can be used to override the interrupt routing for
+             legacy PCI INTx interrupts.  Unlike other tunables in this list,
+             these do not have corresponding sysctl nodes.  The tunable name
+             includes the address of the PCI device as well as the pin of the
+             desired INTx IRQ to override:
+
+             <D>     The domain (or segment) of the PCI device in decimal.
+
+             <B>     The bus address of the PCI device in decimal.
+
+             <S>     The slot of the PCI device in decimal.
+
+             <P>     The interrupt pin of the PCI slot to override.  One of
+                     ‘A’, ‘B’, ‘C’, or ‘D’.
+
+             The value of the tunable is the raw IRQ value to use for the INTx
+             interrupt pin identified by the tunable name.  Mapping of IRQ
+             values to platform interrupt sources is machine dependent.
+
+DDEEVVIICCEE WWIIRRIINNGG
+     You can wire the device unit at a given location with device.hints.  En‐
+     tries of the form _h_i_n_t_s_._<_n_a_m_e_>_._<_u_n_i_t_>_._a_t_=_"_p_c_i_<_B_>_:_<_S_>_:_<_F_>_" or
+     _h_i_n_t_s_._<_n_a_m_e_>_._<_u_n_i_t_>_._a_t_=_"_p_c_i_<_D_>_:_<_B_>_:_<_S_>_:_<_F_>_" will force the driver _n_a_m_e to
+     probe and attach at unit _u_n_i_t for any PCI device found to match the spec‐
+     ification, where:
+
+     <D>      The domain (or segment) of the PCI device in decimal.  Defaults
+              to 0 if unspecified
+
+     <B>      The bus address of the PCI device in decimal.
+
+     <S>      The slot of the PCI device in decimal.
+
+     <F>      The function of the PCI device in decimal.
+
+     The code to do the matching requires an exact string match.  Do not spec‐
+     ify the angle brackets (< >) in the hints file.  Wiring multiple devices
+     to the same _n_a_m_e and _u_n_i_t produces undefined results.
+
+   EExxaammpplleess
+     Given the following lines in _/_b_o_o_t_/_d_e_v_i_c_e_._h_i_n_t_s:
+     hhiinntt..nnvvmmee..33..aatt==""ppccii66::00::00"" hhiinntt..iiggbb..88..aatt==""ppccii1144::00::00"" If there is a device
+     that supports igb(4) at PCI bus 14 slot 0 function 0, then it will be as‐
+     signed igb8 for probe and attach.  Likewise, if there is an nvme(4) card
+     at PCI bus 6 slot 0 function 0, then it will be assigned nvme3 for probe
+     and attach.  If another type of card is in either of these locations, the
+     name and unit of that card will be the default names and will be unaf‐
+     fected by these hints.  If other igb or nvme cards are located elsewhere,
+     they will be assigned their unit numbers sequentially, skipping the unit
+     numbers that have 'at' hints.
+
+FFIILLEESS
+     /dev/pci  Character device for the ppccii driver.
+
+SSEEEE AALLSSOO
+     pciconf(8)
+
+HHIISSTTOORRYY
+     The ppccii driver (not the kernel's PCI support code) first appeared in
+     FreeBSD 2.2, and was written by Stefan Esser and Garrett Wollman.  Sup‐
+     port for device listing and matching was re-implemented by Kenneth Merry,
+     and first appeared in FreeBSD 3.0.
+
+AAUUTTHHOORRSS
+     Kenneth Merry <_k_e_n_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     It is not possible for users to specify an accurate offset into the de‐
+     vice list without calling the PCIOCGETCONF at least once, since they have
+     no way of knowing the current generation number otherwise.  This probably
+     is not a serious problem, though, since users can easily narrow their
+     search by specifying a pattern or patterns for the kernel to match
+     against.
+
+BSD                              April 2, 2025                             BSD

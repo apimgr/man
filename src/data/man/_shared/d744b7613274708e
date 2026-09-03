@@ -1,0 +1,150 @@
+THR_NEW(2)                  BSD System Calls Manual                 THR_NEW(2)
+
+NNAAMMEE
+     tthhrr__nneeww — create new thread of execution
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//tthhrr..hh>>
+
+     _i_n_t
+     tthhrr__nneeww(_s_t_r_u_c_t _t_h_r___p_a_r_a_m _*_p_a_r_a_m, _i_n_t _p_a_r_a_m___s_i_z_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     TThhiiss ffuunnccttiioonn iiss iinntteennddeedd ffoorr iimmpplleemmeennttiinngg tthhrreeaaddiinngg..  NNoorrmmaall aapppplliiccaa‐‐
+     ttiioonnss sshhoouulldd ccaallll pthread_create(33) iinnsstteeaadd..
+
+     The tthhrr__nneeww() system call creates a new kernel-scheduled thread of execu‐
+     tion in the context of the current process.  The newly created thread
+     shares all attributes of the process with the existing kernel-scheduled
+     threads in the process, but has private processor execution state.  The
+     machine context for the new thread is copied from the creating thread's
+     context, including coprocessor state.  FPU state and specific machine
+     registers are excluded from the copy.  These are set according to ABI re‐
+     quirements and syscall parameters.  The FPU state for the new thread is
+     reinitialized to clean.
+
+     The _p_a_r_a_m structure supplies parameters affecting the thread creation.
+     The structure is defined in the <_s_y_s_/_t_h_r_._h> header as follows
+
+     struct thr_param {
+         void          (*start_func)(void *);
+         void          *arg;
+         char          *stack_base;
+         size_t        stack_size;
+         char          *tls_base;
+         size_t        tls_size;
+         long          *child_tid;
+         long          *parent_tid;
+         int           flags;
+         struct rtprio *rtp;
+     };
+     and contains the following fields:
+
+     _s_t_a_r_t___f_u_n_c  Pointer to the thread entry function.  The kernel arranges
+                 for the new thread to start executing the function upon the
+                 first return to userspace.
+
+     _a_r_g         Opaque argument supplied to the entry function.
+
+     _s_t_a_c_k___b_a_s_e  Stack base address.  The stack must be allocated by the
+                 caller.  On some architectures, the ABI might require that
+                 the system put information on the stack to ensure the execu‐
+                 tion environment for _s_t_a_r_t___f_u_n_c.
+
+     _s_t_a_c_k___s_i_z_e  Stack size.
+
+     _t_l_s___b_a_s_e    TLS base address.  The value of TLS base is loaded into the
+                 ABI-defined machine register in the new thread context.
+
+     _t_l_s___s_i_z_e    TLS size.
+
+     _c_h_i_l_d___t_i_d   Address to store the new thread identifier, for the child's
+                 use.
+
+     _p_a_r_e_n_t___t_i_d  Address to store the new thread identifier, for the parent's
+                 use.
+
+                 Both _c_h_i_l_d___t_i_d and _p_a_r_e_n_t___t_i_d are provided, with the intent
+                 that _c_h_i_l_d___t_i_d is used by the new thread to get its thread
+                 identifier without issuing the thr_self(2) syscall, while
+                 _p_a_r_e_n_t___t_i_d is used by the thread creator.  The latter is sep‐
+                 arate from _c_h_i_l_d___t_i_d because the new thread might exit and
+                 free its thread data before the parent has a chance to exe‐
+                 cute far enough to access it.
+
+     _f_l_a_g_s       Thread creation flags.  The _f_l_a_g_s member may specify the fol‐
+                 lowing flags:
+
+                 THR_SUSPENDED     Create the new thread in the suspended
+                                   state.  The flag is not currently imple‐
+                                   mented.
+
+                 THR_SYSTEM_SCOPE  Create the system scope thread.  The flag
+                                   is not currently implemented.
+
+     _r_t_p         Real-time scheduling priority for the new thread.  May be
+                 NULL to inherit the priority from the creating thread.
+
+     The _p_a_r_a_m___s_i_z_e argument should be set to the size of the _p_a_r_a_m structure.
+
+     After the first successful creation of an additional thread, the process
+     is marked by the kernel as multi-threaded.  In particular, the
+     P_HADTHREADS flag is set in the process' p_flag (visible in the ps(1)
+     output), and several operations are executed in multi-threaded mode.  For
+     instance, the execve(2) system call terminates all threads but the call‐
+     ing one on successful execution.
+
+RREETTUURRNN VVAALLUUEESS
+     If successful, tthhrr__nneeww() will return zero, otherwise -1 is returned, and
+     _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+     The tthhrr__nneeww() operation returns the following errors:
+
+     [EFAULT]           The memory pointed to by the _p_a_r_a_m argument is not
+                        valid.
+
+     [EFAULT]           The memory pointed to by the _p_a_r_a_m structure
+                        _c_h_i_l_d___t_i_d, _p_a_r_e_n_t___t_i_d or _r_t_p arguments is not valid.
+
+     [EFAULT]           The specified stack base is invalid, or the kernel was
+                        unable to put required initial data on the stack.
+
+     [EINVAL]           The _p_a_r_a_m___s_i_z_e argument specifies a negative value, or
+                        the value is greater than the largest _s_t_r_u_c_t _p_a_r_a_m
+                        size the kernel can interpret.
+
+     [EINVAL]           The _r_t_p member is not NULL and specifies invalid
+                        scheduling parameters.
+
+     [EINVAL]           The specified TLS base is invalid.
+
+     [EPERM]            The caller does not have permission to set the sched‐
+                        uling parameters or scheduling policy.
+
+     [EPROCLIM]         Creation of the new thread would exceed the RACCT_NTHR
+                        limit, see rctl_get_racct(2).
+
+     [EPROCLIM]         Creation of the new thread would exceed the
+                        kern.threads.max_threads_per_proc sysctl(3) limit.
+
+     [ENOMEM]           There was not enough kernel memory to allocate the new
+                        thread structures.
+
+SSEEEE AALLSSOO
+     ps(1), _umtx_op(2), execve(2), rctl_get_racct(2), thr_exit(2),
+     thr_kill(2), thr_kill2(2), thr_self(2), thr_set_name(2),
+     pthread_create(3)
+
+SSTTAANNDDAARRDDSS
+     The tthhrr__nneeww() system call is non-standard and is used by the 1:1
+     Threading Library (libthr, -lthr) to implement IEEE Std 1003.1-2001
+     (“POSIX.1”) pthread(3) functionality.
+
+HHIISSTTOORRYY
+     The tthhrr__nneeww() system call first appeared in FreeBSD 5.2.
+
+BSD                               May 5, 2020                              BSD

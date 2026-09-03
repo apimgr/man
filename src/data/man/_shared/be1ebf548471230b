@@ -1,0 +1,1043 @@
+LIBALIAS(3)              BSD Library Functions Manual              LIBALIAS(3)
+
+NNAAMMEE
+     lliibbaalliiaass — packet aliasing library for masquerading and network address
+     translation
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+     ##iinncclluuddee <<aalliiaass..hh>>
+
+     Function prototypes are given in the main body of the text.
+
+DDEESSCCRRIIPPTTIIOONN
+     The lliibbaalliiaass library is a collection of functions for aliasing and de-
+     aliasing of IP packets, intended for masquerading and network address
+     translation (NAT).
+
+IINNTTRROODDUUCCTTIIOONN
+     This library is a moderately portable set of functions designed to assist
+     in the process of IP masquerading and network address translation.  Out‐
+     going packets from a local network with unregistered IP addresses can be
+     aliased to appear as if they came from an accessible IP address.  Incom‐
+     ing packets are then de-aliased so that they are sent to the correct ma‐
+     chine on the local network.
+
+     A certain amount of flexibility is built into the packet aliasing engine.
+     In the simplest mode of operation, a many-to-one address mapping takes
+     place between the local network and the packet aliasing host.  This is
+     known as IP masquerading.  In addition, one-to-one mappings between local
+     and public addresses can also be implemented, which is known as static
+     NAT.  In between these extremes, different groups of private addresses
+     can be linked to different public addresses, comprising several distinct
+     many-to-one mappings.  Also, a given public address and port can be stat‐
+     ically redirected to a private address/port.
+
+IINNIITTIIAALLIIZZAATTIIOONN AANNDD CCOONNTTRROOLL
+     One special function, LLiibbAAlliiaassIInniitt(), must always be called before any
+     packet handling may be performed, and the returned instance pointer must
+     be passed to all the other functions.  Normally, the LLiibbAAlliiaassSSeettAAddddrreessss()
+     function is called afterwards, to set the default aliasing address.  In
+     addition, the operating mode of the packet aliasing engine can be custom‐
+     ized by calling LLiibbAAlliiaassSSeettMMooddee().
+
+     _s_t_r_u_c_t _l_i_b_a_l_i_a_s _* LLiibbAAlliiaassIInniitt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*)
+
+           This function is used to initialize internal data structures.  When
+           called the first time, a NULL pointer should be passed as an argu‐
+           ment.  The following mode bits are always set after calling
+           LLiibbAAlliiaassIInniitt().  See the description of LLiibbAAlliiaassSSeettMMooddee() below for
+           the meaning of these mode bits.
+
+                 PKT_ALIAS_SAME_PORTS
+                 PKT_ALIAS_USE_SOCKETS
+                 PKT_ALIAS_RESET_ON_ADDR_CHANGE
+
+           This function will always return the packet aliasing engine to the
+           same initial state.  The LLiibbAAlliiaassSSeettAAddddrreessss() function is normally
+           called afterwards, and any desired changes from the default mode
+           bits listed above require a call to LLiibbAAlliiaassSSeettMMooddee().
+
+           It is mandatory that this function be called at the beginning of a
+           program prior to any packet handling.
+
+     _v_o_i_d LLiibbAAlliiaassUUnniinniitt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*)
+
+           This function has no return value and is used to clear any re‐
+           sources attached to internal data structures.
+
+           This function should be called when a program stops using the
+           aliasing engine; amongst other things, it clears out any firewall
+           holes.  To provide backwards compatibility and extra security, it
+           is added to the atexit(3) chain by LLiibbAAlliiaassIInniitt().
+
+     _v_o_i_d LLiibbAAlliiaassSSeettAAddddrreessss(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _s_t_r_u_c_t _i_n___a_d_d_r _a_d_d_r)
+
+           This function sets the source address to which outgoing packets
+           from the local area network are aliased.  All outgoing packets are
+           re-mapped to this address unless overridden by a static address
+           mapping established by LLiibbAAlliiaassRReeddiirreeccttAAddddrr().  If this function
+           has not been called, and no static rules match, an outgoing packet
+           retains its source address.
+
+           If the PKT_ALIAS_RESET_ON_ADDR_CHANGE mode bit is set (the default
+           mode of operation), then the internal aliasing link tables will be
+           reset any time the aliasing address changes.  This is useful for
+           interfaces such as ppp(8), where the IP address may or may not
+           change on successive dial-up attempts.
+
+           If the PKT_ALIAS_RESET_ON_ADDR_CHANGE mode bit is set to zero, this
+           function can also be used to dynamically change the aliasing ad‐
+           dress on a packet-to-packet basis (it is a low overhead call).
+
+           It is mandatory that this function be called prior to any packet
+           handling.
+
+     _u_n_s_i_g_n_e_d _i_n_t LLiibbAAlliiaassSSeettMMooddee(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _u_n_s_i_g_n_e_d _i_n_t _f_l_a_g_s,
+     _u_n_s_i_g_n_e_d _i_n_t _m_a_s_k)
+
+           This function sets or clears mode bits according to the value of
+           _f_l_a_g_s.  Only bits marked in _m_a_s_k are affected.  The following mode
+           bits are defined in <_a_l_i_a_s_._h>:
+
+           PKT_ALIAS_LOG
+                   Enables logging into _/_v_a_r_/_l_o_g_/_a_l_i_a_s_._l_o_g.  Each time an
+                   aliasing link is created or deleted, the log file is ap‐
+                   pended to with the current number of ICMP, TCP and UDP
+                   links.  Mainly useful for debugging when the log file is
+                   viewed continuously with tail(1).
+
+           PKT_ALIAS_DENY_INCOMING
+                   If this mode bit is set, all incoming packets associated
+                   with new TCP connections or new UDP transactions will be
+                   marked for being ignored (LLiibbAAlliiaassIInn() returns
+                   PKT_ALIAS_IGNORED code) by the calling program.  Response
+                   packets to connections or transactions initiated from the
+                   packet aliasing host or local network will be unaffected.
+                   This mode bit is useful for implementing a one-way fire‐
+                   wall.
+
+           PKT_ALIAS_SAME_PORTS
+                   If this mode bit is set, the packet-aliasing engine will
+                   attempt to leave the alias port numbers unchanged from the
+                   actual local port numbers.  This can be done as long as the
+                   quintuple (proto, alias addr, alias port, remote addr, re‐
+                   mote port) is unique.  If a conflict exists, a new aliasing
+                   port number is chosen even if this mode bit is set.
+
+           PKT_ALIAS_USE_SOCKETS
+                   This bit should be set when the packet aliasing host origi‐
+                   nates network traffic as well as forwards it.  When the
+                   packet aliasing host is waiting for a connection from an
+                   unknown host address or unknown port number (e.g. an FTP
+                   data connection), this mode bit specifies that a socket be
+                   allocated as a place holder to prevent port conflicts.
+                   Once a connection is established, usually within a minute
+                   or so, the socket is closed.
+
+           PKT_ALIAS_UNREGISTERED_ONLY
+                   If this mode bit is set, traffic on the local network which
+                   does not originate from unregistered address spaces will be
+                   ignored.  Standard Class A, B and C unregistered addresses
+                   are:
+
+                   10.0.0.0     ->  10.255.255.255   (Class A subnet)
+                   172.16.0.0   ->  172.31.255.255   (Class B subnets)
+                   192.168.0.0  ->  192.168.255.255  (Class C subnets)
+
+                   This option is useful in the case that the packet aliasing
+                   host has both registered and unregistered subnets on dif‐
+                   ferent interfaces.  The registered subnet is fully accessi‐
+                   ble to the outside world, so traffic from it does not need
+                   to be passed through the packet aliasing engine.
+
+           PKT_ALIAS_UNREGISTERED_CGN
+                   Like PKT_ALIAS_UNREGISTERED_ONLY, but includes the RFC 6598
+                   (Carrier Grade NAT) subnet as follows:
+
+                   100.64.0.0   ->  100.127.255.255  (RFC 6598 subnet)
+
+           PKT_ALIAS_RESET_ON_ADDR_CHANGE
+                   When this mode bit is set and LLiibbAAlliiaassSSeettAAddddrreessss() is
+                   called to change the aliasing address, the internal link
+                   table of the packet aliasing engine will be cleared.  This
+                   operating mode is useful for ppp(8) links where the inter‐
+                   face address can sometimes change or remain the same be‐
+                   tween dial-up attempts.  If this mode bit is not set, the
+                   link table will never be reset in the event of an address
+                   change.
+
+           PKT_ALIAS_PUNCH_FW
+                   This option makes lliibbaalliiaass “punch holes” in an
+                   ipfirewall(4) - based firewall for FTP/IRC DCC connections.
+                   The holes punched are bound by from/to IP address and port;
+                   it will not be possible to use a hole for another connec‐
+                   tion.  A hole is removed when the connection that uses it
+                   dies.  To cater to unexpected death of a program using
+                   lliibbaalliiaass (e.g. kill -9), changing the state of the flag
+                   will clear the entire firewall range allocated for holes.
+                   This clearing will also happen on the initial call to
+                   LLiibbAAlliiaassSSeettFFWWBBaassee(), which must happen prior to setting
+                   this flag.
+
+           PKT_ALIAS_REVERSE
+                   This option makes lliibbaalliiaass reverse the way it handles in‐
+                   coming and outgoing packets, allowing it to be fed with
+                   data that passes through the internal interface rather than
+                   the external one.
+
+           PKT_ALIAS_PROXY_ONLY
+                   This option tells lliibbaalliiaass to obey transparent proxy rules
+                   only.  Normal packet aliasing is not performed.  See
+                   LLiibbAAlliiaassPPrrooxxyyRRuullee() below for details.
+
+           PKT_ALIAS_SKIP_GLOBAL
+                   This option is used by _i_p_f_w___n_a_t only.  Specifying it as a
+                   flag to LLiibbAAlliiaassSSeettMMooddee() has no effect.  See section
+                   _N_E_T_W_O_R_K _A_D_D_R_E_S_S _T_R_A_N_S_L_A_T_I_O_N in ipfw(8) for more details.
+
+     _v_o_i_d LLiibbAAlliiaassSSeettFFWWBBaassee(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _u_n_s_i_g_n_e_d _i_n_t _b_a_s_e, _u_n_s_i_g_n_e_d _i_n_t
+     _n_u_m)
+
+           Set the firewall range allocated for punching firewall holes (with
+           the PKT_ALIAS_PUNCH_FW flag).  The range is cleared for all rules
+           on initialization.
+
+     _v_o_i_d LLiibbAAlliiaassSSkkiinnnnyyPPoorrtt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _u_n_s_i_g_n_e_d _i_n_t _p_o_r_t)
+
+           Set the TCP port used by the Skinny Station protocol.  Skinny is
+           used by Cisco IP phones to communicate with Cisco Call Managers to
+           set up voice over IP calls.  If this is not set, Skinny aliasing
+           will not be done.  The typical port used by Skinny is 2000.
+
+PPAACCKKEETT HHAANNDDLLIINNGG
+     The packet handling functions are used to modify incoming (remote to lo‐
+     cal) and outgoing (local to remote) packets.  The calling program is re‐
+     sponsible for receiving and sending packets via network interfaces.
+
+     Along with LLiibbAAlliiaassIInniitt() and LLiibbAAlliiaassSSeettAAddddrreessss(), the two packet han‐
+     dling functions, LLiibbAAlliiaassIInn() and LLiibbAAlliiaassOOuutt(), comprise the minimal set
+     of functions needed for a basic IP masquerading implementation.
+
+     _i_n_t LLiibbAAlliiaassIInn(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _v_o_i_d _*_b_u_f_f_e_r, _i_n_t _m_a_x_p_a_c_k_e_t_s_i_z_e)
+
+           An incoming packet coming from a remote machine to the local net‐
+           work is de-aliased by this function.  The IP packet is pointed to
+           by _b_u_f_f_e_r, and _m_a_x_p_a_c_k_e_t_s_i_z_e indicates the size of the data struc‐
+           ture containing the packet and should be at least as large as the
+           actual packet size.
+
+           Return codes:
+
+           PKT_ALIAS_OK
+                   The packet aliasing process was successful.
+
+           PKT_ALIAS_IGNORED
+                   The packet was ignored and not de-aliased.  This can happen
+                   if the protocol is unrecognized, as for an ICMP message
+                   type that is not handled, or if incoming packets for new
+                   connections are being ignored (if the
+                   PKT_ALIAS_DENY_INCOMING mode bit was set using
+                   LLiibbAAlliiaassSSeettMMooddee()).
+
+           PKT_ALIAS_UNRESOLVED_FRAGMENT
+                   This is returned when a fragment cannot be resolved because
+                   the header fragment has not been sent yet.  In this situa‐
+                   tion, fragments must be saved with LLiibbAAlliiaassSSaavveeFFrraaggmmeenntt()
+                   until a header fragment is found.
+
+           PKT_ALIAS_FOUND_HEADER_FRAGMENT
+                   The packet aliasing process was successful, and a header
+                   fragment was found.  This is a signal to retrieve any unre‐
+                   solved fragments with LLiibbAAlliiaassGGeettFFrraaggmmeenntt() and de-alias
+                   them with LLiibbAAlliiaassFFrraaggmmeennttIInn().
+
+           PKT_ALIAS_ERROR
+                   An internal error within the packet aliasing engine oc‐
+                   curred.
+
+     _i_n_t LLiibbAAlliiaassOOuutt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _v_o_i_d _*_b_u_f_f_e_r, _i_n_t _m_a_x_p_a_c_k_e_t_s_i_z_e)
+
+           An outgoing packet coming from the local network to a remote ma‐
+           chine is aliased by this function.  The IP packet is pointed to by
+           _b_u_f_f_e_r, and _m_a_x_p_a_c_k_e_t_s_i_z_e indicates the maximum packet size permis‐
+           sible should the packet length be changed.  IP encoding protocols
+           place address and port information in the encapsulated data stream
+           which has to be modified and can account for changes in packet
+           length.  Well known examples of such protocols are FTP and IRC DCC.
+
+           Return codes:
+
+           PKT_ALIAS_OK
+                   The packet aliasing process was successful.
+
+           PKT_ALIAS_IGNORED
+                   The packet was ignored and not aliased.  This can happen if
+                   the protocol is unrecognized, or possibly an ICMP message
+                   type is not handled.
+
+           PKT_ALIAS_ERROR
+                   An internal error within the packet aliasing engine oc‐
+                   curred.
+
+PPOORRTT AANNDD AADDDDRREESSSS RREEDDIIRREECCTTIIOONN
+     The functions described in this section allow machines on the local net‐
+     work to be accessible in some degree to new incoming connections from the
+     external network.  Individual ports can be re-mapped or static network
+     address translations can be designated.
+
+     _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _* LLiibbAAlliiaassRReeddiirreeccttPPoorrtt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*,
+     _s_t_r_u_c_t _i_n___a_d_d_r _l_o_c_a_l___a_d_d_r, _u___s_h_o_r_t _l_o_c_a_l___p_o_r_t,
+     _s_t_r_u_c_t _i_n___a_d_d_r _r_e_m_o_t_e___a_d_d_r, _u___s_h_o_r_t _r_e_m_o_t_e___p_o_r_t,
+     _s_t_r_u_c_t _i_n___a_d_d_r _a_l_i_a_s___a_d_d_r, _u___s_h_o_r_t _a_l_i_a_s___p_o_r_t, _u___c_h_a_r _p_r_o_t_o)
+
+           This function specifies that traffic from a given remote ad‐
+           dress/port to an alias address/port be redirected to a specified
+           local address/port.  The parameter _p_r_o_t_o can be either IPPROTO_TCP
+           or IPPROTO_UDP, as defined in <_n_e_t_i_n_e_t_/_i_n_._h>.
+
+           If _l_o_c_a_l___a_d_d_r or _a_l_i_a_s___a_d_d_r is zero, this indicates that the packet
+           aliasing address as established by LLiibbAAlliiaassSSeettAAddddrreessss() is to be
+           used.  Even if LLiibbAAlliiaassSSeettAAddddrreessss() is called to change the address
+           after LLiibbAAlliiaassRReeddiirreeccttPPoorrtt() is called, a zero reference will track
+           this change.
+
+           If the link is further set up to operate with load sharing, then
+           _l_o_c_a_l___a_d_d_r and _l_o_c_a_l___p_o_r_t are ignored, and are selected dynamically
+           from the server pool, as described in LLiibbAAlliiaassAAddddSSeerrvveerr() below.
+
+           If _r_e_m_o_t_e___a_d_d_r is zero, this indicates to redirect packets from any
+           remote address.  Likewise, if _r_e_m_o_t_e___p_o_r_t is zero, this indicates
+           to redirect packets originating from any remote port number.  The
+           remote port specification will almost always be zero, but non-zero
+           remote addresses can sometimes be useful for firewalling.  If two
+           calls to LLiibbAAlliiaassRReeddiirreeccttPPoorrtt() overlap in their address/port spec‐
+           ifications, then the most recent call will have precedence.
+
+           This function returns a pointer which can subsequently be used by
+           LLiibbAAlliiaassRReeddiirreeccttDDeelleettee().  If NULL is returned, then the function
+           call did not complete successfully.
+
+           All port numbers should be in network address byte order, so it is
+           necessary to use htons(3) to convert these parameters from inter‐
+           nally readable numbers to network byte order.  Addresses are also
+           in network byte order, which is implicit in the use of the _s_t_r_u_c_t
+           _i_n___a_d_d_r data type.
+
+     _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _* LLiibbAAlliiaassRReeddiirreeccttAAddddrr(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*,
+     _s_t_r_u_c_t _i_n___a_d_d_r _l_o_c_a_l___a_d_d_r, _s_t_r_u_c_t _i_n___a_d_d_r _a_l_i_a_s___a_d_d_r)
+
+           This function designates that all incoming traffic to _a_l_i_a_s___a_d_d_r be
+           redirected to _l_o_c_a_l___a_d_d_r.  Similarly, all outgoing traffic from
+           _l_o_c_a_l___a_d_d_r is aliased to _a_l_i_a_s___a_d_d_r.
+
+           If _l_o_c_a_l___a_d_d_r or _a_l_i_a_s___a_d_d_r is zero, this indicates that the packet
+           aliasing address as established by LLiibbAAlliiaassSSeettAAddddrreessss() is to be
+           used.  Even if LLiibbAAlliiaassSSeettAAddddrreessss() is called to change the address
+           after LLiibbAAlliiaassRReeddiirreeccttAAddddrr() is called, a zero reference will track
+           this change.
+
+           If the link is further set up to operate with load sharing, then
+           the _l_o_c_a_l___a_d_d_r argument is ignored, and is selected dynamically
+           from the server pool, as described in LLiibbAAlliiaassAAddddSSeerrvveerr() below.
+
+           If subsequent calls to LLiibbAAlliiaassRReeddiirreeccttAAddddrr() use the same aliasing
+           address, all new incoming traffic to this aliasing address will be
+           redirected to the local address made in the last function call.
+           New traffic generated by any of the local machines, designated in
+           the several function calls, will be aliased to the same address.
+           Consider the following example:
+
+           LibAliasRedirectAddr(la, inet_aton("192.168.0.2"),
+                                   inet_aton("141.221.254.101"));
+           LibAliasRedirectAddr(la, inet_aton("192.168.0.3"),
+                                   inet_aton("141.221.254.101"));
+           LibAliasRedirectAddr(la, inet_aton("192.168.0.4"),
+                                   inet_aton("141.221.254.101"));
+
+           Any outgoing connections such as telnet(1) or ftp(1) from
+           192.168.0.2, 192.168.0.3 and 192.168.0.4 will appear to come from
+           141.221.254.101.  Any incoming connections to 141.221.254.101 will
+           be directed to 192.168.0.4.
+
+           Any calls to LLiibbAAlliiaassRReeddiirreeccttPPoorrtt() will have precedence over ad‐
+           dress mappings designated by LLiibbAAlliiaassRReeddiirreeccttAAddddrr().
+
+           This function returns a pointer which can subsequently be used by
+           LLiibbAAlliiaassRReeddiirreeccttDDeelleettee().  If NULL is returned, then the function
+           call did not complete successfully.
+
+     _i_n_t LLiibbAAlliiaassAAddddSSeerrvveerr(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _*_l_i_n_k,
+     _s_t_r_u_c_t _i_n___a_d_d_r _a_d_d_r, _u___s_h_o_r_t _p_o_r_t)
+
+           This function sets the _l_i_n_k up for Load Sharing using IP Network
+           Address Translation (RFC 2391, LSNAT).  LSNAT operates as follows.
+           A client attempts to access a server by using the server virtual
+           address.  The LSNAT router transparently redirects the request to
+           one of the hosts in the server pool, using a real-time load sharing
+           algorithm.  Multiple sessions may be initiated from the same
+           client, and each session could be directed to a different host
+           based on the load balance across server pool hosts when the ses‐
+           sions are initiated.  If load sharing is desired for just a few
+           specific services, the configuration on LSNAT could be defined to
+           restrict load sharing to just the services desired.
+
+           Currently, only the simplest selection algorithm is implemented,
+           where a host is selected on a round-robin basis only, without re‐
+           gard to load on the host.
+
+           First, the _l_i_n_k is created by either LLiibbAAlliiaassRReeddiirreeccttPPoorrtt() or
+           LLiibbAAlliiaassRReeddiirreeccttAAddddrr().  Then, LLiibbAAlliiaassAAddddSSeerrvveerr() is called multi‐
+           ple times to add entries to the _l_i_n_k's server pool.
+
+           For links created with LLiibbAAlliiaassRReeddiirreeccttAAddddrr(), the _p_o_r_t argument is
+           ignored and could have any value, e.g. htons(~0).
+
+           This function returns 0 on success, -1 otherwise.
+
+     _i_n_t LLiibbAAlliiaassRReeddiirreeccttDDyynnaammiicc(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _*_l_i_n_k)
+
+           This function marks the specified static redirect rule entered by
+           LLiibbAAlliiaassRReeddiirreeccttPPoorrtt() as dynamic.  This can be used to e.g. dynam‐
+           ically redirect a single TCP connection, after which the rule is
+           removed.  Only fully specified links can be made dynamic.  (See the
+           _S_T_A_T_I_C _A_N_D _D_Y_N_A_M_I_C _L_I_N_K_S and _P_A_R_T_I_A_L_L_Y _S_P_E_C_I_F_I_E_D _A_L_I_A_S_I_N_G _L_I_N_K_S
+           sections below for a definition of static vs. dynamic, and par‐
+           tially vs. fully specified links.)
+
+           This function returns 0 on success, -1 otherwise.
+
+     _v_o_i_d LLiibbAAlliiaassRReeddiirreeccttDDeelleettee(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _*_l_i_n_k)
+
+           This function will delete a specific static redirect rule entered
+           by LLiibbAAlliiaassRReeddiirreeccttPPoorrtt() or LLiibbAAlliiaassRReeddiirreeccttAAddddrr().  The parameter
+           _l_i_n_k is the pointer returned by either of the redirection func‐
+           tions.  If an invalid pointer is passed to
+           LLiibbAAlliiaassRReeddiirreeccttDDeelleettee(), then a program crash or unpredictable op‐
+           eration could result, so care is needed when using this function.
+
+     _i_n_t LLiibbAAlliiaassPPrrooxxyyRRuullee(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _c_o_n_s_t _c_h_a_r _*_c_m_d)
+
+           The passed _c_m_d string consists of one or more pairs of words.  The
+           first word in each pair is a token and the second is the value that
+           should be applied for that token.  Tokens and their argument types
+           are as follows:
+
+           ttyyppee eennccooddee__iipp__hhddrr | eennccooddee__ttccpp__ssttrreeaamm | nnoo__eennccooddee
+                   In order to support transparent proxying, it is necessary
+                   to somehow pass the original address and port information
+                   into the new destination server.  If eennccooddee__iipp__hhddrr is spec‐
+                   ified, the original destination address and port are passed
+                   as an extra IP option.  If eennccooddee__ttccpp__ssttrreeaamm is specified,
+                   the original destination address and port are passed as the
+                   first piece of data in the TCP stream in the format “DEST
+                   _I_P _p_o_r_t”.
+
+           ppoorrtt _p_o_r_t_n_u_m
+                   Only packets with the destination port _p_o_r_t_n_u_m are proxied.
+
+           sseerrvveerr _h_o_s_t[:_p_o_r_t_n_u_m]
+                   This specifies the _h_o_s_t and _p_o_r_t_n_u_m that the data is to be
+                   redirected to.  _h_o_s_t must be an IP address rather than a
+                   DNS host name.  If _p_o_r_t_n_u_m is not specified, the destina‐
+                   tion port number is not changed.
+
+                   The _s_e_r_v_e_r specification is mandatory unless the ddeelleettee
+                   command is being used.
+
+           rruullee _i_n_d_e_x
+                   Normally, each call to LLiibbAAlliiaassPPrrooxxyyRRuullee() inserts the next
+                   rule at the start of a linear list of rules.  If an _i_n_d_e_x
+                   is specified, the new rule will be checked after all rules
+                   with lower indices.  Calls to LLiibbAAlliiaassPPrrooxxyyRRuullee() that do
+                   not specify a rule are assigned rule 0.
+
+           ddeelleettee _i_n_d_e_x
+                   This token and its argument MUST NOT be used with any other
+                   tokens.  When used, all existing rules with the given _i_n_d_e_x
+                   are deleted.
+
+           pprroottoo ttccpp | uuddpp
+                   If specified, only packets of the given protocol type are
+                   matched.
+
+           ssrrcc _I_P[/_b_i_t_s]
+                   If specified, only packets with a source address matching
+                   the given _I_P are matched.  If _b_i_t_s is also specified, then
+                   the first _b_i_t_s bits of _I_P are taken as a network specifica‐
+                   tion, and all IP addresses from that network will be
+                   matched.
+
+           ddsstt _I_P[/_b_i_t_s]
+                   If specified, only packets with a destination address
+                   matching the given _I_P are matched.  If _b_i_t_s is also speci‐
+                   fied, then the first _b_i_t_s bits of _I_P are taken as a network
+                   specification, and all IP addresses from that network will
+                   be matched.
+
+           This function is usually used to redirect outgoing connections for
+           internal machines that are not permitted certain types of internet
+           access, or to restrict access to certain external machines.
+
+     _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _* LLiibbAAlliiaassRReeddiirreeccttPPrroottoo(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*,
+     _s_t_r_u_c_t _i_n___a_d_d_r _l_o_c_a_l___a_d_d_r, _s_t_r_u_c_t _i_n___a_d_d_r _r_e_m_o_t_e___a_d_d_r,
+     _s_t_r_u_c_t _i_n___a_d_d_r _a_l_i_a_s___a_d_d_r, _u___c_h_a_r _p_r_o_t_o)
+
+           This function specifies that any IP packet with protocol number of
+           _p_r_o_t_o from a given remote address to an alias address will be redi‐
+           rected to a specified local address.
+
+           If _l_o_c_a_l___a_d_d_r or _a_l_i_a_s___a_d_d_r is zero, this indicates that the packet
+           aliasing address as established by LLiibbAAlliiaassSSeettAAddddrreessss() is to be
+           used.  Even if LLiibbAAlliiaassSSeettAAddddrreessss() is called to change the address
+           after LLiibbAAlliiaassRReeddiirreeccttPPrroottoo() is called, a zero reference will
+           track this change.
+
+           If _r_e_m_o_t_e___a_d_d_r is zero, this indicates to redirect packets from any
+           remote address.  Non-zero remote addresses can sometimes be useful
+           for firewalling.
+
+           If two calls to LLiibbAAlliiaassRReeddiirreeccttPPrroottoo() overlap in their address
+           specifications, then the most recent call will have precedence.
+
+           This function returns a pointer which can subsequently be used by
+           LLiibbAAlliiaassRReeddiirreeccttDDeelleettee().  If NULL is returned, then the function
+           call did not complete successfully.
+
+FFRRAAGGMMEENNTT HHAANNDDLLIINNGG
+     The functions in this section are used to deal with incoming fragments.
+
+     Outgoing fragments are handled within LLiibbAAlliiaassOOuutt() by changing the ad‐
+     dress according to any applicable mapping set by LLiibbAAlliiaassRReeddiirreeccttAAddddrr(),
+     or the default aliasing address set by LLiibbAAlliiaassSSeettAAddddrreessss().
+
+     Incoming fragments are handled in one of two ways.  If the header of a
+     fragmented IP packet has already been seen, then all subsequent fragments
+     will be re-mapped in the same manner the header fragment was.  Fragments
+     which arrive before the header are saved and then retrieved once the
+     header fragment has been resolved.
+
+     _i_n_t LLiibbAAlliiaassSSaavveeFFrraaggmmeenntt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _v_o_i_d _*_p_t_r)
+
+           When LLiibbAAlliiaassIInn() returns PKT_ALIAS_UNRESOLVED_FRAGMENT, this func‐
+           tion can be used to save the pointer to the unresolved fragment.
+
+           It is implicitly assumed that _p_t_r points to a block of memory allo‐
+           cated by malloc(3).  If the fragment is never resolved, the packet
+           aliasing engine will automatically free the memory after a timeout
+           period.  [Eventually this function should be modified so that a
+           callback function for freeing memory is passed as an argument.]
+
+           This function returns PKT_ALIAS_OK if it was successful and
+           PKT_ALIAS_ERROR if there was an error.
+
+     _v_o_i_d _* LLiibbAAlliiaassGGeettFFrraaggmmeenntt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _v_o_i_d _*_b_u_f_f_e_r)
+
+           This function can be used to retrieve fragment pointers saved by
+           LLiibbAAlliiaassSSaavveeFFrraaggmmeenntt().  The IP header fragment pointed to by
+           _b_u_f_f_e_r is the header fragment indicated when LLiibbAAlliiaassIInn() returns
+           PKT_ALIAS_FOUND_HEADER_FRAGMENT.  Once a fragment pointer is re‐
+           trieved, it becomes the calling program's responsibility to free
+           the dynamically allocated memory for the fragment.
+
+           The LLiibbAAlliiaassGGeettFFrraaggmmeenntt() function can be called sequentially until
+           there are no more fragments available, at which time it returns
+           NULL.
+
+     _v_o_i_d LLiibbAAlliiaassFFrraaggmmeennttIInn(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _v_o_i_d _*_h_e_a_d_e_r, _v_o_i_d _*_f_r_a_g_m_e_n_t)
+
+           When a fragment is retrieved with LLiibbAAlliiaassGGeettFFrraaggmmeenntt(), it can
+           then be de-aliased with a call to LLiibbAAlliiaassFFrraaggmmeennttIInn().  The _h_e_a_d_e_r
+           argument is the pointer to a header fragment used as a template,
+           and _f_r_a_g_m_e_n_t is the pointer to the packet to be de-aliased.
+
+MMIISSCCEELLLLAANNEEOOUUSS FFUUNNCCTTIIOONNSS
+     _s_t_r_u_c_t _a_l_i_a_s___l_i_n_k _* AAddddLLiinnkk(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _s_t_r_u_c_t _i_n___a_d_d_r _s_r_c___a_d_d_r,
+     _s_t_r_u_c_t _i_n___a_d_d_r _d_s_t___a_d_d_r, _s_t_r_u_c_t _i_n___a_d_d_r _a_l_i_a_s___a_d_d_r, _u___s_h_o_r_t _s_r_c___p_o_r_t,
+     _u___s_h_o_r_t _d_s_t___p_o_r_t, _i_n_t _a_l_i_a_s___p_a_r_a_m, _i_n_t _l_i_n_k___t_y_p_e)
+
+           This function adds new state to the instance hash table.  The
+           dst_address and/or dst_port may be given as zero, which introduces
+           some dynamic character into the link, since LibAliasSetAddress can
+           change the address that is used.  However, in the current implemen‐
+           tation, such links can only be used for inbound (ext -> int) traf‐
+           fic.
+
+     _v_o_i_d LLiibbAAlliiaassSSeettTTaarrggeett(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _s_t_r_u_c_t _i_n___a_d_d_r _a_d_d_r)
+
+           When an incoming packet not associated with any pre-existing alias‐
+           ing link arrives at the host machine, it will be sent to the ad‐
+           dress indicated by a call to LLiibbAAlliiaassSSeettTTaarrggeett().
+
+           If this function is called with an INADDR_NONE address argument,
+           then all new incoming packets go to the address set by
+           LLiibbAAlliiaassSSeettAAddddrreessss().
+
+           If this function is not called, or is called with an INADDR_ANY ad‐
+           dress argument, then all new incoming packets go to the address
+           specified in the packet.  This allows external machines to talk di‐
+           rectly to internal machines if they can route packets to the ma‐
+           chine in question.
+
+     _u___s_h_o_r_t LLiibbAAlliiaassIInntteerrnneettCChheecckkssuumm(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _u___s_h_o_r_t _*_b_u_f_f_e_r, _i_n_t
+     _n_b_y_t_e_s)
+
+           This is a utility function that does not seem to be available else‐
+           where and is included as a convenience.  It computes the internet
+           checksum, which is used in both IP and protocol-specific headers
+           (TCP, UDP, ICMP).
+
+           The _b_u_f_f_e_r argument points to the data block to be checksummed, and
+           _n_b_y_t_e_s is the number of bytes.  The 16-bit checksum field should be
+           zeroed before computing the checksum.
+
+           Checksums can also be verified by operating on a block of data in‐
+           cluding its checksum.  If the checksum is valid,
+           LLiibbAAlliiaassIInntteerrnneettCChheecckkssuumm() will return zero.
+
+     _i_n_t LLiibbAAlliiaassUUnnaalliiaassOOuutt(_s_t_r_u_c_t _l_i_b_a_l_i_a_s _*, _v_o_i_d _*_b_u_f_f_e_r, _i_n_t
+     _m_a_x_p_a_c_k_e_t_s_i_z_e)
+
+           An outgoing packet, which has already been aliased, has its private
+           address/port information restored by this function.  The IP packet
+           is pointed to by _b_u_f_f_e_r, and _m_a_x_p_a_c_k_e_t_s_i_z_e is provided for error
+           checking purposes.  This function can be used if an already-aliased
+           packet needs to have its original IP header restored for further
+           processing (e.g. logging).
+
+CCOONNCCEEPPTTUUAALL BBAACCKKGGRROOUUNNDD
+     This section is intended for those who are planning to modify the source
+     code or want to create somewhat esoteric applications using the packet
+     aliasing functions.
+
+     The conceptual framework under which the packet aliasing engine operates
+     is described here.  Central to the discussion is the idea of an _a_l_i_a_s_i_n_g
+     _l_i_n_k which describes the relationship for a given packet transaction be‐
+     tween the local machine, aliased identity and remote machine.  It is dis‐
+     cussed how such links come into existence and are destroyed.
+
+   AALLIIAASSIINNGG LLIINNKKSS
+     There is a notion of an _a_l_i_a_s_i_n_g _l_i_n_k, which is a 7-tuple describing a
+     specific translation:
+
+           (local addr, local port, alias addr, alias port,
+            remote addr, remote port, protocol)
+
+     Outgoing packets have the local address and port number replaced with the
+     alias address and port number.  Incoming packets undergo the reverse
+     process.  The packet aliasing engine attempts to match packets against an
+     internal table of aliasing links to determine how to modify a given IP
+     packet.  Both the IP header and protocol dependent headers are modified
+     as necessary.  Aliasing links are created and deleted as necessary ac‐
+     cording to network traffic.
+
+     Protocols can be TCP, UDP or even ICMP in certain circumstances.  (Some
+     types of ICMP packets can be aliased according to sequence or ID number
+     which acts as an equivalent port number for identifying how individual
+     packets should be handled.)
+
+     Each aliasing link must have a unique combination of the following five
+     quantities: alias address/port, remote address/port and protocol.  This
+     ensures that several machines on a local network can share the same
+     aliasing IP address.  In cases where conflicts might arise, the aliasing
+     port is chosen so that uniqueness is maintained.
+
+   SSTTAATTIICC AANNDD DDYYNNAAMMIICC LLIINNKKSS
+     Aliasing links can either be static or dynamic.  Static links persist in‐
+     definitely and represent fixed rules for translating IP packets.  Dynamic
+     links come into existence for a specific TCP connection or UDP transac‐
+     tion or ICMP ECHO sequence.  For the case of TCP, the connection can be
+     monitored to see when the associated aliasing link should be deleted.
+     Aliasing links for UDP transactions (and ICMP ECHO and TIMESTAMP re‐
+     quests) work on a simple timeout rule.  When no activity is observed on a
+     dynamic link for a certain amount of time it is automatically deleted.
+     Timeout rules also apply to TCP connections which do not open or close
+     properly.
+
+   PPAARRTTIIAALLLLYY SSPPEECCIIFFIIEEDD AALLIIAASSIINNGG LLIINNKKSS
+     Aliasing links can be partially specified, meaning that the remote ad‐
+     dress and/or remote port are unknown.  In this case, when a packet match‐
+     ing the incomplete specification is found, a fully specified dynamic link
+     is created.  If the original partially specified link is dynamic, it will
+     be deleted after the fully specified link is created, otherwise it will
+     persist.
+
+     For instance, a partially specified link might be
+
+           (192.168.0.4, 23, 204.228.203.215, 8066, 0, 0, tcp)
+
+     The zeros denote unspecified components for the remote address and port.
+     If this link were static it would have the effect of redirecting all in‐
+     coming traffic from port 8066 of 204.228.203.215 to port 23 (telnet) of
+     machine 192.168.0.4 on the local network.  Each individual telnet connec‐
+     tion would initiate the creation of a distinct dynamic link.
+
+   DDYYNNAAMMIICC LLIINNKK CCRREEAATTIIOONN
+     In addition to aliasing links, there are also address mappings that can
+     be stored within the internal data table of the packet aliasing mecha‐
+     nism.
+
+           (local addr, alias addr)
+
+     Address mappings are searched when creating new dynamic links.
+
+     All outgoing packets from the local network automatically create a dy‐
+     namic link if they do not match an already existing fully specified link.
+     If an address mapping exists for the outgoing packet, this determines the
+     alias address to be used.  If no mapping exists, then a default address,
+     usually the address of the packet aliasing host, is used.  If necessary,
+     this default address can be changed as often as each individual packet
+     arrives.
+
+     The aliasing port number is determined such that the new dynamic link
+     does not conflict with any existing links.  In the default operating
+     mode, the packet aliasing engine attempts to set the aliasing port equal
+     to the local port number.  If this results in a conflict, then port num‐
+     bers are randomly chosen until a unique aliasing link can be established.
+     In an alternate operating mode, the first choice of an aliasing port is
+     also random and unrelated to the local port number.
+
+MMOODDUULLAARR AARRCCHHIITTEECCTTUURREE (AND ipfw(4) SUPPORT)
+     One of the latest improvements to lliibbaalliiaass was to make its support for
+     new protocols independent from the rest of the library, giving it the
+     ability to load/unload support for new protocols at run-time.  To achieve
+     this feature, all the code for protocol handling was moved to a series of
+     modules outside of the main library.  These modules are compiled from the
+     same sources but work in different ways, depending on whether they are
+     compiled to work inside a kernel or as part of the userland library.
+
+   LLIIBBAALLIIAASS MMOODDUULLEESS IINN KKEERRNNEELL LLAANNDD
+     When compiled for the kernel, lliibbaalliiaass modules are plain KLDs recogniz‐
+     able with the _a_l_i_a_s__ prefix.
+
+     To add support for a new protocol, load the corresponding module.  For
+     example:
+
+           kldload alias_ftp
+
+     When support for a protocol is no longer needed, its module can be un‐
+     loaded:
+
+           kldunload alias_ftp
+
+   LLIIBBAALLIIAASS MMOODDUULLEESS IINN UUSSEERRLLAANNDD
+     Due to the differences between kernel and userland (no KLD mechanism,
+     many different address spaces, etc.), we had to change a bit how to han‐
+     dle module loading/tracking/unloading in userland.
+
+     While compiled for a userland lliibbaalliiaass, all the modules are plain li‐
+     braries, residing in _/_u_s_r_/_l_i_b, and recognizable with the _l_i_b_a_l_i_a_s__ pre‐
+     fix.
+
+     There is a configuration file, _/_e_t_c_/_l_i_b_a_l_i_a_s_._c_o_n_f, with the following
+     contents (by default):
+
+           /usr/lib/libalias_ftp.so
+           /usr/lib/libalias_irc.so
+           /usr/lib/libalias_nbt.so
+           /usr/lib/libalias_pptp.so
+           /usr/lib/libalias_skinny.so
+           /usr/lib/libalias_smedia.so
+
+     This file contains the paths to the modules that lliibbaalliiaass will load.  To
+     load/unload a new module, just add its path to _l_i_b_a_l_i_a_s_._c_o_n_f and call
+     LLiibbAAlliiaassRReeffrreesshhMMoodduulleess() from the program.  In case the application pro‐
+     vides a SIGHUP signal handler, add a call to LLiibbAAlliiaassRReeffrreesshhMMoodduulleess() in‐
+     side the handler, and every time you want to refresh the loaded modules,
+     send it the SIGHUP signal:
+
+           kill -HUP <process_pid>
+
+   MMOODDUULLAARR AARRCCHHIITTEECCUURREE:: HHOOWW IITT WWOORRKKSS
+     The modular architecture of lliibbaalliiaass works similar whether it is running
+     inside the kernel or in userland.  From _a_l_i_a_s___m_o_d_._c:
+
+     /* Protocol and userland module handlers chains. */
+     LIST_HEAD(handler_chain, proto_handler) handler_chain ...
+     ...
+     SLIST_HEAD(dll_chain, dll) dll_chain ...
+
+     _h_a_n_d_l_e_r___c_h_a_i_n keeps track of all the protocol handlers loaded, while
+     _d_d_l___c_h_a_i_n tracks which userland modules are loaded.
+
+     _h_a_n_d_l_e_r___c_h_a_i_n is composed of _s_t_r_u_c_t _p_r_o_t_o___h_a_n_d_l_e_r entries:
+
+     struct proto_handler {
+             u_int pri;
+             int16_t dir;
+             uint8_t proto;
+             int (*fingerprint)(struct libalias *la,
+                      struct ip *pip, struct alias_data *ah);
+             int (*protohandler)(struct libalias *la,
+                      struct ip *pip, struct alias_data *ah);
+             TAILQ_ENTRY(proto_handler) link;
+     };
+
+     where:
+
+     _p_r_i is the priority assigned to a protocol handler; lower priority is
+     better.
+
+     _d_i_r is the direction of packets: ingoing or outgoing.
+
+     _p_r_o_t_o indicates to which protocol this packet belongs: IP, TCP or UDP.
+
+     _f_i_n_g_e_r_p_r_i_n_t points to the fingerprint function while protohandler points
+     to the protocol handler function.
+
+     The _f_i_n_g_e_r_p_r_i_n_t function has the dual role of checking if the incoming
+     packet is found, and if it belongs to any categories that this module can
+     handle.
+
+     The _p_r_o_t_o_h_a_n_d_l_e_r function actually manipulates the packet to make
+     lliibbaalliiaass correctly NAT it.
+
+     When a packet enters lliibbaalliiaass, if it meets a module hook, _h_a_n_d_l_e_r___c_h_a_i_n
+     is searched to see if there is an handler that matches this type of a
+     packet (it checks protocol and direction of packet).  Then, if more than
+     one handler is found, it starts with the module with the lowest priority
+     number: it calls the _f_i_n_g_e_r_p_r_i_n_t function and interprets the result.
+
+     If the result value is equal to 0 then it calls the protocol handler of
+     this handler and returns.  Otherwise, it proceeds to the next eligible
+     module until the _h_a_n_d_l_e_r___c_h_a_i_n is exhausted.
+
+     Inside lliibbaalliiaass, the module hook looks like this:
+
+           struct alias_data ad = {
+                   lnk,
+                   &original_address,
+                   &alias_address,
+                   &alias_port,
+                   &ud->uh_sport,          /* original source port */
+                   &ud->uh_dport,          /* original dest port */
+                   256                     /* maxpacketsize */
+           };
+
+           ...
+
+           /* walk out chain */
+           err = find_handler(IN, UDP, la, pip, &ad);
+
+     All data useful to a module are gathered together in an _a_l_i_a_s___d_a_t_a struc‐
+     ture, then ffiinndd__hhaannddlleerr() is called.  The ffiinndd__hhaannddlleerr() function is re‐
+     sponsible for walking the handler chain; it receives as input parameters:
+
+     _I_N      direction
+
+     _U_D_P     working protocol
+
+     _l_a      pointer to this instance of libalias
+
+     _p_i_p     pointer to a _s_t_r_u_c_t _i_p
+
+     _a_d      pointer to _s_t_r_u_c_t _a_l_i_a_s___d_a_t_a (see above)
+
+     In this case, ffiinndd__hhaannddlleerr() will search only for modules registered for
+     supporting INcoming UDP packets.
+
+     As was mentioned earlier, lliibbaalliiaass in userland is a bit different, as
+     care must be taken in module handling as well (avoiding duplicate load of
+     modules, avoiding modules with same name, etc.) so _d_l_l___c_h_a_i_n was intro‐
+     duced.
+
+     _d_l_l___c_h_a_i_n contains a list of all userland lliibbaalliiaass modules loaded.
+
+     When an application calls LLiibbAAlliiaassRReeffrreesshhMMoodduulleess(), lliibbaalliiaass first un‐
+     loads all the loaded modules, then reloads all the modules listed in
+     _/_e_t_c_/_l_i_b_a_l_i_a_s_._c_o_n_f: for every module loaded, a new entry is added to
+     _d_l_l___c_h_a_i_n.
+
+     _d_l_l___c_h_a_i_n is composed of _s_t_r_u_c_t _d_l_l entries:
+
+     struct dll {
+             /* name of module */
+             char            name[DLL_LEN];
+             /*
+              * ptr to shared obj obtained through
+              * dlopen() - use this ptr to get access
+              * to any symbols from a loaded module
+              * via dlsym()
+              */
+             void            *handle;
+             struct dll      *next;
+     };
+
+     _n_a_m_e is the name of the module.
+
+     _h_a_n_d_l_e is a pointer to the module obtained through dlopen(3).
+     Whenever a module is loaded in userland, an entry is added to _d_l_l___c_h_a_i_n,
+     then every protocol handler present in that module is resolved and regis‐
+     tered in _h_a_n_d_l_e_r___c_h_a_i_n.
+
+   HHOOWW TTOO WWRRIITTEE AA MMOODDUULLEE FFOORR LLIIBBAALLIIAASS
+     There is a module (called _a_l_i_a_s___d_u_m_m_y_._[_c_h_]) in lliibbaalliiaass that can be used
+     as a skeleton for future work.  Here we analyse some parts of that mod‐
+     ule.  From _a_l_i_a_s___d_u_m_m_y_._c:
+
+     struct proto_handler handlers[] = {
+         {
+             .pri = 666,
+             .dir = IN|OUT,
+             .proto = UDP|TCP,
+             .fingerprint = fingerprint,
+             .protohandler= protohandler,
+         },
+         { EOH }
+     };
+
+     The variable _h_a_n_d_l_e_r_s is the “most important thing” in a module since it
+     describes the handlers present and lets the outside world use it in an
+     opaque way.
+
+     It must ALWAYS be present in every module, and it MUST retain the name
+     _h_a_n_d_l_e_r_s, otherwise attempting to load a module in userland will fail and
+     complain about missing symbols: for more information about module
+     load/unload, please refer to LLiibbAAlliiaassRReeffrreesshhMMoodduulleess(),
+     LLiibbAAlliiaassLLooaaddMMoodduullee() and LLiibbAAlliiaassUUnnllooaaddMMoodduullee() in _a_l_i_a_s_._c.
+
+     _h_a_n_d_l_e_r_s contains all the _p_r_o_t_o___h_a_n_d_l_e_r structures present in a module.
+
+     static int
+     mod_handler(module_t mod, int type, void *data)
+     {
+             int error;
+
+             switch (type) {
+             case MOD_LOAD:
+                     error = LibAliasAttachHandlers(handlers);
+                     break;
+             case MOD_UNLOAD:
+                     error = LibAliasDetachHandlers(handlers);
+                     break;
+             default:
+                     error = EINVAL;
+             }
+             return (error);
+     }
+     When running as KLD, mmoodd__hhaannddlleerr() registers/deregisters the module using
+     LLiibbAAlliiaassAAttttaacchhHHaannddlleerrss() and LLiibbAAlliiaassDDeettaacchhHHaannddlleerrss(), respectively.
+
+     Every module must contain at least 2 functions: one fingerprint function
+     and a protocol handler function.
+
+     #ifdef _KERNEL
+     static
+     #endif
+     int
+     fingerprint(struct libalias *la, struct ip *pip, struct alias_data *ah)
+     {
+
+     ...
+     }
+
+     #ifdef _KERNEL
+     static
+     #endif
+     int
+     protohandler(struct libalias *la, struct ip *pip,
+                  struct alias_data *ah)
+     {
+
+     ...
+     }
+     and they must accept exactly these input parameters.
+
+   PPAATTCCHHIINNGG AANN AAPPPPLLIICCAATTIIOONN FFOORR UUSSEERRLLAANNDD LLIIBBAALLIIAASS MMOODDUULLEESS
+     To add module support into an application that uses lliibbaalliiaass, the follow‐
+     ing simple steps can be followed.
+
+     1.   Find the main file of an application (let us call it _m_a_i_n_._c).
+
+     2.   Add this to the header section of _m_a_i_n_._c, if not already present:
+
+                #include <signal.h>
+
+          and this just after the header section:
+
+                static void signal_handler(int);
+
+     3.   Add the following line to the init function of an application or, if
+          it does not have any init function, put it in mmaaiinn():
+
+                signal(SIGHUP, signal_handler);
+
+          and place the ssiiggnnaall__hhaannddlleerr() function somewhere in _m_a_i_n_._c:
+
+                static void
+                signal_handler(int sig)
+                {
+
+                        LibAliasRefreshModules();
+                }
+
+          Otherwise, if an application already traps the SIGHUP signal, just
+          add a call to LLiibbAAlliiaassRReeffrreesshhMMoodduulleess() in the signal handler func‐
+          tion.
+     For example, to patch natd(8) to use lliibbaalliiaass modules, just add the fol‐
+     lowing line to RReeffrreesshhAAddddrr(_i_n_t _s_i_g _____u_n_u_s_e_d):
+
+           LibAliasRefreshModules()
+
+     recompile and you are done.
+
+   LLOOGGGGIINNGG SSUUPPPPOORRTT IINN KKEERRNNEELL LLAANNDD
+     When working as KLD, lliibbaalliiaass now has log support that happens on a buf‐
+     fer allocated inside _s_t_r_u_c_t _l_i_b_a_l_i_a_s (from _a_l_i_a_s___l_o_c_a_l_._h):
+
+     struct libalias {
+            ...
+
+             /* log descriptor        */
+     #ifdef  KERNEL_LOG
+             char           *logDesc;        /*
+                                              * ptr to an auto-malloced
+                                              * memory buffer when libalias
+                                              * works as kld
+                                              */
+     #else
+             FILE           *logDesc;        /*
+                                              * ptr to /var/log/alias.log
+                                              * when libalias runs as a
+                                              * userland lib
+                                              */
+     #endif
+
+             ...
+     }
+     so all applications using lliibbaalliiaass will be able to handle their own logs,
+     if they want, accessing _l_o_g_D_e_s_c.  Moreover, every change to a log buffer
+     is automatically added to syslog(3) with the LOG_SECURITY facility and
+     the LOG_INFO level.
+
+AAUUTTHHOORRSS
+     Charles Mott <cm@linktel.net>, versions 1.0 - 1.8, 2.0 - 2.4.
+     Eivind Eklund <eivind@FreeBSD.org>, versions 1.8b, 1.9 and 2.5.  Added
+     IRC DCC support as well as contributing a number of architectural im‐
+     provements; added the firewall bypass for FTP/IRC DCC.
+     Erik Salander <erik@whistle.com> added support for PPTP and RTSP.
+     Junichi Satoh <junichi@junichi.org> added support for RTSP/PNA.
+     Ruslan Ermilov <ru@FreeBSD.org> added support for PPTP and LSNAT as well
+     as general hacking.
+     Gleb Smirnoff <glebius@FreeBSD.org> ported the library to kernel space.
+     Paolo Pisati <piso@FreeBSD.org> made the library modular, moving support
+     for all protocols (except for IP, TCP and UDP) to external modules.
+
+AACCKKNNOOWWLLEEDDGGEEMMEENNTTSS
+     Listed below, in approximate chronological order, are individuals who
+     have provided valuable comments and/or debugging assistance.
+
+           Gary Roberts
+           Tom Torrance
+           Reto Burkhalter
+           Martin Renters
+           Brian Somers
+           Paul Traina
+           Ari Suutari
+           Dave Remien
+           J. Fortes
+           Andrzej Bialecki
+           Gordon Burditt
+
+BSD                              May 31, 2021                              BSD

@@ -1,0 +1,276 @@
+LOCKING(9)               BSD Kernel Developer's Manual              LOCKING(9)
+
+NNAAMMEE
+     lloocckkiinngg — kernel synchronization primitives
+
+DDEESSCCRRIIPPTTIIOONN
+     The _F_r_e_e_B_S_D kernel is written to run across multiple CPUs and as such
+     provides several different synchronization primitives to allow developers
+     to safely access and manipulate many data types.
+
+   MMuutteexxeess
+     Mutexes (also called "blocking mutexes") are the most commonly used syn‐
+     chronization primitive in the kernel.  A thread acquires (locks) a mutex
+     before accessing data shared with other threads (including interrupt
+     threads), and releases (unlocks) it afterwards.  If the mutex cannot be
+     acquired, the thread requesting it will wait.  Mutexes are adaptive by
+     default, meaning that if the owner of a contended mutex is currently run‐
+     ning on another CPU, then a thread attempting to acquire the mutex will
+     spin rather than yielding the processor.  Mutexes fully support priority
+     propagation.
+
+     See mutex(9) for details.
+
+   SSppiinn MMuutteexxeess
+     Spin mutexes are a variation of basic mutexes; the main difference be‐
+     tween the two is that spin mutexes never block.  Instead, they spin while
+     waiting for the lock to be released.  To avoid deadlock, a thread that
+     holds a spin mutex must never yield its CPU.  Unlike ordinary mutexes,
+     spin mutexes disable interrupts when acquired.  Since disabling inter‐
+     rupts can be expensive, they are generally slower to acquire and release.
+     Spin mutexes should be used only when absolutely necessary, e.g. to pro‐
+     tect data shared with interrupt filter code (see bus_setup_intr(9) for
+     details), or for scheduler internals.
+
+   MMuutteexx PPoooollss
+     With most synchronization primitives, such as mutexes, the programmer
+     must provide memory to hold the primitive.  For example, a mutex may be
+     embedded inside the structure it protects.  Mutex pools provide a preal‐
+     located set of mutexes to avoid this requirement.  Note that mutexes from
+     a pool may only be used as leaf locks.
+
+     See mtx_pool(9) for details.
+
+   RReeaaddeerr//WWrriitteerr LLoocckkss
+     Reader/writer locks allow shared access to protected data by multiple
+     threads or exclusive access by a single thread.  The threads with shared
+     access are known as _r_e_a_d_e_r_s since they should only read the protected
+     data.  A thread with exclusive access is known as a _w_r_i_t_e_r since it may
+     modify protected data.
+
+     Reader/writer locks can be treated as mutexes (see above and mutex(9))
+     with shared/exclusive semantics.  Reader/writer locks support priority
+     propagation like mutexes, but priority is propagated only to an exclusive
+     holder.  This limitation comes from the fact that shared owners are
+     anonymous.
+
+     See rwlock(9) for details.
+
+   RReeaadd--MMoossttllyy LLoocckkss
+     Read-mostly locks are similar to _r_e_a_d_e_r_/_w_r_i_t_e_r locks but optimized for
+     very infrequent write locking.  _R_e_a_d_-_m_o_s_t_l_y locks implement full priority
+     propagation by tracking shared owners using a caller-supplied _t_r_a_c_k_e_r
+     data structure.
+
+     See rmlock(9) for details.
+
+   SSlleeeeppaabbllee RReeaadd--MMoossttllyy LLoocckkss
+     Sleepable read-mostly locks are a variation on read-mostly locks.
+     Threads holding an exclusive lock may sleep, but threads holding a shared
+     lock may not.  Priority is propagated to shared owners but not to exclu‐
+     sive owners.
+
+   SShhaarreedd//eexxcclluussiivvee lloocckkss
+     Shared/exclusive locks are similar to reader/writer locks; the main dif‐
+     ference between them is that shared/exclusive locks may be held during
+     unbounded sleep.  Acquiring a contested shared/exclusive lock can perform
+     an unbounded sleep.  These locks do not support priority propagation.
+
+     See sx(9) for details.
+
+   LLoocckkmmaannaaggeerr lloocckkss
+     Lockmanager locks are sleepable shared/exclusive locks used mostly in
+     VFS(9) (as a vnode(9) lock) and in the buffer cache (BUF_LOCK(9)).  They
+     have features other lock types do not have such as sleep timeouts, block‐
+     ing upgrades, writer starvation avoidance, draining, and an interlock mu‐
+     tex, but this makes them complicated both to use and to implement; for
+     this reason, they should be avoided.
+
+     See lock(9) for details.
+
+   NNoonn--bblloocckkiinngg ssyynncchhrroonniizzaattiioonn
+     The kernel has two facilities, epoch(9) and smr(9), which can be used to
+     provide read-only access to a data structure while one or more writers
+     are concurrently modifying the data structure.  Specifically, readers us‐
+     ing epoch(9) and smr(9) to synchronize accesses do not block writers, in
+     contrast with reader/writer locks, and they help ensure that memory freed
+     by writers is not reused until all readers which may be accessing it have
+     finished.  Thus, they are a useful building block in the construction of
+     lock-free data structures.
+
+     These facilities are difficult to use correctly and should be avoided in
+     preference to traditional mutual exclusion-based synchronization, except
+     when performance or non-blocking guarantees are a major concern.
+
+     See epoch(9) and smr(9) for details.
+
+   CCoouunnttiinngg sseemmaapphhoorreess
+     Counting semaphores provide a mechanism for synchronizing access to a
+     pool of resources.  Unlike mutexes, semaphores do not have the concept of
+     an owner, so they can be useful in situations where one thread needs to
+     acquire a resource, and another thread needs to release it.  They are
+     largely deprecated.
+
+     See sema(9) for details.
+
+   CCoonnddiittiioonn vvaarriiaabblleess
+     Condition variables are used in conjunction with locks to wait for a con‐
+     dition to become true.  A thread must hold the associated lock before
+     calling one of the ccvv__wwaaiitt(), functions.  When a thread waits on a condi‐
+     tion, the lock is atomically released before the thread yields the pro‐
+     cessor and reacquired before the function call returns.  Condition vari‐
+     ables may be used with blocking mutexes, reader/writer locks, read-mostly
+     locks, and shared/exclusive locks.
+
+     See condvar(9) for details.
+
+   SSlleeeepp//WWaakkeeuupp
+     The functions ttsslleeeepp(), mmsslleeeepp(), mmsslleeeepp__ssppiinn(), ppaauussee(), wwaakkeeuupp(), and
+     wwaakkeeuupp__oonnee() also handle event-based thread blocking.  Unlike condition
+     variables, arbitrary addresses may be used as wait channels and a dedi‐
+     cated structure does not need to be allocated.  However, care must be
+     taken to ensure that wait channel addresses are unique to an event.  If a
+     thread must wait for an external event, it is put to sleep by ttsslleeeepp(),
+     mmsslleeeepp(), mmsslleeeepp__ssppiinn(), or ppaauussee().  Threads may also wait using one of
+     the locking primitive sleep routines mtx_sleep(9), rw_sleep(9), or
+     sx_sleep(9).
+
+     The parameter _c_h_a_n is an arbitrary address that uniquely identifies the
+     event on which the thread is being put to sleep.  All threads sleeping on
+     a single _c_h_a_n are woken up later by wwaakkeeuupp() (often called from inside an
+     interrupt routine) to indicate that the event the thread was blocking on
+     has occurred.
+
+     Several of the sleep functions including mmsslleeeepp(), mmsslleeeepp__ssppiinn(), and the
+     locking primitive sleep routines specify an additional lock parameter.
+     The lock will be released before sleeping and reacquired before the sleep
+     routine returns.  If _p_r_i_o_r_i_t_y includes the PDROP flag, then the lock will
+     not be reacquired before returning.  The lock is used to ensure that a
+     condition can be checked atomically, and that the current thread can be
+     suspended without missing a change to the condition or an associated
+     wakeup.  In addition, all of the sleep routines will fully drop the _G_i_a_n_t
+     mutex (even if recursed) while the thread is suspended and will reacquire
+     the _G_i_a_n_t mutex (restoring any recursion) before the function returns.
+
+     The ppaauussee() function is a special sleep function that waits for a speci‐
+     fied amount of time to pass before the thread resumes execution.  This
+     sleep cannot be terminated early by either an explicit wwaakkeeuupp() or a sig‐
+     nal.
+
+     See sleep(9) for details.
+
+   GGiiaanntt
+     Giant is a special mutex used to protect data structures that do not yet
+     have their own locks.  Since it provides semantics akin to the old spl(9)
+     interface, Giant has special characteristics:
+
+     1.   It is recursive.
+
+     2.   Drivers can request that Giant be locked around them by not marking
+          themselves MPSAFE.  Note that infrastructure to do this is slowly
+          going away as non-MPSAFE drivers either became properly locked or
+          disappear.
+
+     3.   Giant must be locked before other non-sleepable locks.
+
+     4.   Giant is dropped during unbounded sleeps and reacquired after
+          wakeup.
+
+     5.   There are places in the kernel that drop Giant and pick it back up
+          again.  Sleep locks will do this before sleeping.  Parts of the net‐
+          work or VM code may do this as well.  This means that you cannot
+          count on Giant keeping other code from running if your code sleeps,
+          even if you want it to.
+
+IINNTTEERRAACCTTIIOONNSS
+     The primitives can interact and have a number of rules regarding how they
+     can and can not be combined.  Many of these rules are checked by
+     witness(4).
+
+   BBoouunnddeedd vvss.. UUnnbboouunnddeedd SSlleeeepp
+     In a bounded sleep (also referred to as “blocking”) the only resource
+     needed to resume execution of a thread is CPU time for the owner of a
+     lock that the thread is waiting to acquire.  In an unbounded sleep (often
+     referred to as simply “sleeping”) a thread waits for an external event or
+     for a condition to become true.  In particular, a dependency chain of
+     threads in bounded sleeps should always make forward progress, since
+     there is always CPU time available.  This requires that no thread in a
+     bounded sleep is waiting for a lock held by a thread in an unbounded
+     sleep.  To avoid priority inversions, a thread in a bounded sleep lends
+     its priority to the owner of the lock that it is waiting for.
+
+     The following primitives perform bounded sleeps: mutexes, reader/writer
+     locks and read-mostly locks.
+
+     The following primitives perform unbounded sleeps: sleepable read-mostly
+     locks, shared/exclusive locks, lockmanager locks, counting semaphores,
+     condition variables, and sleep/wakeup.
+
+   GGeenneerraall PPrriinncciipplleess
+     ••   It is an error to do any operation that could result in yielding the
+         processor while holding a spin mutex.
+
+     ••   It is an error to do any operation that could result in unbounded
+         sleep while holding any primitive from the 'bounded sleep' group.
+         For example, it is an error to try to acquire a shared/exclusive lock
+         while holding a mutex, or to try to allocate memory with M_WAITOK
+         while holding a reader/writer lock.
+
+         Note that the lock passed to one of the sslleeeepp() or ccvv__wwaaiitt() func‐
+         tions is dropped before the thread enters the unbounded sleep and
+         does not violate this rule.
+
+     ••   It is an error to do any operation that could result in yielding of
+         the processor when running inside an interrupt filter.
+
+     ••   It is an error to do any operation that could result in unbounded
+         sleep when running inside an interrupt thread.
+
+   IInntteerraaccttiioonn ttaabbllee
+     The following table shows what you can and can not do while holding one
+     of the locking primitives discussed.  Note that “sleep” includes
+     sseemmaa__wwaaiitt(), sseemmaa__ttiimmeeddwwaaiitt(), any of the ccvv__wwaaiitt() functions, and any of
+     the sslleeeepp() functions.
+
+               _Y_o_u _w_a_n_t_: spin mtx  mutex/rw  rmlock  sleep rm  sx/lk  sleep
+        _Y_o_u _h_a_v_e_:        --------  --------  ------  --------  ------ ------
+        spin mtx         ok        no        no      no        no     no-1
+        mutex/rw         ok        ok        ok      no        no     no-1
+        rmlock           ok        ok        ok      no        no     no-1
+        sleep rm         ok        ok        ok      ok-2      ok-2   ok-2/3
+        sx               ok        ok        ok      ok        ok     ok-3
+        lockmgr          ok        ok        ok      ok        ok     ok
+
+     _*_1 There are calls that atomically release this primitive when going to
+     sleep and reacquire it on wakeup (mmttxx__sslleeeepp(), rrww__sslleeeepp(), mmsslleeeepp__ssppiinn(),
+     etc.).
+
+     _*_2 These cases are only allowed while holding a write lock on a sleepable
+     read-mostly lock.
+
+     _*_3 Though one can sleep while holding this lock, one can also use a
+     sslleeeepp() function to atomically release this primitive when going to sleep
+     and reacquire it on wakeup.
+
+     Note that non-blocking try operations on locks are always permitted.
+
+   CCoonntteexxtt mmooddee ttaabbllee
+     The next table shows what can be used in different contexts.  At this
+     time this is a rather easy to remember table.
+
+        _C_o_n_t_e_x_t_:            spin mtx  mutex/rw  rmlock  sleep rm  sx/lk  sleep
+        interrupt filter:   ok        no        no      no        no     no
+        interrupt thread:   ok        ok        ok      no        no     no
+        callout:            ok        ok        ok      no        no     no
+        direct callout:     ok        no        no      no        no     no
+        system call:        ok        ok        ok      ok        ok     ok
+
+SSEEEE AALLSSOO
+     lockstat(1), witness(4), atomic(9), BUS_SETUP_INTR(9), callout(9),
+     condvar(9), epoch(9), lock(9), LOCK_PROFILING(9), mtx_pool(9), mutex(9),
+     rmlock(9), rwlock(9), sema(9), sleep(9), smr(9), sx(9)
+
+BBUUGGSS
+     There are too many locking primitives to choose from.
+
+BSD                            February 3, 2023                            BSD

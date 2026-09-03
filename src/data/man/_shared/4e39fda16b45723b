@@ -1,0 +1,650 @@
+HWPMC(4)                 BSD Kernel Interfaces Manual                 HWPMC(4)
+
+NNAAMMEE
+     hhwwppmmcc — Hardware Performance Monitoring Counter support
+
+SSYYNNOOPPSSIISS
+     The following option must be present in the kernel configuration file:
+
+           ooppttiioonnss HHWWPPMMCC__HHOOOOKKSS
+
+     Additionally, for i386 systems:
+
+           ddeevviiccee aappiicc
+
+     To load the driver as a module at boot time:
+
+           sysrc kld_list+=hwpmc
+
+     Alternatively, to compile the driver into the kernel:
+
+           ddeevviiccee hhwwppmmcc
+
+     To enable debugging features (see _D_E_B_U_G_G_I_N_G):
+
+           ooppttiioonnss KKTTRR
+           ooppttiioonnss KKTTRR__CCOOMMPPIILLEE==((KKTTRR__SSUUBBSSYYSS))
+           ooppttiioonnss KKTTRR__MMAASSKK==((KKTTRR__SSUUBBSSYYSS))
+           ooppttiioonnss HHWWPPMMCC__DDEEBBUUGG
+
+DDEESSCCRRIIPPTTIIOONN
+     The hhwwppmmcc driver virtualizes the hardware performance monitoring facili‐
+     ties in modern CPUs and provides support for using these facilities from
+     user level processes.
+
+     The driver supports multi-processor systems.
+
+     PMCs are allocated using the PMC_OP_PMCALLOCATE request.  A successful
+     PMC_OP_PMCALLOCATE request will return a handle to the requesting
+     process.  Subsequent operations on the allocated PMC use this handle to
+     denote the specific PMC.  A process that has successfully allocated a PMC
+     is termed an “owner process”.
+
+     PMCs may be allocated with process or system scope.
+
+     _P_r_o_c_e_s_s_-_s_c_o_p_e  The PMC is active only when a thread belonging to a
+                    process it is attached to is scheduled on a CPU.
+
+     _S_y_s_t_e_m_-_s_c_o_p_e   The PMC operates independently of processes and measures
+                    hardware events for the system as a whole.
+
+     PMCs may be allocated for counting or for sampling:
+
+     _C_o_u_n_t_i_n_g  In counting modes, the PMCs count hardware events.  These
+               counts are retrievable using the PMC_OP_PMCREAD system call on
+               all architectures.  Some architectures offer faster methods of
+               reading these counts.
+
+     _S_a_m_p_l_i_n_g  In sampling modes, the PMCs are configured to sample the CPU
+               instruction pointer (and optionally to capture the call chain
+               leading up to the sampled instruction pointer) after a config‐
+               urable number of hardware events have been observed.  Instruc‐
+               tion pointer samples and call chain records are usually di‐
+               rected to a log file for subsequent analysis.
+
+     Scope and operational mode are orthogonal; a PMC may thus be configured
+     to operate in one of the following four modes:
+
+     Process-scope, counting
+             These PMCs count hardware events whenever a thread in their at‐
+             tached process is scheduled on a CPU.  These PMCs normally count
+             from zero, but the initial count may be set using the
+             PMC_OP_SETCOUNT operation.  Applications can read the value of
+             the PMC anytime using the PMC_OP_PMCRW operation.
+
+     Process-scope, sampling
+             These PMCs sample the target processes instruction pointer after
+             they have seen the configured number of hardware events.  The
+             PMCs only count events when a thread belonging to their attached
+             process is active.  The desired frequency of sampling is set us‐
+             ing the PMC_OP_SETCOUNT operation prior to starting the PMC.  Log
+             files are configured using the PMC_OP_CONFIGURELOG operation.
+
+     System-scope, counting
+             These PMCs count hardware events seen by them independent of the
+             processes that are executing.  The current count on these PMCs
+             can be read using the PMC_OP_PMCRW request.  These PMCs normally
+             count from zero, but the initial count may be set using the
+             PMC_OP_SETCOUNT operation.
+
+     System-scope, sampling
+             These PMCs will periodically sample the instruction pointer of
+             the CPU they are allocated on, and will write the sample to a log
+             for further processing.  The desired frequency of sampling is set
+             using the PMC_OP_SETCOUNT operation prior to starting the PMC.
+             Log files are configured using the PMC_OP_CONFIGURELOG operation.
+
+             System-wide statistical sampling can only be enabled by a process
+             with super-user privileges.
+
+     Processes are allowed to allocate as many PMCs as the hardware and cur‐
+     rent operating conditions permit.  Processes may mix allocations of sys‐
+     tem-wide and process-private PMCs.  Multiple processes may be using PMCs
+     simultaneously.
+
+     Allocated PMCs are started using the PMC_OP_PMCSTART operation, and
+     stopped using the PMC_OP_PMCSTOP operation.  Stopping and starting a PMC
+     is permitted at any time the owner process has a valid handle to the PMC.
+
+     Process-private PMCs need to be attached to a target process before they
+     can be used.  Attaching a process to a PMC is done using the
+     PMC_OP_PMCATTACH operation.  An already attached PMC may be detached from
+     its target process using the converse PMC_OP_PMCDETACH operation.  Issu‐
+     ing a PMC_OP_PMCSTART operation on an as yet unattached PMC will cause it
+     to be attached to its owner process.  The following rules determine
+     whether a given process may attach a PMC to another target process:
+     ••   A non-jailed process with super-user privileges is allowed to attach
+         to any other process in the system.
+     ••   Other processes are only allowed to attach to targets that they would
+         be able to attach to for debugging (as determined by p_candebug(9)).
+
+     PMCs are released using PMC_OP_PMCRELEASE.  After a successful
+     PMC_OP_PMCRELEASE operation the handle to the PMC will become invalid.
+
+   MMooddiiffiieerr FFllaaggss
+     The PMC_OP_PMCALLOCATE operation supports the following flags that modify
+     the behavior of an allocated PMC:
+
+     PMC_F_CALLCHAIN
+             This modifier informs sampling PMCs to record a callchain when
+             capturing a sample.  The maximum depth to which call chains are
+             recorded is specified by the _k_e_r_n_._h_w_p_m_c_._c_a_l_l_c_h_a_i_n_d_e_p_t_h kernel
+             tunable.
+
+     PMC_F_DESCENDANTS
+             This modifier is valid only for a PMC being allocated in process-
+             private mode.  It signifies that the PMC will track hardware
+             events for its target process and the target's current and future
+             descendants.
+
+     PMC_F_LOG_PROCCSW
+             This modifier is valid only for a PMC being allocated in process-
+             private mode.  When this modifier is present, at every context
+             switch, hhwwppmmcc will log a record containing the number of hardware
+             events seen by the target process when it was scheduled on the
+             CPU.
+
+     PMC_F_LOG_PROCEXIT
+             This modifier is valid only for a PMC being allocated in process-
+             private mode.  With this modifier present, hhwwppmmcc will maintain
+             per-process counts for each target process attached to a PMC.  At
+             process exit time, a record containing the target process' PID
+             and the accumulated per-process count for that process will be
+             written to the configured log file.
+
+     Modifiers PMC_F_LOG_PROCEXIT and PMC_F_LOG_PROCCSW may be used in combi‐
+     nation with modifier PMC_F_DESCENDANTS to track the behavior of complex
+     pipelines of processes.  PMCs with modifiers PMC_F_LOG_PROCEXIT and
+     PMC_F_LOG_PROCCSW cannot be started until their owner process has config‐
+     ured a log file.
+
+   SSiiggnnaallss
+     The hhwwppmmcc driver may deliver signals to processes that have allocated
+     PMCs:
+
+     SIGIO   A PMC_OP_PMCRW operation was attempted on a process-private PMC
+             that does not have attached target processes.
+
+     SIGBUS  The hhwwppmmcc driver is being unloaded from the kernel.
+
+   PPMMCC RROOWW DDIISSPPOOSSIITTIIOONNSS
+     A PMC row is defined as the set of PMC resources at the same hardware ad‐
+     dress in the CPUs in a system.  Since process scope PMCs need to move be‐
+     tween CPUs following their target threads, allocation of a process scope
+     PMC reserves all PMCs in a PMC row for use only with process scope PMCs.
+     Accordingly a PMC row will be in one of the following dispositions:
+     PMC_DISP_FREE        Hardware counters in this row are free and may be
+                          use to satisfy either of system scope or process
+                          scope allocation requests.
+     PMC_DISP_THREAD      Hardware counters in this row are in use by process
+                          scope PMCs and are only available for process scope
+                          allocation requests.
+     PMC_DISP_STANDALONE  Some hardware counters in this row have been admin‐
+                          istratively disabled or are in use by system scope
+                          PMCs.  Non-disabled hardware counters in such a row
+                          may be used for satisfying system scope allocation
+                          requests.  No process scope PMCs will use hardware
+                          counters in this row.
+
+CCOOMMPPAATTIIBBIILLIITTYY
+     The API and ABI documented in this manual page may change in the future.
+     This interface is intended to be consumed by the pmc(3) library; other
+     consumers are unsupported.  Applications targeting PMCs should use the
+     pmc(3) library API.
+
+PPRROOGGRRAAMMMMIINNGG AAPPII
+     The hhwwppmmcc driver operates using a system call number that is dynamically
+     allotted to it when it is loaded into the kernel.
+
+     The hhwwppmmcc driver supports the following operations:
+
+     PMC_OP_CONFIGURELOG
+             Configure a log file for PMCs that require a log file.  The hhwwppmmcc
+             driver will write log data to this file asynchronously.  If it
+             encounters an error, logging will be stopped and the error code
+             encountered will be saved for subsequent retrieval by a
+             PMC_OP_FLUSHLOG request.
+
+     PMC_OP_FLUSHLOG
+             Transfer buffered log data inside hhwwppmmcc to a configured output
+             file.  This operation returns to the caller after the write oper‐
+             ation has returned.  The returned error code reflects any pending
+             error state inside hhwwppmmcc.
+
+     PMC_OP_GETCPUINFO
+             Retrieve information about the highest possible CPU number for
+             the system, and the number of hardware performance monitoring
+             counters available per CPU.
+
+     PMC_OP_GETDRIVERSTATS
+             Retrieve module statistics (for analyzing the behavior of hhwwppmmcc
+             itself).
+
+     PMC_OP_GETMODULEVERSION
+             Retrieve the version number of API.
+
+     PMC_OP_GETPMCINFO
+             Retrieve information about the current state of the PMCs on a
+             given CPU.
+
+     PMC_OP_PMCADMIN
+             Set the administrative state (i.e., whether enabled or disabled)
+             for the hardware PMCs managed by the hhwwppmmcc driver.  The invoking
+             process needs to possess the PRIV_PMC_MANAGE privilege.
+
+     PMC_OP_PMCALLOCATE
+             Allocate and configure a PMC.  On successful allocation, a handle
+             to the PMC (a 32 bit value) is returned.
+
+     PMC_OP_PMCATTACH
+             Attach a process mode PMC to a target process.  The PMC will be
+             active whenever a thread in the target process is scheduled on a
+             CPU.
+
+             If the PMC_F_DESCENDANTS flag had been specified at PMC alloca‐
+             tion time, then the PMC is attached to all current and future de‐
+             scendants of the target process.
+
+     PMC_OP_PMCDETACH
+             Detach a PMC from its target process.
+
+     PMC_OP_PMCRELEASE
+             Release a PMC.
+
+     PMC_OP_PMCRW
+             Read and write a PMC.  This operation is valid only for PMCs con‐
+             figured in counting modes.
+
+     PMC_OP_SETCOUNT
+             Set the initial count (for counting mode PMCs) or the desired
+             sampling rate (for sampling mode PMCs).
+
+     PMC_OP_PMCSTART
+             Start a PMC.
+
+     PMC_OP_PMCSTOP
+             Stop a PMC.
+
+     PMC_OP_WRITELOG
+             Insert a timestamped user record into the log file.
+
+   ii338866 SSppeecciiffiicc AAPPII
+     Some i386 family CPUs support the RDPMC instruction which allows a user
+     process to read a PMC value without needing to invoke a PMC_OP_PMCRW op‐
+     eration.  On such CPUs, the machine address associated with an allocated
+     PMC is retrievable using the PMC_OP_PMCX86GETMSR system call.
+
+     PMC_OP_PMCX86GETMSR
+             Retrieve the MSR (machine specific register) number associated
+             with the given PMC handle.
+
+             The PMC needs to be in process-private mode and allocated without
+             the PMC_F_DESCENDANTS modifier flag, and should be attached only
+             to its owner process at the time of the call.
+
+   aammdd6644 SSppeecciiffiicc AAPPII
+     AMD64 CPUs support the RDPMC instruction which allows a user process to
+     read a PMC value without needing to invoke a PMC_OP_PMCRW operation.  The
+     machine address associated with an allocated PMC is retrievable using the
+     PMC_OP_PMCX86GETMSR system call.
+
+     PMC_OP_PMCX86GETMSR
+             Retrieve the MSR (machine specific register) number associated
+             with the given PMC handle.
+
+             The PMC needs to be in process-private mode and allocated without
+             the PMC_F_DESCENDANTS modifier flag, and should be attached only
+             to its owner process at the time of the call.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS AANNDD LLOOAADDEERR TTUUNNAABBLLEESS
+     The behavior of hhwwppmmcc is influenced by the following sysctl(8) and
+     loader(8) tunables:
+
+     _k_e_r_n_._h_w_p_m_c_._c_a_l_l_c_h_a_i_n_d_e_p_t_h (integer, read-only)
+             The maximum number of call chain records to capture per sample.
+             The default is 8.
+
+     _k_e_r_n_._h_w_p_m_c_._d_e_b_u_g_f_l_a_g_s (string, read-write)
+             (Only available if the hhwwppmmcc driver was compiled with --DDDDEEBBUUGG.)
+             Control the verbosity of debug messages from the hhwwppmmcc driver.
+
+     _k_e_r_n_._h_w_p_m_c_._h_a_s_h_s_i_z_e (integer, read-only)
+             The number of rows in the hash tables used to keep track of owner
+             and target processes.  The default is 16.
+
+     _k_e_r_n_._h_w_p_m_c_._l_o_g_b_u_f_f_e_r_s_i_z_e (integer, read-only)
+             The size in kilobytes of each log buffer used by hhwwppmmcc's logging
+             function.  The default buffer size is 4KB.
+
+     _k_e_r_n_._h_w_p_m_c_._m_i_n_c_o_u_n_t (integer, read-write)
+             The minimum sampling rate for sampling mode PMCs.  The default
+             count is 1000 events.
+
+     _k_e_r_n_._h_w_p_m_c_._m_t_x_p_o_o_l_s_i_z_e (integer, read-only)
+             The size of the spin mutex pool used by the PMC driver.  The de‐
+             fault is 32.
+
+     _k_e_r_n_._h_w_p_m_c_._n_b_u_f_f_e_r_s___p_c_p_u (integer, read-only)
+             The number of log buffers used by hhwwppmmcc for logging.  The default
+             is 64.
+
+     _k_e_r_n_._h_w_p_m_c_._n_s_a_m_p_l_e_s (integer, read-only)
+             The number of entries in the per-CPU ring buffer used during sam‐
+             pling.  The default is 512.
+
+     _s_e_c_u_r_i_t_y_._b_s_d_._u_n_p_r_i_v_i_l_e_g_e_d___s_y_s_p_m_c_s (boolean, read-write)
+             If set to non-zero, allow unprivileged processes to allocate sys‐
+             tem-wide PMCs.  The default value is 0.
+
+     _s_e_c_u_r_i_t_y_._b_s_d_._u_n_p_r_i_v_i_l_e_g_e_d___p_r_o_c___d_e_b_u_g (boolean, read-write)
+             If set to 0, the hhwwppmmcc driver will only allow privileged pro‐
+             cesses to attach PMCs to other processes.
+
+     These variables may be set in the kernel environment using kenv(1) before
+     hhwwppmmcc is loaded.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+   SSMMPP SSyymmmmeettrryy
+     The kernel driver requires all physical CPUs in an SMP system to have
+     identical performance monitoring counter hardware.
+
+   SSppaarrssee CCPPUU NNuummbbeerriinngg
+     On platforms that sparsely number CPUs and which support hot-plugging of
+     CPUs, requests that specify non-existent or disabled CPUs will fail with
+     an error.  Applications allocating system-scope PMCs need to be aware of
+     the possibility of such transient failures.
+
+   xx8866 TTSSCC HHaannddlliinngg
+     Historically, on the x86 architecture, FreeBSD has permitted user pro‐
+     cesses running at a processor CPL of 3 to read the TSC using the RDTSC
+     instruction.  The hhwwppmmcc driver preserves this behavior.
+
+   IInntteell PP44//HHTTTT HHaannddlliinngg
+     On CPUs with HTT support, Intel P4 PMCs are capable of qualifying only a
+     subset of hardware events on a per-logical CPU basis.  Consequently, if
+     HTT is enabled on a system with Intel Pentium P4 PMCs, then the hhwwppmmcc
+     driver will reject allocation requests for process-private PMCs that re‐
+     quest counting of hardware events that cannot be counted separately for
+     each logical CPU.
+
+DDIIAAGGNNOOSSTTIICCSS
+     hhwwppmmcc:: [[ccllaassss//nnppmmcc//ccaappaabbiilliittiieess]]......  Announce the presence of _n_p_m_c PMCs
+     of class _c_l_a_s_s, with capabilities described by bit string _c_a_p_a_b_i_l_i_t_i_e_s.
+
+     hhwwppmmcc:: kkeerrnneell vveerrssiioonn ((00xx%%xx)) ddooeess nnoott mmaattcchh mmoodduullee vveerrssiioonn ((00xx%%xx))..  The
+     module loading process failed because a version mismatch was detected be‐
+     tween the currently executing kernel and the module being loaded.
+
+     hhwwppmmcc:: tthhiiss kkeerrnneell hhaass nnoott bbeeeenn ccoommppiilleedd wwiitthh ''ooppttiioonnss HHWWPPMMCC__HHOOOOKKSS''..  The
+     module loading process failed because the currently executing kernel was
+     not configured with the required configuration option HWPMC_HOOKS.
+
+     hhwwppmmcc:: ttuunnaabbllee hhaasshhssiizzee==%%dd mmuusstt bbee ggrreeaatteerr tthhaann zzeerroo..  A negative value
+     was supplied for tunable _k_e_r_n_._h_w_p_m_c_._h_a_s_h_s_i_z_e.
+
+     hhwwppmmcc:: ttuunnaabbllee llooggbbuuffffeerrssiizzee==%%dd mmuusstt bbee ggrreeaatteerr tthhaann zzeerroo..  A negative
+     value was supplied for tunable _k_e_r_n_._h_w_p_m_c_._l_o_g_b_u_f_f_e_r_s_i_z_e.
+
+     hhwwppmmcc:: ttuunnaabbllee nnllooggbbuuffffeerrss==%%dd mmuusstt bbee ggrreeaatteerr tthhaann zzeerroo..  A negative
+     value was supplied for tunable _k_e_r_n_._h_w_p_m_c_._n_l_o_g_b_u_f_f_e_r_s.
+
+     hhwwppmmcc:: ttuunnaabbllee nnssaammpplleess==%%dd oouutt ooff rraannggee..  The value for tunable
+     _k_e_r_n_._h_w_p_m_c_._n_s_a_m_p_l_e_s was negative or greater than 65535.
+
+DDEEBBUUGGGGIINNGG
+     The hhwwppmmcc module can be configured to record trace entries using the
+     ktr(4) interface.  This is useful for debugging the driver's functional‐
+     ity, primarily during development.  This debugging functionality is not
+     enabled by default, and requires recompiling the kernel and hhwwppmmcc module
+     after adding the following to the kernel config:
+
+           ooppttiioonnss KKTTRR
+           ooppttiioonnss KKTTRR__CCOOMMPPIILLEE==((KKTTRR__SSUUBBSSYYSS))
+           ooppttiioonnss KKTTRR__MMAASSKK==((KKTTRR__SSUUBBSSYYSS))
+           ooppttiioonnss HHWWPPMMCC__DDEEBBUUGG
+
+     This alone is not enough to enable tracing; one must also configure the
+     _k_e_r_n_._h_w_p_m_c_._d_e_b_u_g_f_l_a_g_s sysctl(8) variable, which provides fine-grained
+     control over which types of events are logged to the trace buffer.
+
+     hhwwppmmcc trace events are grouped by 'major' and 'minor' flag types.  The
+     major flag names are as follows:
+
+           cpu       CPU events
+           csw       Context switch events
+           logging   Logging events
+           md        Machine-dependent/class-dependent events
+           module    Miscellaneous events
+           owner     PMC owner events
+           pmc       PMC management events
+           process   Process events
+           sampling  Sampling events
+
+     The minor flags for each major flag group can vary.  The individual minor
+     flag names are:
+
+           allocaterow, allocate, attach, bind, config, exec, exit, find,
+           flush, fork, getbuf, hook, init, intr, linktarget, mayberemove,
+           ops, read, register, release, remove, sample, scheduleio, select,
+           signal, swi, swo, start, stop, syscall, unlinktarget, write
+
+     The _k_e_r_n_._h_w_p_m_c_._d_e_b_u_g_f_l_a_g_s variable is a string with a custom format.  The
+     string should contain a space-separated list of event specifiers.  Each
+     event specifier consists of the major flag name, followed by an equal
+     sign (=), followed by a comma-separated list of minor event types.  To
+     track all events for a major group, an asterisk (*) can be given instead
+     of minor event names.
+
+     For example, to trace all allocation and release events, set _d_e_b_u_g_f_l_a_g_s
+     as follows:
+
+           kern.hwpmc.debugflags="pmc=allocate,release md=allocate,release"
+
+     To trace all events in the process and context switch major flag groups:
+
+           kern.hwpmc.debugflags="process=* csw=*"
+
+     To disable all trace events, set the variable to an empty string.
+
+           kern.hwpmc.debugflags=""
+
+     Trace events are recorded by ktr(4), and can be inspected at run-time us‐
+     ing the ktrdump(8) utility, or at the ddb(4) prompt after a panic with
+     the 'show ktr' command.
+
+EERRRROORRSS
+     A command issued to the hhwwppmmcc driver may fail with the following errors:
+
+     [EAGAIN]           Helper process creation failed for a
+                        PMC_OP_CONFIGURELOG request due to a temporary re‐
+                        source shortage in the kernel.
+
+     [EBUSY]            A PMC_OP_CONFIGURELOG operation was requested while an
+                        existing log was active.
+
+     [EBUSY]            A DISABLE operation was requested using the
+                        PMC_OP_PMCADMIN request for a set of hardware re‐
+                        sources currently in use for process-private PMCs.
+
+     [EBUSY]            A PMC_OP_PMCADMIN operation was requested on an active
+                        system mode PMC.
+
+     [EBUSY]            A PMC_OP_PMCATTACH operation was requested for a tar‐
+                        get process that already had another PMC using the
+                        same hardware resources attached to it.
+
+     [EBUSY]            A PMC_OP_PMCRW request writing a new value was issued
+                        on a PMC that was active.
+
+     [EBUSY]            A PMC_OP_PMCSETCOUNT request was issued on a PMC that
+                        was active.
+
+     [EDOOFUS]          A PMC_OP_PMCSTART operation was requested without a
+                        log file being configured for a PMC allocated with
+                        PMC_F_LOG_PROCCSW and PMC_F_LOG_PROCEXIT modifiers.
+
+     [EDOOFUS]          A PMC_OP_PMCSTART operation was requested on a system-
+                        wide sampling PMC without a log file being configured.
+
+     [EEXIST]           A PMC_OP_PMCATTACH request was reissued for a target
+                        process that already is the target of this PMC.
+
+     [EFAULT]           A bad address was passed in to the driver.
+
+     [EINVAL]           An invalid PMC handle was specified.
+
+     [EINVAL]           An invalid CPU number was passed in for a
+                        PMC_OP_GETPMCINFO operation.
+
+     [EINVAL]           The _p_m___f_l_a_g_s argument to a PMC_OP_CONFIGURELOG request
+                        contained unknown flags.
+
+     [EINVAL]           A PMC_OP_CONFIGURELOG request to de-configure a log
+                        file was issued without a log file being configured.
+
+     [EINVAL]           A PMC_OP_FLUSHLOG request was issued without a log
+                        file being configured.
+
+     [EINVAL]           An invalid CPU number was passed in for a
+                        PMC_OP_PMCADMIN operation.
+
+     [EINVAL]           An invalid operation request was passed in for a
+                        PMC_OP_PMCADMIN operation.
+
+     [EINVAL]           An invalid PMC ID was passed in for a PMC_OP_PMCADMIN
+                        operation.
+
+     [EINVAL]           A suitable PMC matching the parameters passed in to a
+                        PMC_OP_PMCALLOCATE request could not be allocated.
+
+     [EINVAL]           An invalid PMC mode was requested during a
+                        PMC_OP_PMCALLOCATE request.
+
+     [EINVAL]           An invalid CPU number was specified during a
+                        PMC_OP_PMCALLOCATE request.
+
+     [EINVAL]           A CPU other than PMC_CPU_ANY was specified in a
+                        PMC_OP_PMCALLOCATE request for a process-private PMC.
+
+     [EINVAL]           A CPU number of PMC_CPU_ANY was specified in a
+                        PMC_OP_PMCALLOCATE request for a system-wide PMC.
+
+     [EINVAL]           The _p_m___f_l_a_g_s argument to an PMC_OP_PMCALLOCATE request
+                        contained unknown flags.
+
+     [EINVAL]           (On Intel Pentium 4 CPUs with HTT support) A
+                        PMC_OP_PMCALLOCATE request for a process-private PMC
+                        was issued for an event that does not support counting
+                        on a per-logical CPU basis.
+
+     [EINVAL]           A PMC allocated for system-wide operation was speci‐
+                        fied with a PMC_OP_PMCATTACH or PMC_OP_PMCDETACH re‐
+                        quest.
+
+     [EINVAL]           The _p_m___p_i_d argument to a PMC_OP_PMCATTACH or
+                        PMC_OP_PMCDETACH request specified an illegal process
+                        ID.
+
+     [EINVAL]           A PMC_OP_PMCDETACH request was issued for a PMC not
+                        attached to the target process.
+
+     [EINVAL]           Argument _p_m___f_l_a_g_s to a PMC_OP_PMCRW request contained
+                        illegal flags.
+
+     [EINVAL]           A PMC_OP_PMCX86GETMSR operation was requested for a
+                        PMC not in process-virtual mode, or for a PMC that is
+                        not solely attached to its owner process, or for a PMC
+                        that was allocated with flag PMC_F_DESCENDANTS.
+
+     [EINVAL]           A PMC_OP_WRITELOG request was issued for an owner
+                        process without a log file configured.
+
+     [ENOMEM]           The system was not able to allocate kernel memory.
+
+     [ENOSYS]           (On i386 and amd64 architectures) A
+                        PMC_OP_PMCX86GETMSR operation was requested for hard‐
+                        ware that does not support reading PMCs directly with
+                        the RDPMC instruction.
+
+     [ENXIO]            A PMC_OP_GETPMCINFO operation was requested for an ab‐
+                        sent or disabled CPU.
+
+     [ENXIO]            A PMC_OP_PMCALLOCATE operation specified allocation of
+                        a system-wide PMC on an absent or disabled CPU.
+
+     [ENXIO]            A PMC_OP_PMCSTART or PMC_OP_PMCSTOP request was issued
+                        for a system-wide PMC that was allocated on a CPU that
+                        is currently absent or disabled.
+
+     [EOPNOTSUPP]       A PMC_OP_PMCALLOCATE request was issued for PMC capa‐
+                        bilities not supported by the specified PMC class.
+
+     [EOPNOTSUPP]       (i386 architectures) A sampling mode PMC was requested
+                        on a CPU lacking an APIC.
+
+     [EPERM]            A PMC_OP_PMCADMIN request was issued by a process
+                        without super-user privilege or by a jailed super-user
+                        process.
+
+     [EPERM]            A PMC_OP_PMCATTACH operation was issued for a target
+                        process that the current process does not have permis‐
+                        sion to attach to.
+
+     [EPERM]            (i386 and amd64 architectures) A PMC_OP_PMCATTACH op‐
+                        eration was issued on a PMC whose MSR has been re‐
+                        trieved using PMC_OP_PMCX86GETMSR.
+
+     [ESRCH]            A process issued a PMC operation request without hav‐
+                        ing allocated any PMCs.
+
+     [ESRCH]            A process issued a PMC operation request after the PMC
+                        was detached from all of its target processes.
+
+     [ESRCH]            A PMC_OP_PMCATTACH or PMC_OP_PMCDETACH request speci‐
+                        fied a non-existent process ID.
+
+     [ESRCH]            The target process for a PMC_OP_PMCDETACH operation is
+                        not being monitored by hhwwppmmcc.
+
+SSEEEE AALLSSOO
+     kenv(1), pmc(3), pmclog(3), ddb(4), ktr(4), kldload(8), ktrdump(8),
+     pmccontrol(8), pmcstat(8), sysctl(8), kproc_create(9), p_candebug(9)
+
+HHIISSTTOORRYY
+     The hhwwppmmcc driver first appeared in FreeBSD 6.0.
+
+AAUUTTHHOORRSS
+     The hhwwppmmcc driver was written by Joseph Koshy <_j_k_o_s_h_y_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     The driver samples the state of the kernel's logical processor support at
+     the time of initialization (i.e., at module load time).  On CPUs support‐
+     ing logical processors, the driver could misbehave if logical processors
+     are subsequently enabled or disabled while the driver is active.
+
+     On the i386 architecture, the driver requires that the local APIC on the
+     CPU be enabled for sampling mode to be supported.  Many single-processor
+     motherboards keep the APIC disabled in BIOS; on such systems hhwwppmmcc will
+     not support sampling PMCs.
+
+SSEECCUURRIITTYY CCOONNSSIIDDEERRAATTIIOONNSS
+     PMCs may be used to monitor the actual behavior of the system on hard‐
+     ware.  In situations where this constitutes an undesirable information
+     leak, the following options are available:
+
+     1.   Set the sysctl(8) tunable _s_e_c_u_r_i_t_y_._b_s_d_._u_n_p_r_i_v_i_l_e_g_e_d___s_y_s_p_m_c_s to 0.
+          This ensures that unprivileged processes cannot allocate system-wide
+          PMCs and thus cannot observe the hardware behavior of the system as
+          a whole.  This tunable may also be set at boot time using loader(8),
+          or with kenv(1) prior to loading the hhwwppmmcc driver into the kernel.
+
+     2.   Set the sysctl(8) tunable _s_e_c_u_r_i_t_y_._b_s_d_._u_n_p_r_i_v_i_l_e_g_e_d___p_r_o_c___d_e_b_u_g to 0.
+          This will ensure that an unprivileged process cannot attach a PMC to
+          any process other than itself and thus cannot observe the hardware
+          behavior of other processes with the same credentials.
+
+     System administrators should note that on IA-32 platforms FreeBSD makes
+     the content of the IA-32 TSC counter available to all processes via the
+     RDTSC instruction.
+
+BSD                              July 8, 2023                              BSD

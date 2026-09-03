@@ -1,0 +1,114 @@
+SHM_MAP(9)               BSD Kernel Developer's Manual              SHM_MAP(9)
+
+NNAAMMEE
+     sshhmm__mmaapp, sshhmm__uunnmmaapp — map shared memory objects into the kernel's address
+     space
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//mmmmaann..hh>>
+
+     _i_n_t
+     sshhmm__mmaapp(_s_t_r_u_c_t _f_i_l_e _*_f_p, _s_i_z_e___t _s_i_z_e, _o_f_f___t _o_f_f_s_e_t, _v_o_i_d _*_*_m_e_m_p);
+
+     _i_n_t
+     sshhmm__uunnmmaapp(_s_t_r_u_c_t _f_i_l_e _*_f_p, _v_o_i_d _*_m_e_m, _s_i_z_e___t _s_i_z_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     The sshhmm__mmaapp() and sshhmm__uunnmmaapp() functions provide an API for mapping shared
+     memory objects into the kernel.  Shared memory objects are created by
+     shm_open(2).  These objects can then be passed into the kernel via file
+     descriptors.
+
+     A shared memory object cannot be shrunk while it is mapped into the ker‐
+     nel.  This is to avoid invalidating any pages that may be wired into the
+     kernel's address space.  Shared memory objects can still be grown while
+     mapped into the kernel.
+
+     To simplify the accounting needed to enforce the above requirement, call‐
+     ers of this API are required to unmap the entire region mapped by
+     sshhmm__mmaapp() when calling sshhmm__uunnmmaapp().  Unmapping only a portion of the re‐
+     gion is not permitted.
+
+     The sshhmm__mmaapp() function locates the shared memory object associated with
+     the open file _f_p.  It maps the region of that object described by _o_f_f_s_e_t
+     and _s_i_z_e into the kernel's address space.  If it succeeds, _*_m_e_m_p will be
+     set to the start of the mapping.  All pages for the range will be wired
+     into memory upon successful return.
+
+     The sshhmm__uunnmmaapp() function unmaps a region previously mapped by sshhmm__mmaapp().
+     The _m_e_m argument should match the value previously returned in _*_m_e_m_p, and
+     the _s_i_z_e argument should match the value passed to sshhmm__mmaapp().
+
+     Note that sshhmm__mmaapp() will not hold an extra reference on the open file _f_p
+     for the lifetime of the mapping.  Instead, the calling code is required
+     to do this if it wishes to use sshhmm__uunnmmaapp() on the region in the future.
+
+RREETTUURRNN VVAALLUUEESS
+     The sshhmm__mmaapp() and sshhmm__uunnmmaapp() functions return zero on success or an er‐
+     ror on failure.
+
+EEXXAAMMPPLLEESS
+     The following function accepts a file descriptor for a shared memory ob‐
+     ject.  It maps the first sixteen kilobytes of the object into the kernel,
+     performs some work on that address, and then unmaps the address before
+     returning.
+
+           int
+           shm_example(int fd)
+           {
+                   struct file *fp;
+                   void *mem;
+                   int error;
+
+                   error = fget(curthread, fd, CAP_MMAP, &fp);
+                   if (error)
+                           return (error);
+                   error = shm_map(fp, 16384, 0, &mem);
+                   if (error) {
+                           fdrop(fp, curthread);
+                           return (error);
+                   }
+
+                   /* Do something with 'mem'. */
+
+                   error = shm_unmap(fp, mem, 16384);
+                   fdrop(fp, curthread);
+                   return (error);
+           }
+
+EERRRROORRSS
+     The sshhmm__mmaapp() function returns the following errors on failure:
+
+     [EINVAL]           The open file _f_p is not a shared memory object.
+
+     [EINVAL]           The requested region described by _o_f_f_s_e_t and _s_i_z_e ex‐
+                        tends beyond the end of the shared memory object.
+
+     [ENOMEM]           Insufficient address space was available.
+
+     [EACCES]           The shared memory object could not be mapped due to a
+                        protection error.
+
+     [EINVAL]           The shared memory object could not be mapped due to
+                        some other VM error.
+
+     The sshhmm__uunnmmaapp() function returns the following errors on failure:
+
+     [EINVAL]           The open file _f_p is not a shared memory object.
+
+     [EINVAL]           The address range described by _m_e_m and _s_i_z_e is not a
+                        valid address range.
+
+     [EINVAL]           The address range described by _m_e_m and _s_i_z_e is not
+                        backed by the shared memory object associated with the
+                        open file _f_p, or the address range does not cover the
+                        entire mapping of the object.
+
+SSEEEE AALLSSOO
+     shm_open(2)
+
+HHIISSTTOORRYY
+     This API was first introduced in FreeBSD 10.0.
+
+BSD                            December 14, 2011                           BSD

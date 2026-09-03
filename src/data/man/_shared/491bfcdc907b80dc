@@ -1,0 +1,179 @@
+ST(4)                    BSD Kernel Interfaces Manual                    ST(4)
+
+NNAAMMEE
+     sstt — SCSI tape driver
+
+SSYYNNOOPPSSIISS
+     sstt** aatt ssccssiibbuuss??
+     ##sstt00 aatt ssccssiibbuuss00 ttaarrggeett 44 lluunn 00 (fixed-configuration example)
+
+DDEESSCCRRIIPPTTIIOONN
+     The sstt driver provides support for SCSI tape drives.
+
+     SCSI devices have a relatively high level interface and talk to the sys‐
+     tem via a SCSI adapter and a SCSI adapter driver e.g. ahc(4).  The SCSI
+     adapter must be separately configured into the system before a SCSI tape
+     can be configured.
+
+     As the SCSI adapter is probed during boot, the SCSI bus is scanned for
+     devices.  Any devices found which answer as _S_e_q_u_e_n_t_i_a_l type devices will
+     be attached to the sstt driver.
+
+MMOOUUNNTT SSEESSSSIIOONNSS
+     The sstt driver is based around the concept of a _m_o_u_n_t _s_e_s_s_i_o_n, which is
+     defined as the period between the time that a tape is mounted and the
+     time when it is unmounted.  Any parameters set during a mount session re‐
+     main in effect for the remainder of the session or until replaced.  The
+     tape can be unmounted, bringing the session to a close in several ways.
+     These include:
+
+     1.   Closing an “unmount device”.
+
+     2.   Using the MTOFFL ioctl(2) command, reachable through the oofffflliinnee
+          command of mt(1).
+
+EEJJEECCTT aanndd RREEWWIINNDD
+     Bit 0 of the minor number specifies whether a rewind is attempted when
+     the device is closed.  When it is set, the device will not attempt a
+     rewind on close and the device will have an ‘n’ in its name.  For exam‐
+     ple, _/_d_e_v_/_r_s_t_0 will rewind on close but _/_d_e_v_/_n_r_s_t_0 will not.
+
+     Bit 1 of the minor number specifies whether an eject is attempted when
+     the device is closed.  When it is set, the device will attempt to eject
+     its media on close and the device will have an ‘e’ in its name.  For ex‐
+     ample, _/_d_e_v_/_e_r_s_t_0 will eject its media on close but _/_d_e_v_/_r_s_t_0 will not.
+
+     If both bit 0 and bit 1 are set then an eject will be attempted without a
+     rewind and the device will have both an ‘e’ and an ‘n’ in its name.  For
+     example, _/_d_e_v_/_e_n_r_s_t_0 will eject its media without first rewinding it on
+     close.
+
+     There is no guarantee that the attempted eject or rewind will be sup‐
+     ported by the actual hardware.
+
+BBLLOOCCKKIINNGG MMOODDEESS
+     SCSI tapes may run in either _v_a_r_i_a_b_l_e or _f_i_x_e_d block-size modes.  Most
+     QIC-type devices run in fixed block-size mode, whereas most nine-track
+     tapes and many new cartridge formats allow variable block-size.  The dif‐
+     ference between the two is as follows:
+
+     Variable block-size: Each write made to the device results in a single
+     logical record written to the tape.  One can never read or write _p_a_r_t of
+     a record from tape (though you may request a larger block and read a
+     smaller record); nor can one read multiple blocks.  Data from a single
+     write is therefore read by a single read.  The block size used may be any
+     value supported by the device, the SCSI adapter and the system (usually
+     between 1 byte and 64 Kbytes, sometimes more).
+
+     When reading a variable record/block from the tape, the head is logically
+     considered to be immediately after the last item read, and before the
+     next item after that.  If the next item is a file mark, but it was never
+     read, then the next process to read will immediately hit the file mark
+     and receive an end-of-file notification.
+
+     Fixed block-size data written by the user is passed to the tape as a suc‐
+     cession of fixed size blocks.  It may be contiguous in memory, but it is
+     considered to be a series of independent blocks.  One may never write an
+     amount of data that is not an exact multiple of the blocksize.  One may
+     read and write the same data as a different set of records.  In other
+     words, blocks that were written together may be read separately, and
+     vice-versa.
+
+     If one requests more blocks than remain in the file, the drive will en‐
+     counter the file mark.  Because there is some data to return (unless
+     there were no records before the file mark), the read will succeed, re‐
+     turning that data.  The next read will return immediately with an EOF.
+     (As above, if the file mark is never read, it remains for the next
+     process to read if in no-rewind mode.)
+
+FFIILLEE MMAARRKK HHAANNDDLLIINNGG
+     The handling of file marks on write is automatic.  If the user has writ‐
+     ten to the tape, and has not done a read since the last write, then a
+     file mark will be written to the tape when the device is closed.  If a
+     rewind is requested after a write, then the driver assumes that the last
+     file on the tape has been written, and ensures that there are two file
+     marks written to the tape.  The exception to this is that there seems to
+     be a standard (which we follow, but don't understand why) that certain
+     types of tape do not actually write two file marks to tape, but when
+     read, report a “phantom” file mark when the last file is read.  These de‐
+     vices include the QIC family of devices.  (It might be that this set of
+     devices is the same set as that of fixed.  This has not yet been deter‐
+     mined, and they are treated as separate behaviors by the driver at this
+     time.)
+
+IIOOCCTTLLSS
+     The following ioctl(2) calls apply to SCSI tapes.  Some also apply to
+     other tapes.  They are defined in the header file <_s_y_s_/_m_t_i_o_._h>.
+
+     MTIOCGET _s_t_r_u_c_t _m_t_g_e_t _*
+                Retrieve the status and parameters of the tape.
+
+     MTIOCTOP struct mtop *
+                Perform a multiplexed operation.  The argument structure is as
+                follows:
+
+                      struct mtop {
+                              short   mt_op;
+                              int     mt_count;
+                      };
+
+                The following operation values are defined for _m_t___o_p:
+
+                MTWEOF      Write _m_t___c_o_u_n_t end of file marks at the present
+                            head position.
+
+                MTFSF       Skip over _m_t___c_o_u_n_t file marks.  Leave the head on
+                            the EOM side of the last skipped file mark.
+
+                MTBSF       Skip _b_a_c_k_w_a_r_d_s over _m_t___c_o_u_n_t file marks.  Leave
+                            the head on the BOM (beginning of media) side of
+                            the last skipped file mark.
+
+                MTFSR       Skip forwards over _m_t___c_o_u_n_t records.
+
+                MTBSR       Skip backwards over _m_t___c_o_u_n_t records.
+
+                MTREW       Rewind the device to the beginning of the media.
+
+                MTOFFL      Rewind the media (and, if possible, eject).  Even
+                            if the device cannot eject the media, it will of‐
+                            ten no longer respond to normal requests.
+
+                MTNOP       No-op; set status only.
+
+                MTCACHE     Enable controller buffering.
+
+                MTNOCACHE   Disable controller buffering.
+
+                MTSETBSIZ   Set the blocksize to use for the device/mode.  If
+                            the device is capable of variable blocksize opera‐
+                            tion, and the blocksize is set to 0, then the
+                            drive will be driven in variable mode.  This pa‐
+                            rameter is in effect for the present mount session
+                            only.
+
+                MTSETDNSTY  Set the density value (see mt(1)) to use when run‐
+                            ning in the mode opened (minor bits 2 and 3).
+                            This parameter is in effect for the present mount
+                            session only.
+
+     MTIOCIEOT  Set end-of-tape processing (not presently supported for sstt de‐
+                vices).
+
+     MTIOCEEOT  Set end-of-tape processing (not presently supported for sstt de‐
+                vices).
+
+FFIILLEESS
+     /dev/[e][n][r]st[0-9]  General form.
+     /dev/rst0              No eject, rewind on close.
+     /dev/nrst0             No eject, no rewind on close.
+     /dev/erst0             Eject, rewind on close.
+     /dev/enrst0            Eject, no rewind on close.
+
+SSEEEE AALLSSOO
+     chio(1), mt(1), intro(4), mtio(4), scsi(4)
+
+HHIISSTTOORRYY
+     Julian Elischer wrote sstt for Mach 2.5 and ported it to 386BSD.
+
+BSD                            December 21, 2024                           BSD

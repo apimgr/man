@@ -1,0 +1,139 @@
+VXLAN(4)                 BSD Kernel Interfaces Manual                 VXLAN(4)
+
+NNAAMMEE
+     vvxxllaann — Virtual eXtensible LAN interface
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee vvxxllaann
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           if_vxlan_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The vvxxllaann driver creates a virtual tunnel endpoint in a vvxxllaann segment.  A
+     vvxxllaann segment is a virtual Layer 2 (Ethernet) network that is overlaid in
+     a Layer 3 (IP/UDP) network.  vvxxllaann is analogous to vlan(4) but is de‐
+     signed to be better suited for large, multiple tenant data center envi‐
+     ronments.
+
+     Each vvxxllaann interface is created at runtime using interface cloning.  This
+     is most easily done with the ifconfig(8) ccrreeaattee command or using the
+     _c_l_o_n_e_d___i_n_t_e_r_f_a_c_e_s variable in rc.conf(5).  The interface may be removed
+     with the ifconfig(8) ddeessttrrooyy command.
+
+     The vvxxllaann driver creates a pseudo Ethernet network interface that sup‐
+     ports the usual network ioctl(2)s and thus can be used with ifconfig(8)
+     like any other Ethernet interface.  The vvxxllaann interface encapsulates the
+     Ethernet frame by prepending IP/UDP and vvxxllaann headers.  Thus, the encap‐
+     sulated (inner) frame is able to be transmitted over a routed, Layer 3
+     network to the remote host.
+
+     The vvxxllaann interface may be configured in either unicast or multicast
+     mode.  When in unicast mode, the interface creates a tunnel to a single
+     remote host, and all traffic is transmitted to that host.  When in multi‐
+     cast mode, the interface joins an IP multicast group, and receives pack‐
+     ets sent to the group address, and transmits packets to either the multi‐
+     cast group address, or directly to the remote host if there is an appro‐
+     priate forwarding table entry.
+
+     When the vvxxllaann interface is brought up, a udp(4) socket(9) is created
+     based on the configuration, such as the local address for unicast mode or
+     the group address for multicast mode, and the listening (local) port num‐
+     ber.  Since multiple vvxxllaann interfaces may be created that either use the
+     same local address or join the same group address, and use the same port,
+     the driver may share a socket among multiple interfaces.  However, each
+     interface within a socket must belong to a unique vvxxllaann segment.  The
+     analogous vlan(4) configuration would be a physical interface configured
+     as the parent device for multiple VLAN interfaces, each with a unique
+     VLAN tag.  Each vvxxllaann segment is identified by a 24-bit value in the
+     vvxxllaann header called the “VXLAN Network Identifier”, or VNI.
+
+     When configured with the ifconfig(8) vvxxllaannlleeaarrnn parameter, the interface
+     dynamically creates forwarding table entries from received packets.  An
+     entry in the forwarding table maps the inner source MAC address to the
+     outer remote IP address.  During transmit, the interface attempts to
+     lookup an entry for the encapsulated destination MAC address.  If an en‐
+     try is found, the IP address in the entry is used to directly transmit
+     the encapsulated frame to the destination.  Otherwise, when configured in
+     multicast mode, the interface must flood the frame to all hosts in the
+     group.  The maximum number of entries in the table is configurable with
+     the ifconfig(8) vvxxllaannmmaaxxaaddddrr command.  Stale entries in the table are pe‐
+     riodically pruned.  The timeout is configurable with the ifconfig(8)
+     vvxxllaannttiimmeeoouutt command.  The table may be viewed with the sysctl(8)
+     nneett..lliinnkk..vvxxllaann..NN..ffttaabbllee..dduummpp command.
+
+MMTTUU
+     Since the vvxxllaann interface encapsulates the Ethernet frame with an IP,
+     UDP, and vvxxllaann header, the resulting frame may be larger than the MTU of
+     the physical network.  The vvxxllaann specification recommends the physical
+     network MTU be configured to use jumbo frames to accommodate the encapsu‐
+     lated frame size.
+
+     By default, the vvxxllaann driver sets its MTU to usual ethernet MTU of 1500
+     bytes, reduced by the size of vxlan headers prepended to the encapsulated
+     packets.
+
+     Alternatively, the ifconfig(8) mmttuu command may be used to set the fixed
+     MTU size on the vvxxllaann interface to allow the encapsulated frame to fit in
+     the current MTU of the physical network.  If the mmttuu command was used,
+     system no longer adjust the vvxxllaann interface MTU on routing or address
+     changes.
+
+HHAARRDDWWAARREE
+     The vvxxllaann driver supports hardware checksum offload (receive and trans‐
+     mit) and TSO on the encapsulated traffic over physical interfaces that
+     support these features.  The vvxxllaann interface examines the vvxxllaannddeevv inter‐
+     face, if one is specified, or the interface hosting the vvxxllaannllooccaall ad‐
+     dress, and configures its capabilities based on the hardware offload ca‐
+     pabilities of that physical interface.  If multiple physical interfaces
+     will transmit or receive traffic for the vvxxllaann then they all must have
+     the same hardware capabilities.  The transmit routine of a vvxxllaann inter‐
+     face may fail with ENXIO if an outbound physical interface does not sup‐
+     port an offload that the vvxxllaann interface is requesting.  This can happen
+     if there are multiple physical interfaces involved, with different hard‐
+     ware capabilities, or an interface capability was disabled after the
+     vvxxllaann interface had already started.
+
+     At present, these devices are capable of generating checksums and per‐
+     forming TSO on the inner frames in hardware: cxgbe(4).
+
+EEXXAAMMPPLLEESS
+     Create a vvxxllaann interface in unicast mode with the vvxxllaannllooccaall tunnel ad‐
+     dress of 192.168.100.1, and the vvxxllaannrreemmoottee tunnel address of
+     192.168.100.2.
+
+           ifconfig vxlan create vxlanid 108 vxlanlocal 192.168.100.1 vxlanremote 192.168.100.2
+
+     Create a vvxxllaann interface in multicast mode, with the llooccaall address of
+     192.168.10.95, and the ggrroouupp address of 224.0.2.6.  The em0 interface
+     will be used to transmit multicast packets.
+
+           ifconfig vxlan create vxlanid 42 vxlanlocal 192.168.10.95 vxlangroup 224.0.2.6 vxlandev em0
+
+     Once created, the vvxxllaann interface can be configured with ifconfig(8).
+
+     The following when placed in the file _/_e_t_c_/_r_c_._c_o_n_f will cause a vxlan in‐
+     terface called “vxlan0” to be created, and will configure the interface
+     in unicast mode.
+
+           cloned_interfaces="vxlan0"
+           create_args_vxlan0="vxlanid 108 vxlanlocal 192.168.100.1 vxlanremote 192.168.100.2"
+
+SSEEEE AALLSSOO
+     inet(4), inet6(4), vlan(4), rc.conf(5), ifconfig(8), sysctl(8)
+
+     M. Mahalingam and et al, _V_i_r_t_u_a_l _e_X_t_e_n_s_i_b_l_e _L_o_c_a_l _A_r_e_a _N_e_t_w_o_r_k _(_V_X_L_A_N_)_: _A
+     _F_r_a_m_e_w_o_r_k _f_o_r _O_v_e_r_l_a_y_i_n_g _V_i_r_t_u_a_l_i_z_e_d _L_a_y_e_r _2 _N_e_t_w_o_r_k_s _o_v_e_r _L_a_y_e_r _3
+     _N_e_t_w_o_r_k_s, August 2014, RFC 7348.
+
+AAUUTTHHOORRSS
+     The vvxxllaann driver was written by Bryan Venteicher <bryanv@freebsd.org>.
+     Support for stateless hardware offloads was added by Navdeep Parhar
+     <np@freebsd.org> in FreeBSD 13.0.
+
+BSD                             March 30, 2021                             BSD

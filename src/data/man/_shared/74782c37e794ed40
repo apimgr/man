@@ -1,0 +1,203 @@
+GUNION(8)                 BSD System Manager's Manual                GUNION(8)
+
+NNAAMMEE
+     gguunniioonn — control utility for UNION GEOM class
+
+SSYYNNOOPPSSIISS
+     gguunniioonn ccrreeaattee [--vv] [--oo _o_f_f_s_e_t] [--ss _s_i_z_e] [--SS _s_e_c_s_i_z_e] [--ZZ _g_u_n_i_o_n_n_a_m_e]
+            _u_p_p_e_r_d_e_v _l_o_w_e_r_d_e_v
+     gguunniioonn ddeessttrrooyy [--ffvv] _p_r_o_v _._._.
+     gguunniioonn rreesseett [--vv] _p_r_o_v _._._.
+     gguunniioonn rreevveerrtt [--vv] _p_r_o_v _._._.
+     gguunniioonn ccoommmmiitt [--ffrrvv] _p_r_o_v _._._.
+     gguunniioonn lliisstt
+     gguunniioonn ssttaattuuss
+     gguunniioonn llooaadd
+     gguunniioonn uunnllooaadd
+
+DDEESSCCRRIIPPTTIIOONN
+     The gguunniioonn utility is used to track changes to a read-only disk on a
+     writable disk.  Logically, a writable disk is placed over a read-only
+     disk.  Write requests are intercepted and stored on the writable disk.
+     Read requests are first checked to see if they have been written on the
+     top (writable disk) and if found are returned.  If they have not been
+     written on the top disk, then they are read from the lower disk.
+
+     The gguunniioonn utility can be especially useful if you have a large disk with
+     a corrupted filesystem that you are unsure of how to repair.  You can use
+     gguunniioonn to place another disk over the corrupted disk and then attempt to
+     repair the filesystem.  If the repair fails, you can revert all the
+     changes in the upper disk and be back to the unchanged state of the lower
+     disk thus allowing you to try another approach to repairing it.  If the
+     repair is successful you can request that all the writes recorded on the
+     top disk be written to the lower disk.
+
+     Another use of the gguunniioonn utility is to try out upgrades to your system.
+     Place the upper disk over the disk holding your filesystem that is to be
+     upgraded and then run the upgrade on it.  If it works, commit it; if it
+     fails, revert the upgrade.  An example is given below.
+
+     The upper disk must be at least the size of the disk that it covers.  The
+     union metadata exists only for the period of time that the union is in‐
+     stantiated, so it is important to commit the updates before destroying
+     the union.  If the top disk is about 2.5 percent larger for 512 byte sec‐
+     tor disks (or 0.5 percent larger for 4K sector disks) than the disk that
+     it covers, it is posible (thought not currently implemented) to save the
+     union metadata between instantiations of the union device.
+
+     If you do not have physical media available to use for the upper layer,
+     the md(4) disk can be used instead.  When used in sswwaapp mode the changes
+     are all held in buffer memory.  Pages get pushed out to the swap when the
+     system is under memory pressure, otherwise they stay in the operating
+     memory.  If long-term persistance is desired, vvnnooddee mode can be used in
+     which a regular file is used as backing store.  The disk space used by
+     the file is based on the amount of data that is written to the top de‐
+     vice.
+
+     The first argument to gguunniioonn indicates an action to be performed:
+
+     ccrreeaattee   Set up a union provider on the two given devices.  The first de‐
+              vice given is used as the top device and must be writable.  The
+              second device given is used as the bottom device and need only
+              be readable.  The second device may be mounted read-only but it
+              is recommended that it be unmounted and accessed only through a
+              mount of the union device.  If the operation succeeds, the new
+              provider should appear with name
+              _/_d_e_v_/⟨_u_p_p_e_r_d_e_v⟩-⟨_l_o_w_e_r_d_e_v⟩_._u_n_i_o_n.  An alternate name can be
+              specified with the --ZZ flag.  The kernel module _g_e_o_m___u_n_i_o_n_._k_o
+              will be loaded if it is not loaded already.
+
+              Additional options include:
+
+              --oo _o_f_f_s_e_t      Where to begin on the original provider.  The de‐
+                             fault is to start at the beginning of the disk
+                             (i.e., at offset 0).  This option may be used to
+                             skip over partitioning information stored at the
+                             beginning of a disk.  The offset must be a multi‐
+                             ple of the sector size.
+
+              --ss _s_i_z_e        Size of the transparent provider.  The default is
+                             to be the same size as the lower disk.  Any extra
+                             space at the end of the upper disk may be used to
+                             store union metadata.
+
+              --SS _s_e_c_s_i_z_e     Sector size of the transparent provider.  The de‐
+                             fault is to be the same sector size as the lower
+                             disk.
+
+              --vv             Be more verbose.
+
+              --ZZ _g_u_n_i_o_n_n_a_m_e  The name of the new provider.  The suffix
+                             “.union” will be appended to the provider name.
+
+     ddeessttrrooyy  Turn off the given union providers.
+
+              Additional options include:
+
+              --ff  Force the removal of the specified provider.
+
+              --vv  Be more verbose.
+
+     rreevveerrtt   Discard all the changes made in the top layer thus reverting to
+              the original state of the lower device.  The union device may
+              not be mounted or otherwise in use when a rreevveerrtt operation is
+              being done.
+
+     ccoommmmiitt   Write all the changes made in the top device to the lower device
+              thus committing the lower device to have the same data as the
+              union.
+
+              Additional options include:
+
+              --ff  The ccoommmmiitt command will not allow the lower device to be
+                  mounted or otherwise in use while the ccoommmmiitt operation is
+                  being done.  However, the --ff flag may be specified to allow
+                  the lower device to be mounted read-only.  To prevent a
+                  filesystem panic on the mounted lower-device filesystem, im‐
+                  mediately after the ccoommmmiitt operation finishes the lower-de‐
+                  vice filesystem should be unmounted and then remounted to
+                  update its metadata state.  If the lower-device filesystem
+                  is currently being used as the root filesystem then the --rr
+                  flag should be specified to reboot the system at the comple‐
+                  tion of the ccoommmmiitt operation.
+
+              --rr  Reboot the system at the completion of the ccoommmmiitt operation.
+
+              --vv  Be more verbose.
+
+     rreesseett    Reset statistics for the given union providers.
+
+     lliisstt     See geom(8).
+
+     ssttaattuuss   See geom(8).
+
+     llooaadd     See geom(8).
+
+     uunnllooaadd   See geom(8).
+
+EEXXIITT SSTTAATTUUSS
+     Exit status is 0 on success, and 1 if the command fails.
+
+EEXXAAMMPPLLEESS
+     The following example shows how to create and destroy a union provider
+     with disks _/_d_e_v_/_d_a_0_p_1 as the read-only disk on the bottom and _/_d_e_v_/_m_d_0 as
+     the wriable disk on the top.
+
+           gunion create -v md0 da0p1
+           mount /dev/md0-da0p1.union /mnt
+
+     Proceed to make changes in /mnt filesystem.  If they are successful and
+     you want to keep them.
+
+           umount /mnt
+           gunion commit -v md0-da0p1.union
+
+     If they are unsuccessful and you want to roll back.
+
+           umount /mnt
+           gunion revert -v md0-da0p1.union
+
+     When done eliminate the union.
+
+           umount /mnt
+           gunion destroy -v md0-da0p1.union
+
+     All uncommitted changes will be discarded when the union is destroyed.
+
+     If you use the name of the full disk, for example _d_a_0 and it is labelled,
+     then a union name will appear for the disk as _m_d_0_-_d_a_0_._u_n_i_o_n as well as
+     for each partition on the disk as _m_d_0_-_d_a_0_p_1_._u_n_i_o_n, _m_d_0_-_d_a_0_p_2_._u_n_i_o_n, etc.
+     A commit operation can be done only on _m_d_0_-_d_a_0_._u_n_i_o_n and will commit
+     changes to all the partitions.  If partition level commits are desired,
+     then a union must be created for each partition.
+
+     The traffic statistics for the given union providers can be obtained with
+     the lliisstt command.  The example below shows the number of bytes written
+     with newfs(8):
+
+           gunion create md0 da0p1
+           newfs /dev/md0-da0p1.union
+           gunion list
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     The following sysctl(8) variables can be used to control the behavior of
+     the UUNNIIOONN GEOM class.  The default value is shown next to each variable.
+
+     _k_e_r_n_._g_e_o_m_._u_n_i_o_n_._d_e_b_u_g: 0
+             Debug level of the UUNNIIOONN GEOM class.  This can be set to a number
+             between 0 and 4 inclusive.  If set to 0, no debug information is
+             printed.  If set to 1, all the verbose messages are logged.  If
+             set to 2, addition error-related information is logged.  If set
+             to 3, mapping operations are logged.  If set to 4, the maximum
+             amount of debug information is printed.
+
+SSEEEE AALLSSOO
+     geom(4), geom(8)
+
+HHIISSTTOORRYY
+     The gguunniioonn utility appeared in FreeBSD 14.0.
+
+AAUUTTHHOORRSS
+     Marshall Kirk McKusick <_m_c_k_u_s_i_c_k_@_m_c_k_u_s_i_c_k_._c_o_m>
+
+BSD                            January 19, 2022                            BSD

@@ -1,0 +1,465 @@
+ISAKMPD(8)                BSD System Manager's Manual               ISAKMPD(8)
+
+NNAAMMEE
+     iissaakkmmppdd — ISAKMP/Oakley a.k.a. IKEv1 key management daemon
+
+SSYYNNOOPPSSIISS
+     iissaakkmmppdd [--4466aaddKKLLnnSSTTvv] [--cc _c_o_n_f_i_g_-_f_i_l_e] [--DD _c_l_a_s_s=_l_e_v_e_l] [--ff _f_i_f_o]
+             [--ii _p_i_d_-_f_i_l_e] [--ll _p_a_c_k_e_t_l_o_g_-_f_i_l_e] [--NN _u_d_p_e_n_c_a_p_-_p_o_r_t]
+             [--pp _l_i_s_t_e_n_-_p_o_r_t] [--RR _r_e_p_o_r_t_-_f_i_l_e]
+
+DDEESSCCRRIIPPTTIIOONN
+     The iissaakkmmppdd daemon establishes Security Associations (SAs) for encrypted
+     and/or authenticated network traffic.  At this moment, and probably for‐
+     ever, this means ipsec(4) traffic.  Traditionally, iissaakkmmppdd was configured
+     using the isakmpd.conf(5) file format.  A newer, much simpler format is
+     now available: ipsec.conf(5).
+
+     iissaakkmmppdd implements the IKEv1 protocol which is defined in the standards
+     ISAKMP/Oakley (RFC 2408), IKE (RFC 2409), and the Internet DOI (RFC
+     2407).  The newer IKEv2 protocol, as defined in RFC 5996, is not sup‐
+     ported by iissaakkmmppdd but by iked(8).  It follows then that references to IKE
+     in this document pertain to IKEv1 only, and not IKEv2.
+
+     The way iissaakkmmppdd goes about its work is by maintaining an internal config‐
+     uration as well as a policy database which describes what kinds of SAs to
+     negotiate, and by listening for different events that trigger these nego‐
+     tiations.  The events that control iissaakkmmppdd consist of negotiation initia‐
+     tions from a remote party, user input via a FIFO or by signals, upcalls
+     from the kernel via a PF_KEY socket, and lastly by scheduled events trig‐
+     gered by timers running out.
+
+     Most uses of iissaakkmmppdd will be to implement so called "virtual private net‐
+     works" (VPNs).  The ability to provide redundancy is made available
+     through carp(4) and sasyncd(8).  For other uses, some more knowledge of
+     IKEv1 as a protocol is required.  The RFCs mentioned below are a possible
+     starting point.
+
+     On startup iissaakkmmppdd forks into two processes for privilege separation.
+     The unprivileged child jails itself with chroot(8) to _/_v_a_r_/_e_m_p_t_y.  The
+     privileged process communicates with the child, reads configuration files
+     and PKI information, and binds to privileged ports on its behalf.  See
+     the _C_A_V_E_A_T_S section below.
+
+     The options are as follows:
+
+     --44 | --66
+             These options control what address family (AF_INET and/or
+             AF_INET6) iissaakkmmppdd will use.  The default is to use both IPv4 and
+             IPv6.
+
+     --aa      If given, iissaakkmmppdd does not set up flows automatically.  Instead
+             manual flows may be configured using ipsec.conf(5) or by programs
+             such as bgpd(8).  Thus iissaakkmmppdd only takes care of SA establish‐
+             ment.
+
+     --cc _c_o_n_f_i_g_-_f_i_l_e
+             If given, the --cc option specifies an alternate configuration file
+             instead of _/_e_t_c_/_i_s_a_k_m_p_d_/_i_s_a_k_m_p_d_._c_o_n_f.  As this file may contain
+             sensitive information, it must be readable only by the user run‐
+             ning the daemon.  iissaakkmmppdd will reread the configuration file when
+             sent a SIGHUP signal.
+
+             Note that this option applies only to configuration files in the
+             isakmpd.conf(5) format, not those in the ipsec.conf(5) format.
+
+     --DD _c_l_a_s_s=_l_e_v_e_l
+             Debugging class.  It's possible to specify this argument many
+             times.  It takes a parameter of the form _c_l_a_s_s=_l_e_v_e_l, where both
+             _c_l_a_s_s and _l_e_v_e_l are numbers.  _c_l_a_s_s denotes a debugging class,
+             and _l_e_v_e_l the level you want that debugging class to limit debug
+             printouts at (i.e. all debug printouts above the level specified
+             will not output anything).  If _c_l_a_s_s is set to ‘A’, then all de‐
+             bugging classes are set to the specified level.
+
+             Valid values for _c_l_a_s_s are as follows:
+
+                   0   Misc
+                   1   Transport
+                   2   Message
+                   3   Crypto
+                   4   Timer
+                   5   Sysdep
+                   6   SA
+                   7   Exchange
+                   8   Negotiation
+                   9   Policy
+                   10  FIFO user interface
+                   A   All
+
+             Currently used values for _l_e_v_e_l are 0 to 99.
+
+     --dd      The --dd option is used to make the daemon run in the foreground,
+             logging to stderr.
+
+     --ff _f_i_f_o
+             The --ff option specifies the FIFO (a.k.a. named pipe) where the
+             daemon listens for user requests.  If the path given is a dash
+             (‘-’), iissaakkmmppdd will listen to stdin instead.
+
+     --ii _p_i_d_-_f_i_l_e
+             By default the PID of the daemon process will be written to
+             _/_v_a_r_/_r_u_n_/_i_s_a_k_m_p_d_._p_i_d.  This path can be overridden by specifying
+             another one as the argument to the --ii option.  Note that only
+             paths beginning with _/_v_a_r_/_r_u_n are allowed.
+
+     --KK      When this option is given, iissaakkmmppdd does not read the policy con‐
+             figuration file and no keynote(4) policy check is accomplished.
+             This option can be used when policies for flows and SA establish‐
+             ment are arranged by other programs like ipsecctl(8) or bgpd(8).
+
+     --LL      Enable IKE packet capture.  When this option is given, iissaakkmmppdd
+             will write an unencrypted copy of the negotiation packets it is
+             sending and receiving to the file _/_v_a_r_/_r_u_n_/_i_s_a_k_m_p_d_._p_c_a_p, which
+             can later be read by tcpdump(8) and other utilities using
+             pcap_open_offline(3).
+
+     --ll _p_a_c_k_e_t_l_o_g_-_f_i_l_e
+             As option --LL above, but capture to a specified file.  Note that
+             only paths beginning with _/_v_a_r_/_r_u_n are allowed.
+
+     --NN _u_d_p_e_n_c_a_p_-_p_o_r_t
+             The --NN option specifies the listen port for encapsulated UDP that
+             the daemon will bind to.
+
+     --nn      When the --nn option is given, the kernel will not take part in the
+             negotiations.  This is a non-destructive mode, so to speak, in
+             that it won't alter any SAs in the IPsec stack.
+
+     --pp _l_i_s_t_e_n_-_p_o_r_t
+             The --pp option specifies the listen port the daemon will bind to.
+
+     --RR _r_e_p_o_r_t_-_f_i_l_e
+             When you signal iissaakkmmppdd a SIGUSR1, it will report its internal
+             state to a report file, normally _/_v_a_r_/_r_u_n_/_i_s_a_k_m_p_d_._r_e_p_o_r_t, but
+             this can be changed by feeding the file name as an argument to
+             the --RR flag.  Note that only paths beginning with _/_v_a_r_/_r_u_n are
+             allowed.
+
+     --SS      This option is used for setups using sasyncd(8) and carp(4) to
+             provide redundancy.  iissaakkmmppdd starts in passive mode and will not
+             initiate any connections or process any incoming traffic until
+             sasyncd has determined that the host is the carp master.  Addi‐
+             tionally, iissaakkmmppdd will not delete SAs on shutdown by sending
+             delete messages to all peers.
+
+     --TT      When this option is given, NAT-Traversal will be disabled and
+             iissaakkmmppdd will not advertise support for NAT-Traversal to its
+             peers.
+
+     --vv      Enables verbose logging.  Normally, iissaakkmmppdd is silent and outputs
+             only messages when a warning or an error occurs.  With verbose
+             logging iissaakkmmppdd reports successful completion of phase 1 (Main
+             and Aggressive) and phase 2 (Quick) exchanges (Information and
+             Transaction exchanges do not generate any additional status in‐
+             formation).
+
+TTHHEE FFIIFFOO UUSSEERR IINNTTEERRFFAACCEE
+     When iissaakkmmppdd starts, it creates a FIFO (named pipe) where it listens for
+     user requests.  All commands start with a single letter, followed by com‐
+     mand-specific options.  Available commands are:
+
+     CC aadddd [_s_e_c_t_i_o_n]:_t_a_g=_v_a_l_u_e
+     CC rrmmvv [_s_e_c_t_i_o_n]:_t_a_g=_v_a_l_u_e
+     CC rrmm [_s_e_c_t_i_o_n]:_t_a_g
+     CC rrmmss [_s_e_c_t_i_o_n]
+     CC sseett [_s_e_c_t_i_o_n]:_t_a_g=_v_a_l_u_e [ffoorrccee]
+             Update the running iissaakkmmppdd configuration atomically.  ‘set’ sets
+             a configuration value consisting of a section, tag, and value
+             triplet.  ‘set’ will fail if the configuration already contains a
+             section with the named tag; use the ‘force’ option to change this
+             behaviour.  ‘add’ appends a configuration value to the named con‐
+             figuration list tag, unless the value is already in the list.
+             ‘rm’ removes a tag in a section.  ‘rms’ removes an entire sec‐
+             tion.  ‘rmv’ removes an entry from a list, thus reversing an
+             ‘add’ operation.
+
+             NOTE: Sending iissaakkmmppdd a SIGHUP or an "R" through the FIFO will
+             void any updates done to the configuration.
+
+     CC ggeett [_s_e_c_t_i_o_n]:_t_a_g
+             Get the configuration value of the specified section and tag.
+             The result is stored in _/_v_a_r_/_r_u_n_/_i_s_a_k_m_p_d_._r_e_s_u_l_t.
+
+     cc _n_a_m_e  Start the named connection, if stopped or inactive.
+
+     DD _c_l_a_s_s _l_e_v_e_l
+     DD AA _l_e_v_e_l
+     DD TT     Set debug class _c_l_a_s_s to level _l_e_v_e_l.  If _c_l_a_s_s is specified as
+             ‘A’, the level applies to all debug classes.  DD TT toggles all de‐
+             bug classes to level zero.  Another DD TT command will toggle them
+             back to the earlier levels.
+
+     dd _c_o_o_k_i_e_s _m_s_g_i_d
+             Delete the specified SA from the system.  Specify _m_s_g_i_d as ‘-’ to
+             match a Phase 1 SA.
+
+     MM aaccttiivvee
+     MM ppaassssiivvee
+             Set iissaakkmmppdd to active or passive mode.  In passive mode no pack‐
+             ets are sent to peers.
+
+     pp oonn[=_p_a_t_h]
+     pp ooffff   Enable or disable cleartext IKE packet capture.  When enabling,
+             optionally specify which file iissaakkmmppdd should capture the packets
+             to (the default is _/_v_a_r_/_r_u_n_/_i_s_a_k_m_p_d_._p_c_a_p).  Note that only paths
+             beginning with _/_v_a_r_/_r_u_n are allowed.
+
+     QQ       Cleanly shutdown the daemon, as when sent a SIGTERM signal.
+
+     RR       Reinitialize iissaakkmmppdd, as when sent a SIGHUP signal.
+
+     rr       Report iissaakkmmppdd internal state to syslog(3).  See the --RR option.
+             Same as when sent a SIGUSR1 signal.
+
+     SS       Report information on all known SAs to the
+             _/_v_a_r_/_r_u_n_/_i_s_a_k_m_p_d_._r_e_s_u_l_t file.
+
+     TT       Tear down all active quick mode connections.
+
+     tt [_p_h_a_s_e] _n_a_m_e
+             Tear down the named connection, if active.  For _n_a_m_e, the tag
+             specified in isakmpd.conf(5) or the IP address of the remote host
+             can be used.  The optional parameter _p_h_a_s_e specifies whether to
+             delete a phase 1 or phase 2 SA.  The value ‘main’ indicates a
+             phase 1 connection; the value ‘quick’ a phase 2 connection.  If
+             no phase is specified, ‘quick’ will be assumed.
+
+SSEETTTTIINNGG UUPP AANN IIKKEE PPUUBBLLIICC KKEEYY IINNFFRRAASSTTRRUUCCTTUURREE ((PPKKII))
+     In order to use public key based authentication, there has to be an in‐
+     frastructure managing the key signing.  Either there is an already exist‐
+     ing PKI iissaakkmmppdd should take part in, or there will be a need to set one
+     up.  The procedures for using a pre-existing PKI varies depending on the
+     actual Certificate Authority (CA) used, and is therefore not covered
+     here, other than mentioning that openssl(1) needs to be used to create a
+     Certificate Signing Request (CSR) that the CA understands.
+
+     A number of methods exist to allow authentication:
+
+           Passphrase:
+           This method does not use keys at all, but relies on a shared
+           passphrase.
+
+           Host Keys:
+           Public keys are used to authenticate.  See _P_U_B_L_I_C _K_E_Y
+           _A_U_T_H_E_N_T_I_C_A_T_I_O_N below.
+
+           X.509 Certificates:
+           X.509 Certificates are used to authenticate.  See _X_._5_0_9
+           _A_U_T_H_E_N_T_I_C_A_T_I_O_N below.
+
+           Keynote Certificates:
+           Keynote Certificates are used to authenticate.  See _K_E_Y_N_O_T_E
+           _A_U_T_H_E_N_T_I_C_A_T_I_O_N below.
+
+     When configuring iissaakkmmppdd for key- and certificate-based authentication,
+     the “Transforms” tag in isakmpd.conf(5) should include “RSA_SIG”.  For
+     example, the transform “3DES-SHA-RSA_SIG” means: 3DES encryption, SHA
+     hash, authentication using RSA signatures.
+
+PPUUBBLLIICC KKEEYY AAUUTTHHEENNTTIICCAATTIIOONN
+     It is possible to store trusted public keys to make them directly usable
+     by iissaakkmmppdd, bypassing the need to use certificates.  The keys should be
+     saved in PEM format (see openssl(1)) and named and stored after this easy
+     formula:
+
+        For IPv4 identities:    _/_e_t_c_/_i_s_a_k_m_p_d_/_p_u_b_k_e_y_s_/_i_p_v_4_/_A_._B_._C_._D
+        For IPv6 identities:    _/_e_t_c_/_i_s_a_k_m_p_d_/_p_u_b_k_e_y_s_/_i_p_v_6_/_a_b_c_d_:_a_b_c_d_:_:_a_b_:_b_c
+        For FQDN identities:    _/_e_t_c_/_i_s_a_k_m_p_d_/_p_u_b_k_e_y_s_/_f_q_d_n_/_f_o_o_._b_a_r_._o_r_g
+        For UFQDN identities:   _/_e_t_c_/_i_s_a_k_m_p_d_/_p_u_b_k_e_y_s_/_u_f_q_d_n_/_u_s_e_r_@_f_o_o_._b_a_r_._o_r_g
+
+     Depending on the ID-type field of isakmpd.conf(5), keys may be named af‐
+     ter their IPv4 address (IPV4_ADDR or IPV4_ADDR_SUBNET), IPv6 address
+     (IPV6_ADDR or IPV6_ADDR_SUBNET), fully qualified domain name (FDQN), user
+     fully qualified domain name (USER_FQDN), or key ID (KEY_ID).
+
+     For example, iissaakkmmppdd can authenticate using the pre-generated keys if the
+     local public key, by default _/_e_t_c_/_i_s_a_k_m_p_d_/_l_o_c_a_l_._p_u_b, is copied to the re‐
+     mote gateway as _/_e_t_c_/_i_s_a_k_m_p_d_/_p_u_b_k_e_y_s_/_i_p_v_4_/_l_o_c_a_l_._g_a_t_e_w_a_y_._i_p_._a_d_d_r_e_s_s and
+     the remote gateway's public key is copied to the local gateway as
+     _/_e_t_c_/_i_s_a_k_m_p_d_/_p_u_b_k_e_y_s_/_i_p_v_4_/_r_e_m_o_t_e_._g_a_t_e_w_a_y_._i_p_._a_d_d_r_e_s_s.  Of course, new keys
+     may also be generated (the user is not required to use the pre-generated
+     keys).  In this example, ID-type would also have to be set to IPV4_ADDR
+     or IPV4_ADDR_SUBNET in isakmpd.conf(5).
+
+XX..550099 AAUUTTHHEENNTTIICCAATTIIOONN
+     X.509 is a framework for public key certificates.  Certificates can be
+     generated using openssl(1) and provide a means for PKI authentication.
+     In the following example, a CA is created along with host certificates to
+     be signed by the CA.
+
+     1.   Create your own Certificate Authority (CA).
+
+          First, create a private key for the CA, and a Certificate Signing
+          Request (CSR) to enable the CA to sign its own key:
+
+                # openssl genrsa -out /etc/ssl/private/ca.key 2048
+                # openssl req -new -key /etc/ssl/private/ca.key \
+                        -out /etc/ssl/private/ca.csr
+
+          ooppeennssssll rreeqq will prompt for information that will be incorporated
+          into the certificate request.  The information entered comprises a
+          Distinguished Name (DN).  There are quite a few fields, but some can
+          be left blank.  For some fields there will be a default value; if
+          ‘.’ is entered, the field will be left blank.
+
+          After the CSR has been generated, it is used to create and sign a
+          certificate for the CA:
+
+                # openssl x509 -req -days 365 -in /etc/ssl/private/ca.csr \
+                        -signkey /etc/ssl/private/ca.key \
+                        -extfile /etc/ssl/x509v3.cnf -extensions x509v3_CA \
+                        -out /etc/ssl/ca.crt
+
+     2.   Create Certificate Signing Requests (CSRs) for IKE peers.  The CSRs
+          are signed with a pre-generated private key.
+
+          This step, as well as the next one, needs to be done for every peer.
+          Furthermore the last step will need to be done once for each ID you
+          want the peer to have.  The 10.0.0.1 below symbolizes that ID, in
+          this case an IPv4 ID, and should be changed for each invocation.  A
+          fully qualified domain name (FQDN) may be used instead of an IPv4
+          ID.  You will be asked for a DN for each run.  Encoding the ID in
+          the common name is recommended, as it should be unique.
+
+                # openssl req -new -key /etc/isakmpd/private/local.key \
+                        -out /etc/isakmpd/private/10.0.0.1.csr
+
+          Now take these certificate signing requests to your CA and process
+          them as below.  A configuration file is used to add a _s_u_b_j_e_c_t_A_l_t_N_a_m_e
+          extension field matching the ID used by iissaakkmmppdd to the certificate.
+
+          If using an IPv4 ID, copy _/_e_t_c_/_s_s_l_/_x_5_0_9_v_3_._c_n_f to a temporary file
+          and edit it to replace $ENV::CERTIP with the IP address (10.0.0.1 in
+          this example), then generate a signed certificate:
+
+                # sed 's,\$ENV::CERTIP,10.0.0.1,' \
+                        < /etc/ssl/x509v3.cnf > ~/tmp_x509v3.cnf
+                # openssl x509 -req \
+                        -days 365 -in 10.0.0.1.csr \
+                        -CA /etc/ssl/ca.crt -CAkey /etc/ssl/private/ca.key \
+                        -CAcreateserial -extfile ~/tmp_x509v3.cnf \
+                        -extensions x509v3_IPAddr -out 10.0.0.1.crt
+
+          For an FQDN certificate, replace $ENV::CERTFQDN with the hostname
+          and generate a signed certificate:
+
+                # sed 's,\$ENV::CERTFQDN,somehost.somedomain,' \
+                        < /etc/ssl/x509v3.cnf > ~/tmp_x509v3.cnf
+                # openssl x509 -req \
+                        -days 365 -in somehost.somedomain.csr \
+                        -CA /etc/ssl/ca.crt -CAkey /etc/ssl/private/ca.key \
+                        -CAcreateserial -extfile ~/tmp_x509v3.cnf \
+                        -extensions x509v3_FQDN -out somehost.somedomain.crt
+
+          If CERTFQDN is being used, make sure that the _s_u_b_j_e_c_t_A_l_t_N_a_m_e field
+          of the certificate is specified using ssrrcciidd in ipsec.conf(5).  A
+          similar setup will be required if isakmpd.conf(5) is being used in‐
+          stead.
+
+          Put the certificate (the file ending in .crt) in _/_e_t_c_/_i_s_a_k_m_p_d_/_c_e_r_t_s_/
+          on your local system.  Also carry over the CA cert _/_e_t_c_/_s_s_l_/_c_a_._c_r_t
+          and put it in _/_e_t_c_/_i_s_a_k_m_p_d_/_c_a_/.
+
+     To revoke certificates, create a Certificate Revocation List (CRL) file
+     and install it in the _/_e_t_c_/_i_s_a_k_m_p_d_/_c_r_l_s_/ directory.  See openssl(1) and
+     the ‘crl’ subcommand for more info.
+
+KKEEYYNNOOTTEE AAUUTTHHEENNTTIICCAATTIIOONN
+     Keynote is a trust-management framework.  Keys can be generated using
+     keynote(1) and provide an alternative means for iissaakkmmppdd to authenticate.
+     See keynote(4) for further information.
+
+FFIILLEESS
+     /etc/isakmpd/ca/
+             The directory where CA certificates are kept.
+
+     /etc/isakmpd/certs/
+             The directory where IKE certificates are kept, both the local
+             certificate(s) and those of the peers, if a choice to have them
+             kept permanently has been made.
+
+     /etc/isakmpd/crls/
+             The directory where CRLs are kept.
+
+     /etc/isakmpd/isakmpd.conf
+             The configuration file.  As this file can contain sensitive in‐
+             formation it must not be readable by anyone but the user running
+             iissaakkmmppdd.
+
+     /etc/isakmpd/isakmpd.policy
+             The keynote policy configuration file.  The same mode require‐
+             ments as _i_s_a_k_m_p_d_._c_o_n_f.
+
+     /etc/isakmpd/keynote/
+             The directory where KeyNote credentials are kept.
+
+     /etc/isakmpd/private/
+             The directory where local private keys used for public key au‐
+             thentication are kept.  By default, the system startup script
+             rc(8) generates a key-pair when starting, if one does not already
+             exist.  The entire keypair is in _l_o_c_a_l_._k_e_y, and a copy of the
+             public key suitable for transferring to other hosts is extracted
+             into _/_e_t_c_/_i_s_a_k_m_p_d_/_l_o_c_a_l_._p_u_b.  There has to be a certificate for
+             _l_o_c_a_l_._k_e_y in the certificate directory, _/_e_t_c_/_i_s_a_k_m_p_d_/_c_e_r_t_s_/.
+             _l_o_c_a_l_._k_e_y has the same mode requirements as _i_s_a_k_m_p_d_._c_o_n_f.
+
+     /etc/isakmpd/pubkeys/
+             The directory in which trusted public keys are kept.  The keys
+             must be named in the fashion described above.
+
+     /var/run/isakmpd.fifo
+             The FIFO used to manually control iissaakkmmppdd.
+
+     /var/run/isakmpd.pcap
+             The default IKE packet capture file.
+
+     /var/run/isakmpd.pid
+             The PID of the current daemon.
+
+     /var/run/isakmpd.report
+             The report file written when SIGUSR1 is received.
+
+     /var/run/isakmpd.result
+             The report file written when the ‘S’ or ‘C get’ command is issued
+             in the command FIFO.
+
+SSEEEE AALLSSOO
+     openssl(1), getnameinfo(3), pcap_open_offline(3), ipsec(4),
+     ipsec.conf(5), isakmpd.conf(5), isakmpd.policy(5), iked(8), sasyncd(8),
+     ssl(8), tcpdump(8)
+
+SSTTAANNDDAARRDDSS
+     D. Piper, _T_h_e _I_n_t_e_r_n_e_t _I_P _S_e_c_u_r_i_t_y _D_o_m_a_i_n _o_f _I_n_t_e_r_p_r_e_t_a_t_i_o_n _f_o_r _I_S_A_K_M_P,
+     RFC 2407, November 1998.
+
+     D. Maughan, M. Schertler, M. Schneider, and J. Turner, _I_n_t_e_r_n_e_t _S_e_c_u_r_i_t_y
+     _A_s_s_o_c_i_a_t_i_o_n _a_n_d _K_e_y _M_a_n_a_g_e_m_e_n_t _P_r_o_t_o_c_o_l _(_I_S_A_K_M_P_), RFC 2408, November
+     1998.
+
+     D. Harkins and D. Carrel, _T_h_e _I_n_t_e_r_n_e_t _K_e_y _E_x_c_h_a_n_g_e _(_I_K_E_), RFC 2409,
+     November 1998.
+
+     T. Kivinen, B. Swander, A. Huttunen, and V. Volpe, _N_e_g_o_t_i_a_t_i_o_n _o_f _N_A_T_-
+     _T_r_a_v_e_r_s_a_l _i_n _t_h_e _I_K_E, RFC 3947, January 2005.
+
+HHIISSTTOORRYY
+     This implementation of the ISAKMP/Oakley key management protocol was done
+     in 1998 by Niklas Hallqvist and Niels Provos, sponsored by Ericsson Radio
+     Systems.
+
+CCAAVVEEAATTSS
+     When storing a trusted public key for an IPv6 identity, the _m_o_s_t
+     _e_f_f_i_c_i_e_n_t form of address representation, i.e. "::" instead of ":0:0:0:",
+     must be used or the matching will fail.  iissaakkmmppdd uses the output from
+     getnameinfo(3) for the address-to-name translation.  The privileged
+     process only allows binding to the default port 500 or unprivileged ports
+     (>1024).  It is not possible to change the interfaces iissaakkmmppdd listens on
+     without a restart.
+
+     For redundant setups with carp(4) and sasyncd(8), sasyncd(8) must be man‐
+     ually restarted every time iissaakkmmppdd is restarted, and isakmpd.conf(5) must
+     explicitly configure iissaakkmmppdd to listen on the virtual IP address of each
+     carp(4) interface.
+
+BSD                             August 30, 2019                            BSD

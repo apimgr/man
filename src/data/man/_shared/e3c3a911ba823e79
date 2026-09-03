@@ -1,0 +1,167 @@
+MAC_MLS(4)               BSD Kernel Interfaces Manual               MAC_MLS(4)
+
+NNAAMMEE
+     mmaacc__mmllss — Multi-Level Security confidentiality policy
+
+SSYYNNOOPPSSIISS
+     To compile MLS into your kernel, place the following lines in your kernel
+     configuration file:
+
+           ooppttiioonnss MMAACC
+           ooppttiioonnss MMAACC__MMLLSS
+
+     Alternately, to load the MLS module at boot time, place the following
+     line in your kernel configuration file:
+
+           ooppttiioonnss MMAACC
+
+     and in loader.conf(5):
+
+           mac_mls_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmaacc__mmllss policy module implements the Multi-Level Security, or MLS
+     model, which controls access between subjects and objects based on their
+     confidentiality by means of a strict information flow policy.  Each sub‐
+     ject and object in the system has an MLS label associated with it; each
+     subject's MLS label contains information on its clearance level, and each
+     object's MLS label contains information on its classification.
+
+     In MLS, all system subjects and objects are assigned confidentiality la‐
+     bels, made up of a sensitivity level and zero or more compartments.  To‐
+     gether, these label elements permit all labels to be placed in a partial
+     order, with confidentiality protections based on a dominance operator de‐
+     scribing the order.  The sensitivity level is expressed as a value be‐
+     tween 0 and 65535, with higher values reflecting higher sensitivity lev‐
+     els.  The compartment field is expressed as a set of up to 256 compo‐
+     nents, numbered from 1 to 256.  A complete label consists of both sensi‐
+     tivity and compartment elements.
+
+     With normal labels, dominance is defined as a label having a higher or
+     equal active sensitivity level, and having at least all of the same com‐
+     partments as the label to which it is being compared.  With respect to
+     label comparisons, “lower” is defined as being dominated by the label to
+     which it is being compared, and “higher” is defined as dominating the la‐
+     bel to which it is being compared, and “equal” is defined as both labels
+     being able to satisfy the dominance requirements over one another.
+
+     Three special label values exist:
+
+           LLaabbeell        CCoommppaarriissoonn
+           mls/low      dominated by all other labels
+           mls/equal    equal to all other labels
+           mls/high     dominates all other labels
+
+     The “mls/equal” label may be applied to subjects and objects for which no
+     enforcement of the MLS security policy is desired.
+
+     The MLS model enforces the following basic restrictions:
+
+     ••   Subjects may not observe the processes of another subject if its
+         clearance level is lower than the clearance level of the object it is
+         attempting to observe.
+
+     ••   Subjects may not read, write, or otherwise observe objects without
+         proper clearance (e.g. subjects may not observe objects whose classi‐
+         fication label dominates its own clearance label)
+
+     ••   Subjects may not write to objects with a lower classification level
+         than its own clearance level.
+
+     ••   A subject may read and write to an object if its clearance level is
+         equal to the object's classification level as though MLS protections
+         were not in place.
+
+     These rules prevent subjects of lower clearance from gaining access in‐
+     formation classified beyond its clearance level in order to protect the
+     confidentiality of classified information, subjects of higher clearance
+     from writing to objects of lower classification in order to prevent the
+     accidental or malicious leaking of information, and subjects of lower
+     clearance from observing subjects of higher clearance altogether.  In
+     traditional trusted operating systems, the MLS confidentiality model is
+     used in concert with the Biba integrity model (mac_biba(4)) in order to
+     protect the Trusted Code Base (TCB).
+
+   LLaabbeell FFoorrmmaatt
+     Almost all system objects are tagged with an effective, active label ele‐
+     ment, reflecting the classification of the object, or classification of
+     the data contained in the object.  In general, object labels are repre‐
+     sented in the following form:
+
+           mls/_g_r_a_d_e:_c_o_m_p_a_r_t_m_e_n_t_s
+
+     For example:
+
+           mls/10:2+3+6
+           mls/low
+
+     Subject labels consist of three label elements: an effective (active) la‐
+     bel, as well as a range of available labels.  This range is represented
+     using two ordered MLS label elements, and when set on a process, permits
+     the process to change its active label to any label of greater or equal
+     integrity to the low end of the range, and lesser or equal integrity to
+     the high end of the range.  In general, subject labels are represented in
+     the following form:
+
+           mls/_e_f_f_e_c_t_i_v_e_g_r_a_d_e:_e_f_f_e_c_t_i_v_e_c_o_m_p_a_r_t_m_e_n_t_s(_l_o_g_r_a_d_e:_l_o_c_o_m_p_a_r_t_m_e_n_t_s-
+           _h_i_g_r_a_d_e:_h_i_c_o_m_p_a_r_t_m_e_n_t_s)
+
+     For example:
+
+           mls/10:2+3+6(5:2+3-20:2+3+4+5+6)
+           mls/high(low-high)
+
+     Valid ranged labels must meet the following requirement regarding their
+     elements:
+
+           _r_a_n_g_e_h_i_g_h ≥ _e_f_f_e_c_t_i_v_e ≥ _r_a_n_g_e_l_o_w
+
+     One class of objects with ranges currently exists, the network interface.
+     In the case of the network interface, the effective label element refer‐
+     ences the default label for packets received over the interface, and the
+     range represents the range of acceptable labels of packets to be trans‐
+     mitted over the interface.
+
+   RRuunnttiimmee CCoonnffiigguurraattiioonn
+     The following sysctl(8) MIBs are available for fine-tuning the enforce‐
+     ment of this MAC policy.
+
+     _s_e_c_u_r_i_t_y_._m_a_c_._m_l_s_._e_n_a_b_l_e_d     Enables the enforcement of the MLS confiden‐
+                                  tiality policy.  (Default: 1).
+
+     _s_e_c_u_r_i_t_y_._m_a_c_._m_l_s_._p_t_y_s___e_q_u_a_l  Label pty(4)s as “mls/equal” upon creation.
+                                  (Default: 0).
+
+     _s_e_c_u_r_i_t_y_._m_a_c_._m_l_s_._r_e_v_o_c_a_t_i_o_n___e_n_a_b_l_e_d
+                                  Revoke access to objects if the label is
+                                  changed to a more sensitive level than the
+                                  subject.  (Default: 0).
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     Currently, the mmaacc__mmllss policy relies on superuser status (suser(9)) in
+     order to change network interface MLS labels.  This will eventually go
+     away, but it is currently a liability and may allow the superuser to by‐
+     pass MLS protections.
+
+SSEEEE AALLSSOO
+     mac(4), mac_biba(4), mac_bsdextended(4), mac_ddb(4), mac_ifoff(4),
+     mac_lomac(4), mac_none(4), mac_partition(4), mac_portacl(4),
+     mac_seeotheruids(4), mac_test(4), maclabel(7), mac(9)
+
+HHIISSTTOORRYY
+     The mmaacc__mmllss policy module first appeared in FreeBSD 5.0 and was developed
+     by the TrustedBSD Project.
+
+AAUUTTHHOORRSS
+     This software was contributed to the FreeBSD Project by Network Asso‐
+     ciates Laboratories, the Security Research Division of Network Associates
+     Inc. under DARPA/SPAWAR contract N66001-01-C-8035 (“CBOSS”), as part of
+     the DARPA CHATS research program.
+
+BBUUGGSS
+     While the MAC Framework design is intended to support the containment of
+     the root user, not all attack channels are currently protected by entry
+     point checks.  As such, MAC Framework policies should not be relied on,
+     in isolation, to protect against a malicious privileged user.
+
+BSD                              July 25, 2015                             BSD

@@ -1,0 +1,297 @@
+_s_e_t_n_s(2)                      System Calls Manual                     _s_e_t_n_s(2)
+
+NNAAMMEE
+       setns - reassociate thread with a namespace
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##ddeeffiinnee __GGNNUU__SSOOUURRCCEE             /* See feature_test_macros(7) */
+       ##iinncclluuddee <<sscchheedd..hh>>
+
+       iinntt sseettnnss((iinntt _f_d,, iinntt _n_s_t_y_p_e));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  sseettnnss() system call allows the calling thread to move into differ‐
+       ent namespaces.  The _f_d argument is one of the following:
+
+       •  a file  descriptor  referring  to  one  of  the  magic  links  in  a
+          _/_p_r_o_c_/pid_/_n_s_/ directory (or a bind mount to such a link);
+
+       •  a PID file descriptor (see ppiiddffdd__ooppeenn(2)).
+
+       The _n_s_t_y_p_e argument is interpreted differently in each case.
+
+   ffdd rreeffeerrss ttoo aa _//_pp_rr_oo_cc_//ppiidd_//_nn_ss_// lliinnkk
+       If  _f_d  refers  to  a _/_p_r_o_c_/pid_/_n_s_/ link, then sseettnnss() reassociates the
+       calling thread with the namespace associated with that link, subject to
+       any constraints imposed by the _n_s_t_y_p_e argument.  In  this  usage,  each
+       call to sseettnnss() changes just one of the caller’s namespace memberships.
+
+       The  _n_s_t_y_p_e  argument  specifies  which  type  of namespace the calling
+       thread may be reassociated with.  This argument can  have  _o_n_e  of  the
+       following values:
+
+       00      Allow any type of namespace to be joined.
+
+       CCLLOONNEE__NNEEWWCCGGRROOUUPP (since Linux 4.6)
+              _f_d must refer to a cgroup namespace.
+
+       CCLLOONNEE__NNEEWWIIPPCC (since Linux 3.0)
+              _f_d must refer to an IPC namespace.
+
+       CCLLOONNEE__NNEEWWNNEETT (since Linux 3.0)
+              _f_d must refer to a network namespace.
+
+       CCLLOONNEE__NNEEWWNNSS (since Linux 3.8)
+              _f_d must refer to a mount namespace.
+
+       CCLLOONNEE__NNEEWWPPIIDD (since Linux 3.8)
+              _f_d must refer to a descendant PID namespace.
+
+       CCLLOONNEE__NNEEWWTTIIMMEE (since Linux 5.8)
+              _f_d must refer to a time namespace.
+
+       CCLLOONNEE__NNEEWWUUSSEERR (since Linux 3.8)
+              _f_d must refer to a user namespace.
+
+       CCLLOONNEE__NNEEWWUUTTSS (since Linux 3.0)
+              _f_d must refer to a UTS namespace.
+
+       Specifying  _n_s_t_y_p_e as 0 suffices if the caller knows (or does not care)
+       what type of namespace is referred to  by  _f_d.   Specifying  a  nonzero
+       value  for  _n_s_t_y_p_e  is  useful if the caller does not know what type of
+       namespace is referred to by _f_d and wants to ensure that  the  namespace
+       is  of  a  particular type.  (The caller might not know the type of the
+       namespace referred to by _f_d if the file descriptor was  opened  by  an‐
+       other  process and, for example, passed to the caller via a UNIX domain
+       socket.)
+
+   ffdd iiss aa PPIIDD ffiillee ddeessccrriippttoorr
+       Since Linux 5.8, _f_d may refer to a PID file  descriptor  obtained  from
+       ppiiddffdd__ooppeenn(2) or cclloonnee(2).  In this usage, sseettnnss() atomically moves the
+       calling  thread  into  one or more of the same namespaces as the thread
+       referred to by _f_d.
+
+       The _n_s_t_y_p_e argument is a bit mask specified by ORing  together  _o_n_e  _o_r
+       _m_o_r_e of the CCLLOONNEE__NNEEWW** namespace constants listed above.  The caller is
+       moved  into each of the target thread’s namespaces that is specified in
+       _n_s_t_y_p_e; the caller’s memberships in the remaining namespaces  are  left
+       unchanged.
+
+       For  example,  the  following  code would move the caller into the same
+       user, network, and UTS namespaces as PID  1234,  but  would  leave  the
+       caller’s other namespace memberships unchanged:
+
+           int fd = pidfd_open(1234, 0);
+           setns(fd, CLONE_NEWUSER | CLONE_NEWNET | CLONE_NEWUTS);
+
+   DDeettaaiillss ffoorr ssppeecciiffiicc nnaammeessppaaccee ttyyppeess
+       Note  the  following  details  and restrictions when reassociating with
+       specific namespace types:
+
+       User namespaces
+              A process reassociating itself with a user namespace  must  have
+              the  CCAAPP__SSYYSS__AADDMMIINN  capability  in  the  target  user namespace.
+              (This necessarily implies that it is only possible to join a de‐
+              scendant user namespace.)   Upon  successfully  joining  a  user
+              namespace,  a  process is granted all capabilities in that name‐
+              space, regardless of its user and group IDs.
+
+              A multithreaded process  may  not  change  user  namespace  with
+              sseettnnss().
+
+              It  is not permitted to use sseettnnss() to reenter the caller’s cur‐
+              rent user namespace.  This prevents a caller  that  has  dropped
+              capabilities  from  regaining  those  capabilities via a call to
+              sseettnnss().
+
+              For security reasons, a process can’t join a new user  namespace
+              if  it  is sharing filesystem‐related attributes (the attributes
+              whose sharing is controlled by the cclloonnee(2) CCLLOONNEE__FFSS flag)  with
+              another process.
+
+              For further details on user namespaces, see uusseerr__nnaammeessppaacceess(7).
+
+       Mount namespaces
+              Changing  the  mount  namespace requires that the caller possess
+              both CCAAPP__SSYYSS__CCHHRROOOOTT and CCAAPP__SSYYSS__AADDMMIINN capabilities  in  its  own
+              user namespace and CCAAPP__SSYYSS__AADDMMIINN in the user namespace that owns
+              the target mount namespace.
+
+              A  process  can’t  join  a  new mount namespace if it is sharing
+              filesystem‐related attributes (the attributes whose  sharing  is
+              controlled by the cclloonnee(2) CCLLOONNEE__FFSS flag) with another process.
+
+              See  uusseerr__nnaammeessppaacceess(7)  for  details on the interaction of user
+              namespaces and mount namespaces.
+
+       PID namespaces
+              In order to reassociate itself with a  new  PID  namespace,  the
+              caller  must  have  the CCAAPP__SSYYSS__AADDMMIINN capability both in its own
+              user namespace and in the user namespace that  owns  the  target
+              PID namespace.
+
+              Reassociating  the  PID  namespace  has  somewhat different from
+              other namespace types.  Reassociating the calling thread with  a
+              PID  namespace  changes only the PID namespace that subsequently
+              created child processes of the caller will be placed in; it does
+              not change the PID namespace of the caller itself.
+
+              Reassociating with a PID namespace is allowed only if the target
+              PID namespace is a descendant (child, grandchild, etc.)  of,  or
+              is the same as, the current PID namespace of the caller.
+
+              For further details on PID namespaces, see ppiidd__nnaammeessppaacceess(7).
+
+       Cgroup namespaces
+              In  order to reassociate itself with a new cgroup namespace, the
+              caller must have the CCAAPP__SSYYSS__AADDMMIINN capability both  in  its  own
+              user  namespace  and  in the user namespace that owns the target
+              cgroup namespace.
+
+              Using sseettnnss() to change the caller’s cgroup namespace  does  not
+              change the caller’s cgroup memberships.
+
+       Time namespaces
+              In  order  to  reassociate itself with a new time namespace, the
+              caller must have the CCAAPP__SSYYSS__AADDMMIINN capability both  in  its  own
+              user  namespace  and  in the user namespace that owns the target
+              namespace.
+
+              A multithreaded process  may  not  change  time  namespace  with
+              sseettnnss().
+
+       Network, IPC, and UTS namespaces
+              In order to reassociate itself with a new network, IPC, time, or
+              UTS namespace, the caller must have the CCAAPP__SSYYSS__AADDMMIINN capability
+              both  in  its  own user namespace and in the user namespace that
+              owns the target namespace.
+
+RREETTUURRNN VVAALLUUEE
+       On success, sseettnnss() returns 0.  On failure, -1 is returned and _e_r_r_n_o is
+       set to indicate the error.
+
+EERRRROORRSS
+       EEBBAADDFF  _f_d is not a valid file descriptor.
+
+       EEIINNVVAALL _f_d refers to a namespace whose type does not match  that  speci‐
+              fied in _n_s_t_y_p_e.
+
+       EEIINNVVAALL There is a problem with reassociating the thread with the speci‐
+              fied namespace.
+
+       EEIINNVVAALL The  caller  tried to join an ancestor (parent, grandparent, and
+              so on) PID namespace.
+
+       EEIINNVVAALL The caller attempted to join the user namespace in which  it  is
+              already a member.
+
+       EEIINNVVAALL The  caller  shares  filesystem (CCLLOONNEE__FFSS) state (in particular,
+              the root directory) with other processes and tried to join a new
+              user namespace.
+
+       EEIINNVVAALL The caller is multithreaded and tried to join a new  user  name‐
+              space.
+
+       EEIINNVVAALL _f_d  is  a PID file descriptor and _n_s_t_y_p_e is invalid (e.g., it is
+              0).
+
+       EENNOOMMEEMM Cannot allocate sufficient memory to change the specified  name‐
+              space.
+
+       EEPPEERRMM  The calling thread did not have the required capability for this
+              operation.
+
+       EESSRRCCHH  _f_d  is  a  PID  file  descriptor but the process it refers to no
+              longer exists (i.e., it has terminated and been waited on).
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+VVEERRSSIIOONNSS
+       Linux 3.0, glibc 2.14.
+
+NNOOTTEESS
+       For further information on the _/_p_r_o_c_/pid_/_n_s_/  magic  links,  see  nnaammee‐‐
+       ssppaacceess(7).
+
+       Not  all of the attributes that can be shared when a new thread is cre‐
+       ated using cclloonnee(2) can be changed using sseettnnss().
+
+EEXXAAMMPPLLEESS
+       The program below takes two or  more  arguments.   The  first  argument
+       specifies the pathname of a namespace file in an existing _/_p_r_o_c_/pid_/_n_s_/
+       directory.   The  remaining  arguments  specify a command and its argu‐
+       ments.  The program opens the namespace file, joins that namespace  us‐
+       ing sseettnnss(), and executes the specified command inside that namespace.
+
+       The  following shell session demonstrates the use of this program (com‐
+       piled as a binary named _n_s___e_x_e_c) in conjunction with  the  CCLLOONNEE__NNEEWWUUTTSS
+       example  program  in  the cclloonnee(2) man page (complied as a binary named
+       _n_e_w_u_t_s).
+
+       We begin by executing the example program  in  cclloonnee(2)  in  the  back‐
+       ground.  That program creates a child in a separate UTS namespace.  The
+       child  changes  the  hostname in its namespace, and then both processes
+       display the hostnames in their UTS namespaces, so that we can see  that
+       they are different.
+
+           $ ssuu;                   # Need privilege for namespace operations
+           Password:
+           # ..//nneewwuuttss bbiizzaarrrroo &&
+           [1] 3549
+           clone() returned 3550
+           uts.nodename in child:  bizarro
+           uts.nodename in parent: antero
+           # uunnaammee --nn;             # Verify hostname in the shell
+           antero
+
+       We  then run the program shown below, using it to execute a shell.  In‐
+       side that shell, we verify that the hostname is  the  one  set  by  the
+       child created by the first program:
+
+           # ..//nnss__eexxeecc //pprroocc//33555500//nnss//uuttss //bbiinn//bbaasshh;
+           # uunnaammee --nn;             # Executed in shell started by ns_exec
+           bizarro
+
+   PPrrooggrraamm ssoouurrccee
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <fcntl.h>
+       #include <sched.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <unistd.h>
+
+       int
+       main(int argc, char *argv[])
+       {
+           int fd;
+
+           if (argc < 3) {
+               fprintf(stderr, "%s /proc/PID/ns/FILE cmd args...\n", argv[0]);
+               exit(EXIT_FAILURE);
+           }
+
+           /* Get file descriptor for namespace; the file descriptor is opened
+              with O_CLOEXEC so as to ensure that it is not inherited by the
+              program that is later executed.  */
+
+           fd = open(argv[1], O_RDONLY | O_CLOEXEC);
+           if (fd == -1)
+               err(EXIT_FAILURE, "open");
+
+           if (setns(fd, 0) == -1)       /* Join that namespace */
+               err(EXIT_FAILURE, "setns");
+
+           execvp(argv[2], &argv[2]);    /* Execute a command in namespace */
+           err(EXIT_FAILURE, "execvp");
+       }
+
+SSEEEE AALLSSOO
+       nnsseenntteerr(1),  cclloonnee(2),  ffoorrkk(2),  uunnsshhaarree(2),  vvffoorrkk(2), nnaammeessppaacceess(7),
+       uunniixx(7)
+
+Linux man‐pages (unreleased)      2025‐10‐01                          _s_e_t_n_s(2)

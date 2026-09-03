@@ -1,0 +1,325 @@
+_V_I_R_T_U_A_L(8)                  System Manager’s Manual                 _V_I_R_T_U_A_L(8)
+
+NNAAMMEE
+       virtual - Postfix virtual domain mail delivery agent
+
+SSYYNNOOPPSSIISS
+       vviirrttuuaall [generic Postfix daemon options]
+
+DDEESSCCRRIIPPTTIIOONN
+       The vviirrttuuaall(8) delivery agent is designed for virtual mail hosting ser‐
+       vices.  Originally  based  on the Postfix llooccaall(8) delivery agent, this
+       agent looks up recipients with map lookups of their full recipient  ad‐
+       dress,  instead  of  using hard-coded unix password file lookups of the
+       address local part only.
+
+       This delivery agent only delivers mail.  Other features  such  as  mail
+       forwarding,  out-of-office  notifications, etc., must be configured via
+       virtual_alias maps or via similar lookup mechanisms.
+
+MMAAIILLBBOOXX LLOOCCAATTIIOONN
+       The mailbox location is controlled by the vviirrttuuaall__mmaaiillbbooxx__bbaassee and vviirr‐‐
+       ttuuaall__mmaaiillbbooxx__mmaappss  configuration  parameters  (see  below).   The  vviirr‐‐
+       ttuuaall__mmaaiillbbooxx__mmaappss  table  is  indexed  by  the recipient address as de‐
+       scribed under TABLE SEARCH ORDER below.
+
+       The mailbox pathname is constructed as follows:
+
+         $$vviirrttuuaall__mmaaiillbbooxx__bbaassee//$$vviirrttuuaall__mmaaiillbbooxx__mmaappss((_r_e_c_i_p_i_e_n_t))
+
+       where _r_e_c_i_p_i_e_n_t is the full recipient address.
+
+UUNNIIXX MMAAIILLBBOOXX FFOORRMMAATT
+       When the mailbox location does not end in //, the message  is  delivered
+       in  UNIX  mailbox format.   This format stores multiple messages in one
+       textfile.
+
+       The vviirrttuuaall(8) delivery agent prepends a "FFrroomm _s_e_n_d_e_r _t_i_m_e___s_t_a_m_p" enve‐
+       lope header to each message, prepends a  DDeelliivveerreedd--TToo::  message  header
+       with  the envelope recipient address, prepends an XX--OOrriiggiinnaall--TToo:: header
+       with the recipient address as given to Postfix, prepends a RReettuurrnn--PPaatthh::
+       message header with the envelope sender address, prepends a >> character
+       to lines beginning with "FFrroomm ", and appends an empty line.
+
+       The mailbox is  locked  for  exclusive  access  while  delivery  is  in
+       progress. In case of problems, an attempt is made to truncate the mail‐
+       box to its original length.
+
+QQMMAAIILL MMAAIILLDDIIRR FFOORRMMAATT
+       When  the mailbox location ends in //, the message is delivered in qmail
+       mmaaiillddiirr format. This format stores one message per file.
+
+       The vviirrttuuaall(8) delivery agent prepends a DDeelliivveerreedd--TToo::  message  header
+       with  the  final envelope recipient address, prepends an XX--OOrriiggiinnaall--TToo::
+       header with the recipient address as given to Postfix, and  prepends  a
+       RReettuurrnn--PPaatthh:: message header with the envelope sender address.
+
+       By  definition,  mmaaiillddiirr format does not require application-level file
+       locking during mail delivery or retrieval.
+
+MMAAIILLBBOOXX OOWWNNEERRSSHHIIPP
+       Mailbox ownership  is  controlled  by  the  vviirrttuuaall__uuiidd__mmaappss  and  vviirr‐‐
+       ttuuaall__ggiidd__mmaappss  lookup tables, which are indexed with the full recipient
+       address. Each table provides a string with the numerical user and group
+       ID, respectively.
+
+       The vviirrttuuaall__mmiinniimmuumm__uuiidd parameter imposes a lower  bound  on  numerical
+       user ID values that may be specified in any vviirrttuuaall__uuiidd__mmaappss.
+
+CCAASSEE FFOOLLDDIINNGG
+       All  delivery  decisions  are  made  using  the full recipient address,
+       folded to lower case. See also the next section for  a  few  exceptions
+       with optional address extensions.
+
+TTAABBLLEE SSEEAARRCCHH OORRDDEERR
+       Normally, a lookup table is specified as a text file that serves as in‐
+       put to the ppoossttmmaapp(1) command. The result, an indexed file in ddbbmm or ddbb
+       format, is used for fast searching by the mail system.
+
+       The  search  order  is as follows. The search stops upon the first suc‐
+       cessful lookup.
+
+       •      When  the  recipient  has  an  optional  address  extension  the
+              _u_s_e_r_+_e_x_t_e_n_s_i_o_n_@_d_o_m_a_i_n_._t_l_d address is looked up first.
+
+              With Postfix versions before 2.1, the optional address extension
+              is always ignored.
+
+       •      The  _u_s_e_r_@_d_o_m_a_i_n_._t_l_d  address,  without  address  extension,  is
+              looked up next.
+
+       •      Finally, the recipient _@_d_o_m_a_i_n is looked up.
+
+       When the table is provided via other means such as NIS,  LDAP  or  SQL,
+       the same lookups are done as for ordinary indexed files.
+
+       Alternatively,  a  table  can  be  provided as a regular-expression map
+       where patterns are given as regular expressions. In that case, only the
+       full recipient address is given to the regular-expression map.
+
+SSEECCUURRIITTYY
+       The vviirrttuuaall(8) delivery agent is not security sensitive, provided  that
+       the  lookup  tables  with  recipient user/group ID information are ade‐
+       quately protected. This program is not designed to run chrooted.
+
+       The vviirrttuuaall(8) delivery agent disallows regular expression substitution
+       of $1 etc. in regular expression lookup tables, because that would open
+       a security hole.
+
+       The vviirrttuuaall(8) delivery agent will silently ignore requests to use  the
+       pprrooxxyymmaapp(8)  server.  Instead  it  will open the table directly. Before
+       Postfix version 2.2, the virtual delivery agent will terminate  with  a
+       fatal error.
+
+SSTTAANNDDAARRDDSS
+       RFC 822 (ARPA Internet Text Messages)
+
+DDIIAAGGNNOOSSTTIICCSS
+       Mail bounces when the recipient has no mailbox or when the recipient is
+       over  disk  quota. In all other problem cases, mail for an existing re‐
+       cipient is deferred and a warning is logged.
+
+       Problems and transactions are  logged  to  ssyyssllooggdd(8)  or  ppoossttllooggdd(8).
+       Corrupted  message  files are marked so that the queue manager can move
+       them to the ccoorrrruupptt queue afterwards.
+
+       Depending on the setting of the nnoottiiffyy__ccllaasssseess parameter, the  postmas‐
+       ter is notified of bounces and of other trouble.
+
+BBUUGGSS
+       This  delivery agent supports address extensions in email addresses and
+       in lookup table keys, but does not propagate address extension informa‐
+       tion to the result of table lookup.
+
+       Postfix should have lookup tables that can return multiple  result  at‐
+       tributes.  In order to avoid the inconvenience of maintaining three ta‐
+       bles, use an LDAP or MYSQL database.
+
+CCOONNFFIIGGUURRAATTIIOONN PPAARRAAMMEETTEERRSS
+       Changes to mmaaiinn..ccff are picked up automatically, as vviirrttuuaall(8) processes
+       run for only a limited amount of time. Use the command "ppoossttffiixx rreellooaadd"
+       to speed up a change.
+
+       The text below provides only a parameter summary. See  ppoossttccoonnff(5)  for
+       more details including examples.
+
+MMAAIILLBBOOXX DDEELLIIVVEERRYY CCOONNTTRROOLLSS
+       vviirrttuuaall__mmaaiillbbooxx__bbaassee ((eemmppttyy))
+              A  prefix  that  the  vviirrttuuaall(8)  delivery agent prepends to all
+              pathname results from $virtual_mailbox_maps table lookups.
+
+       vviirrttuuaall__mmaaiillbbooxx__mmaappss ((eemmppttyy))
+              Optional lookup tables with all valid addresses in  the  domains
+              that match $virtual_mailbox_domains.
+
+       vviirrttuuaall__mmiinniimmuumm__uuiidd ((110000))
+              The minimum user ID value that the vviirrttuuaall(8) delivery agent ac‐
+              cepts as a result from $virtual_uid_maps table lookup.
+
+       vviirrttuuaall__uuiidd__mmaappss ((eemmppttyy))
+              Lookup tables with the per-recipient user ID that the vviirrttuuaall(8)
+              delivery agent uses while writing to the recipient’s mailbox.
+
+       vviirrttuuaall__ggiidd__mmaappss ((eemmppttyy))
+              Lookup  tables  with  the  per-recipient group ID for vviirrttuuaall(8)
+              mailbox delivery.
+
+       Available in Postfix version 2.0 and later:
+
+       vviirrttuuaall__mmaaiillbbooxx__ddoommaaiinnss (($$vviirrttuuaall__mmaaiillbbooxx__mmaappss))
+              Postfix is the final destination for the specified list  of  do‐
+              mains;  mail is delivered via the $virtual_transport mail deliv‐
+              ery transport.
+
+       vviirrttuuaall__ttrraannssppoorrtt ((vviirrttuuaall))
+              The default mail delivery transport and next-hop destination for
+              final delivery to domains listed with $virtual_mailbox_domains.
+
+       Available in Postfix version 2.5.3 and later:
+
+       ssttrriicctt__mmaaiillbbooxx__oowwnneerrsshhiipp ((yyeess))
+              Defer delivery when a mailbox file is not owned by  its  recipi‐
+              ent.
+
+LLOOCCKKIINNGG CCOONNTTRROOLLSS
+       vviirrttuuaall__mmaaiillbbooxx__lloocckk ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              How  to  lock  a UNIX-style vviirrttuuaall(8) mailbox before attempting
+              delivery.
+
+       ddeelliivveerr__lloocckk__aatttteemmppttss ((2200))
+              The maximal number of attempts to acquire an exclusive lock on a
+              mailbox file or bboouunnccee(8) logfile.
+
+       ddeelliivveerr__lloocckk__ddeellaayy ((11ss))
+              The time between attempts to acquire  an  exclusive  lock  on  a
+              mailbox file or bboouunnccee(8) logfile.
+
+       ssttaallee__lloocckk__ttiimmee ((550000ss))
+              The  time  after which a stale exclusive mailbox lockfile is re‐
+              moved.
+
+RREESSOOUURRCCEE AANNDD RRAATTEE CCOONNTTRROOLLSS
+       vviirrttuuaall__mmaaiillbbooxx__lliimmiitt ((5511220000000000))
+              The maximal size in bytes of an individual vviirrttuuaall(8) mailbox or
+              maildir file, or zero (no limit).
+
+       Implemented in the qmgr(8) daemon:
+
+       vviirrttuuaall__ddeessttiinnaattiioonn__ccoonnccuurrrreennccyy__lliimmiitt (($$ddeeffaauulltt__ddeessttiinnaattiioonn__ccoonnccuurr‐‐
+       rreennccyy__lliimmiitt))
+              The maximal number of parallel deliveries to the  same  destina‐
+              tion via the virtual message delivery transport.
+
+       vviirrttuuaall__ddeessttiinnaattiioonn__rreecciippiieenntt__lliimmiitt (($$ddeeffaauulltt__ddeessttiinnaattiioonn__rreecciippii‐‐
+       eenntt__lliimmiitt))
+              The  maximal  number  of  recipients per message for the virtual
+              message delivery transport.
+
+MMIISSCCEELLLLAANNEEOOUUSS CCOONNTTRROOLLSS
+       ccoonnffiigg__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The default location of the Postfix main.cf and  master.cf  con‐
+              figuration files.
+
+       ddaaeemmoonn__ttiimmeeoouutt ((1188000000ss))
+              How  much time a Postfix daemon process may take to handle a re‐
+              quest before it is terminated by a built-in watchdog timer.
+
+       ddeellaayy__llooggggiinngg__rreessoolluuttiioonn__lliimmiitt ((22))
+              The maximal number of digits after the decimal point  when  log‐
+              ging sub-second delay values.
+
+       iippcc__ttiimmeeoouutt ((33660000ss))
+              The  time limit for sending or receiving information over an in‐
+              ternal communication channel.
+
+       mmaaxx__iiddllee ((110000ss))
+              The maximum amount of time that an idle Postfix  daemon  process
+              waits for an incoming connection before terminating voluntarily.
+
+       mmaaxx__uussee ((110000))
+              The maximal number of incoming connections that a Postfix daemon
+              process will service before terminating voluntarily.
+
+       pprroocceessss__iidd ((rreeaadd--oonnllyy))
+              The process ID of a Postfix command or daemon process.
+
+       pprroocceessss__nnaammee ((rreeaadd--oonnllyy))
+              The process name of a Postfix command or daemon process.
+
+       qquueeuuee__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The location of the Postfix top-level queue directory.
+
+       ssyysslloogg__ffaacciilliittyy ((mmaaiill))
+              The syslog facility of Postfix logging.
+
+       ssyysslloogg__nnaammee ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              A  prefix  that  is  prepended  to  the  process  name in syslog
+              records, so that, for example, "smtpd" becomes "prefix/smtpd".
+
+       Available in Postfix version 3.0 and later:
+
+       vviirrttuuaall__ddeelliivveerryy__ssttaattuuss__ffiilltteerr (($$ddeeffaauulltt__ddeelliivveerryy__ssttaattuuss__ffiilltteerr))
+              Optional filter for the vviirrttuuaall(8) delivery agent to change  the
+              delivery status code or explanatory text of successful or unsuc‐
+              cessful deliveries.
+
+       Available in Postfix version 3.3 and later:
+
+       eennaabbllee__oorriiggiinnaall__rreecciippiieenntt ((yyeess))
+              Enable  support  for the original recipient address after an ad‐
+              dress is rewritten to a  different  address  (for  example  with
+              aliasing or with canonical mapping).
+
+       sseerrvviiccee__nnaammee ((rreeaadd--oonnllyy))
+              The master.cf service name of a Postfix daemon process.
+
+       Available in Postfix 3.5 and later:
+
+       iinnffoo__lloogg__aaddddrreessss__ffoorrmmaatt ((eexxtteerrnnaall))
+              The  email  address  form that will be used in non-debug logging
+              (info, warning, etc.).
+
+SSEEEE AALLSSOO
+       qmgr(8), queue manager
+       bounce(8), delivery status reports
+       postconf(5), configuration parameters
+       postlogd(8), Postfix logging
+       syslogd(8), system logging
+
+RREEAADDMMEE__FFIILLEESS
+       Use "ppoossttccoonnff rreeaaddmmee__ddiirreeccttoorryy" or
+       "ppoossttccoonnff hhttmmll__ddiirreeccttoorryy" to locate this information.
+       VIRTUAL_README, domain hosting howto
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+HHIISSTTOORRYY
+       This delivery agent was originally based on the Postfix local  delivery
+       agent.  Modifications mainly consisted of removing code that either was
+       not  applicable  or  that  was  not  safe  in  this  context:  aliases,
+       ˜user/.forward files, delivery to "|command" or to /file/name.
+
+       The  DDeelliivveerreedd--TToo:: message header appears in the qqmmaaiill system by Daniel
+       Bernstein.
+
+       The mmaaiillddiirr structure appears in the qqmmaaiill system by Daniel Bernstein.
+
+AAUUTTHHOORR((SS))
+       Wietse Venema
+       IBM T.J. Watson Research
+       P.O. Box 704
+       Yorktown Heights, NY 10598, USA
+
+       Wietse Venema
+       Google, Inc.
+       111 8th Avenue
+       New York, NY 10011, USA
+
+       Andrew McNamara
+       andrewm@connect.com.au
+       connect.com.au Pty. Ltd.
+       Level 3, 213 Miller St
+       North Sydney 2060, NSW, Australia
+
+                                                                    _V_I_R_T_U_A_L(8)

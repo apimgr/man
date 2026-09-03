@@ -1,0 +1,214 @@
+KHELP(9)                 BSD Kernel Developer's Manual                KHELP(9)
+
+NNAAMMEE
+     kkhheellpp, kkhheellpp__iinniitt__oossdd, kkhheellpp__ddeessttrrooyy__oossdd, kkhheellpp__ggeett__iidd, kkhheellpp__ggeett__oossdd,
+     kkhheellpp__aadddd__hhhhooookk, kkhheellpp__rreemmoovvee__hhhhooookk, KKHHEELLPP__DDEECCLLAARREE__MMOODD,
+     KKHHEELLPP__DDEECCLLAARREE__MMOODD__UUMMAA — Kernel Helper Framework
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//kkhheellpp..hh>>
+     ##iinncclluuddee <<ssyyss//mmoodduullee__kkhheellpp..hh>>
+
+     iinntt kkhheellpp__iinniitt__oossdd(_u_i_n_t_3_2___t _c_l_a_s_s_e_s, _s_t_r_u_c_t _o_s_d _*_h_o_s_d);
+
+     iinntt kkhheellpp__ddeessttrrooyy__oossdd(_s_t_r_u_c_t _o_s_d _*_h_o_s_d);
+
+     iinntt3322__tt kkhheellpp__ggeett__iidd(_c_h_a_r _*_h_n_a_m_e);
+
+     vvooiidd ** kkhheellpp__ggeett__oossdd(_s_t_r_u_c_t _o_s_d _*_h_o_s_d, _i_n_t_3_2___t _i_d);
+
+     iinntt kkhheellpp__aadddd__hhhhooookk(_c_o_n_s_t _s_t_r_u_c_t _h_o_o_k_i_n_f_o _*_h_k_i, _u_i_n_t_3_2___t _f_l_a_g_s);
+
+     iinntt kkhheellpp__rreemmoovvee__hhhhooookk(_c_o_n_s_t _s_t_r_u_c_t _h_o_o_k_i_n_f_o _*_h_k_i);
+
+     KKHHEELLPP__DDEECCLLAARREE__MMOODD(_h_n_a_m_e, _h_d_a_t_a, _h_h_o_o_k_s, _v_e_r_s_i_o_n);
+
+     KKHHEELLPP__DDEECCLLAARREE__MMOODD__UUMMAA(_h_n_a_m_e, _h_d_a_t_a, _h_h_o_o_k_s, _v_e_r_s_i_o_n, _c_t_o_r, _d_t_o_r);
+
+DDEESSCCRRIIPPTTIIOONN
+     kkhheellpp provides a framework for managing kkhheellpp modules, which indirectly
+     use the hhook(9) KPI to register their hook functions with hook points of
+     interest within the kernel.  Khelp modules aim to provide a structured
+     way to dynamically extend the kernel at runtime in an ABI preserving man‐
+     ner.  Depending on the subsystem providing hook points, a kkhheellpp module
+     may be able to associate per-object data for maintaining relevant state
+     between hook calls.  The hhook(9) and kkhheellpp frameworks are tightly inte‐
+     grated and anyone interested in kkhheellpp should also read the hhook(9) man‐
+     ual page thoroughly.
+
+   IInnffoorrmmaattiioonn ffoorr KKhheellpp MMoodduullee IImmpplleemmeennttoorrss
+     kkhheellpp modules are represented within the kkhheellpp framework by a _s_t_r_u_c_t
+     _h_e_l_p_e_r which has the following members:
+
+           struct helper {
+                   int (*mod_init) (void);
+                   int (*mod_destroy) (void);
+           #define HELPER_NAME_MAXLEN 16
+                   char                    h_name[HELPER_NAME_MAXLEN];
+                   uma_zone_t              h_zone;
+                   struct hookinfo         *h_hooks;
+                   uint32_t                h_nhooks;
+                   uint32_t                h_classes;
+                   int32_t                 h_id;
+                   volatile uint32_t       h_refcount;
+                   uint16_t                h_flags;
+                   TAILQ_ENTRY(helper)     h_next;
+           };
+
+     Modules must instantiate a _s_t_r_u_c_t _h_e_l_p_e_r, but are only required to set
+     the _h___c_l_a_s_s_e_s field, and may optionally set the _h___f_l_a_g_s, _m_o_d___i_n_i_t and
+     _m_o_d___d_e_s_t_r_o_y fields where required.  The framework takes care of all other
+     fields and modules should refrain from manipulating them.  Using the C99
+     designated initialiser feature to set fields is encouraged.
+
+     If specified, the _m_o_d___i_n_i_t function will be run by the kkhheellpp framework
+     prior to completing the registration process.  Returning a non-zero value
+     from the _m_o_d___i_n_i_t function will abort the registration process and fail
+     to load the module.  If specified, the _m_o_d___d_e_s_t_r_o_y function will be run
+     by the kkhheellpp framework during the deregistration process, after the mod‐
+     ule has been deregistered by the kkhheellpp framework.  The return value is
+     currently ignored.  Valid kkhheellpp classes are defined in <_s_y_s_/_k_h_e_l_p_._h>.
+     Valid flags are defined in <_s_y_s_/_m_o_d_u_l_e___k_h_e_l_p_._h>.  The HELPER_NEEDS_OSD
+     flag should be set in the _h___f_l_a_g_s field if the kkhheellpp module requires per‐
+     sistent per-object data storage.  There is no programmatic way (yet) to
+     check if a kkhheellpp class provides the ability for kkhheellpp modules to asso‐
+     ciate persistent per-object data, so a manual check is required.
+
+     The KKHHEELLPP__DDEECCLLAARREE__MMOODD() and KKHHEELLPP__DDEECCLLAARREE__MMOODD__UUMMAA() macros provide conve‐
+     nient wrappers around the DECLARE_MODULE(9) macro, and are used to regis‐
+     ter a kkhheellpp module with the kkhheellpp framework.  KKHHEELLPP__DDEECCLLAARREE__MMOODD__UUMMAA()
+     should only be used by modules which require the use of persistent per-
+     object storage i.e. modules which set the HELPER_NEEDS_OSD flag in their
+     _s_t_r_u_c_t _h_e_l_p_e_r's _h___f_l_a_g_s field.
+
+     The first four arguments common to both macros are as follows.  The _h_n_a_m_e
+     argument specifies the unique ascii(7) name for the kkhheellpp module.  It
+     should be no longer than HELPER_NAME_MAXLEN-1 characters in length.  The
+     _h_d_a_t_a argument is a pointer to the module's _s_t_r_u_c_t _h_e_l_p_e_r.  The _h_h_o_o_k_s
+     argument points to a static array of _s_t_r_u_c_t _h_o_o_k_i_n_f_o structures.  The ar‐
+     ray should contain a _s_t_r_u_c_t _h_o_o_k_i_n_f_o for each hhook(9) point the module
+     wishes to hook, even when using the same hook function multiple times for
+     different hhook(9) points.  The _v_e_r_s_i_o_n argument specifies a version num‐
+     ber for the module which will be passed to MODULE_VERSION(9).  The
+     KKHHEELLPP__DDEECCLLAARREE__MMOODD__UUMMAA() macro takes the additional _c_t_o_r and _d_t_o_r argu‐
+     ments, which specify optional uma(9) constructor and destructor func‐
+     tions.  NULL should be passed where the functionality is not required.
+
+     The kkhheellpp__ggeett__iidd() function returns the numeric identifier for the kkhheellpp
+     module with name _h_n_a_m_e.
+
+     The kkhheellpp__ggeett__oossdd() function is used to obtain the per-object data
+     pointer for a specified kkhheellpp module.  The _h_o_s_d argument is a pointer to
+     the underlying subsystem object's _s_t_r_u_c_t _o_s_d.  This is provided by the
+     hhook(9) framework when calling into a kkhheellpp module's hook function.  The
+     _i_d argument specifies the numeric identifier for the kkhheellpp module to ex‐
+     tract the data pointer from _h_o_s_d for.  The _i_d is obtained using the
+     kkhheellpp__ggeett__iidd() function.
+
+     The kkhheellpp__aadddd__hhhhooookk() and kkhheellpp__rreemmoovvee__hhhhooookk() functions allow a kkhheellpp
+     module to dynamically hook/unhook hhook(9) points at run time.  The _h_k_i
+     argument specifies a pointer to a _s_t_r_u_c_t _h_o_o_k_i_n_f_o which encapsulates the
+     required information about the hhook(9) point and hook function being ma‐
+     nipulated.  The HHOOK_WAITOK flag may be passed in via the _f_l_a_g_s argument
+     of kkhheellpp__aadddd__hhhhooookk() if malloc(9) is allowed to sleep waiting for memory
+     to become available.
+
+   IInntteeggrraattiinngg KKhheellpp IInnttoo aa KKeerrnneell SSuubbssyysstteemm
+     Most of the work required to allow kkhheellpp modules to do useful things re‐
+     lates to defining and instantiating suitable hhook(9) points for kkhheellpp
+     modules to hook into.  The only additional decision a subsystem needs to
+     make is whether it wants to allow kkhheellpp modules to associate persistent
+     per-object data.  Providing support for persistent data storage can allow
+     kkhheellpp modules to perform more complex functionality which may be desir‐
+     able.  Subsystems which want to allow Khelp modules to associate persis‐
+     tent per-object data with one of the subsystem's data structures need to
+     make the following two key changes:
+
+     ••   Embed a _s_t_r_u_c_t _o_s_d pointer in the structure definition for the ob‐
+         ject.
+
+     ••   Add calls to kkhheellpp__iinniitt__oossdd() and kkhheellpp__ddeessttrrooyy__oossdd() to the subsys‐
+         tem code paths which are responsible for respectively initialising
+         and destroying the object.
+
+     The kkhheellpp__iinniitt__oossdd() function initialises the per-object data storage for
+     all currently loaded kkhheellpp modules of appropriate classes which have set
+     the HELPER_NEEDS_OSD flag in their _h___f_l_a_g_s field.  The _c_l_a_s_s_e_s argument
+     specifies a bitmask of kkhheellpp classes which this subsystem associates
+     with.  If a kkhheellpp module matches any of the classes in the bitmask, that
+     module will be associated with the object.  The _h_o_s_d argument specifies
+     the pointer to the object's _s_t_r_u_c_t _o_s_d which will be used to provide the
+     persistent storage for use by kkhheellpp modules.
+
+     The kkhheellpp__ddeessttrrooyy__oossdd() function frees all memory that was associated
+     with an object's _s_t_r_u_c_t _o_s_d by a previous call to kkhheellpp__iinniitt__oossdd().  The
+     _h_o_s_d argument specifies the pointer to the object's _s_t_r_u_c_t _o_s_d which will
+     be purged in preparation for destruction.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     kkhheellpp modules are protected from being prematurely unloaded by a refer‐
+     ence count.  The count is incremented each time a subsystem calls
+     kkhheellpp__iinniitt__oossdd() causing persistent storage to be allocated for the mod‐
+     ule, and decremented for each corresponding call to kkhheellpp__ddeessttrrooyy__oossdd().
+     Only when a module's reference count has dropped to zero can the module
+     be unloaded.
+
+RREETTUURRNN VVAALLUUEESS
+     The kkhheellpp__iinniitt__oossdd() function returns zero if no errors occurred.  It re‐
+     turns ENOMEM if a kkhheellpp module which requires per-object storage fails to
+     allocate the necessary memory.
+
+     The kkhheellpp__ddeessttrrooyy__oossdd() function only returns zero to indicate that no
+     errors occurred.
+
+     The kkhheellpp__ggeett__iidd() function returns the unique numeric identifier for the
+     registered kkhheellpp module with name _h_n_a_m_e.  It return -1 if no module with
+     the specified name is currently registered.
+
+     The kkhheellpp__ggeett__oossdd() function returns the pointer to the kkhheellpp module's
+     persistent object storage memory.  If the module identified by _i_d does
+     not have persistent object storage registered with the object's _h_o_s_d
+     _s_t_r_u_c_t _o_s_d, NULL is returned.
+
+     The kkhheellpp__aadddd__hhhhooookk() function returns zero if no errors occurred.  It
+     returns ENOENT if it could not find the requested hhook(9) point.  It re‐
+     turns ENOMEM if malloc(9) failed to allocate memory.  It returns EEXIST
+     if attempting to register the same hook function more than once for the
+     same hhook(9) point.
+
+     The kkhheellpp__rreemmoovvee__hhhhooookk() function returns zero if no errors occurred.  It
+     returns ENOENT if it could not find the requested hhook(9) point.
+
+EEXXAAMMPPLLEESS
+     A well commented example Khelp module can be found at:
+     _/_u_s_r_/_s_h_a_r_e_/_e_x_a_m_p_l_e_s_/_k_l_d_/_k_h_e_l_p_/_h___e_x_a_m_p_l_e_._c
+
+     The Enhanced Round Trip Time (ERTT) h_ertt(4) kkhheellpp module provides a
+     more complex example of what is possible.
+
+SSEEEE AALLSSOO
+     h_ertt(4), hhook(9), osd(9)
+
+AACCKKNNOOWWLLEEDDGGEEMMEENNTTSS
+     Development and testing of this software were made possible in part by
+     grants from the FreeBSD Foundation and Cisco University Research Program
+     Fund at Community Foundation Silicon Valley.
+
+HHIISSTTOORRYY
+     The kkhheellpp kernel helper framework first appeared in FreeBSD 9.0.
+
+     The kkhheellpp framework was first released in 2010 by Lawrence Stewart whilst
+     studying at Swinburne University of Technology's Centre for Advanced In‐
+     ternet Architectures, Melbourne, Australia.  More details are available
+     at:
+
+     http://caia.swin.edu.au/urp/newtcp/
+
+AAUUTTHHOORRSS
+     The kkhheellpp framework was written by Lawrence Stewart
+     <_l_s_t_e_w_a_r_t_@_F_r_e_e_B_S_D_._o_r_g>.
+
+     This manual page was written by David Hayes <_d_a_v_i_d_._h_a_y_e_s_@_i_e_e_e_._o_r_g> and
+     Lawrence Stewart <_l_s_t_e_w_a_r_t_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             October 1, 2024                            BSD

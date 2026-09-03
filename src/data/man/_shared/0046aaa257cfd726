@@ -1,0 +1,220 @@
+CRYPTO_SESSION(9)        BSD Kernel Developer's Manual       CRYPTO_SESSION(9)
+
+NNAAMMEE
+     ccrryyppttoo__sseessssiioonn — state used for symmetric cryptographic services
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ooppeennccrryyppttoo//ccrryyppttooddeevv..hh>>
+
+     _s_t_r_u_c_t _a_u_t_h___h_a_s_h _*
+     ccrryyppttoo__aauutthh__hhaasshh(_c_o_n_s_t _s_t_r_u_c_t _c_r_y_p_t_o___s_e_s_s_i_o_n___p_a_r_a_m_s _*_c_s_p);
+
+     _s_t_r_u_c_t _e_n_c___x_f_o_r_m _*
+     ccrryyppttoo__cciipphheerr(_c_o_n_s_t _s_t_r_u_c_t _c_r_y_p_t_o___s_e_s_s_i_o_n___p_a_r_a_m_s _*_c_s_p);
+
+     _c_o_n_s_t _s_t_r_u_c_t _c_r_y_p_t_o___s_e_s_s_i_o_n___p_a_r_a_m_s _*
+     ccrryyppttoo__ggeett__ppaarraammss(_c_r_y_p_t_o___s_e_s_s_i_o_n___t _c_s_e_s);
+
+     _i_n_t
+     ccrryyppttoo__nneewwsseessssiioonn(_c_r_y_p_t_o___s_e_s_s_i_o_n___t _*_c_s_e_s,
+         _c_o_n_s_t _s_t_r_u_c_t _c_r_y_p_t_o___s_e_s_s_i_o_n___p_a_r_a_m_s _*_c_s_p, _i_n_t _c_r_i_d);
+
+     _i_n_t
+     ccrryyppttoo__ffrreeeesseessssiioonn(_c_r_y_p_t_o___s_e_s_s_i_o_n___t _c_s_e_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     Symmetric cryptographic operations in the kernel are associated with
+     cryptographic sessions.  Sessions hold state shared across multiple re‐
+     quests.  Active sessions are associated with a single cryptographic
+     driver.
+
+     The _c_r_y_p_t_o___s_e_s_s_i_o_n___t type represents an opaque reference to an active
+     session.  Session objects are allocated and managed by the cryptographic
+     framework.
+
+     New sessions are created by ccrryyppttoo__nneewwsseessssiioonn().  _c_s_p describes various
+     parameters associated with the new session such as the algorithms to use
+     and any session-wide keys.  _c_r_i_d can be used to request either a specific
+     cryptographic driver or classes of drivers.  For the latter case, _c_r_i_d
+     should be set to a mask of the following values:
+
+     CRYPTOCAP_F_HARDWARE  Request hardware drivers.  Hardware drivers do not
+                           use the host CPU to perform operations.  Typically,
+                           a separate co-processor performs the operations
+                           asynchronously.
+
+     CRYPTOCAP_F_SOFTWARE  Request software drivers.  Software drivers use the
+                           host CPU to perform operations.  The kernel in‐
+                           cludes a simple, yet portable implementation of
+                           each supported algorithm in the cryptosoft(4)
+                           driver.  Additional software drivers may also be
+                           available on architectures which provide instruc‐
+                           tions designed to accelerate cryptographic opera‐
+                           tions.
+
+     If both hardware and software drivers are requested, hardware drivers are
+     preferred over software drivers.  Accelerated software drivers are pre‐
+     ferred over the baseline software driver.  If multiple hardware drivers
+     are available, the framework will distribute sessions across these driv‐
+     ers in a round-robin fashion.
+
+     On success, ccrryyppttoo__nneewwsseessssiioonn() saves a reference to the newly created
+     session in _c_s_e_s.
+
+     ccrryyppttoo__ffrreeeesseessssiioonn() is used to free the resources associated with the
+     session _c_s_e_s.
+
+     ccrryyppttoo__aauutthh__hhaasshh() returns a structure describing the baseline software
+     implementation of an authentication algorithm requested by _c_s_p.  If _c_s_p
+     does not specify an authentication algorithm, or requests an invalid al‐
+     gorithm, NULL is returned.
+
+     ccrryyppttoo__cciipphheerr() returns a structure describing the baseline software im‐
+     plementation of an encryption algorithm requested by _c_s_p.  If _c_s_p does
+     not specify an encryption algorithm, or requests an invalid algorithm,
+     NULL is returned.
+
+     ccrryyppttoo__ggeett__ppaarraammss() returns a pointer to the session parameters used by
+     _c_s_e_s.
+
+   SSeessssiioonn PPaarraammeetteerrss
+     Session parameters are used to describe the cryptographic operations per‐
+     formed by cryptographic requests.  Parameters are stored in an instance
+     of _s_t_r_u_c_t _c_r_y_p_t_o___s_e_s_s_i_o_n___p_a_r_a_m_s.  When initializing parameters to pass to
+     ccrryyppttoo__nneewwsseessssiioonn(), the entire structure should first be zeroed.  Needed
+     fields should then be set leaving unused fields as zero.  This structure
+     contains the following fields:
+
+     _c_s_p___m_o_d_e         Type of operation to perform.  This field must be set to
+                      one of the following:
+
+                      CSP_MODE_COMPRESS  Compress or decompress request pay‐
+                                         load.
+
+                                         The compression algorithm is speci‐
+                                         fied in _c_s_p___c_i_p_h_e_r___a_l_g.
+
+                      CSP_MODE_CIPHER    Encrypt or decrypt request payload.
+
+                                         The encryption algorithm is specified
+                                         in _c_s_p___c_i_p_h_e_r___a_l_g.
+
+                      CSP_MODE_DIGEST    Compute or verify a digest, or hash,
+                                         of request payload.
+
+                                         The authentication algorithm is spec‐
+                                         ified in _c_s_p___a_u_t_h___a_l_g.
+
+                      CSP_MODE_AEAD      Authenticated encryption with addi‐
+                                         tional data.  Decryption operations
+                                         require the digest, or tag, and fail
+                                         if it does not match.
+
+                                         The AEAD algorithm is specified in
+                                         _c_s_p___c_i_p_h_e_r___a_l_g.
+
+                      CSP_MODE_ETA       Encrypt-then-Authenticate.  In this
+                                         mode, encryption operations encrypt
+                                         the payload and then compute an au‐
+                                         thentication digest over the request
+                                         additional authentication data fol‐
+                                         lowed by the encrypted payload.  De‐
+                                         cryption operations fail without de‐
+                                         crypting the data if the provided di‐
+                                         gest does not match.
+
+                                         The encryption algorithm is specified
+                                         in _c_s_p___c_i_p_h_e_r___a_l_g and the authentica‐
+                                         tion algorithm is specified in
+                                         _c_s_p___a_u_t_h___a_l_g.
+
+     _c_s_p___f_l_a_g_s        A mask of optional driver features.  Drivers will only
+                      attach to a session if they support all of the requested
+                      features.
+
+                      CSP_F_SEPARATE_OUTPUT  Support requests that use sepa‐
+                                             rate input and output buffers.
+                                             Sessions with this flag set per‐
+                                             mit requests with either a single
+                                             buffer that is modified in-place,
+                                             or requests with separate input
+                                             and output buffers.  Sessions
+                                             without this flag only permit re‐
+                                             quests with a single buffer that
+                                             is modified in-place.
+
+                      CSP_F_SEPARATE_AAD     Support requests that use a sepa‐
+                                             rate buffer for AAD rather than
+                                             providing AAD as a region in the
+                                             input buffer.  Sessions with this
+                                             flag set permit requests with AAD
+                                             passed in either in a region of
+                                             the input buffer or in a single,
+                                             virtually-contiguous buffer.
+                                             Sessions without this flag only
+                                             permit requests with AAD passed
+                                             in as a region in the input buf‐
+                                             fer.
+
+                      CSP_F_ESN              Support requests that use a sepa‐
+                                             rate buffer for IPsec ESN (Ex‐
+                                             tended Sequence Numbers).
+
+                                             Sessions with this flag set per‐
+                                             mit requests with IPsec ESN
+                                             passed in special buffer.  It is
+                                             required for IPsec ESN support of
+                                             encrypt and authenticate mode
+                                             where the high-order 32 bits of
+                                             the sequence number are appended
+                                             after the Next Header (RFC 4303).
+
+     _c_s_p___i_v_l_e_n        If either the cipher or authentication algorithms re‐
+                      quire an explicit initialization vector (IV) or nonce,
+                      this specifies the length in bytes.  All requests for a
+                      session use the same IV length.
+
+     _c_s_p___c_i_p_h_e_r___a_l_g   Encryption or compression algorithm.
+
+     _c_s_p___c_i_p_h_e_r___k_l_e_n  Length of encryption or decryption key in bytes.  All
+                      requests for a session use the same key length.
+
+     _c_s_p___c_i_p_h_e_r___k_e_y   Pointer to encryption or decryption key.  If all re‐
+                      quests for a session use request-specific keys, this
+                      field should be left as NULL.  This pointer and associ‐
+                      ated key must remain valid for the duration of the
+                      crypto session.
+
+     _c_s_p___a_u_t_h___a_l_g     Authentication algorithm.
+
+     _c_s_p___a_u_t_h___k_l_e_n    Length of authentication key in bytes.  If the authenti‐
+                      cation algorithm does not use a key, this field should
+                      be left as zero.
+
+     _c_s_p___a_u_t_h___k_e_y     Pointer to the authentication key.  If all requests for
+                      a session use request-specific keys, this field should
+                      be left as NULL.  This pointer and associated key must
+                      remain valid for the duration of the crypto session.
+
+     _c_s_p___a_u_t_h___m_l_e_n    The length in bytes of the digest.  If zero, the full
+                      length of the digest is used.  If non-zero, the first
+                      _c_s_p___a_u_t_h___m_l_e_n bytes of the digest are used.
+
+RREETTUURRNN VVAALLUUEESS
+     ccrryyppttoo__nneewwsseessssiioonn() returns a non-zero value if an error occurs or zero
+     on success.
+
+     ccrryyppttoo__aauutthh__hhaasshh() and ccrryyppttoo__cciipphheerr() return NULL if the request is
+     valid or a pointer to a structure on success.
+
+SSEEEE AALLSSOO
+     crypto(7), crypto(9), crypto_request(9)
+
+BBUUGGSS
+     The current implementation of ccrryyppttoo__ffrreeeesseessssiioonn does not provide a way
+     for the caller to know that there are no other references to the keys
+     stored in the session's associated parameters.  This function should
+     probably sleep until any in-flight cryptographic operations associated
+     with the session are completed.
+
+BSD                              June 22, 2020                             BSD

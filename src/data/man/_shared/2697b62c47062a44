@@ -1,0 +1,822 @@
+_U_N_I_X(7)                Miscellaneous Information Manual                _U_N_I_X(7)
+
+NNAAMMEE
+       unix - sockets for local interprocess communication
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+       ##iinncclluuddee <<ssyyss//uunn..hh>>
+
+       _u_n_i_x___s_o_c_k_e_t == ssoocckkeett((AAFF__UUNNIIXX,, ttyyppee,, 00));;
+       _e_r_r_o_r == ssoocckkeettppaaiirr((AAFF__UUNNIIXX,, ttyyppee,, 00,, iinntt **_s_v));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  AAFF__UUNNIIXX (also known as AAFF__LLOOCCAALL) socket family is used to communi‐
+       cate between processes on the same machine efficiently.  Traditionally,
+       UNIX domain sockets can be either unnamed, or  bound  to  a  filesystem
+       pathname  (marked as being of type socket).  Linux also supports an ab‐
+       stract namespace which is independent of the filesystem.
+
+       Valid socket types in the UNIX domain are: SSOOCCKK__SSTTRREEAAMM, for  a  stream‐
+       oriented  socket;  SSOOCCKK__DDGGRRAAMM, for a datagram‐oriented socket that pre‐
+       serves message boundaries (as on most UNIX implementations, UNIX domain
+       datagram sockets are always reliable and don’t reorder datagrams);  and
+       (since  Linux 2.6.4) SSOOCCKK__SSEEQQPPAACCKKEETT, for a sequenced‐packet socket that
+       is connection‐oriented, preserves message boundaries, and delivers mes‐
+       sages in the order that they were sent.
+
+       UNIX domain sockets support passing file descriptors or process creden‐
+       tials to other processes using ancillary data.
+
+   AAddddrreessss ffoorrmmaatt
+       A UNIX domain socket address is represented in the following structure:
+
+           struct sockaddr_un {
+               sa_family_t sun_family;               /* AF_UNIX */
+               char        sun_path[108];            /* Pathname */
+           };
+
+       The _s_u_n___f_a_m_i_l_y field always contains AAFF__UUNNIIXX.  On  Linux,  _s_u_n___p_a_t_h  is
+       108 bytes in size; see also BUGS, below.
+
+       Various  system calls (for example, bbiinndd(2), ccoonnnneecctt(2), and sseennddttoo(2))
+       take a _s_o_c_k_a_d_d_r___u_n argument as input.  Some other system calls (for ex‐
+       ample, ggeettssoocckknnaammee(2), ggeettppeeeerrnnaammee(2), rreeccvvffrroomm(2), and aacccceepptt(2))  re‐
+       turn an argument of this type.
+
+       Three types of address are distinguished in the _s_o_c_k_a_d_d_r___u_n structure:
+
+       pathname
+              a  UNIX domain socket can be bound to a null‐terminated filesys‐
+              tem pathname using bbiinndd(2).  When  the  address  of  a  pathname
+              socket is returned (by one of the system calls noted above), its
+              length is
+
+                  offsetof(struct sockaddr_un, sun_path) + strlen(sun_path) + 1
+
+              and  _s_u_n___p_a_t_h contains the null‐terminated pathname.  (On Linux,
+              the above ooffffsseettooff() expression equates to  the  same  value  as
+              _s_i_z_e_o_f_(_s_a___f_a_m_i_l_y___t_),  but  some  other  implementations  include
+              other fields before _s_u_n___p_a_t_h, so the ooffffsseettooff() expression  more
+              portably describes the size of the address structure.)
+
+              For further details of pathname sockets, see below.
+
+       unnamed
+              A  stream  socket  that  has  not been bound to a pathname using
+              bbiinndd(2) has no name.  Likewise, the two sockets created by ssoocckk‐‐
+              eettppaaiirr(2) are unnamed.  When the address of an unnamed socket is
+              returned, its length is _s_i_z_e_o_f_(_s_a___f_a_m_i_l_y___t_), and _s_u_n___p_a_t_h should
+              not be inspected.
+
+       abstract
+              an abstract socket address is  distinguished  (from  a  pathname
+              socket) by the fact that _s_u_n___p_a_t_h_[_0_] is a null byte ('\0').  The
+              socket’s  address  in  this namespace is given by the additional
+              bytes in _s_u_n___p_a_t_h that are covered by the  specified  length  of
+              the  address structure.  (Null bytes in the name have no special
+              significance.)  The name has no connection with filesystem path‐
+              names.  When the address of an abstract socket is returned,  the
+              returned  _a_d_d_r_l_e_n  is  greater  than  _s_i_z_e_o_f_(_s_a___f_a_m_i_l_y___t_) (i.e.,
+              greater than 2), and the name of the socket is contained in  the
+              first _(_a_d_d_r_l_e_n _- _s_i_z_e_o_f_(_s_a___f_a_m_i_l_y___t_)_) bytes of _s_u_n___p_a_t_h.
+
+   PPaatthhnnaammee ssoocckkeettss
+       When binding a socket to a pathname, a few rules should be observed for
+       maximum portability and ease of coding:
+
+       •  The pathname in _s_u_n___p_a_t_h should be null‐terminated.
+
+       •  The  length  of  the  pathname, including the terminating null byte,
+          should not exceed the size of _s_u_n___p_a_t_h.
+
+       •  The _a_d_d_r_l_e_n argument that describes the enclosing _s_o_c_k_a_d_d_r___u_n struc‐
+          ture should have a value of at least:
+
+              offsetof(struct sockaddr_un, sun_path)+strlen(addr.sun_path)+1
+
+          or, more simply, _a_d_d_r_l_e_n can be  specified  as  _s_i_z_e_o_f_(_s_t_r_u_c_t  _s_o_c_k_‐
+          _a_d_d_r___u_n_).
+
+       There  is  some  variation  in  how  implementations handle UNIX domain
+       socket addresses that do not follow the above rules.  For example, some
+       (but not all) implementations append  a  null  terminator  if  none  is
+       present in the supplied _s_u_n___p_a_t_h.
+
+       When  coding  portable applications, keep in mind that some implementa‐
+       tions have _s_u_n___p_a_t_h as short as 92 bytes.
+
+       Various system calls (aacccceepptt(2), rreeccvvffrroomm(2), ggeettssoocckknnaammee(2),  ggeettppeeeerr‐‐
+       nnaammee(2)) return socket address structures.  When applied to UNIX domain
+       sockets,  the value‐result _a_d_d_r_l_e_n argument supplied to the call should
+       be initialized as above.  Upon return, the argument is set to  indicate
+       the  _a_c_t_u_a_l size of the address structure.  The caller should check the
+       value returned in this argument: if the output value exceeds the  input
+       value,  then there is no guarantee that a null terminator is present in
+       _s_u_n___p_a_t_h.  (See BUGS.)
+
+   PPaatthhnnaammee ssoocckkeett oowwnneerrsshhiipp aanndd ppeerrmmiissssiioonnss
+       In the Linux implementation, pathname sockets honor the permissions  of
+       the  directory  they  are  in.   Creation  of a new socket fails if the
+       process does not have write and search (execute) permission on the  di‐
+       rectory in which the socket is created.
+
+       On  Linux,  connecting to a stream socket object requires write permis‐
+       sion on that socket; sending a datagram to a datagram  socket  likewise
+       requires  write  permission  on  that  socket.  POSIX does not make any
+       statement about the effect of the permissions on a socket file, and  on
+       some  systems  (e.g.,  older BSDs), the socket permissions are ignored.
+       Portable programs should not rely on this feature for security.
+
+       When creating a new socket, the owner and group of the socket file  are
+       set  according to the usual rules.  The socket file has all permissions
+       enabled, other than those that are turned off by the process uummaasskk(2).
+
+       The owner, group, and permissions of a pathname socket can  be  changed
+       (using cchhoowwnn(2) and cchhmmoodd(2)).
+
+   AAbbssttrraacctt ssoocckkeettss
+       Socket  permissions  have  no meaning for abstract sockets: the process
+       uummaasskk(2) has no effect when binding an abstract  socket,  and  changing
+       the  ownership  and  permissions  of the object (via ffcchhoowwnn(2) and ffcchh‐‐
+       mmoodd(2)) has no effect on the accessibility of the socket.
+
+       Abstract sockets automatically disappear when all  open  references  to
+       the socket are closed.
+
+       The abstract socket namespace is a nonportable Linux extension.
+
+   SSoocckkeett ooppttiioonnss
+       For  historical  reasons,  these  socket  options  are specified with a
+       SSOOLL__SSOOCCKKEETT type even though they are AAFF__UUNNIIXX specific.  They can be set
+       with sseettssoocckkoopptt(2) and read with ggeettssoocckkoopptt(2) by specifying SSOOLL__SSOOCCKKEETT
+       as the socket family.
+
+       SSOO__PPAASSSSCCRREEDD
+              Enabling this socket option causes receipt of the credentials of
+              the sending process in an SSCCMM__CCRREEDDEENNTTIIAALLSS aanncciillllaarryy  message  in
+              each  subsequently  received  message.  The returned credentials
+              are those specified by the sender using  SSCCMM__CCRREEDDEENNTTIIAALLSS,  or  a
+              default  that  includes the sender’s PID, real user ID, and real
+              group ID, if the sender did not specify  SSCCMM__CCRREEDDEENNTTIIAALLSS  ancil‐
+              lary data.
+
+              When  this  option is set and the socket is not yet connected, a
+              unique name in the abstract namespace will be generated automat‐
+              ically.
+
+              The value given as an argument to sseettssoocckkoopptt(2) and returned  as
+              the result of ggeettssoocckkoopptt(2) is an integer boolean flag.
+
+       SSOO__PPAASSSSSSEECC
+              Enables  receiving  of  the  SELinux  security label of the peer
+              socket in an ancillary message of type SSCCMM__SSEECCUURRIITTYY (see below).
+
+              The value given as an argument to sseettssoocckkoopptt(2) and returned  as
+              the result of ggeettssoocckkoopptt(2) is an integer boolean flag.
+
+              The  SSOO__PPAASSSSSSEECC  option  is  supported  for UNIX domain datagram
+              sockets since Linux 2.6.18; support for UNIX domain stream sock‐
+              ets was added in Linux 4.2.
+
+       SSOO__PPEEEEKK__OOFFFF
+              See ssoocckkeett(7).
+
+       SSOO__PPEEEERRCCRREEDD
+              This read‐only socket option returns the credentials of the peer
+              process connected to this socket.  The returned credentials  are
+              those that were in effect at the time of the call to ccoonnnneecctt(2),
+              lliisstteenn(2), or ssoocckkeettppaaiirr(2).
+
+              The argument to ggeettssoocckkoopptt(2) is a pointer to a _u_c_r_e_d structure;
+              define  the __GGNNUU__SSOOUURRCCEE feature test macro to obtain the defini‐
+              tion of that structure from _<_s_y_s_/_s_o_c_k_e_t_._h_>.
+
+              The use of this option is possible only  for  connected  AAFF__UUNNIIXX
+              stream  sockets and for AAFF__UUNNIIXX stream and datagram socket pairs
+              created using ssoocckkeettppaaiirr(2).
+
+       SSOO__PPEEEERRSSEECC
+              This read‐only socket option returns the security context of the
+              peer socket connected to this socket.  By default, this will  be
+              the same as the security context of the process that created the
+              peer socket unless overridden by the policy or by a process with
+              the required permissions.
+
+              The  argument  to  ggeettssoocckkoopptt(2) is a pointer to a buffer of the
+              specified length in bytes into which the security context string
+              will be copied.  If the buffer length is less than the length of
+              the security context string, then ggeettssoocckkoopptt(2) returns -1, sets
+              _e_r_r_n_o to EERRAANNGGEE, and returns the  required  length  via  _o_p_t_l_e_n.
+              The  caller  should  allocate  at  least  NNAAMMEE__MMAAXX bytes for the
+              buffer initially, although this is not guaranteed to  be  suffi‐
+              cient.   Resizing the buffer to the returned length and retrying
+              may be necessary.
+
+              The security context string may include a terminating null char‐
+              acter in the returned length, but is not guaranteed to do so:  a
+              security   context   "foo"   might   be  represented  as  either
+              {’f’,’o’,’o’} of length 3 or  {’f’,’o’,’o’,’\0’}  of  length  4,
+              which  are  considered  to  be  interchangeable.   The string is
+              printable, does not contain non‐terminating null characters, and
+              is in an unspecified encoding (in particular, it is not  guaran‐
+              teed to be ASCII or UTF‐8).
+
+              The use of this option for sockets in the AAFF__UUNNIIXX address family
+              is supported since Linux 2.6.2 for connected stream sockets, and
+              since  Linux 4.18 also for stream and datagram socket pairs cre‐
+              ated using ssoocckkeettppaaiirr(2).
+
+   AAuuttoobbiinndd ffeeaattuurree
+       If a bbiinndd(2) call specifies  _a_d_d_r_l_e_n  as  _s_i_z_e_o_f_(_s_a___f_a_m_i_l_y___t_),  or  the
+       SSOO__PPAASSSSCCRREEDD  socket  option was specified for a socket that was not ex‐
+       plicitly bound to an address, then the socket is autobound  to  an  ab‐
+       stract  address.   The  address  consists  of a null byte followed by 5
+       bytes in the character set _[_0_-_9_a_-_f_].  Thus, there is a  limit  of  2^20
+       autobind  addresses.  (From Linux 2.1.15, when the autobind feature was
+       added, 8 bytes were used, and the limit  was  thus  2^32  autobind  ad‐
+       dresses.  The change to 5 bytes came in Linux 2.3.15.)
+
+   SSoocckkeettss AAPPII
+       The  following  paragraphs  describe domain‐specific details and unsup‐
+       ported features of the sockets API for UNIX domain sockets on Linux.
+
+       UNIX domain sockets do not support the transmission of out‐of‐band data
+       (the MMSSGG__OOOOBB flag for sseenndd(2) and rreeccvv(2)).
+
+       The sseenndd(2) MMSSGG__MMOORREE flag is not supported by UNIX domain sockets.
+
+       Before Linux 3.4, the use of MMSSGG__TTRRUUNNCC in the _f_l_a_g_s argument of rreeccvv(2)
+       was not supported by UNIX domain sockets.
+
+       The SSOO__SSNNDDBBUUFF socket option does have an effect for UNIX  domain  sock‐
+       ets,  but  the  SSOO__RRCCVVBBUUFF  option  does not.  For datagram sockets, the
+       SSOO__SSNNDDBBUUFF value imposes an upper limit on the size  of  outgoing  data‐
+       grams.   This limit is calculated as the doubled (see ssoocckkeett(7)) option
+       value less 32 bytes used for overhead.
+
+   AAnncciillllaarryy mmeessssaaggeess
+       Ancillary data is sent and received using  sseennddmmssgg(2)  and  rreeccvvmmssgg(2).
+       For  historical  reasons,  the ancillary message types listed below are
+       specified with a SSOOLL__SSOOCCKKEETT type even though they are AAFF__UUNNIIXX specific.
+       To send them, set  the  _c_m_s_g___l_e_v_e_l  field  of  the  struct  _c_m_s_g_h_d_r  to
+       SSOOLL__SSOOCCKKEETT  and the _c_m_s_g___t_y_p_e field to the type.  For more information,
+       see ccmmssgg(3).
+
+       SSCCMM__RRIIGGHHTTSS
+              Send or receive a set of  open  file  descriptors  from  another
+              process.  The data portion contains an integer array of the file
+              descriptors.
+
+              Commonly,  this  operation is referred to as "passing a file de‐
+              scriptor" to another process.  However, more accurately, what is
+              being passed is a reference to an  open  file  description  (see
+              ooppeenn(2)),  and in the receiving process it is likely that a dif‐
+              ferent file descriptor number will be used.  Semantically,  this
+              operation  is equivalent to duplicating (dduupp(2)) a file descrip‐
+              tor into the file descriptor table of another process.
+
+              If the buffer used to receive the ancillary data containing file
+              descriptors is too small (or is absent), then the ancillary data
+              is truncated (or discarded) and the excess file descriptors  are
+              automatically closed in the receiving process.
+
+              If the number of file descriptors received in the ancillary data
+              would  cause  the  process  to exceed its RRLLIIMMIITT__NNOOFFIILLEE resource
+              limit (see ggeettrrlliimmiitt(2)), the excess file descriptors are  auto‐
+              matically closed in the receiving process.
+
+              The  kernel constant SSCCMM__MMAAXX__FFDD defines a limit on the number of
+              file descriptors in the array.   Attempting  to  send  an  array
+              larger  than this limit causes sseennddmmssgg(2) to fail with the error
+              EEIINNVVAALL.  SSCCMM__MMAAXX__FFDD has the  value  253  (or  255  before  Linux
+              2.6.38).
+
+       SSCCMM__CCRREEDDEENNTTIIAALLSS
+              Send  or receive UNIX credentials.  This can be used for authen‐
+              tication.  The credentials are passed as a _s_t_r_u_c_t  _u_c_r_e_d  ancil‐
+              lary  message.   This  structure is defined in _<_s_y_s_/_s_o_c_k_e_t_._h_> as
+              follows:
+
+                  struct ucred {
+                      pid_t pid;    /* Process ID of the sending process */
+                      uid_t uid;    /* User ID of the sending process */
+                      gid_t gid;    /* Group ID of the sending process */
+                  };
+
+              Since glibc 2.8, the __GGNNUU__SSOOUURRCCEE feature test macro must be  de‐
+              fined (before including _a_n_y header files) in order to obtain the
+              definition of this structure.
+
+              The  credentials  which  the sender specifies are checked by the
+              kernel.  A privileged process is allowed to specify values  that
+              do  not  match its own.  The sender must specify its own process
+              ID (unless it has the capability CCAAPP__SSYYSS__AADDMMIINN,  in  which  case
+              the PID of any existing process may be specified), its real user
+              ID,  effective  user  ID,  or  saved  set‐user‐ID (unless it has
+              CCAAPP__SSEETTUUIIDD), and its real group ID, effective group ID, or saved
+              set‐group‐ID (unless it has CCAAPP__SSEETTGGIIDD).
+
+              To receive a _s_t_r_u_c_t _u_c_r_e_d message, the SSOO__PPAASSSSCCRREEDD  option  must
+              be enabled on the socket.
+
+       SSCCMM__SSEECCUURRIITTYY
+              Receive the SELinux security context (the security label) of the
+              peer  socket.   The received ancillary data is a null‐terminated
+              string containing the security context.  The receiver should al‐
+              locate at least NNAAMMEE__MMAAXX bytes in the data portion of the ancil‐
+              lary message for this data.
+
+              To receive the security context, the SSOO__PPAASSSSSSEECC option  must  be
+              enabled on the socket (see above).
+
+       When  sending  ancillary data with sseennddmmssgg(2), only one item of each of
+       the above types may be included in the sent message.
+
+       At least one byte of real data should be sent  when  sending  ancillary
+       data.   On  Linux, this is required to successfully send ancillary data
+       over a UNIX domain stream socket.  When sending ancillary data  over  a
+       UNIX  domain  datagram socket, it is not necessary on Linux to send any
+       accompanying real data.  However, portable applications should also in‐
+       clude at least one byte of real data when sending ancillary data over a
+       datagram socket.
+
+       When receiving from a stream socket, ancillary data  forms  a  kind  of
+       barrier  for  the  received data.  For example, suppose that the sender
+       transmits as follows:
+
+              (1)  sseennddmmssgg(2) of four bytes, with no ancillary data.
+              (2)  sseennddmmssgg(2) of one byte, with ancillary data.
+              (3)  sseennddmmssgg(2) of four bytes, with no ancillary data.
+
+       Suppose that the receiver now performs rreeccvvmmssgg(2)  calls  each  with  a
+       buffer  size  of  20  bytes.  The first call will receive five bytes of
+       data, along with the ancillary data sent by the second sseennddmmssgg(2) call.
+       The next call will receive the remaining four bytes of data.
+
+       If the space allocated for receiving incoming  ancillary  data  is  too
+       small  then  the  ancillary  data is truncated to the number of headers
+       that will fit in the supplied buffer (or, in the case of an  SSCCMM__RRIIGGHHTTSS
+       file  descriptor  list, the list of file descriptors may be truncated).
+       If no buffer  is  provided  for  incoming  ancillary  data  (i.e.,  the
+       _m_s_g___c_o_n_t_r_o_l  field  of  the  _m_s_g_h_d_r structure supplied to rreeccvvmmssgg(2) is
+       NULL), then the incoming ancillary data is discarded.  In both of these
+       cases, the MMSSGG__CCTTRRUUNNCC flag will be set in the _m_s_g_._m_s_g___f_l_a_g_s  value  re‐
+       turned by rreeccvvmmssgg(2).
+
+   IIooccttllss
+       The  following iiooccttll(2) calls return information in _v_a_l_u_e.  The correct
+       syntax is:
+
+              iinntt _v_a_l_u_e;;
+              _e_r_r_o_r == iiooccttll((_u_n_i_x___s_o_c_k_e_t,, _i_o_c_t_l___t_y_p_e,, &&_v_a_l_u_e));;
+
+       _i_o_c_t_l___t_y_p_e can be:
+
+       SSIIOOCCIINNQQ
+              For SSOOCCKK__SSTTRREEAAMM sockets, this call returns the number of  unread
+              bytes  in  the receive buffer.  The socket must not be in LISTEN
+              state, otherwise an error (EEIINNVVAALL) is returned.  SSIIOOCCIINNQQ is  de‐
+              fined in _<_l_i_n_u_x_/_s_o_c_k_i_o_s_._h_>.  Alternatively, you can use the syn‐
+              onymous  FFIIOONNRREEAADD,  defined  in  _<_s_y_s_/_i_o_c_t_l_._h_>.   For SSOOCCKK__DDGGRRAAMM
+              sockets, the returned value is the same as for  Internet  domain
+              datagram sockets; see uuddpp(7).
+
+EERRRROORRSS
+       EEAADDDDRRIINNUUSSEE
+              The  specified local address is already in use or the filesystem
+              socket object already exists.
+
+       EEBBAADDFF  This error can occur for sseennddmmssgg(2) when sending a file descrip‐
+              tor as ancillary data over a UNIX domain  socket  (see  the  de‐
+              scription of SSCCMM__RRIIGGHHTTSS, above), and indicates that the file de‐
+              scriptor number that is being sent is not valid (e.g., it is not
+              an open file descriptor).
+
+       EECCOONNNNRREEFFUUSSEEDD
+              The  remote  address specified by ccoonnnneecctt(2) was not a listening
+              socket.  This error can also occur if the target pathname is not
+              a socket.
+
+       EECCOONNNNRREESSEETT
+              Remote socket was unexpectedly closed.
+
+       EEFFAAUULLTT User memory address was not valid.
+
+       EEIINNVVAALL Invalid argument passed.  A  common  cause  is  that  the  value
+              AAFF__UUNNIIXX  was  not  specified in the _s_u_n___t_y_p_e field of passed ad‐
+              dresses, or the socket was in an invalid state for  the  applied
+              operation.
+
+       EEIISSCCOONNNN
+              ccoonnnneecctt(2) called on an already connected socket or a target ad‐
+              dress was specified on a connected socket.
+
+       EENNFFIILLEE The system‐wide limit on the total number of open files has been
+              reached.
+
+       EENNOOEENNTT The  pathname  in the remote address specified to ccoonnnneecctt(2) did
+              not exist.
+
+       EENNOOMMEEMM Out of memory.
+
+       EENNOOTTCCOONNNN
+              Socket operation needs a target address, but the socket  is  not
+              connected.
+
+       EEOOPPNNOOTTSSUUPPPP
+              Stream  operation  called on non‐stream oriented socket or tried
+              to use the out‐of‐band data option.
+
+       EEPPEERRMM  The sender passed invalid credentials in the _s_t_r_u_c_t _u_c_r_e_d.
+
+       EEPPIIPPEE  Remote socket was closed on a stream socket.  If enabled, a SSIIGG‐‐
+              PPIIPPEE is sent as well.   This  can  be  avoided  by  passing  the
+              MMSSGG__NNOOSSIIGGNNAALL flag to sseenndd(2) or sseennddmmssgg(2).
+
+       EEPPRROOTTOONNOOSSUUPPPPOORRTT
+              Passed protocol is not AAFF__UUNNIIXX.
+
+       EEPPRROOTTOOTTYYPPEE
+              Remote  socket  does not match the local socket type (SSOOCCKK__DDGGRRAAMM
+              versus SSOOCCKK__SSTTRREEAAMM).
+
+       EESSOOCCKKTTNNOOSSUUPPPPOORRTT
+              Unknown socket type.
+
+       EESSRRCCHH  While  sending  an  ancillary  message  containing   credentials
+              (SSCCMM__CCRREEDDEENNTTIIAALLSS),  the  caller  specified  a  PID that does not
+              match any existing process.
+
+       EETTOOOOMMAANNYYRREEFFSS
+              This error can occur for sseennddmmssgg(2) when sending a file descrip‐
+              tor as ancillary data over a UNIX domain  socket  (see  the  de‐
+              scription  of  SSCCMM__RRIIGGHHTTSS,  above).   It occurs if the number of
+              "in‐flight" file descriptors exceeds the RRLLIIMMIITT__NNOOFFIILLEE  resource
+              limit and the caller does not have the CCAAPP__SSYYSS__RREESSOOUURRCCEE capabil‐
+              ity.  An in‐flight file descriptor is one that has been sent us‐
+              ing  sseennddmmssgg(2)  but  has not yet been accepted in the recipient
+              process using rreeccvvmmssgg(2).
+
+              This error is diagnosed since mainline Linux 4.5  (and  in  some
+              earlier  kernel versions where the fix has been backported).  In
+              earlier kernel versions, it was possible to place  an  unlimited
+              number  of  file descriptors in flight, by sending each file de‐
+              scriptor with sseennddmmssgg(2) and then closing the file descriptor so
+              that it was not accounted  against  the  RRLLIIMMIITT__NNOOFFIILLEE  resource
+              limit.
+
+       Other  errors  can  be  generated by the generic socket layer or by the
+       filesystem while generating a filesystem socket object.  See the appro‐
+       priate manual pages for more information.
+
+VVEERRSSIIOONNSS
+       SSCCMM__CCRREEDDEENNTTIIAALLSS and the abstract namespace were introduced  with  Linux
+       2.2  and  should  not  be used in portable programs.  (Some BSD‐derived
+       systems also support credential passing, but the implementation details
+       differ.)
+
+NNOOTTEESS
+       Binding to a socket with a filename creates a socket in the  filesystem
+       that  must  be deleted by the caller when it is no longer needed (using
+       uunnlliinnkk(2)).  The usual UNIX close‐behind semantics  apply;  the  socket
+       can  be  unlinked  at  any  time  and  will be finally removed from the
+       filesystem when the last reference to it is closed.
+
+       To pass file descriptors or credentials over a SSOOCCKK__SSTTRREEAAMM socket,  you
+       must send or receive at least one byte of nonancillary data in the same
+       sseennddmmssgg(2) or rreeccvvmmssgg(2) call.
+
+       UNIX  domain  stream  sockets  do not support the notion of out‐of‐band
+       data.
+
+BBUUGGSS
+       When binding a socket to an address, Linux is one  of  the  implementa‐
+       tions  that  append  a null terminator if none is supplied in _s_u_n___p_a_t_h.
+       In most cases this is unproblematic: when the  socket  address  is  re‐
+       trieved,  it will be one byte longer than that supplied when the socket
+       was bound.  However, there is one case where confusing behavior can re‐
+       sult: if 108 non‐null bytes are supplied when a socket is  bound,  then
+       the  addition  of  the null terminator takes the length of the pathname
+       beyond _s_i_z_e_o_f_(_s_u_n___p_a_t_h_).  Consequently, when retrieving the socket  ad‐
+       dress  (for  example, via aacccceepptt(2)), if the input _a_d_d_r_l_e_n argument for
+       the retrieving call is specified as  _s_i_z_e_o_f_(_s_t_r_u_c_t  _s_o_c_k_a_d_d_r___u_n_),  then
+       the  returned  address  structure  _w_o_n_’_t  have  a  null  terminator  in
+       _s_u_n___p_a_t_h.
+
+       In addition, some implementations don’t require a null terminator  when
+       binding  a socket (the _a_d_d_r_l_e_n argument is used to determine the length
+       of _s_u_n___p_a_t_h) and when the socket address is retrieved on  these  imple‐
+       mentations, there is no null terminator in _s_u_n___p_a_t_h.
+
+       Applications that retrieve socket addresses can (portably) code to han‐
+       dle the possibility that there is no null terminator in _s_u_n___p_a_t_h by re‐
+       specting the fact that the number of valid bytes in the pathname is:
+
+           strnlen(addr.sun_path, addrlen - offsetof(sockaddr_un, sun_path))
+
+       Alternatively,  an application can retrieve the socket address by allo‐
+       cating a buffer of size _s_i_z_e_o_f_(_s_t_r_u_c_t _s_o_c_k_a_d_d_r___u_n_)_+_1 that is zeroed out
+       before the retrieval.  The  retrieving  call  can  specify  _a_d_d_r_l_e_n  as
+       _s_i_z_e_o_f_(_s_t_r_u_c_t  _s_o_c_k_a_d_d_r___u_n_), and the extra zero byte ensures that there
+       will be a null terminator for the string returned in _s_u_n___p_a_t_h:
+
+           void *addrp;
+
+           addrlen = sizeof(struct sockaddr_un);
+           addrp = malloc(addrlen + 1);
+           if (addrp == NULL)
+               /* Handle error */ ;
+           memset(addrp, 0, addrlen + 1);
+
+           if (getsockname(sfd, (struct sockaddr *) addrp, &addrlen)) == -1)
+               /* handle error */ ;
+
+           printf("sun_path = %s\n", ((struct sockaddr_un *) addrp)->sun_path);
+
+       This sort of messiness can be avoided if it is guaranteed that the  ap‐
+       plications that _c_r_e_a_t_e pathname sockets follow the rules outlined above
+       under _P_a_t_h_n_a_m_e _s_o_c_k_e_t_s.
+
+EEXXAAMMPPLLEESS
+       The following code demonstrates the use of sequenced‐packet sockets for
+       local  interprocess  communication.   It consists of two programs.  The
+       server program waits for a connection from  the  client  program.   The
+       client  sends  each of its command‐line arguments in separate messages.
+       The server treats the incoming messages as integers and adds  them  up.
+       The  client  sends  the  command string "END".  The server sends back a
+       message containing the sum of the client’s integers.  The client prints
+       the sum and exits.  The server waits for the next  client  to  connect.
+       To stop the server, the client is called with the command‐line argument
+       "DOWN".
+
+       The following output was recorded while running the server in the back‐
+       ground  and  repeatedly  executing the client.  Execution of the server
+       program ends when it receives the "DOWN" command.
+
+   EExxaammppllee oouuttppuutt
+           $ ..//sseerrvveerr &&
+           [1] 25887
+           $ ..//cclliieenntt 33 44;
+           Result = 7
+           $ ..//cclliieenntt 1111 --55;
+           Result = 6
+           $ ..//cclliieenntt DDOOWWNN;
+           Result = 0
+           [1]+  Done                    ./server
+           $
+
+   PPrrooggrraamm ssoouurrccee
+
+       /*
+        * File connection.h
+        */
+       #ifndef CONNECTION_H
+       #define CONNECTION_H
+
+       #define SOCKET_NAME "/tmp/9Lq7BNBnBycd6nxy.socket"
+       #define BUFFER_SIZE 12
+
+       #endif  // include guard
+
+       /*
+        * File server.c
+        */
+
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <string.h>
+       #include <sys/socket.h>
+       #include <sys/types.h>
+       #include <sys/un.h>
+       #include <unistd.h>
+
+       #include "connection.h"
+
+       int
+       main(void)
+       {
+           int                 down_flag = 0;
+           int                 ret;
+           int                 connection_socket;
+           int                 data_socket;
+           int                 result;
+           ssize_t             r, w;
+           struct sockaddr_un  name;
+           char                buffer[BUFFER_SIZE];
+
+           /* Create local socket.  */
+
+           connection_socket = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+           if (connection_socket == -1) {
+               perror("socket");
+               exit(EXIT_FAILURE);
+           }
+
+           /*
+            * For portability clear the whole structure, since some
+            * implementations have additional (nonstandard) fields in
+            * the structure.
+            */
+
+           memset(&name, 0, sizeof(name));
+
+           /* Bind socket to socket name.  */
+
+           name.sun_family = AF_UNIX;
+           strncpy(name.sun_path, SOCKET_NAME, sizeof(name.sun_path) - 1);
+
+           ret = bind(connection_socket, (const struct sockaddr *) &name,
+                      sizeof(name));
+           if (ret == -1) {
+               perror("bind");
+               exit(EXIT_FAILURE);
+           }
+
+           /*
+            * Prepare for accepting connections.  The backlog size is set
+            * to 20.  So while one request is being processed other requests
+            * can be waiting.
+            */
+
+           ret = listen(connection_socket, 20);
+           if (ret == -1) {
+               perror("listen");
+               exit(EXIT_FAILURE);
+           }
+
+           /* This is the main loop for handling connections.  */
+
+           for (;;) {
+
+               /* Wait for incoming connection.  */
+
+               data_socket = accept(connection_socket, NULL, NULL);
+               if (data_socket == -1) {
+                   perror("accept");
+                   exit(EXIT_FAILURE);
+               }
+
+               result = 0;
+               for (;;) {
+
+                   /* Wait for next data packet.  */
+
+                   r = read(data_socket, buffer, sizeof(buffer));
+                   if (r == -1) {
+                       perror("read");
+                       exit(EXIT_FAILURE);
+                   }
+
+                   /* Ensure buffer is 0-terminated.  */
+
+                   buffer[sizeof(buffer) - 1] = 0;
+
+                   /* Handle commands.  */
+
+                   if (!strncmp(buffer, "DOWN", sizeof(buffer))) {
+                       down_flag = 1;
+                       continue;
+                   }
+
+                   if (!strncmp(buffer, "END", sizeof(buffer))) {
+                       break;
+                   }
+
+                   if (down_flag) {
+                       continue;
+                   }
+
+                   /* Add received summand.  */
+
+                   result += atoi(buffer);
+               }
+
+               /* Send result.  */
+
+               sprintf(buffer, "%d", result);
+               w = write(data_socket, buffer, sizeof(buffer));
+               if (w == -1) {
+                   perror("write");
+                   exit(EXIT_FAILURE);
+               }
+
+               /* Close socket.  */
+
+               close(data_socket);
+
+               /* Quit on DOWN command.  */
+
+               if (down_flag) {
+                   break;
+               }
+           }
+
+           close(connection_socket);
+
+           /* Unlink the socket.  */
+
+           unlink(SOCKET_NAME);
+
+           exit(EXIT_SUCCESS);
+       }
+
+       /*
+        * File client.c
+        */
+
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <string.h>
+       #include <sys/socket.h>
+       #include <sys/types.h>
+       #include <sys/un.h>
+       #include <unistd.h>
+
+       #include "connection.h"
+
+       int
+       main(int argc, char *argv[])
+       {
+           int                 ret;
+           int                 data_socket;
+           ssize_t             r, w;
+           struct sockaddr_un  addr;
+           char                buffer[BUFFER_SIZE];
+
+           /* Create local socket.  */
+
+           data_socket = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+           if (data_socket == -1) {
+               perror("socket");
+               exit(EXIT_FAILURE);
+           }
+
+           /*
+            * For portability clear the whole structure, since some
+            * implementations have additional (nonstandard) fields in
+            * the structure.
+            */
+
+           memset(&addr, 0, sizeof(addr));
+
+           /* Connect socket to socket address.  */
+
+           addr.sun_family = AF_UNIX;
+           strncpy(addr.sun_path, SOCKET_NAME, sizeof(addr.sun_path) - 1);
+
+           ret = connect(data_socket, (const struct sockaddr *) &addr,
+                          sizeof(addr));
+           if (ret == -1) {
+               fprintf(stderr, "The server is down.\n");
+               exit(EXIT_FAILURE);
+           }
+
+           /* Send arguments.  */
+
+           for (int i = 1; i < argc; ++i) {
+               w = write(data_socket, argv[i], strlen(argv[i]) + 1);
+               if (w == -1) {
+                   perror("write");
+                   break;
+               }
+           }
+
+           /* Request result.  */
+
+           strcpy(buffer, "END");
+           w = write(data_socket, buffer, strlen(buffer) + 1);
+           if (w == -1) {
+               perror("write");
+               exit(EXIT_FAILURE);
+           }
+
+           /* Receive result.  */
+
+           r = read(data_socket, buffer, sizeof(buffer));
+           if (r == -1) {
+               perror("read");
+               exit(EXIT_FAILURE);
+           }
+
+           /* Ensure buffer is 0-terminated.  */
+
+           buffer[sizeof(buffer) - 1] = 0;
+
+           printf("Result = %s\n", buffer);
+
+           /* Close socket.  */
+
+           close(data_socket);
+
+           exit(EXIT_SUCCESS);
+       }
+
+       For examples of the use of SSCCMM__RRIIGGHHTTSS,  see  ccmmssgg(3)  and  sseeccccoommpp__uunnoo‐‐
+       ttiiffyy(2).
+
+SSEEEE AALLSSOO
+       rreeccvvmmssgg(2),  sseennddmmssgg(2),  ssoocckkeett(2),  ssoocckkeettppaaiirr(2), ccmmssgg(3), ccaappaabbiillii‐‐
+       ttiieess(7), ccrreeddeennttiiaallss(7), ssoocckkeett(7), uuddpp(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                           _U_N_I_X(7)

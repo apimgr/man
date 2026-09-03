@@ -1,0 +1,227 @@
+FILES.CONF(5)               BSD File Formats Manual              FILES.CONF(5)
+
+NNAAMMEE
+     ffiilleess..ccoonnff — rules base for the config utility
+
+DDEESSCCRRIIPPTTIIOONN
+     The various _f_i_l_e_s_._* files located in the kernel source tree contain all
+     the necessary information needed by config(8) to parse a kernel configu‐
+     ration file and determine the list of files to compile.
+
+     The _f_i_l_e_s_._* rules base are simple, human-readable, text files.  Empty
+     lines, as well as text prefixed by the ‘#’ character, are ignored.
+
+DDEEVVIICCEE TTRREEEE CCOONNCCEEPPTT
+     The OpenBSD kernel “sees” the various devices as a hierarchical tree,
+     where the various devices “attach” to parent entities, which can either
+     be physical devices themselves (such as a computer bus), or logical enti‐
+     ties, designed to make the driver code simpler.  Usually, the top-most
+     devices are attached to the pseudo-device “mainbus”, which is itself re‐
+     ported as attached to a fictitious “root” node.  There is no restriction
+     on the “children” a device node may have; some device drivers can attach
+     themselves to different kinds of parent devices.  For example, the logi‐
+     cal scsibus(4) device can either attach at a SCSI controller device, or
+     at the logical atapiscsi(4) bus.
+
+LLOOCCAATTOORRSS
+     Some device attachments need to provide attachment information.  For ex‐
+     ample, an isa(4) device will use a range of I/O ports, one or more DMA
+     channels, and one interrupt vector.  This attachment information is known
+     as the “locators” for the device.  Most of the buses support default val‐
+     ues for unspecified locators, for devices that either do not require them
+     (such as isa(4) cards not using interrupts), or which can autoconfigure
+     themselves (such as pci(4) devices).
+
+     Attachment lines in the kernel configuration file must match the locators
+     of the device they are attaching to.  For example:
+
+           define pci {[dev = -1], [function = -1]}
+
+     With the rule above, the following kernel configuration lines are valid:
+
+           pciknob0 at pci? dev 2 function 42 # use fixed values
+           pciknob* at pci? dev ? function ?  # use default values
+           pciknob* at pci?                   # use default locators
+
+     But the following are not:
+
+           pciknob* at pci? trick ? treat ?               # unknown locators
+           pciknob* at pci? dev ? function ? usefulness ? # unknown locators
+
+AATTTTRRIIBBUUTTEESS
+     The following syntax defines a simple attribute, which can be later used
+     to factorize code dependencies:
+
+           define attribute
+
+     An attachment-like attribute will also require locators to be specified.
+     If no locators are necessary:
+
+           define attribute {}
+
+     If locators are provided:
+
+           define attribute {[locator1 = default1], [locator2 = default2]}
+
+DDEEVVIICCEESS
+     For simple device attachment, the following syntax defines a simple de‐
+     vice, with no locators:
+
+           device devicename {}
+
+     If locators are necessary, they are specified as:
+
+           device devicename {[locator1 = default1], [locator2 = default2]}
+
+     A device can also reference an attribute with locators.  This is in fact
+     a dependency rule.  For example, _s_y_s_/_c_o_n_f_/_f_i_l_e_s defines the following at‐
+     tribute for SCSI controllers:
+
+           define scsi {}             # no locators
+
+     And SCSI drivers can then be defined as:
+
+           device scsictrl: scsi
+
+     A device may depend on as many attributes as necessary:
+
+           device complexdev: simpledev, otherdev, specialattribute
+
+PPSSEEUUDDOO DDEEVVIICCEESS
+     Pseudo devices are defined as regular devices, except that they do not
+     need locators, and use a different keyword:
+
+           pseudo-device loop: inet
+           pseudo-device ksyms
+
+     The rules above define, respectively, the loopback network interface and
+     the kernel symbols pseudo-device.
+
+DDEEVVIICCEE AATTTTAACCHHMMEENNTT RRUULLEESS
+     Due to the tree structure of the device nodes, every device but the
+     pseudo devices need to attach to some parent node.  A device driver has
+     to specify to which parents it can attach, with the following syntax:
+
+           attach device at parent, parent2, parent3
+
+     The rule above lists all the parent attributes a device may attach to.
+     For example, given the following:
+
+           device smartknob: bells, whistles
+           attach smartknob at brainbus
+
+     The following configuration line is then valid:
+
+           smartknob* at brainbus?
+
+     Whilst the following is not:
+
+           smartknob* at dumbbus?
+
+     If a device supports attachments to multiple parents, using different
+     “glue” routines every time, the following syntax specifies the details:
+
+           attach device at parent with device_parent_glue
+           attach device at parent2 with device_parent2_glue
+
+     This will define more required attributes, depending on the kernel con‐
+     figuration file's contents.
+
+RRUULLEE FFIILLEE IINNCCLLUUSSIIOONN
+     It is possible to include other rules files anywhere in a file, using the
+     “include” keyword:
+
+           include "dev/pci/files.pci"
+
+     The above rule will include the rules for machine-independent PCI code.
+
+     The files _s_y_s_/_a_r_c_h_/_m_a_c_h_i_n_e_/_c_o_n_f_/_f_i_l_e_s_._m_a_c_h_i_n_e, for every “machine” listed
+     in the machine line in the kernel configuration file, as well as
+     _s_y_s_/_c_o_n_f_/_f_i_l_e_s, are always processed, and do not need to be included.
+
+AATTTTRRIIBBUUTTEE RREEQQUUIIRREEMMEENNTTSS
+     The kernel configuration file description passed to config(8) lists sev‐
+     eral compilation options, as well as several device definitions.  From
+     this list, config(8) will build a list of required attributes, which are:
+
+           ••   The “option” lines, with the option name translated to lower‐
+               case (for example, an “option INET6” line will produce the
+               “inet6” attribute).
+           ••   The device and pseudo-device names, except for “root”.
+
+KKEERRNNEELL FFIILLEE LLIISSTT
+     Kernel source files are defined as:
+
+           file file-list  dependencies    need-rules
+
+     “file-list” typically only specifies a single filename.  If instead it
+     contains a list of filenames separated by the ‘|’ character, config(8)
+     will select the first file from the list which exists.  If
+     “${MACHINE_ARCH}” or “${MACHINE}” is found in the filename, it will be
+     substituted with the relevant base architecture name.
+
+     If the “dependencies” part is empty, the file will always be compiled in.
+     This is the case for the core kernel files.  Otherwise, the file will
+     only be added to the list if the dependencies are met.  Dependencies are
+     based upon attributes and device names.  Multiple dependencies can be
+     written using the “|” and “&” operators.  For example:
+
+           file netinet/ipsec_input.c    (inet | inet6) & ipsec
+
+     The above rule teaches config(8) to only add _s_y_s_/_n_e_t_i_n_e_t_/_i_p_s_e_c___i_n_p_u_t_._c to
+     the filelist if the “ipsec” attribute, and at least one of the “inet” and
+     “inet6” attributes, are required.
+
+     The “need” rules can be empty, or one of the following keywords:
+
+     _n_e_e_d_s_-_f_l_a_g   Create an attribute header file, defining whether or not
+                  this attribute is compiled in.
+     _n_e_e_d_s_-_c_o_u_n_t  Create an attribute header file, defining how many instances
+                  of this attribute are to be compiled in.  This rule is
+                  mostly used for pseudo-devices.
+
+     The “attribute header files” are simple C header files created in the
+     kernel compilation directory, with the name _a_t_t_r_i_b_u_t_e_._h and containing
+     the following line:
+
+           #define NATTRIBUTE     0
+
+     This would substitute the attribute name and its uppercase form, prefixed
+     with the letter “N”, to “attribute” and “NATTRIBUTE”, respectively.  For
+     a “needs-flag” rule, the value on the “#define” line is either 1 if the
+     attribute is required, or 0 if it is not required.  For a “needs-count”
+     rule, the value is the number of device instances required, or 0 if the
+     device is not required.
+
+     Attribute files are created for every attribute listed with a “need”
+     rule, even if it is never referenced from the kernel configuration file.
+
+MMIISSCCEELLLLAANNEEOOUUSS IITTEEMMSS
+     _s_y_s_/_a_r_c_h_/_m_a_c_h_i_n_e_/_c_o_n_f_/_f_i_l_e_s_._m_a_c_h_i_n_e must also supply the following spe‐
+     cial commands:
+
+     _m_a_x_p_a_r_t_i_t_i_o_n_s  Defines how many partitions are available on disk block
+                    devices, usually 16.  This value is used by config(8) to
+                    set up various device information structures.
+
+     _m_a_x_u_s_e_r_s       Defines the bounds, and the default value, for the
+                    “maxusers” parameter in the kernel configuration file.
+                    The usual values are 2 8 64 ; config(8) will report an er‐
+                    ror if the “maxusers parameter” in the kernel configura‐
+                    tion file does not fit in the specified range.
+
+FFIILLEESS
+     sys/arch/machine/conf/files.machine
+             Rules for architecture-dependent files, for the “machine” archi‐
+             tecture.
+
+     sys/dev/class/files.class
+             Rules for the “class” class of devices.
+
+     sys/scsi/files.scsi
+             Rules for the common SCSI subsystem.
+
+SSEEEE AALLSSOO
+     config(8)
+
+BSD                              March 2, 2016                             BSD

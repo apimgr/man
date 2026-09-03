@@ -1,0 +1,471 @@
+_s_p_u_f_s(7)               Miscellaneous Information Manual               _s_p_u_f_s(7)
+
+NNAAMMEE
+       spufs - SPU filesystem
+
+DDEESSCCRRIIPPTTIIOONN
+       The  SPU filesystem is used on PowerPC machines that implement the Cell
+       Broadband Engine Architecture in order to access Synergistic  Processor
+       Units (SPUs).
+
+       The  filesystem provides a name space similar to POSIX shared memory or
+       message queues.  Users that have write permissions  on  the  filesystem
+       can  use  ssppuu__ccrreeaattee(2)  to establish SPU contexts under the ssppuuffss root
+       directory.
+
+       Every SPU context is represented by a directory containing a predefined
+       set of files.  These files can be used for manipulating  the  state  of
+       the  logical SPU.  Users can change permissions on the files, but can’t
+       add or remove files.
+
+   MMoouunntt ooppttiioonnss
+       uuiidd==<<uuiidd>>
+              Set the user owning the mount point; the default is 0 (root).
+
+       ggiidd==<<ggiidd>>
+              Set the group owning the mount point; the default is 0 (root).
+
+       mmooddee==<<mmooddee>>
+              Set the mode of the top‐level directory in ssppuuffss,  as  an  octal
+              mode string.  The default is 0775.
+
+   FFiilleess
+       The files in ssppuuffss mostly follow the standard behavior for regular sys‐
+       tem  calls like rreeaadd(2) or wwrriittee(2), but often support only a subset of
+       the operations supported on regular filesystems.  This list details the
+       supported operations and the deviations from the standard behavior  de‐
+       scribed in the respective man pages.
+
+       All  files that support the rreeaadd(2) operation also support rreeaaddvv(2) and
+       all files that support the wwrriittee(2) operation also  support  wwrriitteevv(2).
+       All  files  support the aacccceessss(2) and ssttaatt(2) family of operations, but
+       for the latter call, the only fields of  the  returned  _s_t_a_t  structure
+       that  contain  reliable  information are _s_t___m_o_d_e, _s_t___n_l_i_n_k, _s_t___u_i_d, and
+       _s_t___g_i_d.
+
+       All files support the cchhmmoodd(2)/ffcchhmmoodd(2) and cchhoowwnn(2)/ffcchhoowwnn(2)  opera‐
+       tions,  but  will  not be able to grant permissions that contradict the
+       possible operations (e.g., read access on the _w_b_o_x file).
+
+       The current set of files is:
+
+       _/_c_a_p_a_b_i_l_i_t_i_e_s
+              Contains a comma‐delimited string representing the  capabilities
+              of this SPU context.  Possible capabilities are:
+
+              sscchheedd  This context may be scheduled.
+
+              sstteepp   This  context  can be run in single‐step mode, for debug‐
+                     ging.
+
+              New capabilities flags may be added in the future.
+
+       _/_m_e_m   the contents of the local storage memory of the SPU.   This  can
+              be  accessed like a regular shared memory file and contains both
+              code and data in the address space of the SPU.  The possible op‐
+              erations on an open _m_e_m file are:
+
+              rreeaadd(2)
+              pprreeaadd(2)
+              wwrriittee(2)
+              ppwwrriittee(2)
+              llsseeeekk(2)
+                     These operate as usual, with the exception that llsseeeekk(2),
+                     wwrriittee(2), and ppwwrriittee(2) are not supported beyond the  end
+                     of  the  file.   The  file  size is the size of the local
+                     storage of the SPU, which is normally 256 kilobytes.
+
+              mmmmaapp(2)
+                     Mapping _m_e_m into the process address space  provides  ac‐
+                     cess  to the SPU local storage within the process address
+                     space.  Only MMAAPP__SSHHAARREEDD mappings are allowed.
+
+       _/_r_e_g_s  Contains the saved general‐purpose registers of the SPU context.
+              This file contains the 128‐bit values  of  each  register,  from
+              register  0 to register 127, in order.  This allows the general‐
+              purpose registers to be inspected for debugging.
+
+              Reading to or writing from this file requires that  the  context
+              is scheduled out, so use of this file is not recommended in nor‐
+              mal program operation.
+
+              The  _r_e_g_s file is not present on contexts that have been created
+              with the SSPPUU__CCRREEAATTEE__NNOOSSCCHHEEDD flag.
+
+       _/_m_b_o_x  The first SPU‐to‐CPU communication mailbox.  This file is  read‐
+              only  and can be read in units of 4 bytes.  The file can be used
+              only in nonblocking mode - even ppoollll(2) cannot be used to  block
+              on  this file.  The only possible operation on an open _m_b_o_x file
+              is:
+
+              rreeaadd(2)
+                     If _c_o_u_n_t is smaller than four,  rreeaadd(2)  returns  -1  and
+                     sets  _e_r_r_n_o  to EEIINNVVAALL.  If there is no data available in
+                     the mailbox (i.e., the SPU has not sent  a  mailbox  mes‐
+                     sage),  the return value is set to -1 and _e_r_r_n_o is set to
+                     EEAAGGAAIINN.  When data has been read successfully, four bytes
+                     are placed in the data buffer and the value four  is  re‐
+                     turned.
+
+       _/_i_b_o_x  The second SPU‐to‐CPU communication mailbox.  This file is simi‐
+              lar  to  the first mailbox file, but can be read in blocking I/O
+              mode, thus calling rreeaadd(2) on an open _i_b_o_x file will block until
+              the SPU has written data to its interrupt mailbox  channel  (un‐
+              less  the  file  has  been  opened  with OO__NNOONNBBLLOOCCKK, see below).
+              Also, ppoollll(2) and similar system calls can be  used  to  monitor
+              for the presence of mailbox data.
+
+              The possible operations on an open _i_b_o_x file are:
+
+              rreeaadd(2)
+                     If  _c_o_u_n_t  is  smaller  than four, rreeaadd(2) returns -1 and
+                     sets _e_r_r_n_o to EEIINNVVAALL.  If there is no data  available  in
+                     the  mailbox and the file descriptor has been opened with
+                     OO__NNOONNBBLLOOCCKK, the return value is set to -1  and  _e_r_r_n_o  is
+                     set to EEAAGGAAIINN.
+
+                     If there is no data available in the mailbox and the file
+                     descriptor  has  been opened without OO__NNOONNBBLLOOCCKK, the call
+                     will block until the SPU writes to its interrupt  mailbox
+                     channel.   When  data  has  been  read successfully, four
+                     bytes are placed in the data buffer and the value four is
+                     returned.
+
+              ppoollll(2)
+                     Poll on the _i_b_o_x file returns _(_P_O_L_L_I_N _| _P_O_L_L_R_D_N_O_R_M_) when‐
+                     ever data is available for reading.
+
+       _/_w_b_o_x  The CPU‐to‐SPU communication mailbox.  It is write‐only and  can
+              be  written  in  units  of  four bytes.  If the mailbox is full,
+              wwrriittee(2) will block, and ppoollll(2) can be used to block until  the
+              mailbox is available for writing again.  The possible operations
+              on an open _w_b_o_x file are:
+
+              wwrriittee(2)
+                     If  _c_o_u_n_t  is  smaller than four, wwrriittee(2) returns -1 and
+                     sets _e_r_r_n_o to EEIINNVVAALL.  If there is no space available  in
+                     the  mailbox and the file descriptor has been opened with
+                     OO__NNOONNBBLLOOCCKK, the return value is set to -1  and  _e_r_r_n_o  is
+                     set to EEAAGGAAIINN.
+
+                     If  there  is  no  space available in the mailbox and the
+                     file descriptor has been opened without  OO__NNOONNBBLLOOCCKK,  the
+                     call will block until the SPU reads from its PPE (PowerPC
+                     Processing  Element) mailbox channel.  When data has been
+                     written successfully, the system call returns four as its
+                     function result.
+
+              ppoollll(2)
+                     A poll on the _w_b_o_x file returns  _(_P_O_L_L_O_U_T  _|  _P_O_L_L_W_R_N_O_R_M_)
+                     whenever space is available for writing.
+
+       _/_m_b_o_x___s_t_a_t
+       _/_i_b_o_x___s_t_a_t
+       _/_w_b_o_x___s_t_a_t
+              These are read‐only files that contain the length of the current
+              queue  of  each mailbox—that is, how many words can be read from
+              _m_b_o_x or _i_b_o_x or how many words can be written  to  _w_b_o_x  without
+              blocking.  The files can be read only in four‐byte units and re‐
+              turn  a big‐endian binary integer number.  The only possible op‐
+              eration on an open _*_b_o_x___s_t_a_t file is:
+
+              rreeaadd(2)
+                     If _c_o_u_n_t is smaller than four,  rreeaadd(2)  returns  -1  and
+                     sets  _e_r_r_n_o  to  EEIINNVVAALL.  Otherwise, a four‐byte value is
+                     placed in the data buffer.  This value is the  number  of
+                     elements  that  can  be  read  from  (for  _m_b_o_x___s_t_a_t  and
+                     _i_b_o_x___s_t_a_t) or written to (for _w_b_o_x___s_t_a_t)  the  respective
+                     mailbox without blocking or returning an EEAAGGAAIINN error.
+
+       _/_n_p_c
+       _/_d_e_c_r
+       _/_d_e_c_r___s_t_a_t_u_s
+       _/_s_p_u___t_a_g___m_a_s_k
+       _/_e_v_e_n_t___m_a_s_k
+       _/_e_v_e_n_t___s_t_a_t_u_s
+       _/_s_r_r_0
+       _/_l_s_l_r  Internal  registers  of  the  SPU.  These files contain an ASCII
+              string representing the hex value  of  the  specified  register.
+              Reads  and writes on these files (except for _n_p_c, see below) re‐
+              quire that the SPU context be scheduled out, so frequent  access
+              to these files is not recommended for normal program operation.
+
+              The contents of these files are:
+
+              _n_p_c             Next  Program  Counter - valid only when the SPU
+                              is in a stopped state.
+
+              _d_e_c_r            SPU Decrementer
+
+              _d_e_c_r___s_t_a_t_u_s     Decrementer Status
+
+              _s_p_u___t_a_g___m_a_s_k    MFC tag mask for SPU DMA
+
+              _e_v_e_n_t___m_a_s_k      Event mask for SPU interrupts
+
+              _e_v_e_n_t___s_t_a_t_u_s    Number of SPU events pending (read‐only)
+
+              _s_r_r_0            Interrupt Return address register
+
+              _l_s_l_r            Local Store Limit Register
+
+              The possible operations on these files are:
+
+              rreeaadd(2)
+                     Reads the current register value.  If the register  value
+                     is  larger  than  the buffer passed to the rreeaadd(2) system
+                     call, subsequent reads will  continue  reading  from  the
+                     same buffer, until the end of the buffer is reached.
+
+                     When a complete string has been read, all subsequent read
+                     operations will return zero bytes and a new file descrip‐
+                     tor needs to be opened to read a new value.
+
+              wwrriittee(2)
+                     A wwrriittee(2) operation on the file sets the register to the
+                     value given in the string.  The string is parsed from the
+                     beginning until the first nonnumeric character or the end
+                     of  the  buffer.   Subsequent writes to the same file de‐
+                     scriptor overwrite the previous setting.
+
+                     Except for the _n_p_c file, these files are not  present  on
+                     contexts   that  have  been  created  with  the  SSPPUU__CCRREE‐‐
+                     AATTEE__NNOOSSCCHHEEDD flag.
+
+       _/_f_p_c_r  This file provides access to the Floating Point Status and  Con‐
+              trol  Register  (fcpr)  as a binary, four‐byte file.  The opera‐
+              tions on the _f_p_c_r file are:
+
+              rreeaadd(2)
+                     If _c_o_u_n_t is smaller than four,  rreeaadd(2)  returns  -1  and
+                     sets  _e_r_r_n_o  to  EEIINNVVAALL.  Otherwise, a four‐byte value is
+                     placed in the data buffer; this is the current  value  of
+                     the _f_p_c_r register.
+
+              wwrriittee(2)
+                     If  _c_o_u_n_t  is  smaller than four, wwrriittee(2) returns -1 and
+                     sets _e_r_r_n_o to EEIINNVVAALL.  Otherwise, a  four‐byte  value  is
+                     copied  from  the  data buffer, updating the value of the
+                     _f_p_c_r register.
+
+       _/_s_i_g_n_a_l_1
+       _/_s_i_g_n_a_l_2
+              The files provide access to the two signal notification channels
+              of an SPU.  These are read‐write files that operate on four‐byte
+              words.  Writing to one of these files triggers an  interrupt  on
+              the SPU.  The value written to the signal files can be read from
+              the  SPU  through a channel read or from host user space through
+              the file.  After the value has been read by the SPU, it is reset
+              to zero.  The possible operations on an open _s_i_g_n_a_l_1 or  _s_i_g_n_a_l_2
+              file are:
+
+              rreeaadd(2)
+                     If  _c_o_u_n_t  is  smaller  than four, rreeaadd(2) returns -1 and
+                     sets _e_r_r_n_o to EEIINNVVAALL.  Otherwise, a  four‐byte  value  is
+                     placed  in  the data buffer; this is the current value of
+                     the specified signal notification register.
+
+              wwrriittee(2)
+                     If _c_o_u_n_t is smaller than four, wwrriittee(2)  returns  -1  and
+                     sets  _e_r_r_n_o  to  EEIINNVVAALL.  Otherwise, a four‐byte value is
+                     copied from the data buffer, updating the  value  of  the
+                     specified signal notification register.  The signal noti‐
+                     fication  register will either be replaced with the input
+                     data or will be updated to the bitwise  OR  operation  of
+                     the  old  value and the input data, depending on the con‐
+                     tents of the _s_i_g_n_a_l_1___t_y_p_e or _s_i_g_n_a_l_2___t_y_p_e  files  respec‐
+                     tively.
+
+       _/_s_i_g_n_a_l_1___t_y_p_e
+       _/_s_i_g_n_a_l_2___t_y_p_e
+              These  two  files change the behavior of the _s_i_g_n_a_l_1 and _s_i_g_n_a_l_2
+              notification files.  They contain a numeric ASCII  string  which
+              is  read as either "1" or "0".  In mode 0 (overwrite), the hard‐
+              ware replaces the contents of the signal channel with  the  data
+              that is written to it.  In mode 1 (logical OR), the hardware ac‐
+              cumulates  the  bits  that  are subsequently written to it.  The
+              possible operations on an open _s_i_g_n_a_l_1___t_y_p_e or _s_i_g_n_a_l_2___t_y_p_e file
+              are:
+
+              rreeaadd(2)
+                     When the count supplied to the rreeaadd(2)  call  is  shorter
+                     than  the  required  length for the digit (plus a newline
+                     character), subsequent reads from the same file  descrip‐
+                     tor will complete the string.  When a complete string has
+                     been  read,  all  subsequent  read operations will return
+                     zero bytes and a new file descriptor needs to  be  opened
+                     to read the value again.
+
+              wwrriittee(2)
+                     A wwrriittee(2) operation on the file sets the register to the
+                     value given in the string.  The string is parsed from the
+                     beginning until the first nonnumeric character or the end
+                     of  the  buffer.   Subsequent writes to the same file de‐
+                     scriptor overwrite the previous setting.
+
+       _/_m_b_o_x___i_n_f_o
+       _/_i_b_o_x___i_n_f_o
+       _/_w_b_o_x___i_n_f_o
+       _/_d_m_a___i_n_t_o
+       _/_p_r_o_x_y_d_m_a___i_n_f_o
+              Read‐only files that contain the saved state of  the  SPU  mail‐
+              boxes  and  DMA  queues.   This  allows the SPU status to be in‐
+              spected, mainly for  debugging.   The  _m_b_o_x___i_n_f_o  and  _i_b_o_x___i_n_f_o
+              files  each  contain the four‐byte mailbox message that has been
+              written by the SPU.  If no message has  been  written  to  these
+              mailboxes,  then  contents  of  these  files  is undefined.  The
+              _m_b_o_x___s_t_a_t, _i_b_o_x___s_t_a_t, and _w_b_o_x___s_t_a_t files contain the  available
+              message count.
+
+              The  _w_b_o_x___i_n_f_o  file contains an array of four‐byte mailbox mes‐
+              sages, which have been sent to the SPU.  With current  CBEA  ma‐
+              chines,  the  array is four items in length, so up to 4 * 4 = 16
+              bytes can be read from this file.  If any mailbox queue entry is
+              empty, then the bytes read at the corresponding location are un‐
+              defined.
+
+              The _d_m_a___i_n_f_o file contains the  contents  of  the  SPU  MFC  DMA
+              queue, represented as the following structure:
+
+                  struct spu_dma_info {
+                      uint64_t         dma_info_type;
+                      uint64_t         dma_info_mask;
+                      uint64_t         dma_info_status;
+                      uint64_t         dma_info_stall_and_notify;
+                      uint64_t         dma_info_atomic_command_status;
+                      struct mfc_cq_sr dma_info_command_data[16];
+                  };
+
+              The  last member of this data structure is the actual DMA queue,
+              containing 16 entries.  The _m_f_c___c_q___s_r structure is defined as:
+
+                  struct mfc_cq_sr {
+                      uint64_t mfc_cq_data0_RW;
+                      uint64_t mfc_cq_data1_RW;
+                      uint64_t mfc_cq_data2_RW;
+                      uint64_t mfc_cq_data3_RW;
+                  };
+
+              The _p_r_o_x_y_d_m_a___i_n_f_o file contains  similar  information,  but  de‐
+              scribes  the  proxy  DMA queue (i.e., DMAs initiated by entities
+              outside the SPU) instead.  The file is in the following format:
+
+                  struct spu_proxydma_info {
+                      uint64_t         proxydma_info_type;
+                      uint64_t         proxydma_info_mask;
+                      uint64_t         proxydma_info_status;
+                      struct mfc_cq_sr proxydma_info_command_data[8];
+                  };
+
+              Accessing these files requires that the SPU context is scheduled
+              out ‐ frequent use can be inefficient.  These files  should  not
+              be used for normal program operation.
+
+              These  files  are not present on contexts that have been created
+              with the SSPPUU__CCRREEAATTEE__NNOOSSCCHHEEDD flag.
+
+       _/_c_n_t_l  This file provides access to the SPU Run Control and SPU  status
+              registers,  as  an  ASCII  string.  The following operations are
+              supported:
+
+              rreeaadd(2)
+                     Reads from the _c_n_t_l file will return an ASCII string with
+                     the hex value of the SPU Status register.
+
+              wwrriittee(2)
+                     Writes to the _c_n_t_l file will set the  context’s  SPU  Run
+                     Control register.
+
+       _/_m_f_c   Provides access to the Memory Flow Controller of the SPU.  Read‐
+              ing from the file returns the contents of the SPU’s MFC Tag Sta‐
+              tus  register,  and writing to the file initiates a DMA from the
+              MFC.  The following operations are supported:
+
+              wwrriittee(2)
+                     Writes to this file need to be in the format of a MFC DMA
+                     command, defined as follows:
+
+                         struct mfc_dma_command {
+                             int32_t  pad;    /* reserved */
+                             uint32_t lsa;    /* local storage address */
+                             uint64_t ea;     /* effective address */
+                             uint16_t size;   /* transfer size */
+                             uint16_t tag;    /* command tag */
+                             uint16_t class;  /* class ID */
+                             uint16_t cmd;    /* command opcode */
+                         };
+
+                     Writes  are  required   to   be   exactly   _s_i_z_e_o_f_(_s_t_r_u_c_t
+                     _m_f_c___d_m_a___c_o_m_m_a_n_d_) bytes in size.  The command will be sent
+                     to  the  SPU’s MFC proxy queue, and the tag stored in the
+                     kernel (see below).
+
+              rreeaadd(2)
+                     Reads the contents of the tag status  register.   If  the
+                     file  is  opened  in  blocking mode (i.e., without OO__NNOONN‐‐
+                     BBLLOOCCKK), then the read will block until a DMA tag (as per‐
+                     formed by a previous write) is complete.  In  nonblocking
+                     mode,  the MFC tag status register will be returned with‐
+                     out waiting.
+
+              ppoollll(2)
+                     Calling ppoollll(2) on the _m_f_c file will block  until  a  new
+                     DMA  can  be started (by checking for PPOOLLLLOOUUTT) or until a
+                     previously started DMA (by checking for PPOOLLLLIINN) has  been
+                     completed.
+
+                     _/_m_s_s  Provides access to the MFC MultiSource Synchroniza‐
+                     tion (MSS) facility.  By mmmmaapp(2)‐ing this file, processes
+                     can access the MSS area of the SPU.
+
+                     The following operations are supported:
+
+              mmmmaapp(2)
+                     Mapping mmssss into the process address space  gives  access
+                     to  the  SPU  MSS  area within the process address space.
+                     Only MMAAPP__SSHHAARREEDD mappings are allowed.
+
+       _/_p_s_m_a_p Provides access to the whole problem‐state mapping of  the  SPU.
+              Applications  can  use this area to interface to the SPU, rather
+              than writing to individual register files in ssppuuffss.
+
+              The following operations are supported:
+
+              mmmmaapp(2)
+                     Mapping ppssmmaapp gives a process a direct  map  of  the  SPU
+                     problem  state  area.   Only MMAAPP__SSHHAARREEDD mappings are sup‐
+                     ported.
+
+       _/_p_h_y_s_-_i_d
+              Read‐only file containing the physical SPU number that  the  SPU
+              context  is  running  on.  When the context is not running, this
+              file contains the string "-1".
+
+              The physical SPU number is given by an ASCII hex string.
+
+       _/_o_b_j_e_c_t_-_i_d
+              Allows applications to store (or retrieve) a  single  64‐bit  ID
+              into  the  context.  This ID is later used by profiling tools to
+              uniquely identify the context.
+
+              wwrriittee(2)
+                     By writing an ASCII hex value into  this  file,  applica‐
+                     tions can set the object ID of the SPU context.  Any pre‐
+                     vious value of the object ID is overwritten.
+
+              rreeaadd(2)
+                     Reading  this file gives an ASCII hex string representing
+                     the object ID for this SPU context.
+
+EEXXAAMMPPLLEESS
+       To automatically mmoouunntt(8) the SPU filesystem when booting, at the loca‐
+       tion _/_s_p_u chosen by the user, put this line into the ffssttaabb(5)  configu‐
+       ration file:
+       none /spu spufs gid=spu 0 0
+
+SSEEEE AALLSSOO
+       cclloossee(2), ssppuu__ccrreeaattee(2), ssppuu__rruunn(2), ccaappaabbiilliittiieess(7)
+
+       _T_h_e _C_e_l_l _B_r_o_a_d_b_a_n_d _E_n_g_i_n_e _A_r_c_h_i_t_e_c_t_u_r_e _(_C_B_E_A_) _s_p_e_c_i_f_i_c_a_t_i_o_n
+
+Linux man‐pages (unreleased)      2025‐05‐17                          _s_p_u_f_s(7)

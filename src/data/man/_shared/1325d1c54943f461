@@ -1,0 +1,158 @@
+KTLS(4)                  BSD Kernel Interfaces Manual                  KTLS(4)
+
+NNAAMMEE
+     kkttllss — kernel Transport Layer Security
+
+SSYYNNOOPPSSIISS
+     ooppttiioonnss KKEERRNN__TTLLSS
+
+DDEESSCCRRIIPPTTIIOONN
+     The kkttllss facility allows the kernel to perform Transport Layer Security
+     (TLS) framing on TCP sockets.  With kkttllss, the initial handshake for a
+     socket using TLS is performed in userland.  Once the session keys are ne‐
+     gotiated, they are provided to the kernel via the TCP_TXTLS_ENABLE and
+     TCP_RXTLS_ENABLE socket options.  Both socket options accept a _s_t_r_u_c_t
+     _t_l_s___e_n_a_b_l_e structure as their argument.  The members of this structure
+     describe the cipher suite used for the TLS session and provide the ses‐
+     sion keys used for the respective direction.
+
+     kkttllss only permits the session keys to be set once in each direction.  As
+     a result, applications must disable rekeying when using kkttllss.
+
+   MMooddeess
+     kkttllss can operate in different modes.  A given socket may use different
+     modes for transmit and receive, or a socket may only offload a single di‐
+     rection.  The available modes are:
+
+     TCP_TLS_MODE_NONE      kkttllss is not enabled.
+
+     TCP_TLS_MODE_SW        TLS records are encrypted or decrypted in the ker‐
+                            nel in the socket layer via crypto(9).  Typically
+                            the encryption or decryption is performed in soft‐
+                            ware, but it may also be performed by co-proces‐
+                            sors.
+
+     TCP_TLS_MODE_IFNET     TLS records are encrypted or decrypted by the net‐
+                            work interface card (NIC).  In this mode, the net‐
+                            work stack does not work with encrypted data.  In‐
+                            stead, the NIC encrypts TLS records as they are
+                            being transmitted, or decrypts received TLS
+                            records before providing them to the host.
+
+                            Network interfaces which support this feature will
+                            advertise the TXTLS4 (for IPv4) and/or TXTLS6 (for
+                            IPv6) capabilities as reported by ifconfig(8).
+                            These capabilities can also be controlled by
+                            ifconfig(8).
+
+                            If a network interface supports rate limiting
+                            (also known as packet pacing) for TLS offload, the
+                            interface will advertise the TXTLS_RTLMT capabil‐
+                            ity.
+
+     TCP_TLS_MODE_TOE       TLS records are encrypted by the NIC using a TCP
+                            offload engine (TOE).  This is similar to
+                            TCP_TLS_MODE_IFNET in that the network stack does
+                            not work with encrypted data.  However, this mode
+                            works in tandem with a TOE to handle interactions
+                            between TCP and TLS.
+
+   TTrraannssmmiitt
+     Once TLS transmit is enabled by a successful set of the TCP_TXTLS_ENABLE
+     socket option, all data written on the socket is stored in TLS records
+     and encrypted.  Most data is transmitted in application layer TLS
+     records, and the kernel chooses how to partition data among TLS records.
+     Individual TLS records with a fixed length and record type can be sent by
+     sendmsg(2) with the TLS record type set in a TLS_SET_RECORD_TYPE control
+     message.  The payload of this control message is a single byte holding
+     the desired TLS record type.  This can be used to send TLS records with a
+     type other than application data (for example, handshake messages) or to
+     send application data records with specific contents (for example, empty
+     fragments).
+
+     The current TLS transmit mode of a socket can be queried via the
+     TCP_TXTLS_MODE socket option.  A socket using TLS transmit offload can
+     also set the TCP_TXTLS_MODE socket option to toggle between
+     TCP_TLS_MODE_SW and TCP_TLS_MODE_IFNET.
+
+   RReecceeiivvee
+     Once TLS receive is enabled by a successful set of the TCP_RXTLS_ENABLE
+     socket option, all data read from the socket is returned as decrypted TLS
+     records.  Each received TLS record must be read from the socket using
+     recvmsg(2).  Each received TLS record will contain a TLS_GET_RECORD con‐
+     trol message along with the decrypted payload.  The control message con‐
+     tains a _s_t_r_u_c_t _t_l_s___g_e_t___r_e_c_o_r_d which includes fields from the TLS record
+     header.  If an invalid or corrupted TLS record is received, recvmsg(2)
+     will fail with one of the following errors:
+
+     [EINVAL]           The version fields in a TLS record's header did not
+                        match the version required by the _s_t_r_u_c_t _t_l_s___e_n_a_b_l_e
+                        structure used to enable in-kernel TLS.
+
+     [EMSGSIZE]         A TLS record's length was either too small or too
+                        large.
+
+     [EMSGSIZE]         The connection was closed after sending a truncated
+                        TLS record.
+
+     [EBADMSG]          The TLS record failed to match the included authenti‐
+                        cation tag.
+
+     The current TLS receive mode of a socket can be queried via the
+     TCP_RXTLS_MODE socket option.  At present, the mode cannot be changed.
+
+   SSyyssccttll NNooddeess
+     kkttllss uses several sysctl nodes under the _k_e_r_n_._i_p_c_._t_l_s node.  A few of
+     them are described below:
+
+     _k_e_r_n_._i_p_c_._t_l_s_._e_n_a_b_l_e      Determines if new kernel TLS sessions can be
+                              created.
+
+     _k_e_r_n_._i_p_c_._t_l_s_._c_b_c___e_n_a_b_l_e  Determines if new kernel TLS sessions with a ci‐
+                              pher suite using AES-CBC can be created.
+
+     _k_e_r_n_._i_p_c_._t_l_s_._s_w          A tree of nodes containing statistics for TLS
+                              sessions using TCP_TLS_MODE_SW.
+
+     _k_e_r_n_._i_p_c_._t_l_s_._i_f_n_e_t       A tree of nodes containing statistics for TLS
+                              sessions using TCP_TLS_MODE_IFNET.
+
+     _k_e_r_n_._i_p_c_._t_l_s_._t_o_e         A tree of nodes containing statistics for TLS
+                              sessions using TCP_TLS_MODE_TOE.
+
+     _k_e_r_n_._i_p_c_._t_l_s_._s_t_a_t_s       A tree of nodes containing various kernel TLS
+                              statistics.
+
+     The _k_e_r_n_._i_p_c_._m_b___u_s_e___e_x_t___p_g_s sysctl controls whether the kernel may use
+     unmapped mbufs.  They are required for TLS transmit.
+
+   SSuuppppoorrtteedd HHaarrddwwaarree
+     The cxgbe(4) and mlx5en(4) drivers include support for the
+     TCP_TLS_MODE_IFNET mode.
+
+     The cxgbe(4) driver includes support for the TCP_TLS_MODE_TOE mode.
+
+   SSuuppppoorrtteedd LLiibbrraarriieess
+     OpenSSL 3.0 and later include support for kkttllss.  The _s_e_c_u_r_i_t_y_/_o_p_e_n_s_s_l_*
+     and _s_e_c_u_r_i_t_y_/_g_n_u_t_l_s ports may also be built with support for kkttllss by en‐
+     abling the KTLS option.  OpenSSL in the base system includes KTLS support
+     when built with WITH_OPENSSL_KTLS.
+
+     Applications using a supported library should generally work with kkttllss
+     without any changes provided they use standard interfaces such as
+     SSL_read(3) and SSL_write(3).  Additional performance may be gained by
+     the use of SSL_sendfile(3).
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     kkttllss assumes the presence of a direct map of physical memory when per‐
+     forming software encryption and decryption.  As a result, it is only sup‐
+     ported on architectures with a direct map.
+
+SSEEEE AALLSSOO
+     cxgbe(4), mlx5en(4), tcp(4), src.conf(5), ifconfig(8), sysctl(8),
+     crypto(9)
+
+HHIISSTTOORRYY
+     Kernel TLS first appeared in FreeBSD 13.0.
+
+BSD                            October 31, 2024                            BSD

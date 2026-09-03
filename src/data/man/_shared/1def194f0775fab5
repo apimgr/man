@@ -1,0 +1,118 @@
+UCRED(9)                 BSD Kernel Developer's Manual                UCRED(9)
+
+NNAAMMEE
+     uuccrreedd, ccrrggeett, ccrrhhoolldd, ccrrffrreeee, ccrrccooppyy, ccrrdduupp, ccrruu22xx — functions related to
+     user credentials
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//uuccrreedd..hh>>
+
+     _s_t_r_u_c_t _u_c_r_e_d _*
+     ccrrggeett(_v_o_i_d);
+
+     _s_t_r_u_c_t _u_c_r_e_d _*
+     ccrrhhoolldd(_s_t_r_u_c_t _u_c_r_e_d _*_c_r);
+
+     _v_o_i_d
+     ccrrffrreeee(_s_t_r_u_c_t _u_c_r_e_d _*_c_r);
+
+     _v_o_i_d
+     ccrrccooppyy(_s_t_r_u_c_t _u_c_r_e_d _*_d_e_s_t, _s_t_r_u_c_t _u_c_r_e_d _*_s_r_c);
+
+     _s_t_r_u_c_t _u_c_r_e_d _*
+     ccrrccooppyyssaaffee(_s_t_r_u_c_t _p_r_o_c _*_p, _s_t_r_u_c_t _u_c_r_e_d _*_c_r);
+
+     _s_t_r_u_c_t _u_c_r_e_d _*
+     ccrrdduupp(_s_t_r_u_c_t _u_c_r_e_d _*_c_r);
+
+     _v_o_i_d
+     ccrrsseettggrroouuppss(_s_t_r_u_c_t _u_c_r_e_d _*_c_r, _i_n_t _n_g_r_p, _g_i_d___t _*_g_r_o_u_p_s);
+
+     _v_o_i_d
+     ccrruu22xx(_s_t_r_u_c_t _u_c_r_e_d _*_c_r, _s_t_r_u_c_t _x_u_c_r_e_d _*_x_c_r);
+
+DDEESSCCRRIIPPTTIIOONN
+     The uuccrreedd family of functions is used to manage user credential struc‐
+     tures (_s_t_r_u_c_t _u_c_r_e_d) within the kernel.
+
+     The ccrrggeett() function allocates memory for a new structure, sets its ref‐
+     erence count to 1, and initializes its lock.
+
+     The ccrrhhoolldd() function increases the reference count on the credential.
+
+     The ccrrffrreeee() function decreases the reference count on the credential.
+     If the count drops to 0, the storage for the structure is freed.
+
+     The ccrrccooppyy() function copies the contents of the source (template) cre‐
+     dential into the destination template.  The _u_i_d_i_n_f_o structure within the
+     destination is referenced by calling uihold(9).
+
+     The ccrrccooppyyssaaffee() function copies the current credential associated with
+     the process _p into the newly allocated credential _c_r.  The process lock
+     on _p must be held and will be dropped and reacquired as needed to allo‐
+     cate group storage space in _c_r.
+
+     The ccrrdduupp() function allocates memory for a new structure and copies the
+     contents of _c_r into it.  The actual copying is performed by ccrrccooppyy().
+
+     The ccrrsseettggrroouuppss() function sets the _c_r___g_r_o_u_p_s and _c_r___n_g_r_o_u_p_s variables
+     and allocates space as needed.  It also truncates the group list to the
+     current maximum number of groups.  No other mechanism should be used to
+     modify the _c_r___g_r_o_u_p_s array except for updating the primary group via as‐
+     signment to _c_r___g_r_o_u_p_s_[_0_].
+
+     The ccrruu22xx() function converts a _u_c_r_e_d structure to an _x_u_c_r_e_d structure.
+     That is, it copies data from _c_r to _x_c_r; it ignores fields in the former
+     that are not present in the latter (e.g., _c_r___u_i_d_i_n_f_o), and appropriately
+     sets fields in the latter that are not present in the former (e.g.,
+     _c_r___v_e_r_s_i_o_n).
+
+RREETTUURRNN VVAALLUUEESS
+     ccrrggeett(), ccrrhhoolldd(), ccrrdduupp(), and ccrrccooppyyssaaffee() all return a pointer to a
+     _u_c_r_e_d structure.
+
+UUSSAAGGEE NNOOTTEESS
+     As of FreeBSD 5.0, the _u_c_r_e_d structure contains extensible fields.  This
+     means that the correct protocol must always be followed to create a fresh
+     and writable credential structure: new credentials must always be derived
+     from existing credentials using ccrrggeett(), ccrrccooppyy(), and ccrrccooppyyssaaffee().
+
+     In the common case, credentials required for access control decisions are
+     used in a read-only manner.  In these circumstances, the thread creden‐
+     tial _t_d___u_c_r_e_d should be used, as it requires no locking to access safely,
+     and remains stable for the duration of the call even in the face of a
+     multi-threaded application changing the process credentials from another
+     thread.
+
+     During a process credential update, the process lock must be held across
+     check and update, to prevent race conditions.  The process credential,
+     _t_d_-_>_t_d___p_r_o_c_-_>_p___u_c_r_e_d, must be used both for check and update.  If a
+     process credential is updated during a system call and checks against the
+     thread credential are to be made later during the same system call, the
+     thread credential must also be refreshed from the process credential so
+     as to prevent use of a stale value.  To avoid this scenario, it is recom‐
+     mended that system calls updating the process credential be designed to
+     avoid other authorization functions.
+
+     If temporarily elevated privileges are required for a thread, the thread
+     credential can be replaced for the duration of an activity, or for the
+     remainder of the system call.  However, as a thread credential is often
+     shared, appropriate care should be taken to make sure modifications are
+     made to a writable credential through the use of ccrrggeett() and ccrrccooppyy().
+
+     Caution should be exercised when checking authorization for a thread or
+     process perform an operation on another thread or process.  As a result
+     of temporary elevation, the target thread credential should _n_e_v_e_r be used
+     as the target credential in an access control decision: the process cre‐
+     dential associated with the thread, _t_d_-_>_t_d___p_r_o_c_-_>_p___u_c_r_e_d, should be used
+     instead.  For example, p_candebug(9) accepts a target process, not a tar‐
+     get thread, for access control purposes.
+
+SSEEEE AALLSSOO
+     uihold(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Chad David <_d_a_v_i_d_c_@_a_c_n_s_._a_b_._c_a>.
+
+BSD                            January 23, 2019                            BSD

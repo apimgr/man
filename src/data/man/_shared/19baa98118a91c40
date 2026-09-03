@@ -1,0 +1,137 @@
+CCD(4)                   BSD Kernel Interfaces Manual                   CCD(4)
+
+NNAAMMEE
+     ccccdd — Concatenated Disk driver
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ccccdd
+
+DDEESSCCRRIIPPTTIIOONN
+     The ccccdd driver provides the capability of combining one or more
+     disks/partitions into one virtual disk.
+
+     This document assumes that you are familiar with how to generate kernels,
+     how to properly configure disks and devices in a kernel configuration
+     file, and how to partition disks.
+
+     In order to compile in support for the ccccdd, you must add a line similar
+     to the following to your kernel configuration file:
+
+           device    ccd       # concatenated disk devices
+
+     As of the FreeBSD 3.0 release, you do not need to configure your kernel
+     with ccccdd but may instead use it as a kernel loadable module.  Simply run‐
+     ning ccdconfig(8) will load the module into the kernel.
+
+     A ccccdd may be either serially concatenated or interleaved.  To serially
+     concatenate the partitions, specify the interleave factor of 0.  Note
+     that mirroring may not be used with an interleave factor of 0.
+
+     There is a run-time utility that is used for configuring ccccdds.  See
+     ccdconfig(8) for more information.
+
+   TThhee IInntteerrlleeaavvee FFaaccttoorr
+     If a ccccdd is interleaved correctly, a “striping” effect is achieved, which
+     can increase sequential read/write performance.  The interleave factor is
+     expressed in units of DEV_BSIZE (usually 512 bytes).  For large writes,
+     the optimum interleave factor is typically the size of a track, while for
+     large reads, it is about a quarter of a track.  (Note that this changes
+     greatly depending on the number and speed of disks.)  For instance, with
+     eight 7,200 RPM drives on two Fast-Wide SCSI buses, this translates to
+     about 128 for writes and 32 for reads.  A larger interleave tends to work
+     better when the disk is taking a multitasking load by localizing the file
+     I/O from any given process onto a single disk.  You lose sequential per‐
+     formance when you do this, but sequential performance is not usually an
+     issue with a multitasking load.
+
+     An interleave factor must be specified when using a mirroring configura‐
+     tion, even when you have only two disks (i.e., the layout winds up being
+     the same no matter what the interleave factor).  The interleave factor
+     will determine how I/O is broken up, however, and a value 128 or greater
+     is recommended.
+
+     ccccdd has an option for a parity disk, but does not currently implement it.
+
+     The best performance is achieved if all component disks have the same ge‐
+     ometry and size.  Optimum striping cannot occur with different disk
+     types.
+
+     For random-access oriented workloads, such as news servers, a larger in‐
+     terleave factor (e.g., 65,536) is more desirable.  Note that there is not
+     much ccccdd can do to speed up applications that are seek-time limited.
+     Larger interleave factors will at least reduce the chance of having to
+     seek two disk-heads to read one directory or a file.
+
+   DDiisskk MMiirrrroorriinngg
+     You can configure the ccccdd to “mirror” any even number of disks.  See
+     ccdconfig(8) for how to specify the necessary flags.  For example, if you
+     have a ccccdd configuration specifying four disks, the first two disks will
+     be mirrored with the second two disks.  A write will be run to both sides
+     of the mirror.  A read will be run to either side of the mirror depending
+     on what the driver believes to be most optimal.  If the read fails, the
+     driver will automatically attempt to read the same sector from the other
+     side of the mirror.  Currently ccccdd uses a dual seek zone model to opti‐
+     mize reads for a multi-tasking load rather than a sequential load.
+
+     In an event of a disk failure, you can use dd(1) to recover the failed
+     disk.
+
+     Note that a one-disk ccccdd is not the same as the original partition.  In
+     particular, this means if you have a file system on a two-disk mirrored
+     ccccdd and one of the disks fail, you cannot mount and use the remaining
+     partition as itself; you have to configure it as a one-disk ccccdd.  You
+     cannot replace a disk in a mirrored ccccdd partition without first backing
+     up the partition, then replacing the disk, then restoring the partition.
+
+   LLiinnuuxx CCoommppaattiibbiilliittyy
+     The Linux compatibility mode does not try to read the label that Linux'
+     md(4) driver leaves on the raw devices.  You will have to give the order
+     of devices and the interleave factor on your own.  When in Linux compati‐
+     bility mode, ccccdd will convert the interleave factor from Linux terminol‐
+     ogy.  That means you give the same interleave factor that you gave as
+     chunk size in Linux.
+
+     If you have a Linux md(4) device in “legacy” mode, do not use the
+     CCDF_LINUX flag in ccdconfig(8).  Use the CCDF_NO_OFFSET flag instead.
+     In that case you have to convert the interleave factor on your own, usu‐
+     ally it is Linux' chunk size multiplied by two.
+
+     Using a Linux RAID this way is potentially dangerous and can destroy the
+     data in there.  Since FreeBSD does not read the label used by Linux,
+     changes in Linux might invalidate the compatibility layer.
+
+     However, using this is reasonably safe if you test the compatibility be‐
+     fore mounting a RAID read-write for the first time.  Just using
+     ccdconfig(8) without mounting does not write anything to the Linux RAID.
+     Then you do a ffsscckk..eexxtt22ffss (_p_o_r_t_s_/_f_i_l_e_s_y_s_t_e_m_s_/_e_2_f_s_p_r_o_g_s) on the ccccdd device
+     using the --nn flag.  You can mount the file system read-only to check
+     files in there.  If all this works, it is unlikely that there is a prob‐
+     lem with ccccdd.  Keep in mind that even when the Linux compatibility mode
+     in ccccdd is working correctly, bugs in FreeBSD's eexx22ffss implementation would
+     still destroy your data.
+
+WWAARRNNIINNGGSS
+     If just one (or more) of the disks in a ccccdd fails, the entire file system
+     will be lost unless you are mirroring the disks.
+
+     If one of the disks in a mirror is lost, you should still be able to back
+     up your data.  If a write error occurs, however, data read from that sec‐
+     tor may be non-deterministic.  It may return the data prior to the write
+     or it may return the data that was written.  When a write error occurs,
+     you should recover and regenerate the data as soon as possible.
+
+     Changing the interleave or other parameters for a ccccdd disk usually de‐
+     stroys whatever data previously existed on that disk.
+
+FFIILLEESS
+     /dev/ccd*  ccccdd device special files
+
+SSEEEE AALLSSOO
+     dd(1), ccdconfig(8), config(8), disklabel(8), fsck(8), gvinum(8),
+     mount(8), newfs(8)
+
+HHIISSTTOORRYY
+     The concatenated disk driver was originally written at the University of
+     Utah.
+
+BSD                             August 9, 1995                             BSD

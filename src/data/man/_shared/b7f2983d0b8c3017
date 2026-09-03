@@ -1,0 +1,200 @@
+MOUNT_UNIONFS(8)          BSD System Manager's Manual         MOUNT_UNIONFS(8)
+
+NNAAMMEE
+     mmoouunntt__uunniioonnffss — mount union file systems
+
+SSYYNNOOPPSSIISS
+     mmoouunntt__uunniioonnffss [--bb] [--oo _o_p_t_i_o_n_s] _d_i_r_e_c_t_o_r_y _u_n_i_o_n_d_i_r
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmoouunntt__uunniioonnffss utility attaches _d_i_r_e_c_t_o_r_y above _u_n_i_o_n_d_i_r in such a way
+     that the contents of both directory trees remain visible.  By default,
+     _d_i_r_e_c_t_o_r_y becomes the _u_p_p_e_r layer and _u_n_i_o_n_d_i_r becomes the _l_o_w_e_r layer.
+
+     The options are as follows:
+
+     --bb      Deprecated.  Use --oo bbeellooww instead.
+
+     --oo      Options are specified with the --oo flag followed by an option.
+             The following options are available:
+
+             bbeellooww   Inverts the default position, so that _d_i_r_e_c_t_o_r_y becomes
+                     the lower layer and _u_n_i_o_n_d_i_r becomes the upper layer.
+                     However, _u_n_i_o_n_d_i_r remains the mount point.
+
+             ccooppyymmooddee = ttrraaddiittiioonnaall | ttrraannssppaarreenntt | mmaassqquueerraaddee
+                     Specifies the way to create a file or a directory in the
+                     upper layer automatically when needed.  The ttrraaddiittiioonnaall
+                     mode uses the same way as the old unionfs for backward
+                     compatibility, and ttrraannssppaarreenntt duplicates the file and
+                     directory mode bits and the ownership in the lower layer
+                     to the created file in the upper layer.  For behavior of
+                     the mmaassqquueerraaddee mode, see _M_A_S_Q_U_E_R_A_D_E _M_O_D_E below.
+
+             wwhhiitteeoouutt = aallwwaayyss | wwhheennnneeeeddeedd
+                     Specifies whether whiteouts should always be made in the
+                     upper layer when removing a file or directory or only
+                     when it already exists in the lower layer.
+
+             uuddiirr=_m_o_d_e
+                     Specifies directory mode bits in octal for mmaassqquueerraaddee
+                     mode.
+
+             uuffiillee=_m_o_d_e
+                     Specifies file mode bits in octal for mmaassqquueerraaddee mode.
+
+             ggiidd=_g_i_d
+                     Specifies group for mmaassqquueerraaddee mode.
+
+             uuiidd=_u_i_d
+                     Specifies user for mmaassqquueerraaddee mode.
+
+     To enforce file system security, the user mounting a file system must be
+     superuser or else have write permission on the mounted-on directory.  In
+     addition, the _v_f_s_._u_s_e_r_m_o_u_n_t sysctl(8) variable must be set to 1 to permit
+     file system mounting by ordinary users.  However, note that ttrraannssppaarreenntt
+     and mmaassqquueerraaddee modes require _v_f_s_._u_s_e_r_m_o_u_n_t to be set to 0 because this
+     functionality can only be used by superusers.
+
+     Filenames are looked up in the upper layer and then in the lower layer.
+     If a directory is found in the lower layer, and there is no entry in the
+     upper layer, then a _s_h_a_d_o_w directory will be created in the upper layer.
+     The ownership and the mode bits are set depending on the ccooppyymmooddee option.
+     In ttrraaddiittiioonnaall mode, it will be owned by the user who originally did the
+     union mount, with mode 0777 (“rwxrwxrwx”) modified by the umask in effect
+     at that time.
+
+     If a file exists in the upper layer then there is no way to access a file
+     with the same name in the lower layer.  If necessary, a combination of
+     loopback and union mounts can be made which will still allow the lower
+     files to be accessed by a different pathname.
+
+     Except in the case of a directory, access to an object is granted via the
+     normal file system access checks.  For directories, the current user must
+     have access to both the upper and lower directories (should they both ex‐
+     ist).
+
+     Requests to create or modify objects in _u_n_i_o_n_d_i_r are passed to the upper
+     layer with the exception of a few special cases.  An attempt to open for
+     writing a file which exists in the lower layer causes a copy of the
+     _e_n_t_i_r_e file to be made to the upper layer, and then for the upper layer
+     copy to be opened.  Similarly, an attempt to truncate a lower layer file
+     to zero length causes an empty file to be created in the upper layer.
+     Any other operation which would ultimately require modification to the
+     lower layer fails with EROFS.
+
+     The union file system manipulates the namespace, rather than individual
+     file systems.  The union operation applies recursively down the directory
+     tree now rooted at _u_n_i_o_n_d_i_r.  Thus any file systems which are mounted un‐
+     der _u_n_i_o_n_d_i_r will take part in the union operation.  This differs from
+     the uunniioonn option to mount(8) which only applies the union operation to
+     the mount point itself, and then only for lookups.
+
+MMAASSQQUUEERRAADDEE MMOODDEE
+     When a file (or a directory) is created in the upper layer, the
+     mmaassqquueerraaddee mode sets it the fixed access mode bits given in uuffiillee (for
+     files) or uuddiirr (for directories) option and the owner given in uuddiirr and
+     ggiidd options, instead of ones in the lower layer.  Note that in the
+     mmaassqquueerraaddee mode and when owner of the file or directory matches one spec‐
+     ified in uuiidd option, only mode bits for the owner will be modified.  More
+     specifically, the file mode bits in the upper layer will be (mode in the
+     lower layer) OR (mode given in uuffiillee AND 0700), and the ownership will be
+     the same as one in the lower layer.
+
+     The default values for uuffiillee, uuddiirr, uuiidd, and ggiidd are as follow:
+
+     ••   If none of uuffiillee and uuddiirr were specified, access mode bits in the
+         mount point will be used.
+     ••   If none of uuiidd and ggiidd were specified, ownership in the mount point
+         will be used.
+     ••   If one of uuddiirr or uuffiillee is not specified, the value of the other op‐
+         tion will be used.
+     ••   If one of uuiidd or ggiidd is not specified, the value of the other option
+         will be used.
+
+EEXXAAMMPPLLEESS
+     The commands
+
+           mount -t cd9660 -o ro /dev/cd0 /usr/src
+           mount -t unionfs -o noatime /var/obj /usr/src
+
+     mount the CD-ROM drive _/_d_e_v_/_c_d_0 on _/_u_s_r_/_s_r_c and then attaches _/_v_a_r_/_o_b_j on
+     top.  For most purposes the effect of this is to make the source tree ap‐
+     pear writable even though it is stored on a CD-ROM.  The --oo nnooaattiimmee op‐
+     tion is useful to avoid unnecessary copying from the lower to the upper
+     layer.
+
+     The commands
+
+           mount -t cd9660 -o ro /dev/cd0 /usr/src
+           chown 2020 /usr/src
+           mount -t unionfs -o noatime -o copymode=masquerade -o uid=builder \
+               -o udir=755 -o ufile=644 /var/obj /usr/src
+
+     also mount the CD-ROM drive _/_d_e_v_/_c_d_0 on _/_u_s_r_/_s_r_c and then attaches
+     _/_v_a_r_/_o_b_j on top.  Furthermore, the owner of all files and directories in
+     _/_u_s_r_/_s_r_c is a regular user with UID 2020 when seen from the upper layer.
+     Note that for the access mode bits, ones in the lower layer (on the CD-
+     ROM, in this example) are still used without change.  Thus, write privi‐
+     lege to the upper layer can be controlled independently from access mode
+     bits and ownership in the lower layer.  If a user does not have read
+     privilege from the lower layer, one cannot still read even when the upper
+     layer is mounted by using mmaassqquueerraaddee mode.
+
+     The command
+
+           mount -t unionfs -o noatime -o below /sys $HOME/sys
+
+     attaches the system source tree below the _s_y_s directory in the user's
+     home directory.  This allows individual users to make private changes to
+     the source, and build new kernels, without those changes becoming visible
+     to other users.  Note that the files in the lower layer remain accessible
+     via _/_s_y_s.
+
+SSEEEE AALLSSOO
+     intro(2), mount(2), unmount(2), fstab(5), mount(8), mount_nullfs(8)
+
+HHIISSTTOORRYY
+     The mmoouunntt__nnuullll utility first appeared in 4.4BSD.  It was renamed to
+     mmoouunntt__uunniioonnffss in FreeBSD 5.0.
+
+     The --rr option for hiding the lower layer completely was removed in
+     FreeBSD 7.0 because this is identical to using mount_nullfs(8).
+
+AAUUTTHHOORRSS
+     In FreeBSD 7.0, Masanori OZAWA <_o_z_a_w_a_@_o_n_g_s_._c_o_._j_p> reimplemented handling
+     of locking, whiteout, and file mode bits, and Hiroki Sato
+     <_h_r_s_@_F_r_e_e_B_S_D_._o_r_g> wrote about the changes in this manual page.
+
+BBUUGGSS
+     THIS FILE SYSTEM TYPE IS NOT YET FULLY SUPPORTED (READ: IT DOESN'T WORK)
+     AND USING IT MAY, IN FACT, DESTROY DATA ON YOUR SYSTEM.  USE AT YOUR OWN
+     RISK.
+
+     This code also needs an owner in order to be less dangerous - serious
+     hackers can apply by sending mail to ⟨_f_r_e_e_b_s_d_-_f_s_@_F_r_e_e_B_S_D_._o_r_g⟩ and an‐
+     nouncing their intent to take it over.
+
+     Without whiteout support from the file system backing the upper layer,
+     there is no way that delete and rename operations on lower layer objects
+     can be done.  EOPNOTSUPP is returned for this kind of operations as gen‐
+     erated by VOP_WHITEOUT() along with any others which would make modifica‐
+     tions to the lower layer, such as chmod(1).
+
+     Running find(1) over a union tree has the side-effect of creating a tree
+     of shadow directories in the upper layer.
+
+     The current implementation does not support copying extended attributes
+     for acl(9), mac(9), or so on to the upper layer.  Note that this may be a
+     security issue.
+
+     A shadow directory, which is one automatically created in the upper layer
+     when it exists in the lower layer and does not exist in the upper layer,
+     is always created with the superuser privilege.  However, a file copied
+     from the lower layer in the same way is created by the user who accessed
+     it.  Because of this, if the user is not the superuser, even in
+     ttrraannssppaarreenntt mode the access mode bits in the copied file in the upper
+     layer will not always be the same as ones in the lower layer.  This be‐
+     havior should be fixed.
+
+BSD                             October 3, 2016                            BSD

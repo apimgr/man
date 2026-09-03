@@ -1,0 +1,693 @@
+PROCCTL(2)                  BSD System Calls Manual                 PROCCTL(2)
+
+NNAAMMEE
+     pprrooccccttll — control processes
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//pprrooccccttll..hh>>
+
+     _i_n_t
+     pprrooccccttll(_i_d_t_y_p_e___t _i_d_t_y_p_e, _i_d___t _i_d, _i_n_t _c_m_d, _v_o_i_d _*_d_a_t_a);
+
+DDEESSCCRRIIPPTTIIOONN
+     The pprrooccccttll() system call provides for control over processes.  The
+     _i_d_t_y_p_e and _i_d arguments specify the set of processes to control.  If mul‐
+     tiple processes match the identifier, pprrooccccttll will make a “best effort”
+     to control as many of the selected processes as possible.  An error is
+     only returned if no selected processes successfully complete the request.
+     The following identifier types are supported:
+
+     P_PID   Control the process with the process ID _i_d.  _i_d zero is a short‐
+             cut for the calling process ID.
+
+     P_PGID  Control processes belonging to the process group with the ID _i_d.
+
+     The control request to perform is specified by the _c_m_d argument.
+
+     All status changing requests (*_CTL) require the caller to have the right
+     to debug the target.  All status query requests (*_STATUS) require the
+     caller to have the right to observe the target.
+
+     The following commands are supported:
+
+     PROC_ASLR_CTL        Controls Address Space Layout Randomization (ASLR)
+                          in program images created by execve(2) in the speci‐
+                          fied process or its descendants that do not either
+                          change the control or modify it by other means.  The
+                          _d_a_t_a parameter must point to an integer variable
+                          holding one of the following values:
+
+                          PROC_ASLR_FORCE_ENABLE
+                                  Request that ASLR is enabled after execu‐
+                                  tion, even if it is disabled system-wide.
+
+                          PROC_ASLR_FORCE_DISABLE
+                                  Request that ASLR is disabled after execu‐
+                                  tion, even if it is enabled system-wide.
+
+                          PROC_ASLR_NOFORCE
+                                  Use the system-wide configured policy for
+                                  ASLR.
+
+                          Note that the elfctl(1) “noaslr” flag takes prece‐
+                          dence over this control.  Executing a binary with
+                          this flag set will never use ASLR.  Similarly, exe‐
+                          cuting a set-user-ID or set-group-ID binary ignores
+                          this control and only honors the elfctl(1) flag and
+                          system-wide policy.
+
+     PROC_ASLR_STATUS     Returns the current status of ASLR enablement for
+                          the target process.  The _d_a_t_a parameter must point
+                          to an integer variable, where one of the following
+                          values is written:
+
+                          PROC_ASLR_FORCE_ENABLE
+
+                          PROC_ASLR_FORCE_DISABLE
+
+                          PROC_ASLR_NOFORCE
+
+                          If the currently executed image in the process it‐
+                          self has ASLR enabled, the PROC_ASLR_ACTIVE flag is
+                          or-ed with the value listed above.
+
+     PROC_PROTMAX_CTL     Controls the maximum protection used for mmap(2) re‐
+                          quests in the target process that do not specify an
+                          explicit maximum protection in the _p_r_o_t argument via
+                          PROT_MAX.  The maximum protection limits the permis‐
+                          sions a mapping can be assigned by mprotect(2).  If
+                          an explicit maximum protection is not provided, the
+                          maximum protection for a new mapping is set to ei‐
+                          ther PROT_READ | PROT_WRITE | PROT_EXEC (RWX) or the
+                          protection specified in _p_r_o_t.  Mappings created with
+                          _p_r_o_t set to PROT_NONE always use RWX maximum protec‐
+                          tion.
+
+                          The _d_a_t_a parameter must point to an integer variable
+                          holding one of the following values:
+
+                          PROC_PROTMAX_FORCE_ENABLE
+                                  Use the permissions in _p_r_o_t as the implicit
+                                  maximum protection, even if RWX permissions
+                                  are requested by the sysctl
+                                  _v_m_._i_m_p_l_y___p_r_o_t___m_a_x.
+
+                          PROC_PROTMAX_FORCE_DISABLE
+                                  Use RWX as the implicit maximum protection,
+                                  even if constrained permissions are re‐
+                                  quested by the sysctl _v_m_._i_m_p_l_y___p_r_o_t___m_a_x.
+
+                          PROC_PROTMAX_NOFORCE
+                                  Use the system-wide configured policy for
+                                  the implicit PROT_MAX control.
+
+                          Note that the elfctl(1) “noprotmax” flag takes
+                          precedence over this control.  Executing a binary
+                          with this flag set will always use RWX as the im‐
+                          plicit maximum protection.
+
+     PROC_PROTMAX_STATUS  Returns the current status of the implicit PROT_MAX
+                          control for the target process.  The _d_a_t_a parameter
+                          must point to an integer variable, where one of the
+                          following values is written:
+
+                          PROC_PROTMAX_FORCE_ENABLE
+
+                          PROC_PROTMAX_FORCE_DISABLE
+
+                          PROC_PROTMAX_NOFORCE
+
+                          If the currently executed image in the process it‐
+                          self has the implicit PROT_MAX control enabled, the
+                          PROC_PROTMAX_ACTIVE flag is or-ed with the value
+                          listed above.
+
+     PROC_SPROTECT        Set process protection state.  This is used to mark
+                          a process as protected from being killed if the sys‐
+                          tem exhausts available memory and swap.  The _d_a_t_a
+                          parameter must point to an integer containing an op‐
+                          eration and zero or more optional flags.  The fol‐
+                          lowing operations are supported:
+
+                          PPROT_SET
+                                  Mark the selected processes as protected.
+
+                          PPROT_CLEAR
+                                  Clear the protected state of selected pro‐
+                                  cesses.
+
+                          The following optional flags are supported:
+
+                          PPROT_DESCEND
+                                  Apply the requested operation to all child
+                                  processes of each selected process in addi‐
+                                  tion to each selected process.
+
+                          PPROT_INHERIT
+                                  When used with PPROT_SET, mark all future
+                                  child processes of each selected process as
+                                  protected.  Future child processes will also
+                                  mark all of their future child processes.
+
+     PROC_REAP_ACQUIRE    Enable orphaned process reaping for future children
+                          of the current process.
+
+                          If a parent process exits before one or more of its
+                          children processes, the remaining children processes
+                          are orphaned.  When an orphaned process exits, it is
+                          reparented to a reaper process that is responsible
+                          for harvesting the terminated process via wait(2).
+                          When this control is enabled, the current process
+                          becomes the reaper process for future children and
+                          their descendants.  Existing child processes con‐
+                          tinue to use the reaper assigned when the child was
+                          created via fork(2).  If a reaper process exits, all
+                          of the processes for whom it was the reaper are re‐
+                          assigned to the reaper process's reaper.
+
+                          After system initialization, init(8) is the default
+                          reaper.
+
+     PROC_REAP_RELEASE    Disable orphaned process reaping for the current
+                          process.
+
+                          Any processes for whom the current process was the
+                          reaper are reassigned to the current process's
+                          reaper.
+
+     PROC_REAP_STATUS     Provides a consistent snapshot of information about
+                          the reaper of the specified process, or the process
+                          itself if it is a reaper.  The _d_a_t_a argument must
+                          point to a _p_r_o_c_c_t_l___r_e_a_p_e_r___s_t_a_t_u_s structure which is
+                          filled in by the system call on successful return.
+
+                          struct procctl_reaper_status {
+                                  u_int   rs_flags;
+                                  u_int   rs_children;
+                                  u_int   rs_descendants;
+                                  pid_t   rs_reaper;
+                                  pid_t   rs_pid;
+                          };
+
+                          The _r_s___f_l_a_g_s may have the following flags returned:
+
+                          REAPER_STATUS_OWNED
+                                  The specified process is a reaper.  When
+                                  this flag is returned, the specified process
+                                  _i_d, pid, identifies a reaper, otherwise the
+                                  _r_s___r_e_a_p_e_r field of the structure is set to
+                                  the pid of the reaper for the specified
+                                  process id.
+
+                          REAPER_STATUS_REALINIT
+                                  The specified process is the root of the
+                                  reaper tree, i.e., init(8).
+
+                          The _r_s___c_h_i_l_d_r_e_n field returns the number of pro‐
+                          cesses that can be reaped by the reaper that are
+                          also children of the reaper.  It is possible to have
+                          a child whose reaper is not the specified process,
+                          since the reaper for existing children is not
+                          changed by PROC_REAP_ACQUIRE.  The _r_s___d_e_s_c_e_n_d_a_n_t_s
+                          field returns the total number of processes that can
+                          be reaped by the reaper.  The _r_s___r_e_a_p_e_r field re‐
+                          turns the reaper's pid.  The _r_s___p_i_d returns the pid
+                          of one reaper child if there are any processes that
+                          can be reapead; otherwise, it is set to -1.
+
+     PROC_REAP_GETPIDS    Queries the list of processes that can be reaped by
+                          the reaper of the specified process.  The request
+                          takes a pointer to a _p_r_o_c_c_t_l___r_e_a_p_e_r___p_i_d_s structure
+                          in the _d_a_t_a parameter.
+
+                          struct procctl_reaper_pids {
+                                  u_int   rp_count;
+                                  struct procctl_reaper_pidinfo *rp_pids;
+                          };
+
+                          When called, the _r_p___p_i_d_s field must point to an ar‐
+                          ray of _r_p___c_o_u_n_t _p_r_o_c_c_t_l___r_e_a_p_e_r___p_i_d_i_n_f_o structures.
+                          The kernel will populate these structures with in‐
+                          formation about the reaper's descendants.
+
+                          The _s_t_r_u_c_t _p_r_o_c_c_t_l___r_e_a_p_e_r___p_i_d_i_n_f_o structure provides
+                          some information about one of the reaper's descen‐
+                          dants.  Note that for a descendant that is not a
+                          child, it may be incorrectly identified because of a
+                          race in which the original child process exited and
+                          the exited process's pid was reused for an unrelated
+                          process.
+
+                          struct procctl_reaper_pidinfo {
+                                  pid_t   pi_pid;
+                                  pid_t   pi_subtree;
+                                  u_int   pi_flags;
+                          };
+
+                          The _p_i___p_i_d field is the process id of the descen‐
+                          dant.  The _p_i___s_u_b_t_r_e_e field provides the pid of the
+                          direct child of the reaper which is the (grand-)par‐
+                          ent of the descendant process.  The _p_i___f_l_a_g_s field
+                          returns the following flags, further describing the
+                          descendant:
+
+                          REAPER_PIDINFO_VALID
+                                  Set to indicate that the
+                                  _p_r_o_c_c_t_l___r_e_a_p_e_r___p_i_d_i_n_f_o structure was filled
+                                  in by the kernel.  Zero-filling the _r_p___p_i_d_s
+                                  array and testing the REAPER_PIDINFO_VALID
+                                  flag allows the caller to detect the end of
+                                  the returned array.
+
+                          REAPER_PIDINFO_CHILD
+                                  The _p_i___p_i_d field identifies a direct child
+                                  of the reaper.
+
+                          REAPER_PIDINFO_REAPER
+                                  The reported process is itself a reaper.
+                                  The descendants of the subordinate reaper
+                                  are not reported.
+
+                          REAPER_PIDINFO_ZOMBIE
+                                  The reported process is in the zombie state,
+                                  ready to be reaped.
+
+                          REAPER_PIDINFO_STOPPED
+                                  The reported process is stopped by a
+                                  SIGSTOP/SIGTSTP signal.
+
+                          REAPER_PIDINFO_EXITING
+                                  The reported process is in the process of
+                                  exiting (but not yet a zombie).
+
+     PROC_REAP_KILL       Request to deliver a signal to some subset of the
+                          descendants of the reaper.  The _d_a_t_a parameter must
+                          point to a _p_r_o_c_c_t_l___r_e_a_p_e_r___k_i_l_l structure, which is
+                          used both for parameters and status return.
+
+                          struct procctl_reaper_kill {
+                                  int     rk_sig;
+                                  u_int   rk_flags;
+                                  pid_t   rk_subtree;
+                                  u_int   rk_killed;
+                                  pid_t   rk_fpid;
+                          };
+
+                          The _r_k___s_i_g field specifies the signal to be deliv‐
+                          ered.  Zero is not a valid signal number, unlike for
+                          kill(2).  The _r_k___f_l_a_g_s field further directs the op‐
+                          eration.  It is or-ed from the following flags:
+
+                          REAPER_KILL_CHILDREN
+                                  Deliver the specified signal only to direct
+                                  children of the reaper.
+
+                          REAPER_KILL_SUBTREE
+                                  Deliver the specified signal only to descen‐
+                                  dants that were forked by the direct child
+                                  with pid specified in the _r_k___s_u_b_t_r_e_e field.
+
+                          If neither the REAPER_KILL_CHILDREN nor the
+                          REAPER_KILL_SUBTREE flags are specified, all current
+                          descendants of the reaper are signalled.
+
+                          If a signal was delivered to any process, the return
+                          value from the request is zero.  In this case, the
+                          _r_k___k_i_l_l_e_d field identifies the number of processes
+                          signalled.  The _r_k___f_p_i_d field is set to the pid of
+                          the first process for which signal delivery failed,
+                          e.g., due to permission problems.  If no such
+                          process exists, the _r_k___f_p_i_d field is set to -1.
+
+     PROC_TRACE_CTL       Enable or disable tracing of the specified
+                          process(es), according to the value of the integer
+                          argument.  Tracing includes inspecting the process
+                          via ptrace(2), ktrace(2), debugging sysctls,
+                          hwpmc(4), or dtrace(1) as well as dumping core.
+                          Possible values for the _d_a_t_a argument are:
+
+                          PROC_TRACE_CTL_ENABLE
+                                  Enable tracing, after it was disabled by
+                                  PROC_TRACE_CTL_DISABLE.  Only allowed for
+                                  self.
+
+                          PROC_TRACE_CTL_DISABLE
+                                  Disable tracing for the specified process.
+                                  Tracing is re-enabled when the process
+                                  changes the executing program with the
+                                  execve(2) system call.  A child inherits the
+                                  trace settings from the parent on fork(2).
+
+                          PROC_TRACE_CTL_DISABLE_EXEC
+                                  Same as PROC_TRACE_CTL_DISABLE, but the set‐
+                                  ting persists for the process even after
+                                  execve(2).
+
+     PROC_TRACE_STATUS    Returns the current tracing status for the specified
+                          process in the integer variable pointed to by _d_a_t_a.
+                          If tracing is disabled, _d_a_t_a is set to -1.  If trac‐
+                          ing is enabled, but no debugger is attached by the
+                          ptrace(2) system call, _d_a_t_a is set to 0.  If a de‐
+                          bugger is attached, _d_a_t_a is set to the pid of the
+                          debugger process.
+
+     PROC_TRAPCAP_CTL     Controls the capability mode sandbox actions for the
+                          specified sandboxed processes on a return from any
+                          system call which fails with either an ENOTCAPABLE
+                          or ECAPMODE error.  If this control is enabled and a
+                          system call fails with one of these errors, a syn‐
+                          chronous SIGTRAP signal is delivered to the thread
+                          immediately before returning from the system call.
+
+                          Possible values for the _d_a_t_a argument are:
+
+                          PROC_TRAPCAP_CTL_ENABLE
+                                  Enable SIGTRAP signal delivery on capability
+                                  mode access violations.  The enabled mode is
+                                  inherited by the children of the process,
+                                  and is kept after fexecve(2) calls.
+
+                          PROC_TRAPCAP_CTL_DISABLE
+                                  Disable SIGTRAP signal delivery on capabil‐
+                                  ity mode access violations.  Note that the
+                                  global sysctl kern.trap_enotcap might still
+                                  cause the signal to be delivered.  See
+                                  capsicum(4).
+
+                          On signal delivery, the _s_i___e_r_r_n_o member of the
+                          _s_i_g_i_n_f_o signal handler parameter is set to the sys‐
+                          tem call error value, and the _s_i___c_o_d_e member is set
+                          to TRAP_CAP.  The system call number is stored in
+                          the _s_i___s_y_s_c_a_l_l field of the _s_i_g_i_n_f_o signal handler
+                          parameter.  The other system call parameters can be
+                          read from the _u_c_o_n_t_e_x_t___t but the system call number
+                          is typically stored in the register that also con‐
+                          tains the return value and so is unavailable in the
+                          signal handler.
+
+                          See capsicum(4) for more information about capabil‐
+                          ity mode.
+
+     PROC_TRAPCAP_STATUS  Return the current status of raising SIGTRAP for ca‐
+                          pability mode access violations by the specified
+                          process.  The integer value pointed to by the _d_a_t_a
+                          argument is set to the PROC_TRAPCAP_CTL_ENABLE value
+                          if SIGTRAP delivery is enabled, and to
+                          PROC_TRAPCAP_CTL_DISABLE otherwise.
+
+                          See the note about sysctl kern.trap_enotcap above,
+                          which gives independent global control of signal de‐
+                          livery.
+
+     PROC_PDEATHSIG_CTL   Request the delivery of a signal when the parent of
+                          the calling process exits.  _i_d_t_y_p_e must be P_PID and
+                          _i_d must be the either caller's pid or zero, with no
+                          difference in effect.  The value is cleared for
+                          child processes and when executing set-user-ID or
+                          set-group-ID binaries.  _d_a_t_a must point to a value
+                          of type _i_n_t indicating the signal that should be de‐
+                          livered to the caller.  Use zero to cancel a previ‐
+                          ously requested signal delivery.
+
+     PROC_PDEATHSIG_STATUS
+                          Query the current signal number that will be deliv‐
+                          ered when the parent of the calling process exits.
+                          _i_d_t_y_p_e must be P_PID and _i_d must be the either
+                          caller's pid or zero, with no difference in effect.
+                          _d_a_t_a must point to a memory location that can hold a
+                          value of type _i_n_t.  If signal delivery has not been
+                          requested, it will contain zero on return.
+
+     PROC_STACKGAP_CTL    Controls stack gaps in the specified process.  A
+                          stack gap is one or more virtual memory pages at the
+                          end of the growth area for a MAP_STACK mapping that
+                          is reserved and never backed by memory.  Instead,
+                          the process is guaranteed to receive a synchronous
+                          SIGSEGV signal for each access to pages in the gap.
+                          The number of pages reserved for each stack is set
+                          by the sysctl _s_e_c_u_r_i_t_y_._b_s_d_._s_t_a_c_k___g_u_a_r_d___p_a_g_e.
+
+                          Gaps protect against stack overflows by preventing
+                          them from corrupting memory adjacent to the stack.
+
+                          The _d_a_t_a argument must point to an integer variable
+                          containing flags.  The following flags are allowed:
+
+                          PROC_STACKGAP_ENABLE
+                                  This flag is only accepted for consistency
+                                  with PROC_STACKGAP_STATUS.  If stack gaps
+                                  are enabled, the flag is ignored.  If stack
+                                  gaps are disabled, the request fails with
+                                  EINVAL.  After gaps are disabled in a
+                                  process, they can only be re-enabled when an
+                                  execve(2) is performed.
+
+                          PROC_STACKGAP_DISABLE
+                                  Disable stack gaps for the process.  For ex‐
+                                  isting stacks, the gap is no longer reserved
+                                  and can be filled by memory on access.
+
+                          PROC_STACKGAP_ENABLE_EXEC
+                                  Enable stack gaps for the new address space
+                                  constructed by any future execve(2) in the
+                                  specified process.
+
+                          PROC_STACKGAP_DISABLE_EXEC
+                                  Inherit disabled stack gaps state after
+                                  execve(2).  In other words, if the currently
+                                  executing program has stack gaps disabled,
+                                  they are kept disabled on exec.  If gaps
+                                  were enabled, they are kept enabled after
+                                  exec.
+
+                          The stack gap state is inherited from the parent on
+                          fork(2).
+
+     PROC_STACKGAP_STATUS
+                          Returns the current stack gap state for the speci‐
+                          fied process.  _d_a_t_a must point to an integer vari‐
+                          able, which is used to return a bitmask consisting
+                          of the following flags:
+
+                          PROC_STACKGAP_ENABLE
+                                  Stack gaps are enabled.
+
+                          PROC_STACKGAP_DISABLE
+                                  Stack gaps are disabled.
+
+                          PROC_STACKGAP_ENABLE_EXEC
+                                  Stack gaps are enabled in the process after
+                                  execve(2).
+
+                          PROC_STACKGAP_DISABLE_EXEC
+                                  Stack gaps are disabled in the process after
+                                  execve(2).
+
+                          Note that the elfctl(1) “nostackgap” flag takes
+                          precedence over this setting for individual process
+                          address spaces.  Executing a binary with this flag
+                          set will never use stack gaps in the address space
+                          constructed by execve(2).  However, the controls
+                          value can still be inherited by child processes, and
+                          executing a binary without this flag set will revert
+                          to the behavior specified by the control.
+
+     PROC_NO_NEW_PRIVS_CTL
+                          Allows one to ignore the set-user-ID and set-group-
+                          ID bits on the program images activated by execve(2)
+                          in the specified process and its future descendants.
+                          The _d_a_t_a parameter must point to an integer variable
+                          holding the following value:
+
+                          PROC_NO_NEW_PRIVS_ENABLE
+                                  Request set-user-ID and set-group-ID bits to
+                                  be ignored.
+
+                          It is not possible to disable this control once it
+                          has been enabled.
+
+     PROC_NO_NEW_PRIVS_STATUS
+                          Returns the current status of set-ID bits enablement
+                          for the target process.  The _d_a_t_a parameter must
+                          point to an integer variable, where one of the fol‐
+                          lowing values is written:
+
+                          PROC_NO_NEW_PRIVS_ENABLE
+
+                          PROC_NO_NEW_PRIVS_DISABLE
+
+     PROC_WXMAP_CTL       Controls the creation of mappings with both write
+                          and execute permissions in a process's address
+                          space.  The _d_a_t_a parameter must point to an integer
+                          variable holding one of the following values:
+
+                          PROC_WX_MAPPINGS_PERMIT
+                                  Enable creation of mappings that have both
+                                  write and execute permissions in the speci‐
+                                  fied process' current and future address
+                                  spaces.
+
+                          PROC_WX_MAPPINGS_DISALLOW_EXEC
+                                  In a new address space created by a future
+                                  call to execve(2), disallow creation of map‐
+                                  pings that have both write and execute per‐
+                                  missions.
+
+                          If both flags are set,
+                          PROC_WX_MAPPINGS_DISALLOW_EXEC takes precedence dur‐
+                          ing execve(2).  If neither flag is set, mappings
+                          with write and execute permissions are only permit‐
+                          ted if the kern.elf{32/64}.allow_wx sysctl is non-
+                          zero or the elfctl(1) “wxneeded” flag is set in the
+                          ELF control note.
+
+                          Once creation of writeable and executable mappings
+                          is enabled for a process, it is impossible (and
+                          pointless) to disable it.  The only way to ensure
+                          the absence of such mappings after they were enabled
+                          in a given process is to set the
+                          PROC_WX_MAPPINGS_DISALLOW_EXEC flag and execve(2) an
+                          image.
+
+     PROC_WXMAP_STATUS    Returns the current status of the controls over cre‐
+                          ation of mappings with both write and execute per‐
+                          missions for the specified process.  The data param‐
+                          eter must point to an integer variable, where one of
+                          the following values is written:
+
+                          PROC_WX_MAPPINGS_PERMIT
+                                  Creation of simultaneously writable and exe‐
+                                  cutable mappings are permitted; otherwise,
+                                  the process cannot create such mappings.
+
+                          PROC_WX_MAPPINGS_DISALLOW_EXEC
+                                  After execve(2), the new address space will
+                                  not permit creation of simultaneously
+                                  writable and executable mappings.
+
+                          Additionally, if the address space of the process
+                          does not permit creation of simultaneously writable
+                          and executable mappings and it is guaranteed that no
+                          such mapping was created since address space cre‐
+                          ation, the PROC_WXORX_ENFORCE flag is set in the re‐
+                          turned value.
+
+xx8866 MMAACCHHIINNEE--SSPPEECCIIFFIICC RREEQQUUEESSTTSS
+     PROC_KPTI_CTL     AMD64 only.  Controls the Kernel Page Table Isolation
+                       (KPTI) option for the children of the specified
+                       process.  This control is only meaningful if KPTI has
+                       been enabled globally by the _v_m_._p_m_a_p_._k_p_t_i tunable.  It
+                       is not possible to change the KPTI setting for a run‐
+                       ning process, only for new address spaces constructed
+                       by a future execve(2).
+
+                       The _d_a_t_a parameter must point to an integer variable
+                       containing one of the following commands:
+
+                       PROC_KPTI_CTL_ENABLE_ON_EXEC
+                               Enable KPTI after execve(2).
+
+                       PROC_KPTI_CTL_DISABLE_ON_EXEC
+                               Disable KPTI after execve(2).  Only root or a
+                               process having the _P_R_I_V___I_O privilege can use
+                               this option.
+
+     PROC_KPTI_STATUS  Returns the current KPTI status for the specified
+                       process.  _d_a_t_a must point to an integer variable, where
+                       one of the following values is written:
+
+                       PROC_KPTI_CTL_ENABLE_ON_EXEC
+
+                       PROC_KPTI_CTL_DISABLE_ON_EXEC
+
+                       The status is or-ed with _P_R_O_C___K_P_T_I___S_T_A_T_U_S___A_C_T_I_V_E if
+                       KPTI is active for the current address space of the
+                       process.
+
+NNOOTTEESS
+     Disabling tracing on a process should not be considered a security fea‐
+     ture, as it is bypassable both by the kernel and privileged processes and
+     via other system mechanisms.  As such, it should not be utilized to reli‐
+     ably protect cryptographic keying material or other confidential data.
+
+     Note that processes can trivially bypass the 'no simultaneously writable
+     and executable mappings' policy by first marking some mapping as write‐
+     able, writing code to it, then removing write and adding execute permis‐
+     sion.  This may be legitimately required by some programs such as JIT
+     compilers.
+
+RREETTUURRNN VVAALLUUEESS
+     If an error occurs, a value of -1 is returned and _e_r_r_n_o is set to indi‐
+     cate the error.
+
+EERRRROORRSS
+     The pprrooccccttll() system call will fail if:
+
+     [EFAULT]           The _d_a_t_a parameter points outside the process's allo‐
+                        cated address space.
+
+     [EINVAL]           The _c_m_d argument specifies an unsupported command.
+
+                        The _i_d_t_y_p_e argument specifies an unsupported identi‐
+                        fier type.
+
+     [EPERM]            The calling process does not have permission to per‐
+                        form the requested operation on any of the selected
+                        processes.
+
+     [ESRCH]            No processes matched the requested _i_d_t_y_p_e and _i_d.
+
+     [EINVAL]           An invalid operation or flag was passed in _d_a_t_a for a
+                        PROC_SPROTECT command.
+
+     [EPERM]            The _i_d_t_y_p_e argument is not equal to P_PID, or _i_d is
+                        not equal to the pid of the calling process, for
+                        PROC_REAP_ACQUIRE or PROC_REAP_RELEASE requests.
+
+     [EINVAL]           Invalid or undefined flags were passed to a
+                        PROC_REAP_KILL request.
+
+     [EINVAL]           An invalid or zero signal number was requested for a
+                        PROC_REAP_KILL request.
+
+     [EINVAL]           A PROC_REAP_RELEASE request was issued by the init(8)
+                        process.
+
+     [EBUSY]            A PROC_REAP_ACQUIRE request was issued by a process
+                        that is already a reaper process.
+
+     [EBUSY]            A PROC_TRACE_CTL request was issued for a process be‐
+                        ing traced.
+
+     [EPERM]            A PROC_TRACE_CTL request to re-enable tracing of the
+                        process (PROC_TRACE_CTL_ENABLE), or to disable persis‐
+                        tence of PROC_TRACE_CTL_DISABLE on execve(2) specified
+                        a target process other than the calling process.
+
+     [EINVAL]           The value of the integer _d_a_t_a parameter for the
+                        PROC_TRACE_CTL or PROC_TRAPCAP_CTL request is invalid.
+
+     [EINVAL]           The PROC_PDEATHSIG_CTL or PROC_PDEATHSIG_STATUS re‐
+                        quest referenced an unsupported _i_d, _i_d_t_y_p_e or invalid
+                        signal number.
+
+SSEEEE AALLSSOO
+     dtrace(1), elfctl(1), proccontrol(1), protect(1), cap_enter(2), kill(2),
+     ktrace(2), mmap(2), mprotect(2), ptrace(2), wait(2), capsicum(4),
+     hwpmc(4), init(8)
+
+HHIISSTTOORRYY
+     The pprrooccccttll() function appeared in FreeBSD 10.0.
+
+     The reaper facility is based on a similar feature in Linux and Dragonfly‐
+     BSD, and first appeared in FreeBSD 10.2.
+
+     The PROC_PDEATHSIG_CTL facility is based on the ‘prctl(PR_SET_PDEATHSIG,
+     ...)’ feature in Linux, and first appeared in FreeBSD 11.2.
+
+     ASLR support was added for checklist compliance in FreeBSD 13.0.
+
+BSD                            December 4, 2024                            BSD

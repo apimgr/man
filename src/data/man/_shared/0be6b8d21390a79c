@@ -1,0 +1,3505 @@
+DIALOG(3)                  Library Functions Manual                  DIALOG(3)
+
+
+
+NNAAMMEE
+       dialog - widgets and utilities for the dialog program
+
+SSYYNNOOPPSSIISS
+       cccc [[ ffllaagg ...... ]] ffiillee ...... --llddiiaalloogg [[ lliibbrraarryy ...... ]]
+          or
+       cccc $$((ddiiaalloogg--ccoonnffiigg ----ccffllaaggss)) ffiillee ...... $$((ddiiaalloogg--ccoonnffiigg ----lliibbss)) ]]
+
+       ##iinncclluuddee <<ddiiaalloogg..hh>>
+
+       DDiiaalloogg is a program that will let you present a variety of questions or
+       display messages using dialog boxes from a shell script.  It  is  built
+       from  the  ddiiaalloogg library, which consists of several widgets as well as
+       utility functions that are used by the widgets or the main program.
+
+DDEESSCCRRIIPPTTIIOONN
+       This manpage documents the features from _<_d_i_a_l_o_g_._h_> which are likely to
+       be  important to developers using the widgets directly.  Some hints are
+       also given for developing new widgets.
+
+       Here is a ddiiaalloogg version of _H_e_l_l_o _W_o_r_l_d:
+              int main(void)
+              {
+                   int status;
+                   init_dialog(stdin, stdout);
+                   status = dialog_yesno(
+                             "Hello, in dialog-format",
+                             "Hello World!",
+                             0, 0);
+                   end_dialog();
+                   return status;
+              }
+
+DDEEFFIINNIITTIIOONNSS
+       Exit codes (passed back to the main program for its  use)  are  defined
+       with a "_D_L_G___E_X_I_T__ prefix.  The efined constants can be mapped using en‐
+       vironment variables as described in ddiiaalloogg(1), e.g., _D_L_G___E_X_I_T___O_K corre‐
+       sponds to _$_D_I_A_L_O_G___O_K.
+
+       Useful  character  constants  which  correspond to user input are named
+       with the "_C_H_R__" prefix, e.g., _C_H_R___B_A_C_K_S_P_A_C_E.
+
+       Colors and video attributes are categorized and  associated  with  set‐
+       tings in the configuration file (see the discussion of _$_D_I_A_L_O_G_R_C in ddii‐‐
+       aalloogg(1)).  The _D_I_A_L_O_G___A_T_R_(_n_) macro is used for defining the  references
+       to the combined color and attribute table ddllgg__ccoolloorr__ttaabbllee[[]].
+
+       The ddiiaalloogg application passes its command-line parameters to the widget
+       functions.  Some of those parameters are single values, but some of the
+       widgets accept data as an array of values.  Those include checklist/ra‐
+       diobox, menubox and formbox.  When the ----iitteemm--hheellpp option is given,  an
+       extra  column of data is expected.  The USE_ITEM_HELP(), CHECKBOX_TAGS,
+       MENUBOX_TAGS and FORMBOX_TAGS macros are used to hide  this  difference
+       from the calling application.
+
+       Most  of  the other definitions found in _<_d_i_a_l_o_g_._h_> are used for conve‐
+       nience in building the library or main program.  These include  defini‐
+       tions based on the generated _<_d_l_g___c_o_n_f_i_g_._h_> header.
+
+DDAATTAA SSTTRRUUCCTTUURREESS
+       All of the global data for the ddiiaalloogg library is stored in a few struc‐
+       tures: _D_I_A_L_O_G___S_T_A_T_E, _D_I_A_L_O_G___V_A_R_S and _D_I_A_L_O_G___C_O_L_O_R_S.  The  corresponding
+       ddiiaalloogg__ssttaattee,  ddiiaalloogg__vvaarrss  and ddllgg__ccoolloorr__ttaabbllee global variables should
+       be initialized to zeros, and then populated with the data  to  use.   A
+       few of these must be nonzero for the corresponding widgets to function.
+       As as the case with function names, variables beginning with  "_d_i_a_l_o_g__"
+       are  designed for use by the calling application while variables begin‐
+       ning with "_d_l_g__" are intended for lower levels, e.g., by the ddiiaalloogg li‐
+       brary.
+
+DDIIAALLOOGG__SSTTAATTEE
+       The  _s_t_a_t_e  variables  are  ddiiaalloogg's working variables.  It initializes
+       those, uses them to manage the widgets.
+
+   ..aallll__ssuubbwwiinnddoowwss
+       This is a linked list of all subwindows created by  the  library.   The
+       ddllgg__ddeell__wwiinnddooww  function  uses this to free storage for subwindows when
+       deleting a window.
+
+   ..aallll__wwiinnddoowwss
+       This is a linked list of all  windows  created  by  the  library.   The
+       ddllgg__ddeell__wwiinnddooww  function  uses  this to locate windows which may be re‐
+       drawn after deleting a window.
+
+   ..aassppeecctt__rraattiioo
+       This corresponds to  the  command-line  option  "----aassppeecctt--rraattiioo".   The
+       value  gives  the application some control over the box dimensions when
+       using auto sizing (specifying 0 for height and width).   It  represents
+       width / height.  The default is 9, which means 9 characters wide to ev‐
+       ery 1 line high.
+
+   ..ffiinniisshh__ssttrriinngg
+       When set to true, this allows calls to ddllgg__ffiinniisshh__ssttrriinngg to discard the
+       corresponding data which is created to speed up layout computations for
+       the given string parameter.  The ggaauuggee widget uses this feature.
+
+   ..ggeettcc__ccaallllbbaacckkss
+       This is set up in _u_i___g_e_t_c_._c to record windows which must be polled  for
+       input,  e.g.,  to  handle the background tailbox widget.  One window is
+       designated as the foreground or control window.
+
+   ..ggeettcc__rreeddiirreecctt
+       If the control window for _D_I_A_L_O_G___S_T_A_T_E_._g_e_t_c___c_a_l_l_b_a_c_k_s  is  closed,  the
+       list  is  transferred to this variable.  Closing all windows causes the
+       application to exit.
+
+   ..hhaadd__rreessiizzee
+       This is set to TRUE in ddllgg__wwiillll__rreessiizzee or ddllgg__rreessuulltt__kkeeyy  when  KKEEYY__RREE‐‐
+       SSIIZZEE is read, to tell ddiiaalloogg to ignore subsequent EERRRRs.
+
+   ..nnoo__mmoouussee
+       This corresponds to the command-line option "----nnoo--mmoouussee".  If true, ddii‐‐
+       aalloogg will not initialize (and enable) the mouse in _i_n_i_t___d_i_a_l_o_g.
+
+   ..oouuttppuutt
+       This is set in the ddiiaalloogg application to the stream on which the appli‐
+       cation  and library functions may write text results.  Normally that is
+       the standard error, since the curses library prefers to write its  data
+       to  the  standard output.  Some scripts, trading portability for conve‐
+       nience, prefer to write results to the standard output, e.g., by  using
+       the "----ssttddoouutt" option.
+
+   ..oouuttppuutt__ccoouunntt
+       This  is incremented by ddllgg__ddooeess__oouuttppuutt, which is called by each widget
+       that writes text to the output.  The ddiiaalloogg application  uses  that  to
+       decide  if  it  should also write a separator, i.e., _D_I_A_L_O_G___S_T_A_T_E_._s_e_p_a_‐
+       _r_a_t_e___s_t_r, between calls to each widget.
+
+   ..ppiippee__iinnppuutt
+       This is set in _i_n_i_t___d_i_a_l_o_g to a stream which can be used by  the  ggaauuggee
+       widget, which must be the application's standard input.  The ddiiaalloogg ap‐
+       plication calls _i_n_i_t___d_i_a_l_o_g normally with _i_n_p_u_t set to the standard in‐
+       put, but optionally based on the "----iinnppuutt--ffdd" option.  Since the appli‐
+       cation cannot read from a pipe (standard input) and at  the  same  time
+       read  the  curses  input from the standard input, it must allow for re‐
+       opening the latter from either a specific file descriptor, or  directly
+       from  the  terminal.   The adjusted pipe stream value is stored in this
+       variable.
+
+   ..ssccrreeeenn__hheeiigghhtt
+       The text-formatting functions use this for the number of rows used  for
+       formatting a string.
+
+       It  is  used by ddiiaalloogg for the command-line options "----pprriinntt--tteexxtt--ssiizzee"
+       and "----pprriinntt--tteexxtt--oonnllyy".
+
+   ..ssccrreeeenn__iinniittiiaalliizzeedd
+       This is set in _i_n_i_t___d_i_a_l_o_g and reset in  _e_n_d___d_i_a_l_o_g.   It  is  used  to
+       check  if  curses has been initialized, and if the _e_n_d_w_i_n function must
+       be called on exit.
+
+   ..ssccrreeeenn__oouuttppuutt
+       This is set in _i_n_i_t___d_i_a_l_o_g to the output stream used by the curses  li‐
+       brary.   Normally  that  is the standard output, unless that happens to
+       not be a terminal (and if _i_n_i_t___d_i_a_l_o_g can successfully open the  termi‐
+       nal directly).
+
+   ..ssccrreeeenn__wwiiddtthh
+       The  text-formatting  functions use this for the number of columns used
+       for formatting a string.
+
+       It is used by ddiiaalloogg for the command-line  options  "----pprriinntt--tteexxtt--ssiizzee"
+       and "----pprriinntt--tteexxtt--oonnllyy".
+
+   ..sseeppaarraattee__ssttrr
+       This  corresponds  to the command-line option "----sseeppaarraattee--wwiiddggeett".  The
+       given string specifies a string that will separate the output  on  ddiiaa‐‐
+       lloogg's  output  from  each widget.  This is used to simplify parsing the
+       result of a dialog with several widgets.  If this option is not  given,
+       the default separator string is a tab character.
+
+   ..ttaabb__lleenn
+       This  corresponds to the command-line option "----ttaabb--lleenn _n_u_m_b_e_r".  Spec‐
+       ify the  number  of  spaces  that  a  tab  character  occupies  if  the
+       "----ttaabb--ccoorrrreecctt" option is given.  The default is 8.
+
+   ..tteexxtt__hheeiigghhtt
+       The  text-formatting functions set this to the number of lines used for
+       formatting a string.
+
+       It is used by ddiiaalloogg for the command-line  options  "----pprriinntt--tteexxtt--ssiizzee"
+       and "----pprriinntt--tteexxtt--oonnllyy".
+
+   ..tteexxtt__oonnllyy
+       DDiiaalloogg uses this in the command-line option "----pprriinntt--tteexxtt--oonnllyy".
+
+       The  text-formatting  functions  (ddllgg__pprriinntt__tteexxtt,  ddllgg__pprriinntt__lliinnee,  and
+       ddllgg__pprriinntt__aauuttoowwrraapp) check this to decide whether to print the formatted
+       text to ddiiaalloogg's output or to the curses-display.
+
+       Also,  ddllgg__aauuttoo__ssiizzee  checks  the  flag,  allowing it to be used before
+       iinniitt__ddiiaalloogg is called.
+
+   ..tteexxtt__wwiiddtthh
+       The text-formatting functions set this to the number  of  columns  used
+       for formatting a string.
+
+       It  is  used by ddiiaalloogg for the command-line options "----pprriinntt--tteexxtt--ssiizzee"
+       and "----pprriinntt--tteexxtt--oonnllyy".
+
+   ..ttrraaccee__oouuttppuutt
+       This corresponds to the command-line option "----ttrraaccee _f_i_l_e".  It is  the
+       file pointer to which trace messages are written.
+
+   ..uussee__ccoolloorrss
+       This is set in _i_n_i_t___d_i_a_l_o_g if the curses implementation supports color.
+
+   ..uussee__ssccrroollllbbaarr
+       This  corresponds  to  the command-line option "----ssccrroollllbbaarr".  If true,
+       draw a scrollbar to make windows holding scrolled data more readable.
+
+   ..uussee__sshhaaddooww
+       This corresponds to the command-line option "----nnoo--sshhaaddooww".  This is set
+       in  _i_n_i_t___d_i_a_l_o_g  if the curses implementation supports color.  If true,
+       suppress shadows that would be drawn to the right and  bottom  of  each
+       dialog box.
+
+   ..vviissiitt__iitteemmss
+       This  corresponds  to  the command-line option "----vviissiitt--iitteemmss".  Modify
+       the tab-traversal of the list-oriented widgets  (buildlist,  checklist,
+       radiobox,  menubox,  inputmenu,  and  treeview)  to include the list of
+       items as one of the states.  This is useful as a visual aid, i.e.,  the
+       cursor position helps some users.
+
+       The ddiiaalloogg application resets the ddiiaalloogg__vvaarrss data before accepting op‐
+       tions to invoke each widget.  Most of the _D_I_A_L_O_G___V_A_R_S members  are  set
+       directly from ddiiaalloogg's command-line options:
+
+DDIIAALLOOGG__VVAARRSS
+       In contrast to DDIIAALLOOGG__SSTTAATTEE, the members of DDIIAALLOOGG__VVAARRSS are set by com‐
+       mand-line options in ddiiaalloogg.
+
+   ..aasscciiii__lliinneess
+       This corresponds to the command-line option "----aasscciiii--lliinneess.  It  causes
+       line-drawing  to be done with ASCII characters, e.g., "+" and "-".  See
+       _D_I_A_L_O_G___V_A_R_S_._n_o___l_i_n_e_s.
+
+   ..bbaacckkttiittllee
+       This corresponds to the command-line  option  "----bbaacckkttiittllee  _b_a_c_k_t_i_t_l_e".
+       It specifies a _b_a_c_k_t_i_t_l_e string to be displayed on the backdrop, at the
+       top of the screen.
+
+   ..bbeeeepp__aafftteerr__ssiiggnnaall
+       This corresponds to the command-line option "----bbeeeepp--aafftteerr".   If  true,
+       beep  after  a  user has completed a widget by pressing one of the but‐
+       tons.
+
+   ..bbeeeepp__ssiiggnnaall
+       This corresponds to the command-line option "----bbeeeepp".  It is obsolete.
+
+   ..bbeeggiinn__sseett
+       This is true if the command-line option "----bbeeggiinn _y  _x"  was  used.   It
+       specifies  the position of the upper left corner of a dialog box on the
+       screen.
+
+   ..bbeeggiinn__xx
+       This corresponds to the _x value from the command-line option "----bbeeggiinn _y
+       _x" (second value).
+
+   ..bbeeggiinn__yy
+       This corresponds to the _y value from the command-line option "----bbeeggiinn _y
+       _x" (first value).
+
+   ..ccaanncceell__llaabbeell
+       This corresponds to the command-line  option  "----ccaanncceell--llaabbeell  _s_t_r_i_n_g".
+       The given _s_t_r_i_n_g overrides the label used for “Cancel” buttons.
+
+   ..ccaanntt__kkiillll
+       This corresponds to the command-line option "----nnoo--kkiillll".  If true, this
+       tells ddiiaalloogg to put the ttaaiillbbooxxbbgg box in the background,  printing  its
+       process  id  to ddiiaalloogg's output.  SIGHUP is disabled for the background
+       process.
+
+   ..ccoolloorrss
+       This corresponds to the command-line option "----ccoolloorrss".  If  true,  in‐
+       terpret  embedded  "\Z"  sequences  in the dialog text by the following
+       character, which tells ddiiaalloogg to set  colors  or  video  attributes:  0
+       through 7 are the ANSI codes used in curses: black, red, green, yellow,
+       blue, magenta, cyan and white respectively.  Bold is set by 'b',  reset
+       by 'B'.  Reverse is set by 'r', reset by 'R'.  Underline is set by 'u',
+       reset by 'U'.  The settings are cumulative, e.g.,  "\Zb\Z1"  makes  the
+       following text bright red.  Restore normal settings with "\Zn".
+
+   ..ccoolluummnn__sseeppaarraattoorr
+       This corresponds to the command-line option "----ccoolluummnn--sseeppaarraattoorr".  DDiiaa‐‐
+       lloogg splits data for radio/checkboxes and menus on  the  occurrences  of
+       the given string, and aligns the split data into columns.
+
+   ..ccrr__wwrraapp
+       This  corresponds to the command-line option "----ccrr--wwrraapp".  If true, in‐
+       terpret embedded newlines in the  dialog  text  as  a  newline  on  the
+       screen.  Otherwise, ddiiaalloogg will only wrap lines where needed to fit in‐
+       side the text box.  Even though you can control line breaks with  this,
+       ddiiaalloogg will still wrap any lines that are too long for the width of the
+       box.  Without cr-wrap, the layout of your text may be formatted to look
+       nice  in  the  source  code of your script without affecting the way it
+       will look in the dialog.
+
+   ..ccuurrssoorr__ooffff__llaabbeell
+       This corresponds to the command-line option  "----ccuurrssoorr--ooffff--llaabbeell".   If
+       true,  place  the  terminal cursor at the end of a button instead of on
+       the first character of the button label.  This is useful to reduce vis‐
+       ual confusion when the cursor coloration interacts poorly with the but‐
+       ton-label text colors.
+
+   ..ddaattee__ffoorrmmaatt
+       This corresponds to the command-line option "----ddaattee--ffoorrmmaatt _s_t_r_i_n_g".  If
+       the host provides ssttrrffttiimmee, and the value is nonnull, the calendar wid‐
+       get uses this to format its output.
+
+   ..ddeeffaauulltt__bbuuttttoonn
+       This is set by the command-line option "----ddeeffaauulltt--bbuuttttoonn.  It  is  used
+       by ddllgg__ddeeffaauulltt__bbuuttttoonn.
+
+   ..ddeeffaauulltt__iitteemm
+       This  corresponds  to  the command-line option "----ddeeffaauulltt--iitteemm _s_t_r_i_n_g".
+       The given string is used as the default item in a  checklist,  form  or
+       menu box.  Normally the first item in the box is the default.
+
+   ..ddeeffaauullttnnoo
+       This  corresponds  to  the command-line option "----ddeeffaauullttnnoo".  If true,
+       make the default value of the yyeess//nnoo box a NNoo.  Likewise, treat the de‐
+       fault button of widgets that provide “OK” and “Cancel” as a _C_a_n_c_e_l.  If
+       ----nnoo--ccaanncceell was given that option overrides this,  making  the  default
+       button always “Yes” (internally the same as “OK”).
+
+   ..ddllgg__cclleeaarr__ssccrreeeenn
+       This  corresponds to the command-line option "----cclleeaarr".  This option is
+       implemented in the main program, not the library.  If true, the  screen
+       will  be  cleared  on  exit.  This may be used alone, without other op‐
+       tions.
+
+   ..eerraassee__oonn__eexxiitt
+       This corresponds to  the  command-line  option  "----eerraassee--oonn--eexxiitt".   If
+       true,  remove  the  dialog  widget  on program exit, erasing the entire
+       screen to its native background color, and place the terminal cursor at
+       the  lower  left  corner  of the screen.  This is useful for making the
+       window contents invisible at the end of a series of dialog boxes.   But
+       it can also be used at earlier stages of a series of invocations of ddii‐‐
+       aalloogg, if the series may be aborted before it is fully completed.
+
+   ..eexxiitt__llaabbeell
+       This corresponds to the command-line option "----eexxiitt--llaabbeell ssttrriinngg".  The
+       given string overrides the label used for “EXIT” buttons.
+
+   ..eexxttrraa__bbuuttttoonn
+       This corresponds to the command-line option "----eexxttrraa--bbuuttttoonn".  If true,
+       some widgets show an extra button, between “OK” and “Cancel” buttons.
+
+   ..eexxttrraa__llaabbeell
+       This corresponds to the  command-line  option  "----eexxttrraa--llaabbeell  _s_t_r_i_n_g".
+       The  given  string overrides the label used for “Extra” buttons.  Note:
+       for inputmenu widgets, this defaults to “Rename”.
+
+   ..ffoorrmmiitteemm__ttyyppee
+       This is set by the command-line option  "----ppaasssswwoorrddffoorrmm"  to  tell  the
+       form  widget  that its text fields should be treated like password wid‐
+       gets.
+
+   ..hheellpp__bbuuttttoonn
+       This corresponds to the command-line option "----hheellpp--bbuuttttoonn".  If  true,
+       some  widgets show a help-button after “OK” and “Cancel” buttons, i.e.,
+       in checklist, radiolist and menu boxes.  If ----iitteemm--hheellpp is also  given,
+       on  exit the return status will be the same as for the “OK” button, and
+       the item-help text will be written to ddiiaalloogg's output after  the  token
+       “HELP”.   Otherwise, the return status will indicate that the Help but‐
+       ton was pressed, and no message printed.
+
+   ..hheellpp__ffiillee
+       This corresponds to the  command-line  option  "----hhffiillee  _s_t_r_i_n_g".   The
+       given filename is passed to ddiiaalloogg__hheellppffiillee when the user presses F1.
+
+   ..hheellpp__llaabbeell
+       This corresponds to the command-line option "----hheellpp--llaabbeell _s_t_r_i_n_g".  The
+       given string overrides the label used for “Help” buttons.
+
+   ..hheellpp__lliinnee
+       This corresponds to the  command-line  option  "----hhlliinnee  _s_t_r_i_n_g".   The
+       given  string is displayed in the bottom of dialog windows, like a sub‐
+       title.
+
+   ..hheellpp__ssttaattuuss
+       This corresponds to the command-line option "----hheellpp--ssttaattuuss".  If  true,
+       and  the the help-button is selected, writes the checklist or radiolist
+       information after the item-help “HELP” information.  This can  be  used
+       to  reconstruct  the state of a checklist after processing the help re‐
+       quest.
+
+   ..hheellpp__ttaaggss
+       This corresponds to the command-line option  "----hheellpp--ttaaggss".   If  true,
+       ddllgg__aadddd__hheellpp__ffoorrmmiitteemm  and  ddllgg__aadddd__hheellpp__lliissttiitteemm  use  the  item's tag
+       value consistently rather than using the tag's help-text value when _D_I_‐
+       _A_L_O_G___V_A_R_S_._i_t_e_m___h_e_l_p is set.
+
+   ..iinnppuutt__lleennggtthh
+       This  is nonzero if _D_I_A_L_O_G___V_A_R_S_._i_n_p_u_t___r_e_s_u_l_t is allocated, versus being
+       a pointer to the user's local variables.
+
+   ..iinnppuutt__mmeennuu
+       This flag is set to denote whether the menubox widget implements a menu
+       versus a inputmenu widget.
+
+   ..iinnppuutt__rreessuulltt
+       This  may be either a user-supplied buffer, or a buffer dynamically al‐
+       located by the library, depending on _D_I_A_L_O_G___V_A_R_S_._i_n_p_u_t___l_e_n_g_t_h:
+
+       •   If _D_I_A_L_O_G___V_A_R_S_._i_n_p_u_t___l_e_n_g_t_h is zero, this is a pointer to user buf‐
+           fer  (on  the  stack, or static).  The buffer size is assumed to be
+           MMAAXX__LLEENN, which is defined in _<_d_i_a_l_o_g_._h_>.
+
+       •   When _D_I_A_L_O_G___V_A_R_S_._i_n_p_u_t___l_e_n_g_t_h is nonzero, this is a dynamically-al‐
+           located  buffer  used by the widgets to return printable results to
+           the calling application.
+
+       Certain widgets copy a result to this buffer.  If the pointer is  NULL,
+       or  if  the  length is insufficient for the result, then the ddiiaalloogg li‐
+       brary  allocates  a  buffer  which  is  large  enough,  and  sets  _D_I_A_‐
+       _L_O_G___V_A_R_S_._i_n_p_u_t___l_e_n_g_t_h.  Callers should check for this case if they have
+       supplied their own buffer.
+
+   ..iinnsseeccuurree
+       This corresponds to the command-line  option  "----iinnsseeccuurree".   If  true,
+       make  the password widget friendlier but less secure, by echoing aster‐
+       isks for each character.
+
+   ..iinn__hheellppffiillee
+       This variable is used to prevent ddiiaalloogg__hheellppffiillee from showing anything,
+       e.g., if F1 were pressed within a help-file display.
+
+   ..iissoo__wweeeekk
+       This  corresponds  to the command-line option "----iissoo--wweeeekk".  It is used
+       in the calendar widget to tell how to compute the starting week for the
+       year:
+
+       •   by  default, the calendar treats January 1 as the first week of the
+           year.
+
+       •   If this variable is true, the calendar uses ISO 8601's  convention.
+           ISO 8601 numbers weeks starting with the first week in January with
+           a Thursday in the current year.  January 1 may be in  the  _p_r_e_v_i_o_u_s
+           year.
+
+   ..iitteemm__hheellpp
+       This  corresponds  to  the command-line option "----iitteemm--hheellpp".  If true,
+       interpret the tags data for checklist, radiolist and menu boxes  adding
+       a  column whose text is displayed in the bottom line of the screen, for
+       the currently selected item.
+
+   ..kkeeeepp__ttiittee
+       This is set by the command-line option "----kkeeeepp--ttiittee" to tell ddiiaalloogg  to
+       not  attempt  to cancel the terminal initialization (termcap _t_i/_t_e) se‐
+       quences which correspond to xterm's alternate-screen  switching.   Nor‐
+       mally  ddiiaalloogg does this to avoid flickering when run several times in a
+       script.
+
+   ..kkeeeepp__wwiinnddooww
+       This corresponds to the command-line option "----kkeeeepp--wwiinnddooww".  If  true,
+       do  not  remove/repaint the window on exit.  This is useful for keeping
+       the window contents visible when several widgets are run  in  the  same
+       process.   Note  that  curses will clear the screen when starting a new
+       process.
+
+   ..llaasstt__kkeeyy
+       This corresponds to the command-line option "----llaasstt--kkeeyy".
+
+   ..mmaaxx__iinnppuutt
+       This corresponds to the command-line option "----mmaaxx--iinnppuutt _s_i_z_e".   Limit
+       input strings to the given size.  If not specified, the limit is 2048.
+
+   ..nnoo__hhoott__kkeeyy
+       This corresponds to the command-line option "----nnoo--hhoott--lliisstt".
+
+       Some  widgets  (buildlist, checklist, inputmenu, menu, radiolist, tree‐
+       view) display a list for which the leading capital letter in each entry
+       is accepted as a hot-key, to quickly move the focus to that entry.
+
+       Setting this variable to TRUE disables the feature.
+
+   ..nnoo__iitteemmss
+       This corresponds to the command-line option "----nnoo--iitteemmss".  Some widgets
+       (checklist, inputmenu, radiolist, menu) display a list with two columns
+       (a  “tag”  and “item”, i.e., “description”).  This tells ddiiaalloogg to read
+       shorter rows from data, omitting the “list”.
+
+   ..nnoo__llaabbeell
+       This corresponds to the command-line option "----nnoo--llaabbeell  _s_t_r_i_n_g".   The
+       given string overrides the label used for “No” buttons.
+
+   ..nnoo__lliinneess
+       This corresponds to the command-line option "----nnoo--lliinneess.  It suppresses
+       line-drawing.  See _D_I_A_L_O_G___V_A_R_S_._a_s_c_i_i___l_i_n_e_s.
+
+   ..nnoo__nnll__eexxppaanndd
+       This corresponds  to  the  command-line  option  "----nnoo--nnll--eexxppaanndd".   If
+       false,  ddllgg__ttrriimm__ssttrriinngg  converts  literal "\n" substrings in a message
+       into newlines.
+
+   ..nnoo__ttaaggss
+       This corresponds to the command-line option "----nnoo--ttaaggss".  Some  widgets
+       (checklist, inputmenu, radiolist, menu) display a list with two columns
+       (a “tag” and “item”, also known as “description”).  The tag  is  useful
+       for  scripting,  but may not help the user.  The ----nnoo--ttaaggss option (from
+       Xdialog) may be used to suppress the column of tags from the display.
+
+       Normally ddiiaalloogg allows you to quickly move to entries on the  displayed
+       list, by matching a single character to the first character of the tag.
+       When the ----nnoo--ttaaggss option is given, ddiiaalloogg matches  against  the  first
+       character  of the description.  In either case, the matchable character
+       is highlighted.
+
+       Here is a table showing how the no_tags and no_items values interact:
+
+       tab(/);  l  l  l  l  l  l  l  l  n   n.    Widget/Fields   Shown/Fields
+       Read/.no_items/.no_tags          _         buildlist/item/tag,item/0/0*
+       buildlist/item/tag,item/0/1                      buildlist/tag/tag/1/0*
+       buildlist/tag/tag/1/1       checklist/tag,item/tag,item/0/0      check‐
+       list/item/tag,item/0/1 checklist/tag/tag/1/0 checklist/tag/tag/1/1  in‐
+       putmenu/tag,item/tag,item/0/0     inputmenu/item/tag,item/0/1    input‐
+       menu/tag/tag/1/0    inputmenu/tag/tag/1/1    menu/tag,item/tag,item/0/0
+       menu/item/tag,item/0/1    menu/tag/tag/1/0    menu/tag/tag/1/1    radi‐
+       olist/tag,item/tag,item/0/0      radiolist/item/tag,item/0/1      radi‐
+       olist/tag/tag/1/0   radiolist/tag/tag/1/1   treeview/item/tag,item/0/0*
+       treeview/item/tag,item/0/1 treeview/tag/tag/1/0* treeview/tag/tag/1/1 _
+
+       * Xdialog does not display the tag column for the  analogous  buildlist
+         and  treeview  widgets.   DDiiaalloogg  does  the same on the command-line.
+         However the library interface defaults to displaying the tag  column.
+         Your  application  can enable or disable the tag column as needed for
+         each widget.
+
+   ..nnooccaanncceell
+       This corresponds to the command-line option  "----nnoo--ccaanncceell".   If  true,
+       suppress the “Cancel” button in checklist, inputbox and menu box modes.
+       A script can still test if the user pressed the ESC key  to  cancel  to
+       quit.
+
+   ..nnooccoollllaappssee
+       This  corresponds to the command-line option "----nnoo--ccoollllaappssee".  Normally
+       ddiiaalloogg converts tabs to spaces and reduces multiple spaces to a  single
+       space  for  text  which is displayed in a message boxes, etc.  It true,
+       that feature is disabled.  Note that ddiiaalloogg will still wrap text,  sub‐
+       ject to the ----ccrr--wwrraapp option.
+
+   ..nnooookk
+       This corresponds to the command-line option "----nnoo--ookk.  DDiiaalloogg will sup‐
+       press the “ok” (or “yes”) button from the widget.
+
+   ..ookk__llaabbeell
+       This corresponds to the command-line option "----ookk--llaabbeell  _s_t_r_i_n_g".   The
+       given string overrides the label used for “OK” buttons.
+
+   ..ppaauussee__sseeccss
+       When  set, force ddllgg__sseett__ttiimmeeoouutt to use 10 milliseconds rather than us‐
+       ing the _D_I_A_L_O_G___V_A_R_S_._t_i_m_e_o_u_t___s_e_c_s value.
+
+   ..pprriinntt__ssiizz
+       This corresponds to the command-line option "----pprriinntt--ssiizzee".   If  true,
+       each widget prints its size to ddiiaalloogg's output when it is invoked.
+
+   ..qquuootteedd
+       This corresponds to the command-line option "----qquuootteedd.  Normally ddiiaalloogg
+       quotes the strings returned by checklist's as  well  as  the  item-help
+       text.  If true, ddiiaalloogg will quote all string results.
+
+   ..rreeoorrddeerr
+       This  corresponds  to  the command-line option "----rreeoorrddeerr.  By default,
+       the buildlist widget uses the same order for the output (right) list as
+       for  the  input  (left).  If true, ddiiaalloogg will use the order in which a
+       user adds selections to the output list.
+
+   ..sseeppaarraattee__oouuttppuutt
+       This corresponds to the command-line  option  "----sseeppaarraattee--oouuttppuutt".   If
+       true, checklist widgets output result one line at a time, with no quot‐
+       ing.  This facilitates parsing by another program.
+
+   ..ssiinnggllee__qquuootteedd
+       This corresponds to  the  command-line  option  "----ssiinnggllee--qquuootteedd".   If
+       true,  use single-quoting as needed (and no quotes if unneeded) for the
+       output of checklist's as well as the item-help text.  If this option is
+       not  set,  ddiiaalloogg  uses double quotes around each item.  The latter re‐
+       quires occasional use of backslashes to make the output useful in shell
+       scripts.
+
+   ..ssiizzee__eerrrr
+       This  corresponds  to  the  command-line option "----ssiizzee--eerrrr".  If true,
+       check the resulting size of a dialog  box  before  trying  to  use  it,
+       printing the resulting size if it is larger than the screen.  (This op‐
+       tion is obsolete, since all new-window calls are checked).
+
+   ..sslleeeepp__sseeccss
+       This corresponds to the command-line option "----sslleeeepp _s_e_c_s".   This  op‐
+       tion  is implemented in the main program, not the library.  If nonzero,
+       this is the number of seconds after to delay after processing a  dialog
+       box.
+
+   ..ttaabb__ccoorrrreecctt
+       This  corresponds to the command-line option "----ttaabb--ccoorrrreecctt".  If true,
+       convert each tab character of the text to one or more  spaces.   Other‐
+       wise,  tabs  are rendered according to the curses library's interpreta‐
+       tion.
+
+   ..ttiimmee__ffoorrmmaatt
+       This corresponds to the command-line option "----ttiimmee--ffoorrmmaatt _s_t_r_i_n_g".  If
+       the  host provides ssttrrffttiimmee, and the value is nonnull, the timebox wid‐
+       get uses this to format its output.
+
+   ..ttiimmeeoouutt__sseeccss
+       This corresponds to the command-line option "----ttiimmeeoouutt _s_e_c_s".  If  non‐
+       zero, timeout input requests (exit with error code) if no user response
+       within the given number of seconds.
+
+   ..ttiittllee
+       This corresponds to the command-line option "----ttiittllee _t_i_t_l_e".  Specifies
+       a _t_i_t_l_e string to be displayed at the top of the dialog box.
+
+   ..ttrriimm__wwhhiitteessppaaccee
+       This  corresponds to the command-line option "----ttrriimm".  If true, elimi‐
+       nate leading blanks, trim literal newlines  and  repeated  blanks  from
+       message text.
+
+   ..wweeeekk__ssttaarrtt
+       This corresponds to the command-line option "----wweeeekk--ssttaarrtt".  It is used
+       in the calendar widget to set the  starting  day  for  the  week.   The
+       string value can be
+
+       •   a number (0 to 6, Sunday through Saturday using POSIX) or
+
+       •   the  special  value  “locale” (this works with systems using glibc,
+           providing an extension to the  llooccaallee  command,  the  ffiirrsstt__wweeeekkddaayy
+           value).
+
+       •   a  string matching one of the abbreviations for the day of the week
+           shown in the ccaalleennddaarr widget, e.g., “Mo” for “Monday”.
+
+   ..yyeess__llaabbeell
+       This corresponds to the command-line option "----yyeess--llaabbeell _s_t_r_i_n_g".   The
+       given string overrides the label used for “Yes” buttons.
+
+WWIIDDGGEETTSS
+       Functions  that implement major functionality for the command-line ddiiaa‐‐
+       lloogg program, e.g., widgets, have names beginning "_d_i_a_l_o_g__".
+
+       All dialog boxes have at least three parameters:
+
+          _t_i_t_l_e
+               the caption for the box, shown on its top border.
+
+          _h_e_i_g_h_t
+               the height of the dialog box.
+
+          _w_i_d_t_h
+               the width of the dialog box.
+
+       Other parameters depend on the box type.
+
+   ddiiaalloogg__bbuuiillddlliisstt
+       implements the "----bbuuiillddlliisstt" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _l_i_s_t___h_e_i_g_h_t
+            is the minimum height to reserve  for  displaying  the  list.   If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       cchhaarr **** _i_t_e_m_s
+            is an array of strings which is viewed either as a list of rows
+            _t_a_g _i_t_e_m _s_t_a_t_u_s
+
+            or
+            _t_a_g _i_t_e_m _s_t_a_t_u_s _h_e_l_p
+
+            depending on whether ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set.
+
+       iinntt _o_r_d_e_r___m_o_d_e
+            is reserved for future enhancements
+
+   ddiiaalloogg__ccaalleennddaarr
+       implements the "----ccaalleennddaarr" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _s_u_b_t_i_t_l_e
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the height excluding the fixed-height calendar grid.
+
+       iinntt _w_i_d_t_h
+            is  the overall width of the box, which is adjusted up to the cal‐
+            endar grid's minimum width if needed.
+
+       iinntt _d_a_y
+            is the initial day of the week shown, counting zero as Sunday.  If
+            the value is negative, the current day of the week is used.
+
+       iinntt _m_o_n_t_h
+            is  the  initial month of the year shown, counting one as January.
+            If the value is negative, the current month of the year is used.
+
+       iinntt _y_e_a_r
+            is the initial year shown.  If the value is negative, the  current
+            year is used.
+
+   ddiiaalloogg__cchheecckklliisstt
+       implements the "----cchheecckklliisstt" and "----rraaddiioolliisstt" options depending on the
+       _f_l_a_g parameter.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _l_i_s_t___h_e_i_g_h_t
+            is the minimum height to reserve  for  displaying  the  list.   If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       iinntt _i_t_e_m_s
+            is an array of strings which is viewed either as a list of rows
+            _t_a_g _i_t_e_m _s_t_a_t_u_s
+
+            or
+            _t_a_g _i_t_e_m _s_t_a_t_u_s _h_e_l_p
+
+            depending on whether ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set.
+
+       flag is  either  _F_L_A_G___C_H_E_C_K,  for  checklists,  or _F_L_A_G___R_A_D_I_O for radi‐
+            olists.
+
+   ddiiaalloogg__ddsseelleecctt
+       implements the "----ddsseelleecctt" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _p_a_t_h
+            is the preselected value to show in the input-box, which  is  used
+            also to set the directory- and file-windows.
+
+       iinntt _h_e_i_g_h_t
+            is  the height excluding the minimum needed to show the dialog box
+            framework.  If zero, the height is based on the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+   ddiiaalloogg__eeddiittbbooxx
+       implements the "----eeddiittbbooxx" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _f_i_l_e
+            is the name of the file from which to read.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+   ddiiaalloogg__ffoorrmm
+       implements the "----ffoorrmm" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+       iinntt _f_o_r_m___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       iinntt _i_t_e_m_s
+            is an array of strings which is viewed either as a list of rows
+            _N_a_m_e _N_a_m_e_Y _N_a_m_e_X _T_e_x_t _T_e_x_t_Y _T_e_x_t_X _F_L_e_n _I_L_e_n
+
+            or
+            _N_a_m_e _N_a_m_e_Y _N_a_m_e_X _T_e_x_t _T_e_x_t_Y _T_e_x_t_X _F_L_e_n _I_L_e_n _H_e_l_p
+
+            depending on whether ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set.
+
+   ddiiaalloogg__ffsseelleecctt
+       implements the "----ffsseelleecctt" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _p_a_t_h
+            is the preselected value to show in the input-box, which  is  used
+            also to set the directory- and file-windows.
+
+       iinntt _h_e_i_g_h_t
+            is  the height excluding the minimum needed to show the dialog box
+            framework.  If zero, the height is based on the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+   ddiiaalloogg__ggaauuggee
+       implements  the  "----ggaauuggee" option.  Alternatively, a simpler or custom‐
+       ized gauge widget can be set up using  ddllgg__aallllooccaattee__ggaauuggee,  ddllgg__rreeaalllloo‐‐
+       ccaattee__ggaauuggee, ddllgg__uuppddaattee__ggaauuggee and ddllgg__ffrreeee__ggaauuggee.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _p_e_r_c_e_n_t
+            is the percentage to show in the progress bar.
+
+   ddiiaalloogg__iinnppuuttbbooxx
+       implements  the  "----iinnppuuttbbooxx"  or "----ppaasssswwoorrdd" option, depending on the
+       value of _p_a_s_s_w_o_r_d.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+       ccoonnsstt cchhaarr ** _i_n_i_t
+            is the initial value of the input box, whose length is taken  into
+            account when auto-sizing the width of the dialog box.
+
+       iinntt _p_a_s_s_w_o_r_d
+            if true, causes typed input to be echoed as asterisks.
+
+   ddiiaalloogg__hheellppffiillee
+       implements the "----hhffiillee" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _f_i_l_e
+            is  the name of a file containing the text to display.  This func‐
+            tion is internally bound to F1 (function key  “1”),  passing  ddiiaa‐‐
+            lloogg__vvaarrss..hheellpp__ffiillee  as  a parameter.  The ddiiaalloogg program sets that
+            variable when the ----hhffiillee option is given.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+   ddiiaalloogg__mmeennuu
+       implements the "----mmeennuu" or "----iinnppuuttmmeennuu" option  depending  on  whether
+       ddiiaalloogg__vvaarrss..iinnppuutt__mmeennuu is set.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _m_e_n_u___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       iinntt _i_t_e_m_s
+            is an array of strings which is viewed either as a list of rows
+            _t_a_g _i_t_e_m
+
+            or
+            _t_a_g _i_t_e_m _h_e_l_p
+
+            depending on whether ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set.
+
+   ddiiaalloogg__mmiixxeeddffoorrmm
+       implements the "----mmiixxeeddffoorrmm" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _f_o_r_m___h_e_i_g_h_t
+            is the minimum height to reserve  for  displaying  the  list.   If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       iinntt _i_t_e_m_s
+            is an array of strings which is viewed either as a list of rows
+            _N_a_m_e _N_a_m_e_Y _N_a_m_e_X _T_e_x_t _T_e_x_t_Y _T_e_x_t_X _F_L_e_n _I_L_e_n _I_t_y_p
+
+            or
+            _N_a_m_e _N_a_m_e_Y _N_a_m_e_X _T_e_x_t _T_e_x_t_Y _T_e_x_t_X _F_L_e_n _I_L_e_n _I_t_y_p _H_e_l_p
+
+            depending on whether ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set.
+
+   ddiiaalloogg__mmiixxeeddggaauuggee
+       implements the "----mmiixxeeddggaauuggee" option
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the caption text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _p_e_r_c_e_n_t
+            is the percentage to show in the progress bar.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       iinntt _i_t_e_m_s
+            is  an  array of strings which is viewed as a list of _t_a_g and _i_t_e_m
+            values.  The _t_a_g values are listed, one per row, in  the  list  at
+            the top of the widget.
+
+            The  _i_t_e_m values are decoded: digits 0 through 9 are the following
+            strings
+
+            0      Succeeded
+
+            1      Failed
+
+            2      Passed
+
+            3      Completed
+
+            4      Checked
+
+            5      Done
+
+            6      Skipped
+
+            7      In Progress
+
+            8      (blank)
+
+            9      N/A
+
+            A string with a leading "-" character  is  centered,  marked  with
+            "%".  For example, "-75" is displayed as "75%".  Other strings are
+            displayed as is.
+
+   ddiiaalloogg__mmssggbbooxx
+       implements the "----mmssggbbooxx" or "----iinnffoobbooxx" option  depending  on  whether
+       _p_a_u_s_e_o_p_t is set.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _p_a_u_s_e_o_p_t
+            if  true,  an  “OK” button will be shown, and the dialog will wait
+            for it to complete.  With an “OK” button, it is  denoted  a  “msg‐
+            box”, without an “OK” button, it is denoted an “infobox”.
+
+   ddiiaalloogg__ppaauussee
+       implements the "----ppaauussee" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _s_e_c_o_n_d_s
+            is the timeout to use for the progress bar.
+
+   ddiiaalloogg__pprrggbbooxx
+       implements the "----pprrggbbooxx" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is  the prompt text shown within the widget.  If empty or null, no
+            prompt is shown.
+
+       ccoonnsstt cchhaarr ** _c_o_m_m_a_n_d
+            is the name of the command to execute.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _p_a_u_s_e_o_p_t
+            if true, an “OK” button will be shown, and the  dialog  will  wait
+            for it to complete.
+
+   ddiiaalloogg__pprrooggrreessssbbooxx
+       implements the "----pprrooggrreessssbbooxx" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is  the prompt text shown within the widget.  If empty or null, no
+            prompt is shown.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+   ddiiaalloogg__rraannggeebbooxx
+       implements the "----rraannggeebbooxx" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.  If empty or null,  no
+            prompt is shown.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the widget.  If zero, the height is based
+            on the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the widget.  If zero, the height is  based
+            on the screen size.
+
+       iinntt _m_i_n___v_a_l_u_e
+            is the minimum value to allow.
+
+       iinntt _m_a_x___v_a_l_u_e
+            is the maximum value to allow.
+
+       iinntt _d_e_f_a_u_l_t___v_a_l_u_e
+            is the default value, if no change is made.
+
+   ddiiaalloogg__ttaaiillbbooxx
+       implements the "----ttaaiillbbooxx" or "----ttaaiillbbooxxbbgg" option depending on whether
+       _b_g___t_a_s_k is set.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _f_i_l_e
+            is the name of the file to display in the dialog.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _b_g___t_a_s_k
+            if true, the window is added to the callback list in ddiiaalloogg__ssttaattee,
+            and  the application will poll for the window to be updated.  Oth‐
+            erwise an “OK” button is added to  the  window,  and  it  will  be
+            closed when the button is activated.
+
+   ddiiaalloogg__tteexxttbbooxx
+       implements the "----tteexxttbbooxx" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _f_i_l_e
+            is the name of the file to display in the dialog.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+   ddiiaalloogg__ttiimmeebbooxx
+       implements the "----ttiimmeebbooxx" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _s_u_b_t_i_t_l_e
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _h_o_u_r
+            is  the initial hour shown.  If the value is negative, the current
+            hour is used.  Returns DLG_EXIT_ERROR if the  value  specified  is
+            greater than or equal to 24.
+
+       iinntt _m_i_n_u_t_e
+            is  the  initial minute shown.  If the value is negative, the cur‐
+            rent minute is used.  Returns DLG_EXIT_ERROR if the  value  speci‐
+            fied is greater than or equal to 60.
+
+       iinntt _s_e_c_o_n_d
+            is  the  initial second shown.  If the value is negative, the cur‐
+            rent second is used.  Returns DLG_EXIT_ERROR if the  value  speci‐
+            fied is greater than or equal to 60.
+
+   ddiiaalloogg__ttrreeeevviieeww
+       implements the "----ttrreeeevviieeww" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+       iinntt _l_i_s_t___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       cchhaarr **** _i_t_e_m_s
+            is the list of items,  contain  tag,  name,  and  optionally  help
+            strings  (if ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set).  The initial selection
+            state for each item is also in this list.
+
+       iinntt _f_l_a_g
+
+       flag is either _F_L_A_G___C_H_E_C_K, for  checklists  (multiple  selections),  or
+            _F_L_A_G___R_A_D_I_O for radiolists (a single selection).
+
+   ddiiaalloogg__yyeessnnoo
+       implements the "----yyeessnnoo" option.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is based  on
+            the screen size.
+
+UUTTIILLIITTYY FFUUNNCCTTIIOONNSS
+       Most  functions  that  implement lower-level functionality for the com‐
+       mand-line ddiiaalloogg program or widgets, have names beginning "_d_l_g__".  Bow‐
+       ing  to  longstanding  usage, the functions that initialize the display
+       and end it are named _i_n_i_t___d_i_a_l_o_g and _e_n_d___d_i_a_l_o_g.
+
+       The only non-widget function whose name begins with "_d_i_a_l_o_g__"  is  ddiiaa‐‐
+       lloogg__vveerrssiioonn,  which  returns  the  version  number  of the library as a
+       string.
+
+       A few functions are prefixed "___d_l_g__", because they are required for in‐
+       ternal  use,  but  not intended as part of the library application pro‐
+       gramming interface.
+
+       Here is a brief summary of the utility functions and their parameters:
+
+   ddllgg__aadddd__ccaallllbbaacckk
+       Add a callback, used to allow polling input from multiple tailbox  wid‐
+       gets.
+
+       DDIIAALLOOGG__CCAALLLLBBAACCKK **_p
+            contains the callback information.
+
+   ddllgg__aadddd__ccaallllbbaacckk__rreeff
+       Like ddllgg__aadddd__ccaallllbbaacckk, but passes a reference to the DDIIAALLOOGG__CCAALLLLBBAACCKK as
+       well as a pointer to a cleanup function which will be called  when  the
+       associated input ends.
+
+       DDIIAALLOOGG__CCAALLLLBBAACCKK ****_p
+            points  to  the  callback information.  This is a reference to the
+            pointer so that the caller's pointer  can  be  zeroed  when  input
+            ends.
+
+       DDIIAALLOOGG__FFRREEEEBBAACCKK _f_u_n_c
+            function  to  call  when  input ends, e.g., to free caller's addi‐
+            tional data.
+
+   ddllgg__aadddd__hheellpp__ffoorrmmiitteemm
+       This is a utility function used enforce consistent behavior for the _D_I_‐
+       _A_L_O_G___V_A_R_S_._h_e_l_p___t_a_g_s and _D_I_A_L_O_G___V_A_R_S_._i_t_e_m___h_e_l_p variables.
+
+       iinntt **_r_e_s_u_l_t
+            this  is updated to DLG_EXIT_ITEM_HELP if _D_I_A_L_O_G___V_A_R_S_._i_t_e_m___h_e_l_p is
+            set.
+
+       cchhaarr ****_t_a_g
+            the tag- or help-text is stored here.
+
+       DDIIAALLOOGG__FFOORRMMIITTEEMM **_i_t_e_m
+            contains the list item to use for tag- or help-text.
+
+   ddllgg__aadddd__hheellpp__lliissttiitteemm
+       This is a utility function used enforce consistent behavior for the _D_I_‐
+       _A_L_O_G___V_A_R_S_._h_e_l_p___t_a_g_s and _D_I_A_L_O_G___V_A_R_S_._i_t_e_m___h_e_l_p variables.
+
+       iinntt **_r_e_s_u_l_t
+            this  is updated to DLG_EXIT_ITEM_HELP if _D_I_A_L_O_G___V_A_R_S_._i_t_e_m___h_e_l_p is
+            set.
+
+       cchhaarr ****_t_a_g
+            the tag- or help-text is stored here.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM **_i_t_e_m
+            contains the list item to use for tag- or help-text.
+
+   ddllgg__aadddd__llaasstt__kkeeyy
+       Report  the  last  key  entered  by  the  user.   This  implements  the
+       ----llaasstt--kkeeyy command-line option, using ddiiaalloogg__vvaarrss..llaasstt__kkeeyy.
+
+       iinntt _m_o_d_e
+            controls  the  way the last key report is separated from other re‐
+            sults:
+
+            -2   (no separator)
+
+            -1   (separator after the key name)
+
+            0    (separator is optionally before the key name)
+
+            1    (same as -1)
+
+   ddllgg__aadddd__qquuootteedd
+       Add a quoted string to the result buffer (see ddllgg__aadddd__rreessuulltt).   If  no
+       quotes  are  necessary, none are used.  If ddiiaalloogg__vvaarrss..ssiinnggllee__qquuootteedd is
+       set, single-quotes are used.  Otherwise, double-quotes are used.
+
+       cchhaarr ** _s_t_r_i_n_g
+            is the string to add.
+
+   ddllgg__aadddd__rreessuulltt
+       Add a string to the result buffer ddiiaalloogg__vvaarrss..iinnppuutt__rreessuulltt.
+
+       cchhaarr ** _s_t_r_i_n_g
+            is the string to add.
+
+   ddllgg__aadddd__sseeppaarraattoorr
+       Add an output-separator to the result buffer  ddiiaalloogg__vvaarrss..iinnppuutt__rreessuulltt.
+       If  ddiiaalloogg__vvaarrss..oouuttppuutt__sseeppaarraattoorr  is set, use that.  Otherwise, if ddiiaa‐‐
+       lloogg__vvaarrss..sseeppaarraattee__oouuttppuutt is set, use newline.  If neither is set, use a
+       space.
+
+   ddllgg__aadddd__ssttrriinngg
+       Add   a   quoted   or   unquoted  string  to  the  result  buffer  (see
+       ddllgg__aadddd__qquuootteedd)  and  ddllgg__aadddd__rreessuulltt),  according   to   whether   ddiiaa‐‐
+       lloogg__vvaarrss..qquuootteedd is true.
+
+       cchhaarr ** _s_t_r_i_n_g
+            is the string to add.
+
+   ddllgg__aalliiggnn__ccoolluummnnss
+       Copy  and  reformat an array of pointers to strings, aligning according
+       to the column separator  ddiiaalloogg__vvaarrss..ccoolluummnn__sseeppaarraattoorr.   If  no  column
+       separator  is set, the array will be unmodified; otherwise it is copied
+       and reformatted.
+
+              Caveat: This function is only implemented for 8-bit characters.
+
+       cchhaarr ****_t_a_r_g_e_t
+            This is the array to reformat.  It points to the first  string  to
+            modify.
+
+       iinntt _p_e_r___r_o_w
+            This is the size of the struct for each row of the array.
+
+       iinntt _n_u_m___r_o_w_s
+            This is the number of rows in the array.
+
+   ddllgg__aallllooccaattee__ggaauuggee
+       Allocates a gauge widget.  Use ddllgg__uuppddaattee__ggaauuggee to display the result.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+       iinntt _p_e_r_c_e_n_t
+            is the percentage to show in the progress bar.
+
+   ddllgg__aasscciiiibbooxx
+       returns  its  parameter  transformed  to  the corresponding "+" or "-",
+       etc., for the line-drawing characters used in ddiiaalloogg.  If the parameter
+       is not a line-drawing or other special character such as ACS_DARROW, it
+       returns 0.
+
+       cchhttyyppee _c_h
+            is the parameter, usually one of the AACCSS___x_x_x constants.
+
+   ddllgg__aattttrr__cclleeaarr
+       Set window to the given attribute.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       iinntt _h_e_i_g_h_t
+            is the number of rows to update.
+
+       iinntt _w_i_d_t_h
+            is the number of columns to update.
+
+       cchhttyyppee _a_t_t_r
+            is the attribute, e.g., AA__BBOOLLDD.
+
+   ddllgg__aauuttoo__ssiizzee
+       Compute window size based on the size of the formatted _p_r_o_m_p_t and mini‐
+       mum dimensions for a given widget.
+
+       DDiiaalloogg  sets  ddiiaalloogg__ssttaattee..tteexxtt__hheeiigghhtt  and ddiiaalloogg__ssttaattee..tteexxtt__wwiiddtthh for
+       the formatted _p_r_o_m_p_t as a side-effect.
+
+       Normally ddiiaalloogg writes the formatted _p_r_o_m_p_t to the curses  window,  but
+       it  will  write  the  formatted  _p_r_o_m_p_t  to  the  output stream if ddiiaa‐‐
+       lloogg__ssttaattee..tteexxtt__oonnllyy is set.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _p_r_o_m_p_t
+            is the message text which will be displayed in  the  widget,  used
+            here to determine how large the widget should be.
+
+            If  the  value  is _N_U_L_L, ddiiaalloogg allows the widget to use the whole
+            screen, i.e., if the values referenced by _h_e_i_g_h_t and/or _w_i_d_t_h  are
+            zero.
+
+       iinntt ** _h_e_i_g_h_t
+            is the nominal height.  DDiiaalloogg checks the referenced value and may
+            update it:
+
+            •   if the value is negative, ddiiaalloogg updates it to  the  available
+                height of the screen, after reserving rows for the window bor‐
+                der and shadow, as well as taking into account ddiiaalloogg__vvaarrss..bbee‐‐
+                ggiinn__yy and ddiiaalloogg__vvaarrss..bbeeggiinn__sseett.
+
+            •   if the value is zero, ddiiaalloogg updates it to the required height
+                of the window, taking into  account  a  (possibly)  multi-line
+                _p_r_o_m_p_t.
+
+            •   if  the value is greater than zero, ddiiaalloogg uses it internally,
+                but restores the value on return.
+
+       iinntt ** _w_i_d_t_h
+            is the nominal width.  DDiiaalloogg checks the referenced value and  may
+            update it:
+
+            •   if  the  value is negative, ddiiaalloogg updates it to the available
+                width of the screen, after reserving rows for the window  bor‐
+                der and shadow, as well as taking into account ddiiaalloogg__vvaarrss..bbee‐‐
+                ggiinn__xx and ddiiaalloogg__vvaarrss..bbeeggiinn__sseett.
+
+            •   if the value is zero, ddiiaalloogg updates it to the required  width
+                of  the  window,  taking  into account a (possibly) multi-line
+                _p_r_o_m_p_t.
+
+            •   if the value is greater than zero, ddiiaalloogg uses it  internally,
+                but restores the value on return.
+
+       iinntt _b_o_x_l_i_n_e_s
+            is the number of lines to reserve in the vertical direction.
+
+       iinntt _m_i_n_c_o_l_s
+            is the minimum number of columns to use.
+
+   ddllgg__aauuttoo__ssiizzeeffiillee
+       Like  ddllgg__aauuttoo__ssiizzee,  but  use  a file contents to decide how large the
+       widget should be.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _f_i_l_e
+            is the name of the file.
+
+       iinntt ** _h_e_i_g_h_t
+            is the nominal height.
+
+            If it is -1, use  the  screen's  height  (after  subtracting  ddiiaa‐‐
+            lloogg__vvaarrss..bbeeggiinn__yy if ddiiaalloogg__vvaarrss..bbeeggiinn__sseett is true).
+
+            If  it  is  greater  than  zero, limit the referenced value to the
+            screen-height after verifying that the file exists.
+
+       iinntt ** _w_i_d_t_h
+            is the nominal width.
+
+            If it is -1,  use  the  screen's  width  (after  subtracting  ddiiaa‐‐
+            lloogg__vvaarrss..bbeeggiinn__xx if ddiiaalloogg__vvaarrss..bbeeggiinn__sseett is true).
+
+            If  it  is  greater  than  zero, limit the referenced value to the
+            screen-width after verifying that the file exists.
+
+       iinntt _b_o_x_l_i_n_e_s
+            is the number of lines to reserve on the screen for drawing boxes.
+
+       iinntt _m_i_n_c_o_l_s
+            is the number of columns to reserve  on  the  screen  for  drawing
+            boxes.
+
+   ddllgg__bbeeeeppiinngg
+       If  ddiiaalloogg__vvaarrss..bbeeeepp__ssiiggnnaall  is  nonzero, this calls bbeeeepp once and sets
+       ddiiaalloogg__vvaarrss..bbeeeepp__ssiiggnnaall to zero.
+
+   ddllgg__bbooxxcchhaarr
+       returns its cchhttyyppee parameter transformed as follows:
+
+       •   if neither ddiiaalloogg__vvaarrss..aasscciiii__lliinneess nor ddiiaalloogg__vvaarrss..nnoo__lliinneess is set.
+
+       •   if ddiiaalloogg__vvaarrss..aasscciiii__lliinneess is set, returns the corresponding "+" or
+           "-", etc., for the line-drawing characters used in ddiiaalloogg.
+
+       •   otherwise,  if ddiiaalloogg__vvaarrss..nnoo__lliinneess is set, returns a space for the
+           line-drawing characters.
+
+       •   if the parameter is not a line-drawing or other  special  character
+           such as ACS_DARROW, it returns the parameter unchanged.
+
+   ddllgg__bbooxx__xx__oorrddiinnaattee
+       returns  a  suitable  x-ordinate  (column)  for  a new widget.  If ddiiaa‐‐
+       lloogg__vvaarrss..bbeeggiinn__sseett is 1, use ddiiaalloogg__vvaarrss..bbeeggiinn__xx; otherwise center  the
+       widget on the screen (using the _w_i_d_t_h parameter).
+
+       iinntt _w_i_d_t_h
+            is the width of the widget.
+
+   ddllgg__bbooxx__yy__oorrddiinnaattee
+       returns  a  suitable  y-ordinate  (row)  for  a  new  widget.   If ddiiaa‐‐
+       lloogg__vvaarrss..bbeeggiinn__sseett is 1, use ddiiaalloogg__vvaarrss..bbeeggiinn__yy; otherwise center  the
+       widget on the screen (using the _h_e_i_g_h_t parameter).
+
+       iinntt _h_e_i_g_h_t
+            is the height of the widget.
+
+   ddllgg__bbuuiillddlliisstt
+       This is an alternate interface to the bbuuiillddlliisstt widget which allows the
+       application to read the list item states back directly without  putting
+       them in the output buffer.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+       iinntt _l_i_s_t___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            is the list of items,  contain  tag,  name,  and  optionally  help
+            strings  (if ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set).  The initial selection
+            state for each item is also in this list.
+
+       ccoonnsstt cchhaarr ** _s_t_a_t_e_s
+            This is a list of characters to  display  for  the  given  states.
+            Normally a buildlist provides true (1) and false (0) values, which
+            the widget displays as "*" and space, respectively.   An  applica‐
+            tion  may  set  this  parameter  to  an  arbitrary null-terminated
+            string.  The widget determines  the  number  of  states  from  the
+            length  of  this  string, and will cycle through the corresponding
+            display characters as the user presses the space-bar.
+
+       iinntt _o_r_d_e_r___m_o_d_e
+            is reserved for future enhancements
+
+       iinntt ** _c_u_r_r_e_n_t___i_t_e_m
+            The widget sets the referenced location to the index of  the  cur‐
+            rent display item (cursor) when it returns.
+
+   ddllgg__bbuuttttoonn__ccoouunntt
+       Count the buttons in the list.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is  a  list  of  (pointers  to) button labels terminated by a null
+            pointer.
+
+   ddllgg__bbuuttttoonn__kkeeyy
+       If a key was bound to one of the button-codes in ddllgg__rreessuulltt__kkeeyy, fake a
+       button-value and an “Cancel”  key to cause the calling widget to return
+       the corresponding status.
+
+       See ddllgg__ookk__bbuuttttoonnccooddee, which maps settings for ok/extra/help and button
+       number into exit-code.
+
+   ddllgg__bbuuttttoonn__llaayyoouutt
+       Make  sure there is enough space for the buttons by computing the width
+       required for their labels, adding margins and  limiting  based  on  the
+       screen size.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is  a  list  of  (pointers  to) button labels terminated by a null
+            pointer.
+
+       iinntt ** _l_i_m_i_t
+            the function sets the referenced _l_i_m_i_t to the width  required  for
+            the buttons (limited by the screen size) if that is wider than the
+            passed-in limit.
+
+   ddllgg__bbuuttttoonn__ssiizzeess
+       Compute the size of the button array in columns.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is a list of (pointers to) button  labels  terminated  by  a  null
+            pointer.
+
+       iinntt _v_e_r_t_i_c_a_l
+            is true if the buttons are arranged in a column rather than a row.
+
+       iinntt ** _l_o_n_g_e_s_t
+            Return the total number of columns in the referenced location.
+
+       iinntt ** _l_e_n_g_t_h
+            Return the longest button's columns in the referenced location.
+
+   ddllgg__bbuuttttoonn__ttoo__cchhaarr
+       Find  the  first uppercase character in the label, which we may use for
+       an abbreviation.  If the label is empty, return -1.   If  no  uppercase
+       character  is  found, return 0.  Otherwise return the uppercase charac‐
+       ter.
+
+       Normally ddllgg__ddrraaww__bbuuttttoonnss and ddllgg__cchhaarr__ttoo__bbuuttttoonn use the  first  upper‐
+       case  character.   However, they keep track of all of the labels and if
+       the first has already been used in another label,  they  will  continue
+       looking  for  another uppercase character.  This function does not have
+       enough information to make that check.
+
+       ccoonnsstt cchhaarr ** _l_a_b_e_l
+            is the label to test.
+
+   ddllgg__bbuuttttoonn__xx__sstteepp
+       Compute the step-size needed between elements of the button array.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is a list of (pointers to) button  labels  terminated  by  a  null
+            pointer.
+
+       iinntt _l_i_m_i_t
+            is the maximum number of columns to allow for the buttons.
+
+       iinntt ** _g_a_p
+            store  the nominal gap between buttons in the referenced location.
+            This is constrained to be at least one.
+
+       iinntt ** _m_a_r_g_i_n
+            store the left+right total margins (for the list  of  buttons)  in
+            the referenced location.
+
+       iinntt ** _s_t_e_p
+            store the step-size in the referenced location.
+
+   ddllgg__ccaallcc__lliisstt__wwiiddtthh
+       Calculate  the  minimum  width for the list, assuming none of the items
+       are truncated.
+
+       iinntt _i_t_e_m___n_o
+            is the number of _i_t_e_m_s.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            contains a _n_a_m_e and _t_e_x_t field, e.g., for checklists  or  radiobox
+            lists.   The function returns the sum of the widest columns needed
+            for of each of these fields.
+
+            If ddiiaalloogg__vvaarrss..nnoo__iitteemmss is set, the _t_e_x_t fields in  the  list  are
+            ignored.
+
+   ddllgg__ccaallcc__lliisstthh
+       Calculate new height and list_height values.
+
+       iinntt ** _h_e_i_g_h_t
+            on  input,  is  the height without adding the list-height.  On re‐
+            turn, this contains the total list-height and is the  actual  wid‐
+            get's height.
+
+       iinntt ** _l_i_s_t___h_e_i_g_h_t
+            on  input, is the requested list-height.  On return, this contains
+            the number of rows available for displaying the list after  taking
+            into account the screen size and the ddiiaalloogg__vvaarrss..bbeeggiinn__sseett and ddii‐‐
+            aalloogg__vvaarrss..bbeeggiinn__yy variables.
+
+       iinntt _i_t_e_m___n_o
+            is the number of _i_t_e_m_s in the list.
+
+   ddllgg__ccaallcc__lliissttww
+       This function is obsolete, provided for library-compatibility.   It  is
+       replaced by ddllgg__ccaallcc__lliisstt__wwiiddtthh.
+
+       iinntt _i_t_e_m___n_o
+            is the number of _i_t_e_m_s.
+
+       cchhaarr **** _i_t_e_m_s
+            is a list of character pointers.
+
+       iinntt _g_r_o_u_p
+            is  the  number of items in each group, e.g., the second array in‐
+            dex.
+
+   ddllgg__cchhaarr__ttoo__bbuuttttoonn
+       Given a list of button labels, and a character which may be the  abbre‐
+       viation  for  one,  find it, if it exists.  An abbreviation will be the
+       first character which happens to be capitalized in the label.   If  the
+       character is found, return its index within the list of _l_a_b_e_l_s.  Other‐
+       wise, return DDLLGG__EEXXIITT__UUNNKKNNOOWWNN.
+
+       iinntt _c_h
+            is the character to find.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is a list of (pointers to) button  labels  terminated  by  a  null
+            pointer.
+
+   ddllgg__cchheecckklliisstt
+       This  entrypoint  provides the ----cchheecckklliisstt or ----rraaddiioolliisstt functionality
+       without the limitations of ddiiaalloogg's command-line syntax (compare to ddii‐‐
+       aalloogg__cchheecckklliisstt).
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+       iinntt _l_i_s_t___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of _i_t_e_m_s.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            This is a list of the items to display in the checklist.
+
+       ccoonnsstt cchhaarr ** _s_t_a_t_e_s
+            This is a list of characters to  display  for  the  given  states.
+            Normally a checklist provides true (1) and false (0) values, which
+            the widget displays as "*" and space, respectively.   An  applica‐
+            tion  may  set  this  parameter  to  an  arbitrary null-terminated
+            string.  The widget determines  the  number  of  states  from  the
+            length  of  this  string, and will cycle through the corresponding
+            display characters as the user presses the space-bar.
+
+       iinntt _f_l_a_g
+            This is should be one of FFLLAAGG__CCHHEECCKK or  FFLLAAGG__RRAADDIIOO,  depending  on
+            whether the widget should act as a checklist or radiobox.
+
+       iinntt ** _c_u_r_r_e_n_t___i_t_e_m
+            The  widget  sets the referenced location to the index of the cur‐
+            rent display item (cursor) when it returns.
+
+   ddllgg__cchheecckk__ssccrroolllleedd
+       given a function key (or other key that was mapped to a function  key),
+       check if it is one of the up/down scrolling functions:
+
+              DLGK_PAGE_FIRST,
+              DLGK_PAGE_LAST,
+              DLGK_GRID_UP,
+              DLGK_GRID_DOWN,
+              DLGK_PAGE_PREV or
+              DLGK_PAGE_NEXT.
+
+       Some  widgets  use  these key bindings for scrolling the prompt-text up
+       and down, to allow for display in very small windows.
+
+       The function returns 0 (zero) if it finds one of these keys, and -1  if
+       not.
+
+       iinntt _k_e_y
+            is the function-key to check
+
+       iinntt _l_a_s_t
+            is the number of lines which would be used to display the scrolled
+            prompt in an arbitrarily tall window.  It is used  here  to  check
+            limits for the _o_f_f_s_e_t value.
+
+       iinntt _p_a_g_e
+            this  is  the available height for writing scrolled text, which is
+            smaller than the window if it contains buttons.
+
+       bbooooll ** _s_h_o_w
+            on return, holds TRUE if ddllgg__pprriinntt__ssccrroolllleedd should be used to  re‐
+            display the prompt text.
+
+       iinntt ** _o_f_f_s_e_t
+            on entry, holds the starting line number (counting from zero) last
+            used for ddllgg__pprriinntt__ssccrroolllleedd.  On return, holds the updated  start‐
+            ing line number.
+
+   ddllgg__cclleeaarr
+       Set  window to the default ddiiaalloogg screen attribute.  This is set in the
+       rc-file with ssccrreeeenn__ccoolloorr.
+
+   ddllgg__ccllrr__rreessuulltt
+       Free storage used for  the  result  buffer  (ddiiaalloogg__vvaarrss..iinnppuutt__rreessuulltt).
+       The corresponding pointer is set to NULL.
+
+   ddllgg__ccoolloorr__ccoouunntt
+       Return the number of colors that can be configured in ddiiaalloogg.
+
+   ddllgg__ccoolloorr__sseettuupp
+       Initialize the color pairs used in ddiiaalloogg.
+
+   ddllgg__ccoouunntt__aarrggvv
+       Count the entries in an argument vector.
+
+       aarrggvv Points to the argument vector.
+
+   ddllgg__ccoouunntt__ccoolluummnnss
+       Returns the number of columns used for a string.  This is not necessar‐
+       ily the number of bytes in a string.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to measure.
+
+   ddllgg__ccoouunntt__rreeaall__ccoolluummnnss
+       Returns the number of columns used for a string,  accounting  for  "\Z"
+       sequences which can be used for coloring the text if ddiiaalloogg__vvaarrss..ccoolloorrss
+       is set.  This is not necessarily the number of bytes in a string.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to measure.
+
+   ddllgg__ccoouunntt__wwcchhaarrss
+       Returns the number of wide-characters in the string.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to measure.
+
+   ddllgg__ccrreeaattee__rrcc
+       Create a configuration file, i.e., write  internal  tables  to  a  file
+       which can be read back by ddiiaalloogg as an rc-file.
+
+       ccoonnsstt cchhaarr ** _f_i_l_e_n_a_m_e
+            is the name of the file to write to.
+
+   ddllgg__ccttll__ssiizzee
+       If  ddiiaalloogg__vvaarrss..ssiizzee__eerrrr is true, check if the given window size is too
+       large to fit on the screen.  If so, exit with an  error  reporting  the
+       size of the window.
+
+       iinntt _h_e_i_g_h_t
+            is the window's height
+
+       iinntt _w_i_d_t_h
+            is the window's width
+
+   ddllgg__ddeeffaauulltt__bbuuttttoonn
+       If  ddiiaalloogg__vvaarrss..ddeeffaauulltt__bbuuttttoonn is positive, return the button-index for
+       that button code, using ddllgg__ookk__bbuuttttoonnccooddee to test indices starting with
+       zero.  Otherwise (or if no match was found for the button code), return
+       zero.
+
+   ddllgg__ddeeffaauulltt__ffoorrmmiitteemm
+       If ddiiaalloogg__vvaarrss..ddeeffaauulltt__iitteemm is not null, find that name by matching the
+       _n_a_m_e  field  in  the list of form _i_t_e_m_s.  If found, return the index of
+       that item in the list.  Otherwise, return zero.
+
+       DDIIAALLOOGG__FFOORRMMIITTEEMM ** _i_t_e_m_s
+            is the list of items to search.  It is terminated by an entry with
+            a null _n_a_m_e field.
+
+   ddllgg__ddeeffaauulltt__iitteemm
+       This  function  is obsolete, provided for library-compatibility.  It is
+       replaced by ddllgg__ddeeffaauulltt__ffoorrmmiitteemm and ddllgg__ddeeffaauulltt__lliissttiitteemm.
+
+       cchhaarr **** _i_t_e_m_s
+            is the list of items to search.
+
+       iinntt _l_l_e_n
+            is the number of items in each group, e.g., the second  array  in‐
+            dex.
+
+   ddllgg__ddeeffaauullttnnoo__bbuuttttoonn
+       If ddiiaalloogg__vvaarrss..ddeeffaauullttnnoo is true, and ddiiaalloogg__vvaarrss..nnooccaanncceell is not, find
+       the button-index for the “Cancel” button.  Otherwise, return the  index
+       for “OK” (always zero).
+
+   ddllgg__ddeell__wwiinnddooww
+       Remove a window, repainting everything else.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to remove.
+
+   ddllgg__ddeerr__wwiinnddooww
+       create a derived window, e.g., for an input area of a widget
+
+       WWIINNDDOOWW ** _w_i_n
+            is the parent window
+
+       iinntt _h_e_i_g_h_t
+            is the subwindow's height
+
+       iinntt _w_i_d_t_h
+            is the subwindow's width
+
+       iinntt _y
+            is the subwindow's top-row
+
+       iinntt _x
+            is the subwindow's left-column
+
+   ddllgg__ddooeess__oouuttppuutt
+       This  is  called each time a widget is invoked which may do output.  It
+       increments ddiiaalloogg__ssttaattee..oouuttppuutt__ccoouunntt, so the output function in  ddiiaalloogg
+       can test this and add a separator.
+
+   ddllgg__ddrraaww__aarrrroowwss
+       Draw  up/down arrows on a window, e.g., for scrollable lists.  It calls
+       ddllgg__ddrraaww__aarrrroowwss22 using the _m_e_n_u_b_o_x___c_o_l_o_r and  _m_e_n_u_b_o_x___b_o_r_d_e_r___c_o_l_o_r  at‐
+       tributes.
+
+       WWIINNDDOOWW ** _d_i_a_l_o_g
+            is the window on which to draw an arrow.
+
+       iinntt _t_o_p___a_r_r_o_w
+            is true if an up-arrow should be drawn at the top of the window.
+
+       iinntt _b_o_t_t_o_m___a_r_r_o_w
+            is true if an down-arrow should be drawn at the bottom of the win‐
+            dow.
+
+       iinntt _x
+            is the zero-based column within the window on which  to  draw  ar‐
+            rows.
+
+       iinntt _t_o_p
+            is the zero-based row within the window on which to draw up-arrows
+            as well as a horizontal line to show the window's top.
+
+       iinntt _b_o_t_t_o_m
+            is the zero-based row within the window on which to draw  down-ar‐
+            rows as well as a horizontal line to show the window's bottom.
+
+   ddllgg__ddrraaww__aarrrroowwss22
+       Draw up/down arrows on a window, e.g., for scrollable lists.
+
+       WWIINNDDOOWW ** _d_i_a_l_o_g
+            is the window on which to draw an arrow.
+
+       iinntt _t_o_p___a_r_r_o_w
+            is true if an up-arrow should be drawn at the top of the window.
+
+       iinntt _b_o_t_t_o_m___a_r_r_o_w
+            is true if an down-arrow should be drawn at the bottom of the win‐
+            dow.
+
+       iinntt _x
+            is the zero-based column within the window on which  to  draw  ar‐
+            rows.
+
+       iinntt _t_o_p
+            is the zero-based row within the window on which to draw up-arrows
+            as well as a horizontal line to show the window's top.
+
+       iinntt _b_o_t_t_o_m
+            is the zero-based row within the window on which to draw  down-ar‐
+            rows as well as a horizontal line to show the window's bottom.
+
+       cchhttyyppee _a_t_t_r
+            is the window's background attribute.
+
+       cchhttyyppee _b_o_r_d_e_r_a_t_t_r
+            is the window's border attribute.
+
+   ddllgg__ddrraaww__bboottttoomm__bbooxx
+       Draw  a  partial box at the bottom of a window, e.g., to surround a row
+       of buttons.  It is designed to merge with an existing  box  around  the
+       whole  window  (see  ddllgg__ddrraaww__bbooxx), so it uses tee-elements rather than
+       corner-elements on the top corners of this box.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+   ddllgg__ddrraaww__bboottttoomm__bbooxx22
+       Draw a partial box at the bottom of a window, e.g., to surround  a  row
+       of  buttons.   It  is designed to merge with an existing box around the
+       whole window (see ddllgg__ddrraaww__bbooxx22), so it uses tee-elements  rather  than
+       corner-elements on the top corners of this box.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       cchhttyyppee _o_n___l_e_f_t
+            is  used  to color the upper/left edges of the box, i.e., the tee-
+            element and horizontal line
+
+       cchhttyyppee _o_n___r_i_g_h_t
+            is used to color the right edge of the box, i.e., the tee-element
+
+       cchhttyyppee _o_n___i_n_s_i_d_e
+            is used to fill-color the inside of the box
+
+   ddllgg__ddrraaww__bbooxx
+       Draw a rectangular box with line drawing characters.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       iinntt _y
+            is the top row of the box.
+
+       iinntt _x
+            is the left column of the box.
+
+       iinntt _h_e_i_g_h_t
+            is the height of the box.
+
+       iinntt _w_i_d_t_h
+            is the width of the box.
+
+       cchhttyyppee _b_o_x_c_h_a_r
+            is used to color the right/lower edges.   It  also  is  fill-color
+            used for the box contents.
+
+       cchhttyyppee _b_o_r_d_e_r_c_h_a_r
+            is used to color the upper/left edges.
+
+   ddllgg__ddrraaww__bbooxx22
+       Draw a rectangular box with line drawing characters.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       iinntt _y
+            is the top row of the box.
+
+       iinntt _x
+            is the left column of the box.
+
+       iinntt _h_e_i_g_h_t
+            is the height of the box.
+
+       iinntt _w_i_d_t_h
+            is the width of the box.
+
+       cchhttyyppee _b_o_x_c_h_a_r
+            is used to fill-color for the box contents.
+
+       cchhttyyppee _b_o_r_d_e_r_c_h_a_r
+            is used to color the upper/left edges.
+
+       cchhttyyppee _b_o_r_d_e_r_c_h_a_r_2
+            is used to color the right/lower edges.
+
+   ddllgg__ddrraaww__bbuuttttoonnss
+       Print a list of buttons at the given position.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       iinntt _y
+            is the starting row.
+
+       iinntt _x
+            is the starting column.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is  a  list  of  (pointers  to) button labels terminated by a null
+            pointer.
+
+       iinntt _s_e_l_e_c_t_e_d
+            is the index within the list of the selected button.
+
+       iinntt _v_e_r_t_i_c_a_l
+            is true if the buttons are arranged in a column rather than a row.
+
+       iinntt _l_i_m_i_t
+            is the number of columns (or rows if  _v_e_r_t_i_c_a_l)  allowed  for  the
+            display.
+
+   ddllgg__ddrraaww__hheellpplliinnee
+       draw  the text in ddiiaalloogg__vvaarrss..hheellpp__lliinnee at the bottom of the given win‐
+       dow.
+
+       WWIINNDDOOWW ** _d_i_a_l_o_g
+            is the window to modify.
+
+       bbooooll _d_e_c_o_r_a_t_i_o_n_s
+            if true, allow room for the scrolling arrows.
+
+   ddllgg__ddrraaww__ssccrroollllbbaarr
+       If ddiiaalloogg__ssttaattee..uussee__ssccrroollllbbaarr is set, draw a  scrollbar  on  the  right
+       margin  of  windows  holding scrollable data.  Also (whether or not the
+       scrollbar is drawn), annotate the bottom margin of the window with  the
+       percentage  of data by the bottom of that window, and call ddllgg__ddrraaww__aarr‐‐
+       rroowwss22 to put markers on the window showing when more data is available.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window in which the data is scrolled.  Because _l_e_f_t, _r_i_g_h_t,
+            _t_o_p,  _b_o_t_t_o_m are passed as parameters, this window can contain ad‐
+            ditional data.
+
+       lloonngg _f_i_r_s_t___d_a_t_a
+            is the zero-based index to the first row of data  in  the  current
+            window.
+
+       lloonngg _t_h_i_s___d_a_t_a
+            is the zero-based index to the current row of data.
+
+       lloonngg _n_e_x_t___d_a_t_a
+            is the zero-based index to the next data after the current row.
+
+       lloonngg _t_o_t_a_l___d_a_t_a
+            is the total number of rows of data.
+
+       iinntt _l_e_f_t
+            is  the  zero-based left margin/column of the window.  The up/down
+            arrows are draw inset by 5 columns from this point.
+
+       iinntt _r_i_g_h_t
+            is the zero-based right margin/column of the window.  The  scroll‐
+            bar is drawn flush against this column.
+
+       iinntt _t_o_p
+            is the zero-based row within the window on which to draw up-arrows
+            as well as a horizontal line to show the window's top.
+
+       iinntt _b_o_t_t_o_m
+            is the zero-based row within the window on which to draw  down-ar‐
+            rows as well as a horizontal line to show the window's bottom.
+
+       cchhttyyppee _a_t_t_r
+            is the window's background attribute.
+
+       cchhttyyppee _b_o_r_d_e_r_a_t_t_r
+            is the window's border attribute.
+
+   ddllgg__ddrraaww__sshhaaddooww
+       Draw  shadows  along the right and bottom edge of a window to give it a
+       3-dimensional look.  (The height, etc., may not be the same as the win‐
+       dow's actual values).
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       iinntt _h_e_i_g_h_t
+            is the height of the window.
+
+       iinntt _w_i_d_t_h
+            is the width of the window.
+
+       iinntt _y
+            is the top row of the window.
+
+       iinntt _x
+            is the left column of the window.
+
+   ddllgg__ddrraaww__ttiittllee
+       Draw a title centered at the top of the window.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+   ddllgg__dduummmmyy__mmeennuutteexxtt
+       This is a utility function which supports the ----iinnppuuttmmeennuu option of the
+       ddiiaalloogg program.  If ddiiaalloogg__vvaarrss..iinnppuutt__mmeennuu is set,  ddiiaalloogg__mmeennuu  passes
+       this  pointer to ddllgg__mmeennuu as the _r_e_n_a_m_e___m_e_n_u_t_e_x_t parameter.  Otherwise,
+       it passes ddllgg__dduummmmyy__mmeennuutteexxtt.
+
+       The function should only return DDLLGG__EEXXIITT__EERRRROORR.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            is the list of menu items
+
+       iinntt _c_u_r_r_e_n_t
+            is the index of the currently-selected item
+
+       cchhaarr ** _n_e_w_t_e_x_t
+            is the updated text for the menu item
+
+   ddllgg__dduummpp__kkeeyyss
+       Write all user-defined key-bindings to the given stream, e.g., as  part
+       of ddllgg__ccrreeaattee__rrcc.
+
+       FFIILLEE ** _f_p
+            is the stream on which to write the bindings.
+
+   ddllgg__dduummpp__wwiinnddooww__kkeeyyss
+       Write  all user-defined key-bindings to the given stream, e.g., as part
+       of ddllgg__ccrreeaattee__rrcc.
+
+       FFIILLEE ** _f_p
+            is the stream on which to write the bindings.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window for which bindings should be dumped.  If it is null,
+            then only built-in bindings are dumped.
+
+   ddllgg__eeaatt__aarrggvv
+       Remove one or more items from an argument vector.
+
+       iinntt ** _a_r_g_c_p
+            in/out  parameter  giving the length of the argument vector.  cchhaarr
+            ****** _a_r_g_v_p in/out parameter pointing to the argument  vector.   iinntt
+            _s_t_a_r_t starting index.  iinntt _c_o_u_n_t number of arguments to remove.
+
+   ddllgg__eeddiitt__ooffffsseett
+       Given  the  character-offset  in the string, returns the display-offset
+       where ddiiaalloogg should position the cursor.  In this context, “characters”
+       may  be  multicolumn,  since  the  string  can be a multibyte character
+       string.
+
+       cchhaarr ** _s_t_r_i_n_g
+            is the string to analyze
+
+       iinntt _o_f_f_s_e_t
+            is the character-offset
+
+       iinntt _x___l_a_s_t
+            is a limit on the column positions that can  be  used,  e.g.,  the
+            window's size.
+
+   ddllgg__eeddiitt__ssttrriinngg
+       Updates  the string and character-offset, given various editing charac‐
+       ters or literal characters which are inserted at the  character-offset.
+       Returns  true  if an editing change was made (and the display should be
+       updated), and false if the key was something like KKEEYY__EENNTTEERR, which is a
+       non-editing action outside this function.
+
+       cchhaarr ** _s_t_r_i_n_g
+            is the (multibyte) string to update
+
+       iinntt ** _o_f_f_s_e_t
+            is the character-offset
+
+       iinntt _k_e_y
+            is the editing key
+
+       iinntt _f_k_e_y
+            is true if the editing key is a function-key
+
+       bbooooll _f_o_r_c_e
+            is used in a special loop case by calling code to force the return
+            value of this function when a function-key code 0 is passed in.
+
+   ddllgg__eexxiitt
+       Given an internal exit code, check  if  the  corresponding  environment
+       variable  is  set.  If so, remap the exit code to match the environment
+       variable.  Finally call eexxiitt with the resulting exit code.
+
+       iinntt _c_o_d_e
+            is the  internal  exit  code,  e.g.,  DDLLGG__EEXXIITT__OOKK,  which  may  be
+            remapped.
+
+       The  ddiiaalloogg  program uses this function to allow shell scripts to remap
+       the exit codes so they can distinguish ESC from ERROR.
+
+   ddllgg__eexxiittccooddee22ss
+       Returns the name of an exit-code, e.g., “OK” for DDLLGG__EEXXIITT__OOKK.
+
+       iinntt _c_o_d_e
+            is an exit-code for ddiiaalloogg as defined in <<ddiiaalloogg..hh>>.
+
+   ddllgg__eexxiittnnaammee22nn
+       Returns  an  exit-code  as  the  reverse  of  ddllgg__eexxiittccooddee22nn,  e.g.,  0
+       (DDLLGG__EEXXIITT__OOKK) for the “OK” string.
+
+       ccoonnsstt cchhaarr ** _n_a_m_e
+            is  the  name  of an exit-code for ddiiaalloogg as defined in <<ddiiaalloogg..hh>>
+            but omitting the “DLG_EXIT_” prefix.
+
+   ddllgg__eexxiitt__bbuuttttoonnccooddee
+       Map the given button index for ddllgg__eexxiitt__llaabbeell into ddiiaalloogg's exit-code.
+
+       iinntt _b_u_t_t_o_n
+            is the button index
+
+   ddllgg__eexxiitt__llaabbeell
+       Return a list of button labels.  If ddiiaalloogg__vvaarrss..eexxttrraa__bbuuttttoonn  is  true,
+       return  the result of ddllgg__ookk__llaabbeellss.  Otherwise, return a list with the
+       “Exit” label and (if ddiiaalloogg__vvaarrss..hheellpp__bbuuttttoonn is set) the “Help”  button
+       as well.
+
+   ddllgg__eexxiitteerrrr
+       Quit program killing all ttaaiillbbooxxbbgg widgets.
+
+       ccoonnsstt cchhaarr ** _f_m_t
+            is the format of the pprriinnttff-like message to write.
+
+       ......
+            are the variables to apply to the _f_m_t format.
+
+   ddllgg__ffiinndd__iinnddeexx
+       Given  the character-offset to find in the list, return the correspond‐
+       ing array index.
+
+       ccoonnsstt iinntt **_l_i_s_t
+            contains a list of character-offsets, i.e., indices into a  string
+            that denote the beginning of multibyte characters.
+
+       iinntt _l_i_m_i_t
+            is the last index into lliisstt to search.
+
+       iinntt _t_o___f_i_n_d
+            is the character-offset to find.
+
+   ddllgg__ffiinniisshh__ssttrriinngg
+       If _D_I_A_L_O_G___S_T_A_T_E_._f_i_n_i_s_h___s_t_r_i_n_g is true, this function discards data used
+       to speed up layout computations.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the address of the string whose data should be discarded.   The
+            address  rather than contents is used as the unique identifier be‐
+            cause some of the caching is used for editable input-fields.
+
+   ddllgg__fflluusshh__ggeettcc
+       Cancel the local data saved by ddllgg__llaasstt__ggeettcc.
+
+   ddllgg__eeddiittbbooxx
+       This entrypoint provides the ----eeddiittbbooxx functionality without the  limi‐
+       tations of ddiiaalloogg's command-line syntax (compare to ddiiaalloogg__eeddiittbbooxx).
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       cchhaarr ****** _l_i_s_t
+            is  a  pointer to an array of cchhaarr ** pointers.  The array is allo‐
+            cated by the caller, and so are the strings to  which  it  points.
+            The ddllgg__eeddiittbbooxx function may reallocate the array and the strings.
+
+       iinntt ** _r_o_w_s
+            points to the nominal length of _l_i_s_t.  The referenced value is up‐
+            dated if_l_i_s_t is reallocated.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+   ddllgg__ffoorrmm
+       This entrypoint provides the ----ffoorrmm functionality without  the  limita‐
+       tions of ddiiaalloogg's command-line syntax (compare to ddiiaalloogg__ffoorrmm).
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+       iinntt _f_o_r_m___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of _i_t_e_m_s.
+
+       DDIIAALLOOGG__FFOORRMMIITTEEMM ** _i_t_e_m_s
+            This is a list of the items to display in the form.
+
+       iinntt ** _c_u_r_r_e_n_t___i_t_e_m
+            The widget sets the referenced location to the index of  the  cur‐
+            rent display item (cursor) when it returns.
+
+   ddllgg__ffrreeee__ccoolluummnnss
+       Free data allocated by ddllgg__aalliiggnn__ccoolluummnnss.
+
+       cchhaarr ****_t_a_r_g_e_t
+            This  is  the array which was reformatted.  It points to the first
+            string to free.
+
+       iinntt _p_e_r___r_o_w
+            This is the size of the struct for each row of the array.
+
+       iinntt _n_u_m___r_o_w_s
+            This is the number of rows in the array.
+
+   ddllgg__ffrreeee__ffoorrmmiitteemmss
+       Free memory owned by a list of DIALOG_FORMITEM's.
+
+       DDIIAALLOOGG__FFOORRMMIITTEEMM ** _i_t_e_m_s
+            is the list to free.
+
+   ddllgg__ffrreeee__ggaauuggee
+       Remove the gauge widget from the screen and free its associated memory.
+
+       vvooiidd **_o_b_j_p_t_r
+            points to the gauge widget.
+
+   ddllgg__ggeettcc
+       Read a character from the given window.   Handle  repainting  here  (to
+       simplify  things  in  the  calling  application).  Also, if input-call‐
+       back(s) are set up, poll the corresponding files  and  handle  the  up‐
+       dates, e.g., for displaying a tailbox.  Returns the key-code.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window within which to read.
+
+       iinntt ** _f_k_e_y
+            as  a  side-effect,  set  this to true if the key-code is really a
+            function-key.
+
+   ddllgg__ggeetteennvv__nnuumm
+       Get a number from the environment:
+
+       •   If the caller provides a pointer in the  second  parameter,  return
+           success/failure  for  the function return, and the actual value via
+           the pointer.  Use this for decoding arbitrary numbers, e.g.,  nega‐
+           tive or zero.
+
+       •   If  the caller does not provide a pointer, return the decoded value
+           for the function-return.  Use this when only  values  greater  than
+           zero are useful.
+
+       cchhaarr ** _n_a_m_e
+            is the name of the environment-variable to retrieve.
+
+       iinntt ** _v_a_l_u_e
+            is the optional pointer to a return-value.
+
+   ddllgg__ggeetteennvv__ssttrr
+       Get  a  string from the environment, rejecting those which are entirely
+       blank.
+
+       cchhaarr ** _n_a_m_e
+            is the name of the environment-variable to retrieve.
+
+   ddllgg__ggeett__aattttrrss
+       extract the video attributes from the given window.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window from which to get attributes.
+
+   ddllgg__ggeettcc__ccaallllbbaacckkss
+       passes the given key-code _c_h to the current window that has established
+       a  callback.   If the callback returns zero, remove it and try the next
+       window.  If no more callbacks remain, return.  If  any  callbacks  were
+       found, return true, otherwise false.
+
+       iinntt _c_h
+            is the key-code
+
+       iinntt _f_k_e_y
+            is true if the key is a function-key
+
+       iinntt ** _r_e_s_u_l_t
+            is used to pass an exit-code to the caller, which should pass that
+            via ddllgg__eexxiitt.
+
+   ddllgg__iinnddeexx__ccoolluummnnss
+       Build a list of the display-columns for the  given  multibyte  string's
+       characters.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to analyze
+
+   ddllgg__iinnddeexx__wwcchhaarrss
+       Build  an index of the wide-characters in the string, so the caller can
+       easily tell which byte-offset begins a given wide-character.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to analyze
+
+   ddllgg__iitteemm__hheellpp
+       Draw the string for the ddiiaalloogg__vvaarrss..iitteemm__hheellpp feature.
+
+       ccoonnsstt cchhaarr ** _t_x_t
+            is the help-message
+
+   ddllgg__kkeeeepp__ttiittee
+       This performs the check and modifications for the  command-line  option
+       "----kkeeeepp--ttiittee",  used in iinniitt__ddiiaalloogg as well as for the command-line op‐
+       tion ----eerraassee--oonn--eexxiitt.
+
+       FFIILLEE ** _o_u_t_p_u_t
+            is the output stream used for displaying widgets.   It  is  either
+            _s_t_d_o_u_t or _s_t_d_e_r_r, depending on the ----ssttddoouutt option.
+
+   ddllgg__kkiillllaallll__bbgg
+       If  ddiiaalloogg  has  callbacks  active,  purge the list of all that are not
+       marked to keep in the background.  If any remain, run those in a  back‐
+       ground process.
+
+       iinntt ** _r_e_t_v_a_l
+            stores the exit-code to pass back to the caller.
+
+   ddllgg__llaasstt__ggeettcc
+       returns the most recent character that was read via ddllgg__ggeettcc.
+
+   ddllgg__lliimmiitt__ccoolluummnnss
+       Given  a column limit, count the number of wide characters that can fit
+       into that limit.  The offset is used to skip over a  leading  character
+       that was already written.
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to analyze
+
+       iinntt _l_i_m_i_t
+            is the column limit
+
+       iinntt _o_f_f_s_e_t
+            is the starting offset from which analysis should continue
+
+   ddllgg__llooookkuupp__kkeeyy
+       Check  for  a  key-binding.  If there is no binding associated with the
+       widget, it simply returns the given curses-key.  Otherwise, it  returns
+       the result of the binding
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window on which the binding is checked
+
+       iinntt _c_u_r_s_e_s___k_e_y
+            is the curses key-code
+
+       iinntt ** _d_i_a_l_o_g___k_e_y
+            is  the  corresponding  ddiiaalloogg internal code (see DDLLGG__KKEEYYSS__EENNUUMM in
+            dlg_key.h).
+
+   ddllgg__mmaaxx__iinnppuutt
+       Limit the parameter according to ddiiaalloogg__vvaarrss..mmaaxx__iinnppuutt
+
+       iinntt _m_a_x___l_e_n
+            is the value to limit
+
+   ddllgg__mmaattcchh__cchhaarr
+       Match a given character against the beginning of the  string,  ignoring
+       case  of  the  given character.  The matching string must begin with an
+       uppercase character.
+
+       iinntt _c_h
+            is the character to check
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to search
+
+   ddllgg__mmeennuu
+       This entrypoint provides the ----mmeennuu functionality without  the  limita‐
+       tions of ddiiaalloogg's command-line syntax (compare to ddiiaalloogg__mmeennuu).
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is the desired width of the box.  If zero, the height is  adjusted
+            to use the available screen size.
+
+       iinntt _m_e_n_u___h_e_i_g_h_t
+            is  the  minimum  height  to  reserve for displaying the list.  If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of _i_t_e_m_s.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            This is a list of the items to display in the form.
+
+       iinntt ** _c_u_r_r_e_n_t___i_t_e_m
+            The widget sets the referenced location to the index of  the  cur‐
+            rent display item (cursor) when it returns.
+
+       DDIIAALLOOGG__IINNPPUUTTMMEENNUU _r_e_n_a_m_e___m_e_n_u_t_e_x_t
+            If  this is not ddllgg__dduummmmyy__mmeennuutteexxtt, the widget acts like an _i_n_p_u_t_‐
+            _m_e_n_u widget, providing an extra “Rename” button,  which  activates
+            an edit feature on the selected menu item.
+
+   ddllgg__mmoovvee__wwiinnddooww
+       Moves/resizes the given window to the given position and size.
+
+       WWIINNDDOOWW **_w_i_n
+            is the window to move/resize.
+
+       WWIINNDDOOWW **_h_e_i_g_h_t
+            is the height of the resized window.
+
+       WWIINNDDOOWW **_w_i_d_t_h
+            is the width of the resized window.
+
+       WWIINNDDOOWW **_y
+            y-ordinate to use for the repositioned window.
+
+       WWIINNDDOOWW **_x
+            x-ordinate to use for the repositioned window.
+
+   ddllgg__mmoouussee__bbiiggrreeggiioonn
+       Retrieve the big-region under the pointer.
+
+       iinntt _y
+            is the row on which the mouse click occurred
+
+       iinntt _x
+            is the column on which the mouse click occurred
+
+   ddllgg__mmoouussee__ffrreeee__rreeggiioonnss
+       Free the memory associated with mouse regions.
+
+   ddllgg__mmoouussee__mmkkbbiiggrreeggiioonn
+       Creates  a  region  on  which  the mouse-clicks will return a specified
+       code.
+
+       iinntt _y
+            is the top-row of the region.
+
+       iinntt _x
+            is the left-column of the region.
+
+       iinntt _h_e_i_g_h_t
+            is the height of the region.
+
+       iinntt _w_i_d_t_h
+            is the width of the region.
+
+       iinntt _c_o_d_e
+            is a code used to make the region unique within a widget
+
+       iinntt _s_t_e_p___x
+            is used in modes 2 (columns) and 3 (cells) to determine the  width
+            of a column/cell.
+
+       iinntt _s_t_e_p___y
+            is currently unused
+
+       iinntt _m_o_d_e
+            is  used  to determine how the mouse position is translated into a
+            code (like a function-key):
+
+            1  index by lines
+
+            2  index by columns
+
+            3  index by cells
+
+   ddllgg__mmoouussee__mmkkrreeggiioonn
+       iinntt _y
+            is the top-row of the region.
+
+       iinntt _x
+            is the left-column of the region.
+
+       iinntt _h_e_i_g_h_t
+            is the height of the region.
+
+       iinntt _w_i_d_t_h
+            is the width of the region.
+
+       iinntt _c_o_d_e
+            is a code used to make the region unique within a widget
+
+   ddllgg__mmoouussee__rreeggiioonn
+       Retrieve the frame under the mouse pointer
+
+       iinntt _y
+            is the row of the mouse-click
+
+       iinntt _x
+            is the column of the mouse-click
+
+   ddllgg__mmoouussee__sseettbbaassee
+       Sets a base for subsequent calls to  ddllgg__mmoouussee__mmkkrreeggiioonn,  so  they  can
+       make regions relative to the start of a given window.
+
+       iinntt _x
+            is the left-column for the base
+
+       iinntt _y
+            is the top-row for the base
+
+   ddllgg__mmoouussee__sseettccooddee
+       Sets  a  value  used internally by ddllgg__mmoouussee__mmkkrreeggiioonn which is added to
+       the _c_o_d_e parameter.  By providing different values, e.g., multiples  of
+       KKEEYY__MMAAXX,  it is possible to support multiple “big” regions in a widget.
+       The _b_u_i_l_d_l_i_s_t widget uses this feature to recognize mouse-clicks in the
+       left/right panes.
+
+       iinntt _c_o_d_e
+            is the value to add to ddllgg__mmoouussee__mmkkrreeggiioonn's _c_o_d_e parameter.
+
+   ddllgg__mmoouussee__wwggeettcchh
+       is  a wrapper for ddllgg__ggeettcc which additionally maps mouse-clicks (if the
+       curses library supports those) into extended function-keys which encode
+       the  position  according to the _m_o_d_e in ddllgg__mmoouussee__mmkkbbiiggrreeggiioonn.  Returns
+       the corresponding key-code.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window on which to perform the input
+
+       iinntt ** _f_k_e_y
+            the referenced location is set to true if the key-code is  an  ac‐
+            tual or extended (mouse) function-key.
+
+   ddllgg__mmoouussee__wwggeettcchh__nnoowwaaiitt
+       This is a non-blocking variant of ddllgg__mmoouussee__wwggeettcchh.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window on which to perform the input
+
+       iinntt ** _f_k_e_y
+            the  referenced  location is set to true if the key-code is an ac‐
+            tual or extended (mouse) function-key.
+
+   ddllgg__nneeeedd__sseeppaarraattoorr
+       Check if an output-separator is needed.  If  ddiiaalloogg__vvaarrss..oouuttppuutt__sseeppaarraa‐‐
+       ttoorr  is  set,  return  true.  Otherwise, if ddiiaalloogg__vvaarrss..iinnppuutt__rreessuulltt is
+       nonempty, return true.  If neither, return false.
+
+   ddllgg__nneeww__mmooddaall__wwiinnddooww
+       Create a modal window, optionally with a shadow.  The shadow is created
+       if ddiiaalloogg__ssttaattee..uussee__sshhaaddooww is true.
+
+       WWIINNDDOOWW ** _p_a_r_e_n_t
+            is the parent window (usually the top-level window of a widget)
+
+       iinntt _h_e_i_g_h_t
+            is the window's height
+
+       iinntt _w_i_d_t_h
+            is the window's width
+
+       iinntt _y
+            is the window's top-row
+
+       iinntt _x
+            is the window's left-column
+
+   ddllgg__nneeww__wwiinnddooww
+       Create  a  window,  optionally with a shadow.  The shadow is created if
+       ddiiaalloogg__ssttaattee..uussee__sshhaaddooww is true.
+
+       iinntt _h_e_i_g_h_t
+            is the window's height
+
+       iinntt _w_i_d_t_h
+            is the window's width
+
+       iinntt _y
+            is the window's top-row
+
+       iinntt _x
+            is the window's left-column
+
+   ddllgg__nneexxtt__bbuuttttoonn
+       Return the next index in the list of labels.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is a list of (pointers to) button  labels  terminated  by  a  null
+            pointer.
+
+       iinntt _b_u_t_t_o_n
+            is the current button-index.
+
+   ddllgg__nneexxtt__ookk__bbuuttttoonniinnddeexx
+       Assuming  that  the caller is using ddllgg__ookk__llaabbeellss to list buttons, find
+       the next index in the list of buttons.
+
+       iinntt _c_u_r_r_e_n_t
+            is the current index in the list of buttons
+
+       iinntt _e_x_t_r_a
+            if negative, provides a way to enumerate extra active areas on the
+            widget.
+
+   ddllgg__ookk__bbuuttttoonnccooddee
+       Map the given button index for ddllgg__ookk__llaabbeellss into ddiiaalloogg's exit-code.
+
+       iinntt _b_u_t_t_o_n
+            is  the button-index (which is not necessarily the same as the in‐
+            dex in the list of labels).
+
+   ddllgg__ookk__bbuuttttoonn__kkeeyy
+       Calls ddllgg__bbuuttttoonn__kkeeyy with the “Cancel” button disabled, e.g.,  for  the
+       textbox widget.
+
+   ddllgg__ookk__llaabbeell
+       Returns  a  list with the “Ok” label, and if ddiiaalloogg__vvaarrss..hheellpp__bbuuttttoonn is
+       true, the “Help” label as well.
+
+   ddllgg__ookk__llaabbeellss
+       Return a list of button labels for the OK/Cancel group of widgets.
+
+   ddllgg__oorrddiinnaattee
+       Decode the string as an integer, decrement if greater than zero to make
+       a curses-ordinate from a dialog-ordinate.
+
+   ddllgg__ppaarrssee__bbiinnddkkeeyy
+       Parse  the parameters of the “bindkeys” configuration-file entry.  This
+       expects widget name which may be "*", followed by curses key definition
+       and then ddiiaalloogg key definition.
+
+       cchhaarr ** _p_a_r_a_m_s
+            is the parameter string to parse.
+
+   ddllgg__ppaarrssee__rrcc
+       Parse the configuration file and set up variables.
+
+   ddllgg__ppooppeenn
+       Open  a  pipe  which  ties the standard error and output together.  The
+       ppooppeenn function captures only the standard output of a command.
+
+       ccoonnsstt cchhaarr **_c_o_m_m_a_n_d
+            The shell command to run.
+
+       ccoonnsstt cchhaarr **_t_y_p_e
+            Like ppooppeenn, "r" is used to read, and "w" is used to write.
+
+   ddllgg__pprreevv__bbuuttttoonn
+       Return the previous index in the list of labels.
+
+       ccoonnsstt cchhaarr **** _l_a_b_e_l_s
+            is a list of (pointers to) button  labels  terminated  by  a  null
+            pointer.
+
+       iinntt _b_u_t_t_o_n
+            is the current button index
+
+   ddllgg__pprriinntt__lliissttiitteemm
+       This  is  a  helper function used for the various “list” widgets, e.g.,
+       checklist, menu, buildlist, treeview.  Each list-widget has  “tag”  and
+       “description”  values  for  each  item which can be displayed.  If ddiiaa‐‐
+       lloogg__vvaarrss..nnoo__ttaaggss is true, the “tag” value  is  not  shown.   The  first
+       character  of the first value shown (tag or description) is highlighted
+       to indicate that the widget will match it for quick navigation.
+
+       WWIINNDDOOWW **_w_i_n
+            the window in which to display the text
+
+       ccoonnsstt cchhaarr **_t_e_x_t
+            the value to display
+
+       iinntt _c_l_i_m_i_t
+            the number of columns available for printing the text
+
+       bbooooll _f_i_r_s_t
+            true if this is the first call (for “tag” and “description”),  and
+            the first character of the value should be highlighted.
+
+       iinntt _s_e_l_e_c_t_e_d
+            nonzero  if the text should be displayed using the “selected” col‐
+            ors
+
+   ddllgg__pprriinntt__ssccrroolllleedd
+       This is a wrapper for  ddllgg__pprriinntt__aauuttoowwrraapp  which  allows  the  user  to
+       scroll too-long prompt text up/down.
+
+       See ddllgg__cchheecckk__ssccrroolllleedd for a function which updates the _o_f_f_s_e_t variable
+       used as a parameter here.  It complements this function; you need both.
+       If  _p_a_u_s_e_o_p_t  is  set, this function returns an updated _l_a_s_t parameter,
+       needed for ddllgg__cchheecckk__ssccrroolllleedd calls.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       ccoonnsstt cchhaarr ** _p_r_o_m_p_t
+            is the string to print
+
+       iinntt _o_f_f_s_e_t
+            is the starting line-number to write wrapped text.
+
+       iinntt _h_e_i_g_h_t
+            is the available height for writing the wrapped text
+
+       iinntt _w_i_d_t_h
+            is the width that the wrapping should occur in
+
+       iinntt _p_a_u_s_e_o_p_t
+            is true if the extra functionality for  scrolling  should  be  en‐
+            abled.   If false, this calls ddllgg__pprriinntt__aauuttoowwrraapp without doing any
+            scrolling.
+
+   ddllgg__pprriinntt__lliinnee
+       Print one line of the prompt in the window within  the  limits  of  the
+       specified  right  margin.   The  line will end on a word boundary and a
+       pointer to the start of the next line is returned, or a NULL pointer if
+       the end of *prompt is reached.
+
+       WWIINNDDOOWW **_w_i_n
+            is the window to update.
+
+       cchhttyyppee **_a_t_t_r
+            holds the starting attributes, and is updated to reflect the final
+            attributes applied to the string.
+
+       ccoonnsstt cchhaarr **_p_r_o_m_p_t
+            is the string to print
+
+       iinntt _l_m
+            is the left margin.
+
+       iinntt _r_m
+            is the right margin
+
+       iinntt **_x
+            returns the ending x-ordinate.
+
+   ddllgg__pprreevv__ookk__bbuuttttoonniinnddeexx
+       Find the previous button index in the list from ddllgg__ookk__llaabbeellss.
+
+       iinntt _c_u_r_r_e_n_t
+            is the current index
+
+       iinntt _e_x_t_r_a
+            if negative provides a way to enumerate extra active areas on  the
+            widget.
+
+   ddllgg__pprriinntt__aauuttoowwrraapp
+       Print  a  string  of text in a window, automatically wrap around to the
+       next line if the string is too long to fit on one line.  Note that  the
+       string  may contain embedded newlines.  The text is written starting at
+       the top of the window.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       ccoonnsstt cchhaarr ** _p_r_o_m_p_t
+            is the string to print
+
+       iinntt _h_e_i_g_h_t
+            is the nominal height the wrapped string is limited to
+
+       iinntt _w_i_d_t_h
+            is the width that the wrapping should occur in
+
+   ddllgg__pprriinntt__ssiizzee
+       If ddiiaalloogg__vvaarrss..pprriinntt__ssiizz is true, print the given height/width (from  a
+       widget) to ddiiaalloogg__ssttaattee..oouuttppuutt, e.g., SSiizzee:: hheeiigghhtt,, wwiiddtthh.
+
+       iinntt _h_e_i_g_h_t
+            is the window's height
+
+       iinntt _w_i_d_t_h
+            is the window's width
+
+   ddllgg__pprriinntt__tteexxtt
+       Print  up  to _c_o_l_s columns from tteexxtt, optionally rendering ddiiaalloogg's es‐
+       cape sequences for attributes and color.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window to update.
+
+       ccoonnsstt cchhaarr ** _t_x_t
+            is the string to print
+
+       iinntt _c_o_l
+            is the column limit
+
+       cchhttyyppee ** _a_t_t_r
+            holds the starting attributes, and is updated to reflect the final
+            attributes applied to the string.
+
+   ddllgg__pprrooggrreessssbbooxx
+       implements the "----pprrggbbooxx" and "----pprrooggrreessssbbooxx" options.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is  the prompt text shown within the widget.  If empty or null, no
+            prompt is shown.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _p_a_u_s_e_o_p_t
+            if true, an “OK” button will be shown, and the  dialog  will  wait
+            for  it  to  complete.  With an “OK” button, it is denoted a “pro‐
+            grambox”, without an “OK” button, it is denoted a “progressbox”.
+
+       FFIILLEE ** _f_p
+            is the file pointer, which may be a pipe or a regular file.
+
+   ddllgg__ppuutt__bbaacckkttiittllee
+       Display the background title if ddiiaalloogg__vvaarrss..bbaacckkttiittllee is non-null.  The
+       background title is shown at the top of the screen.
+
+   ddllgg__rreeaallllooccaattee__ggaauuggee
+       Allocates  or reallocates a gauge widget (see ddllgg__aallllooccaattee__ggaauuggee).  Use
+       ddllgg__uuppddaattee__ggaauuggee to display the result.
+
+       vvooiidd **** _o_b_j_p_t_r
+            If the pointer referenced by this parameter is null, the  function
+            creates  a  new gauge widget using ddllgg__aallllooccaattee__ggaauuggee.  Otherwise,
+            it updates the title and cprompt values, reusing the  window  from
+            the  previous  call on this function.  As a side-effect, the func‐
+            tion stores the updated object-pointer via the _o_b_j_p_t_r parameter.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title string to display at the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is adjusted
+            to use the available screen size.
+
+       iinntt _p_e_r_c_e_n_t
+            is the percentage to show in the progress bar.
+
+   ddllgg__rreeggiisstteerr__bbuuttttoonnss
+       The widget developer should call this function after  ddllgg__rreeggiisstteerr__wwiinn‐‐
+       ddooww, for the list of button labels associated with the widget.  One may
+       bind a key to a button, e.g., “OK” for DDLLGGKK__OOKK,
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window with which to associate the buttons
+
+       ccoonnsstt cchhaarr ** _n_a_m_e
+            is the widget's binding name (usually the name of the widget).
+
+       ccoonnsstt cchhaarr **** _b_u_t_t_o_n_s
+            is the list of buttons
+
+   ddllgg__rreeggiisstteerr__wwiinnddooww
+       For a given named widget's window, associate a binding table.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window with which to associate the buttons
+
+       ccoonnsstt cchhaarr ** _n_a_m_e
+            is the widget's binding name (usually the name of the widget).
+
+       DDLLGG__KKEEYYSS__BBIINNDDIINNGG ** _b_i_n_d_i_n_g
+            is the binding table
+
+   ddllgg__rreemmoovvee__ccaallllbbaacckk
+       Remove a callback.
+
+       DDIIAALLOOGG__CCAALLLLBBAACCKK ** _p
+            contains the callback information.
+
+   ddllgg__rreennaammeedd__mmeennuutteexxtt
+       This is a utility function which supports the ----iinnppuuttmmeennuu option of the
+       ddiiaalloogg  program.   If ddiiaalloogg__vvaarrss..iinnppuutt__mmeennuu is set, ddiiaalloogg__mmeennuu passes
+       this pointer to ddllgg__mmeennuu as the _r_e_n_a_m_e___m_e_n_u_t_e_x_t parameter.   Otherwise,
+       it passes ddllgg__dduummmmyy__mmeennuutteexxtt.
+
+       The  function  should  add “RENAMED” to ddiiaalloogg__vvaarrss..iinnppuutt__rreessuulltt , fol‐
+       lowed by the menu item's name and the _n_e_w_t_e_x_t value (with a space sepa‐
+       rating the three items), and return DDLLGG__EEXXIITT__EEXXTTRRAA.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            is the list of menu items
+
+       iinntt _c_u_r_r_e_n_t
+            is the index of the currently-selected item
+
+       cchhaarr ** _n_e_w_t_e_x_t
+            is the updated text for the menu item
+
+   ddllgg__rreesseett__ttiimmeeoouutt
+       Calls  wwttiimmeeoouutt  with  the value saved for a window in the last call to
+       ddllgg__sseett__ttiimmeeoouutt.
+
+   ddllgg__rreessttoorree__vvaarrss
+       Restore  ddiiaalloogg's  variables  from  the  given   variable   (see   ddiiaa‐‐
+       lloogg__ssaavvee__vvaarrss).
+
+       DDIIAALLOOGG__VVAARRSS ** _s_a_v_e
+            is the variable from which to restore.
+
+       The  _D_I_A_L_O_G___V_A_R_S_._i_n_p_u_t___l_e_n_g_t_h  and _D_I_A_L_O_G___V_A_R_S_._i_n_p_u_t___r_e_s_u_l_t members are
+       treated specially, since these are used by a widget to pass data to the
+       caller.  They are not modified by this function.
+
+   ddllgg__rreessuulltt__kkeeyy
+       Test  a  ddiiaalloogg internal keycode to see if it corresponds to one of the
+       push buttons on the widget such as “OK”.  This is only useful if  there
+       are  user-defined  key  bindings,  since there are no built-in bindings
+       that map directly to DDLLGGKK__OOKK, etc.  Return true if a mapping was done.
+
+       iinntt _d_i_a_l_o_g___k_e_y
+            is the ddiiaalloogg key to test
+
+       iinntt _f_k_e_y
+            is true if this is a function key
+
+       iinntt ** _r_e_s_u_l_t_p
+            store the result of the mapping in the referenced location.
+
+   ddllgg__ssaavvee__vvaarrss
+       Save ddiiaalloogg's variables into the given variable (see ddllgg__rreessttoorree__vvaarrss).
+
+       DDIIAALLOOGG__VVAARRSS ** _s_a_v_e
+            is the variable into which to save.
+
+   ddllgg__sseett__ffooccuuss
+       Set focus on the given window, making it display above other windows on
+       the screen.
+
+       WWIINNDDOOWW ** _p_a_r_e_n_t
+            is the parent window (usually the top-level window of a widget)
+
+       WWIINNDDOOWW ** _w_i_n
+            is  the  window  on which to place focus (usually a subwindow of a
+            widget)
+
+   ddllgg__sseett__rreessuulltt
+       Setup a fixed-buffer for the result in ddiiaalloogg__vvaarrss..iinnppuutt__rreessuulltt
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the new contents for the result
+
+   ddllgg__sseett__ttiimmeeoouutt
+       Calls wwttiimmeeoouutt to establish a preferred timeout for nonblocking  reads,
+       e.g.,  to allow the gauge widget to handle window-resizing events.  The
+       ddllgg__mmaayy__rreessiizzee function temporarily overrides this value, to  allow  it
+       to  skip  over  the error codes returned while the ncurses library pro‐
+       cesses window-resizing events.  It restores the  value  established  in
+       this call by calling ddllgg__rreessttoorree__ttiimmeeoouutt.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window whose input-timeout should be set
+
+       bbooooll _w_i_l_l___g_e_t_c
+            is  true  if  the  widget is expected to read keyboard characters.
+            Some (such as the gauge widget) do not.
+
+   ddllgg__sshhooww__ssttrriinngg
+       Displays the string, shifted as necessary, to fit within  the  box  and
+       show the current character-offset.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window within which to display
+
+       ccoonnsstt cchhaarr ** _s_t_r_i_n_g
+            is the string to display
+
+       iinntt _o_f_f_s_e_t
+            is the starting (character, not bytes) offset
+
+       cchhttyyppee _a_t_t_r
+            is the window attribute to use for the string
+
+       iinntt _y___b_a_s_e
+            beginning row on screen
+
+       iinntt _x___b_a_s_e
+            beginning column on screen
+
+       iinntt _x___l_a_s_t
+            number of columns on screen
+
+       bbooooll _h_i_d_d_e_n
+            if true, do not echo input
+
+       bbooooll _f_o_r_c_e
+            if true, force repaint
+
+   ddllgg__ssttrrcclloonnee
+       duplicate the string, like ssttrrdduupp.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the string to duplicate
+
+   ddllgg__ssttrrccmmpp
+       compare two strings, ignoring case.
+
+       ccoonnsstt cchhaarr ** _a
+            is one string
+
+       ccoonnsstt cchhaarr ** _b
+            is the other string
+
+   ddllgg__ssttrriinngg__ttoo__aarrggvv
+       Convert  a  string to an argument vector returning an index (which must
+       be freed by the caller).  The string is modified:
+
+       •   Blanks between arguments are replaced by nulls.
+
+       •   Normally arguments are separated by blanks; however you can double-
+           quote an argument to enclose blanks.  The surrounding double-quotes
+           are removed from the string.
+
+       •   A backslash preceding a double-quote within  double-quotes  is  re‐
+           moved.
+
+       •   A backslash preceding a newline outside double-quotes is removed.
+
+       •   Except for special cases, backslashes are preserved in the strings,
+           since other ddiiaalloogg functions interpret backslashes, e.g., for  col‐
+           ors.
+
+       cchhaarr **_b_l_o_b
+            is the string to convert.
+
+   ddllgg__ssuubb__wwiinnddooww
+       create a subwindow, e.g., for an input area of a widget
+
+       WWIINNDDOOWW ** _w_i_n
+            is the parent window
+
+       iinntt _h_e_i_g_h_t
+            is the subwindow's height
+
+       iinntt _w_i_d_t_h
+            is the subwindow's width
+
+       iinntt _y
+            is the subwindow's top-row
+
+       iinntt _x
+            is the subwindow's left-column
+
+   ddllgg__ttaabb__ccoorrrreecctt__ssttrr
+       If  the ddiiaalloogg__vvaarrss..ttaabb__ccoorrrreecctt is true, convert tabs to single spaces.
+       Return the converted result.  The caller is responsible for freeing the
+       string.
+
+       cchhaarr ** _p_r_o_m_p_t
+            is the string to convert
+
+   ddllgg__ttrraaccee
+       If  the  parameter  is  non-null, opens a trace file with that name and
+       stores the file pointer in ddiiaalloogg__ssttaattee..ttrraaccee.
+
+   ddllgg__ttrraaccee__22nn
+       logs a numeric value as a comment.
+
+       cchhaarr ** _n_a_m_e
+            is the name to log in the comment.
+
+       iinntt _v_a_l_u_e
+            is the value to log in the comment.
+
+   ddllgg__ttrraaccee__22ss
+       logs a string value as a comment.  If the value contains embedded  new‐
+       lines, the comment is continued with “#+” markers.
+
+       cchhaarr ** _n_a_m_e
+            is the name to log in the comment.
+
+       iinntt _v_a_l_u_e
+            is the value to log in the comment.
+
+   ddllgg__ttrraaccee__cchhrr
+       If ddiiaalloogg__ssttaattee..ttrraaccee is set, translate the parameters into a printable
+       representation, log it on a “chr” line.
+
+       iinntt _c_h
+            is the nominal keycode value.
+
+       iinntt _f_k_e_y
+            is nonzero if the value is really a function key.  Some  of  these
+            may be values declared in the DLG_KEYS_ENUM.
+
+   ddllgg__ttrraaccee__mmssgg
+       Write a formatted message to the trace file.
+
+       ccoonnsstt cchhaarr ** _f_m_t
+            is the format of the pprriinnttff-like message to write.
+
+       ......
+            are the variables to apply to the _f_m_t format.
+
+       Use  the  DLG_TRACE macro for portability, in case the trace feature is
+       not compiled into the library.  It uses an extra level  of  parentheses
+       to work with a variable number of parameters, e.g.,
+
+              DLG_TRACE(("this is dialog version %s\n", dialog_version()));
+
+   ddllgg__ttrraaccee__vvaa__mmssgg
+       Write a formatted message to the trace file.
+
+       ccoonnsstt cchhaarr **_f_m_t
+            is the format of the pprriinnttff-like message to write.
+
+       vvaa__lliisstt _a_p
+            are the variables to apply to the _f_m_t format.
+
+       This  is  used  in  ddllgg__eexxiitteerrrr  to capture error messages in the trace
+       file:
+
+              va_start(ap, fmt);
+              dlg_trace_msg("## Error: ");
+              dlg_trace_va_msg(fmt, ap);
+              va_end(ap);
+
+       Unlike ddllgg__ttrraaccee__mmssgg, an extra macro is not needed.
+
+   ddllgg__ttttyyssiizzee
+       Returns the screensize without using curses.  That allows the  function
+       to be used before initializing the screen.
+
+   ddllgg__ttrraaccee__wwiinn
+       If ddiiaalloogg__ssttaattee..ttrraaccee is set, log a printable picture of the given win‐
+       dow.
+
+   ddllgg__ttrreeeevviieeww
+       This is an alternate interface to 'treeview' which allows the  applica‐
+       tion to read the list item states back directly without putting them in
+       the output buffer.
+
+       ccoonnsstt cchhaarr ** _t_i_t_l_e
+            is the title on the top of the widget.
+
+       ccoonnsstt cchhaarr ** _c_p_r_o_m_p_t
+            is the prompt text shown within the widget.
+
+       iinntt _h_e_i_g_h_t
+            is the desired height of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _w_i_d_t_h
+            is  the desired width of the box.  If zero, the height is based on
+            the screen size.
+
+       iinntt _l_i_s_t___h_e_i_g_h_t
+            is the minimum height to reserve  for  displaying  the  list.   If
+            zero, it is computed based on the given _h_e_i_g_h_t and _w_i_d_t_h.
+
+       iinntt _i_t_e_m___n_o
+            is the number of rows in _i_t_e_m_s.
+
+       DDIIAALLOOGG__LLIISSTTIITTEEMM ** _i_t_e_m_s
+            is  the  list  of  items,  contain  tag, name, and optionally help
+            strings (if ddiiaalloogg__vvaarrss..iitteemm__hheellpp is set).  The initial  selection
+            state for each item is also in this list.
+
+       ccoonnsstt cchhaarr ** _s_t_a_t_e_s
+            This  is  a  list  of  characters to display for the given states.
+            Normally a buildlist provides true (1) and false (0) values, which
+            the  widget  displays as "*" and space, respectively.  An applica‐
+            tion may  set  this  parameter  to  an  arbitrary  null-terminated
+            string.   The  widget  determines  the  number  of states from the
+            length of this string, and will cycle  through  the  corresponding
+            display characters as the user presses the space-bar.
+
+       iinntt ** _d_e_p_t_h_s
+            This  is a list of depths of each item in the tree.  It is a sepa‐
+            rate parameter from _i_t_e_m_s to allow reuse  of  the  existing  func‐
+            tions.
+
+       iinntt _f_l_a_g
+            is  either  _F_L_A_G___C_H_E_C_K,  for  checklists (multiple selections), or
+            _F_L_A_G___R_A_D_I_O for radiolists (a single selection).
+
+       iinntt ** _c_u_r_r_e_n_t___i_t_e_m
+            The widget sets the referenced location to the index of  the  cur‐
+            rent display item (cursor) when it returns.
+
+   ddllgg__ttrriimm__ssttrriinngg
+       The  ddiiaalloogg  program  uses  this  in  each widget to adjust the message
+       string, which may contain the newline character (referred to  as  '\n')
+       and/or  the special substring "\n" (which can be translated into a new‐
+       line character).
+
+       There are several optional features:
+
+       •   Unless ddiiaalloogg__vvaarrss..nnooccoollllaappssee is set, each tab is  converted  to  a
+           space before other processing.
+
+       •   If  ddiiaalloogg__vvaarrss..nnoo__nnll__eexxppaanndd  is  not  set, and the string has "\n"
+           substrings:
+
+           •   The function changes embedded "\n" substrings to  '\n'  charac‐
+               ters.
+
+               The  function preserves extra spaces after these substitutions.
+               For instance, spaces following a newline (substring or  charac‐
+               ter) are preserved to use as an indentation.
+
+           •   If ddiiaalloogg__vvaarrss..ccrr__wwrraapp is set, the function preserves '\n' new‐
+               line characters.  Otherwise, each  '\n'  newline  character  is
+               converted to a space.
+
+       •   Otherwise, if ddiiaalloogg__vvaarrss..ttrriimm__wwhhiitteessppaaccee is set:
+
+           •   This  function  strips  all extra spaces to simplify justifica‐
+               tion.
+
+           •   If ddiiaalloogg__vvaarrss..ccrr__wwrraapp is set, the function preserves '\n' new‐
+               line  characters.   Otherwise,  each  '\n' newline character is
+               converted to a space.
+
+       •   Finally (if ddiiaalloogg__vvaarrss..nnoo__nnll__eexxppaanndd is set, or the string does not
+           contain  "\n"  substrings,  and  ddiiaalloogg__vvaarrss..ttrriimm__wwhhiitteessppaaccee is not
+           set):
+
+           •   Unless ddiiaalloogg__vvaarrss..nnooccoollllaappssee is set, sequences of  spaces  are
+               reduced to a single space.
+
+       cchhaarr ** _s_r_c
+            is the string to trim
+
+   ddllgg__uunnrreeggiisstteerr__wwiinnddooww
+       Remove the bindings for a given window.
+
+       WWIINNDDOOWW ** _w_i_n
+            is the window from which to remove bindings
+
+   ddllgg__uuppddaattee__ggaauuggee
+       Update a gauge widget to show a different percentage value.
+
+       vvooiidd **_o_b_j_p_t_r
+            points to the gauge object to update.
+
+       iinntt _p_e_r_c_e_n_t
+            is the new percentage value to display.
+
+   ddllgg__wwiillll__rreessiizzee
+       This filters out bursts of KKEEYY__RREESSIIZZEE values.  Call this after ddllgg__ggeettcc
+       returns KKEEYY__RREESSIIZZEE, to improve performance.
+
+   ddllgg__yyeess__bbuuttttoonnccooddee
+       Map the given button index for ddllgg__yyeess__llaabbeellss into ddiiaalloogg's exit-code.
+
+       iinntt _b_u_t_t_o_n
+            is the button index
+
+   ddllgg__yyeess__llaabbeellss
+       Return a list of buttons for Yes/No labels.
+
+   eenndd__ddiiaalloogg
+       End use of ddiiaalloogg functions.
+
+   iinniitt__ddiiaalloogg
+       Do some initialization for ddiiaalloogg.
+
+       FFIILLEE **_i_n_p_u_t
+            is the real tty input of ddiiaalloogg.  Usually it is the  standard  in‐
+            put, but if ----iinnppuutt--ffdd option is used, it may be anything.
+
+       FFIILLEE **_o_u_t_p_u_t
+            is  where ddiiaalloogg will send its result.  Usually it is the standard
+            error, but if ----ssttddoouutt or ----oouuttppuutt--ffdd is used, it may be anything.
+
+SSEEEE AALLSSOO
+       ddiiaalloogg (1).
+
+AAUUTTHHOORR
+       Thomas E. Dickey
+
+
+
+$Date: 2021/01/17 18:02:44 $                                         DIALOG(3)

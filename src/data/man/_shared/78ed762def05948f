@@ -1,0 +1,241 @@
+IAVF(4)                  BSD Kernel Interfaces Manual                  IAVF(4)
+
+NNAAMMEE
+     iiaavvff — Intel Ethernet Adaptive Virtual Function Driver
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following lines in your
+     kernel configuration file:
+
+           ddeevviiccee iifflliibb
+           ddeevviiccee iiaavvff
+
+     To load the driver as a module at boot time, place the following lines in
+     loader.conf(5):
+
+           if_iavf_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The iiaavvff driver provides support for any PCI Virtual Function created
+     from certain Intel Ethernet devices.  This driver is compatible with vir‐
+     tual functions bound to devices based on the following:
+
+     ••   Intel® Ethernet Controller E810-C
+     ••   Intel® Ethernet Controller E810-XXV
+     ••   Intel® Ethernet Connection E822-C
+     ••   Intel® Ethernet Connection E822-L
+     ••   Intel® Ethernet Connection E823-C
+     ••   Intel® Ethernet Connection E823-L
+     ••   Intel® Ethernet Controller I710
+     ••   Intel® Ethernet Controller X710
+     ••   Intel® Ethernet Controller XL710
+     ••   Intel® Ethernet Network Connection X722
+     ••   Intel® Ethernet Controller XXV710
+     ••   Intel® Ethernet Controller V710
+
+     The associated Physical Function (PF) drivers for this VF driver are:
+
+     ••   ice(4)
+     ••   ixl(4)
+
+     For questions related to hardware requirements, refer to the documenta‐
+     tion supplied with your Intel Ethernet Adapter.  All hardware require‐
+     ments listed apply to use with FreeBSD.
+
+   TThhee VVFF DDrriivveerr
+     The VF driver is normally used in a virtualized environment where a host
+     driver manages SR-IOV, and provides a VF device to the guest.
+
+     In the FreeBSD guest, the iavf driver would be loaded and will function
+     using the VF device assigned to it.
+
+     The VF driver provides most of the same functionality as the core driver,
+     but is actually a subordinate to the host.  Access to many controls is
+     accomplished by a request to the host via what is called the "Admin
+     queue."  These are startup and initialization events, however; once in
+     operation, the device is self-contained and should achieve near native
+     performance.
+
+     Some notable limitations of the VF environment:
+
+     ••   The PF can configure the VF to allow promiscuous mode, using a con‐
+         figuration parameter in iovctl.conf(5); otherwise, promiscuous mode
+         will not work
+
+     ••   Media info is not available from the PF, so the active media will al‐
+         ways be displayed as auto in ifconfig(8)
+
+   AAddaappttiivvee VViirrttuuaall FFuunnccttiioonn
+     Adaptive Virtual Function (AVF) allows the virtual function driver, or
+     VF, to adapt to changing feature sets of the physical function driver
+     (PF) with which it is associated.  This allows system administrators to
+     update a PF without having to update all the VFs associated with it.  All
+     AVFs have a single common device ID and branding string.
+
+     AVFs have a minimum set of features known as "base mode," but may provide
+     additional features depending on what features are available in the PF
+     with which the AVF is associated.  The following are base mode features:
+     ••   4 Queue Pairs (QP) and associated Configuration Status Registers
+         (CSRs) for Tx/Rx
+     ••   iavf descriptors and ring format
+     ••   Descriptor write-back completion
+     ••   1 control queue, with iavf descriptors, CSRs and ring format
+     ••   5 MSI-X interrupt vectors and corresponding iavf CSRs
+     ••   1 Interrupt Throttle Rate (ITR) index
+     ••   1 Virtual Station Interface (VSI) per VF
+     ••   1 Traffic Class (TC), TC0
+     ••   Receive Side Scaling (RSS) with 64 entry indirection table and key,
+         configured through the PF
+     ••   1 unicast MAC address reserved per VF
+     ••   8 MAC address filters for each VF on an Intel® Ethernet 800 Series
+         device
+     ••   16 MAC address filters for each VF on an Intel® Ethernet 700 Series
+         device
+     ••   Stateless offloads - non-tunneled checksums
+     ••   AVF device ID
+     ••   HW mailbox is used for VF to PF communications
+
+CCOONNFFIIGGUURRAATTIIOONN AANNDD TTUUNNIINNGG
+   IImmppoorrttaanntt SSyysstteemm CCoonnffiigguurraattiioonn CChhaannggeess
+     It is important to note that 100G operation can generate high numbers of
+     interrupts, often incorrectly being interpreted as a storm condition in
+     the kernel.  It is suggested that this be resolved by setting
+     _h_w_._i_n_t_r___s_t_o_r_m___t_h_r_e_s_h_o_l_d to 0.
+
+     The default is 1000.
+
+     Best throughput results are seen with a large MTU; use 9706 if possible.
+     The default number of descriptors per ring is 1024.  Increasing this may
+     improve performance, depending on your use case.
+
+   CCoonnffiigguurriinngg ffoorr nnoo iifflliibb
+     iflib(4) is a common framework for network interface drivers for FreeBSD
+     that uses a shared set of sysctl names.
+
+     The default iiaavvff driver depends on it, but it can be compiled without it.
+
+   JJuummbboo FFrraammeess
+     Jumbo Frames support is enabled by changing the Maximum Transmission Unit
+     (MTU) to a value larger than the default value of 1500.
+
+     Use the ifconfig(8) command to increase the MTU size.
+
+     To confirm the MTU used between two specific devices, use route(8):
+
+           route get <destination_IP_address>
+
+     NOTE:
+
+     ••   The maximum MTU setting for jumbo frames is 9706.  This corresponds
+         to the maximum jumbo frame size of 9728 bytes.
+
+     ••   This driver will attempt to use multiple page-sized buffers to re‐
+         ceive each jumbo packet.  This should help to avoid buffer starvation
+         issues when allocating receive packets.
+
+     ••   Packet loss may have a greater impact on throughput when you use
+         jumbo frames.  If you observe a drop in performance after enabling
+         jumbo frames, enabling flow control may mitigate the issue.
+
+   CChheecckkssuumm OOffffllooaadd
+     Checksum offloading supports both TCP and UDP packets and is supported
+     for both transmit and receive.
+
+     TSO (TCP Segmentation Offload) supports both IPv4 and IPv6.  Both of
+     these features are enabled and disabled via ifconfig(8).
+
+     NOTE:
+     ••   TSO requires Tx checksum; if Tx checksum is disabled then TSO will
+         also be disabled.
+
+   LLRROO
+     LRO (Large Receive Offload) may provide Rx performance improvement.  How‐
+     ever, it is incompatible with packet-forwarding workloads.  You should
+     carefully evaluate the environment and enable LRO when possible.
+
+   RRxx aanndd TTxx DDeessccrriippttoorr RRiinnggss
+     Allows you to set the Rx and Tx descriptor rings independently.  Set them
+     via these iflib(4) sysctls:
+
+     dev.iavf.#.iflib.override_nrxds
+
+     dev.iavf.#.iflib.override_ntxds
+
+   LLiinnkk--LLeevveell FFllooww CCoonnttrrooll ((LLFFCC))
+     The VF driver does not have access to flow control settings.  It must be
+     managed from the host side.
+
+SSEEEE AALLSSOO
+     arp(4), ice(4), iflib(4), ixl(4), netintro(4), vlan(4), ifconfig(8)
+
+     See the “Intel® Ethernet Adapters and Devices User Guide” for additional
+     information on features.  It is available on the Intel website at either
+     of the following:
+
+     ••   hhttttppss::////ccddrrddvv22..iinntteell..ccoomm//vv11//ddll//ggeettCCoonntteenntt//770055883311
+
+     ••   hhttttppss::////wwwwww..iinntteell..ccoomm//ccoonntteenntt//wwwwww//uuss//eenn//ddoowwnnllooaadd//1199337733//aaddaapptteerr--uusseerr--gguuiiddee--ffoorr--iinntteell--eetthheerrnneett--aaddaapptteerrss..hhttmmll
+
+     For information on how to identify your adapter, and for the latest Intel
+     network drivers, refer to the Intel Support website:
+     ⟨hhttttpp::////wwwwww..iinntteell..ccoomm//ssuuppppoorrtt⟩
+
+CCAAVVEEAATTSS
+   DDrriivveerr BBuuffffeerr OOvveerrffllooww FFiixx
+     The fix to resolve CVE-2016-8105, referenced in Intel SA-00069
+     ⟨hhttttppss::////wwwwww..iinntteell..ccoomm//ccoonntteenntt//wwwwww//uuss//eenn//sseeccuurriittyy--cceenntteerr//aaddvviissoorryy//iinntteell--ssaa--0000006699..hhttmmll⟩,
+     is included in this and future versions of the driver.
+
+   NNeettwwoorrkk MMeemmoorryy BBuuffffeerr AAllllooccaattiioonn
+     FreeBSD may have a low number of network memory buffers (mbufs) by de‐
+     fault.  If your mbuf value is too low, it may cause the driver to fail to
+     initialize and/or cause the system to become unresponsive.  You can check
+     to see if the system is mbuf-starved by running netstat -m.  Increase the
+     number of mbufs by editing the lines below in sysctl.conf(5):
+
+           kern.ipc.nmbclusters
+           kern.ipc.nmbjumbop
+           kern.ipc.nmbjumbo9
+           kern.ipc.nmbjumbo16
+           kern.ipc.nmbufs
+
+     The amount of memory that you allocate is system specific, and may re‐
+     quire some trial and error.  Also, increasing the following in
+     sysctl.conf(5) could help increase network performance:
+
+           kern.ipc.maxsockbuf
+           net.inet.tcp.sendspace
+           net.inet.tcp.recvspace
+           net.inet.udp.maxdgram
+           net.inet.udp.recvspace
+
+   UUDDPP SSttrreessss TTeesstt DDrrooppppeedd PPaacckkeett IIssssuuee
+     Under small packet UDP stress with the iiaavvff driver, the system may drop
+     UDP packets due to socket buffers being full.  Setting the PF driver's
+     Flow Control variables to the minimum may resolve the issue.
+
+   DDiissaabbllee LLRROO wwhheenn rroouuttiinngg//bbrriiddggiinngg
+     LRO must be turned off when forwarding traffic.
+
+SSUUPPPPOORRTT
+     For general information, go to the Intel support website at
+     ⟨hhttttpp::////wwwwww..iinntteell..ccoomm//ssuuppppoorrtt//⟩.
+
+     If an issue is identified with the released source code on a supported
+     kernel with a supported adapter, email the specific information related
+     to the issue to ⟨_f_r_e_e_b_s_d_@_i_n_t_e_l_._c_o_m⟩.
+
+LLEEGGAALL
+     Intel® is a trademark or registered trademark of Intel Corporation or its
+     subsidiaries in the United States and / or other countries.
+
+     Other names and brands may be claimed as the property of others.
+
+HHIISSTTOORRYY
+     The iiaavvff device driver first appeared in FreeBSD 10.1 under the name
+     iixxllvv.  It was converted to use iflib(4) and renamed in FreeBSD 12.4.
+
+AAUUTTHHOORRSS
+     The iiaavvff driver was written by the Intel Corporation <_f_r_e_e_b_s_d_@_i_n_t_e_l_._c_o_m>
+
+BSD                              May 21, 2024                              BSD

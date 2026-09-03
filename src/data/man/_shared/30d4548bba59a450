@@ -1,0 +1,192 @@
+KPROC(9)                 BSD Kernel Developer's Manual                KPROC(9)
+
+NNAAMMEE
+     kkpprroocc__ssttaarrtt, kkpprroocc__sshhuuttddoowwnn, kkpprroocc__ccrreeaattee, kkpprroocc__eexxiitt, kkpprroocc__rreessuummee,
+     kkpprroocc__ssuussppeenndd, kkpprroocc__ssuussppeenndd__cchheecckk — kernel processes
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//kktthhrreeaadd..hh>>
+
+     _v_o_i_d
+     kkpprroocc__ssttaarrtt(_c_o_n_s_t _v_o_i_d _*_u_d_a_t_a);
+
+     _v_o_i_d
+     kkpprroocc__sshhuuttddoowwnn(_v_o_i_d _*_a_r_g, _i_n_t _h_o_w_t_o);
+
+     _i_n_t
+     kkpprroocc__ccrreeaattee(_v_o_i_d _(_*_f_u_n_c_)_(_v_o_i_d _*_), _v_o_i_d _*_a_r_g, _s_t_r_u_c_t _p_r_o_c _*_*_n_e_w_p_p,
+         _i_n_t _f_l_a_g_s, _i_n_t _p_a_g_e_s, _c_o_n_s_t _c_h_a_r _*_f_m_t, _._._.);
+
+     _v_o_i_d
+     kkpprroocc__eexxiitt(_i_n_t _e_c_o_d_e);
+
+     _i_n_t
+     kkpprroocc__rreessuummee(_s_t_r_u_c_t _p_r_o_c _*_p);
+
+     _i_n_t
+     kkpprroocc__ssuussppeenndd(_s_t_r_u_c_t _p_r_o_c _*_p, _i_n_t _t_i_m_o);
+
+     _v_o_i_d
+     kkpprroocc__ssuussppeenndd__cchheecckk(_s_t_r_u_c_t _p_r_o_c _*_p);
+
+     _i_n_t
+     kkpprroocc__kktthhrreeaadd__aadddd(_v_o_i_d _(_*_f_u_n_c_)_(_v_o_i_d _*_), _v_o_i_d _*_a_r_g, _s_t_r_u_c_t _p_r_o_c _*_*_p_r_o_c_p_t_r,
+         _s_t_r_u_c_t _t_h_r_e_a_d _*_*_t_d_p_t_r, _i_n_t _f_l_a_g_s, _i_n_t _p_a_g_e_s, _c_h_a_r _* _p_r_o_c_n_a_m_e,
+         _c_o_n_s_t _c_h_a_r _*_f_m_t, _._._.);
+
+DDEESSCCRRIIPPTTIIOONN
+     In FreeBSD 8.0, the kktthhrreeaadd**(_9) family of functions was renamed to be the
+     kkpprroocc**(_9) family of functions, as they were misnamed and actually pro‐
+     duced kernel processes.  A new family of _d_i_f_f_e_r_e_n_t kktthhrreeaadd__**(_9) functions
+     was added to produce _r_e_a_l kernel _t_h_r_e_a_d_s.  See the kthread(9) man page
+     for more information on those calls.  Also note that the
+     kkpprroocc__kktthhrreeaadd__aadddd(_9) function appears in both pages as its functionality
+     is split.
+
+     The function kkpprroocc__ssttaarrtt() is used to start “internal” daemons such as
+     bbuuffddaaeemmoonn, ppaaggeeddaaeemmoonn, vvmmddaaeemmoonn, and the ssyynncceerr and is intended to be
+     called from SYSINIT(9).  The _u_d_a_t_a argument is actually a pointer to a
+     _s_t_r_u_c_t _k_p_r_o_c___d_e_s_c which describes the kernel process that should be cre‐
+     ated:
+
+           struct kproc_desc {
+                   char            *arg0;
+                   void            (*func)(void);
+                   struct proc     **global_procpp;
+           };
+
+     The structure members are used by kkpprroocc__ssttaarrtt() as follows:
+
+           _a_r_g_0           String to be used for the name of the process.  This
+                          string will be copied into the _p___c_o_m_m member of the
+                          new process' _s_t_r_u_c_t _p_r_o_c.
+
+           _f_u_n_c           The main function for this kernel process to run.
+
+           _g_l_o_b_a_l___p_r_o_c_p_p  A pointer to a _s_t_r_u_c_t _p_r_o_c pointer that should be
+                          updated to point to the newly created process'
+                          process structure.  If this variable is NULL, then
+                          it is ignored.
+
+     The kkpprroocc__ccrreeaattee() function is used to create a kernel process.  The new
+     process shares its address space with process 0, the sswwaappppeerr process, and
+     runs in kernel mode only.  The _f_u_n_c argument specifies the function that
+     the process should execute.  The _a_r_g argument is an arbitrary pointer
+     that is passed in as the only argument to _f_u_n_c when it is called by the
+     new process.  The _n_e_w_p_p pointer points to a _s_t_r_u_c_t _p_r_o_c pointer that is
+     to be updated to point to the newly created process.  If this argument is
+     NULL, then it is ignored.  The _f_l_a_g_s argument specifies a set of flags as
+     described in rfork(2).  The _p_a_g_e_s argument specifies the size of the new
+     kernel process's stack in pages.  If 0 is used, the default kernel stack
+     size is allocated.  The rest of the arguments form a printf(9) argument
+     list that is used to build the name of the new process and is stored in
+     the _p___c_o_m_m member of the new process's _s_t_r_u_c_t _p_r_o_c.
+
+     The kkpprroocc__eexxiitt() function is used to terminate kernel processes.  It
+     should be called by the main function of the kernel process rather than
+     letting the main function return to its caller.  The _e_c_o_d_e argument spec‐
+     ifies the exit status of the process.  While exiting, the function
+     exit1(9) will initiate a call to wakeup(9) on the process handle.
+
+     The kkpprroocc__rreessuummee(), kkpprroocc__ssuussppeenndd(), and kkpprroocc__ssuussppeenndd__cchheecckk() functions
+     are used to suspend and resume a kernel process.  During the main loop of
+     its execution, a kernel process that wishes to allow itself to be sus‐
+     pended should call kkpprroocc__ssuussppeenndd__cchheecckk() passing in _c_u_r_p_r_o_c as the only
+     argument.  This function checks to see if the kernel process has been
+     asked to suspend.  If it has, it will tsleep(9) until it is told to re‐
+     sume.  Once it has been told to resume it will return allowing execution
+     of the kernel process to continue.  The other two functions are used to
+     notify a kernel process of a suspend or resume request.  The _p argument
+     points to the _s_t_r_u_c_t _p_r_o_c of the kernel process to suspend or resume.
+     For kkpprroocc__ssuussppeenndd(), the _t_i_m_o argument specifies a timeout to wait for
+     the kernel process to acknowledge the suspend request and suspend itself.
+
+     The kkpprroocc__sshhuuttddoowwnn() function is meant to be registered as a shutdown
+     event for kernel processes that need to be suspended voluntarily during
+     system shutdown so as not to interfere with system shutdown activities.
+     The actual suspension of the kernel process is done with kkpprroocc__ssuussppeenndd().
+
+     The kkpprroocc__kktthhrreeaadd__aadddd() function is much like the kkpprroocc__ccrreeaattee() function
+     above except that if the kproc already exists, then only a new thread
+     (see kthread(9)) is created on the existing process.  The _f_u_n_c argument
+     specifies the function that the process should execute.  The _a_r_g argument
+     is an arbitrary pointer that is passed in as the only argument to _f_u_n_c
+     when it is called by the new process.  The _p_r_o_c_p_t_r pointer points to a
+     _s_t_r_u_c_t _p_r_o_c pointer that is the location to be updated with the new proc
+     pointer if a new process is created, or if not NULL, must contain the
+     process pointer for the already existing process.  If this argument
+     points to NULL, then a new process is created and the field updated.  If
+     not NULL, the _t_d_p_t_r pointer points to a _s_t_r_u_c_t _t_h_r_e_a_d pointer that is the
+     location to be updated with the new thread pointer.  The _f_l_a_g_s argument
+     specifies a set of flags as described in rfork(2).  The _p_a_g_e_s argument
+     specifies the size of the new kernel thread's stack in pages.  If 0 is
+     used, the default kernel stack size is allocated.  The procname argument
+     is the name the new process should be given if it needs to be created.
+     It is _N_O_T a printf style format specifier but a simple string.  The rest
+     of the arguments form a printf(9) argument list that is used to build the
+     name of the new thread and is stored in the _t_d___n_a_m_e member of the new
+     thread's _s_t_r_u_c_t _t_h_r_e_a_d.
+
+RREETTUURRNN VVAALLUUEESS
+     The kkpprroocc__ccrreeaattee(), kkpprroocc__rreessuummee(), and kkpprroocc__ssuussppeenndd() functions return
+     zero on success and non-zero on failure.
+
+EEXXAAMMPPLLEESS
+     This example demonstrates the use of a _s_t_r_u_c_t _k_p_r_o_c___d_e_s_c and the func‐
+     tions kkpprroocc__ssttaarrtt(), kkpprroocc__sshhuuttddoowwnn(), and kkpprroocc__ssuussppeenndd__cchheecckk() to run
+     the bbuuffddaaeemmoonn process.
+
+           static struct proc *bufdaemonproc;
+
+           static struct kproc_desc buf_kp = {
+                   "bufdaemon",
+                   buf_daemon,
+                   &bufdaemonproc
+           };
+           SYSINIT(bufdaemon, SI_SUB_KTHREAD_BUF, SI_ORDER_FIRST, kproc_start,
+               &buf_kp)
+
+           static void
+           buf_daemon()
+           {
+                   ...
+                   /*
+                    * This process needs to be suspended prior to shutdown sync.
+                    */
+                   EVENTHANDLER_REGISTER(shutdown_pre_sync, kproc_shutdown,
+                       bufdaemonproc, SHUTDOWN_PRI_LAST);
+                   ...
+                   for (;;) {
+                           kproc_suspend_check(bufdaemonproc);
+                           ...
+                   }
+           }
+
+EERRRROORRSS
+     The kkpprroocc__rreessuummee() and kkpprroocc__ssuussppeenndd() functions will fail if:
+
+     [EINVAL]           The _p argument does not reference a kernel process.
+
+     The kkpprroocc__ccrreeaattee() function will fail if:
+
+     [EAGAIN]           The system-imposed limit on the total number of pro‐
+                        cesses under execution would be exceeded.  The limit
+                        is given by the sysctl(3) MIB variable KERN_MAXPROC.
+
+     [EINVAL]           The RFCFDG flag was specified in the _f_l_a_g_s parameter.
+
+SSEEEE AALLSSOO
+     rfork(2), exit1(9), kthread(9), SYSINIT(9), wakeup(9)
+
+HHIISSTTOORRYY
+     The kkpprroocc__ssttaarrtt() function first appeared in FreeBSD 2.2.  The
+     kkpprroocc__sshhuuttddoowwnn(), kkpprroocc__ccrreeaattee(), kkpprroocc__eexxiitt(), kkpprroocc__rreessuummee(),
+     kkpprroocc__ssuussppeenndd(), and kkpprroocc__ssuussppeenndd__cchheecckk() functions were introduced in
+     FreeBSD 4.0.  Prior to FreeBSD 5.0, the kkpprroocc__sshhuuttddoowwnn(), kkpprroocc__rreessuummee(),
+     kkpprroocc__ssuussppeenndd(), and kkpprroocc__ssuussppeenndd__cchheecckk() functions were named
+     sshhuuttddoowwnn__kkpprroocc(), rreessuummee__kkpprroocc(), sshhuuttddoowwnn__kkpprroocc(), and
+     kkpprroocc__ssuussppeenndd__lloooopp(), respectively.  Originally they had the names
+     kktthhrreeaadd__**() but were changed to kkpprroocc__**() when real kthreads became
+     available.
+
+BSD                            October 19, 2007                            BSD

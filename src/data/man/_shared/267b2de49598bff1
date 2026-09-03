@@ -1,0 +1,509 @@
+LOADER_SIMP(8)            BSD System Manager's Manual           LOADER_SIMP(8)
+
+NNAAMMEE
+     llooaaddeerr__ssiimmpp — kernel bootstrapping final stage
+
+DDEESSCCRRIIPPTTIIOONN
+     The program called llooaaddeerr__ssiimmpp is the final stage of FreeBSD's kernel
+     bootstrapping process.  On IA32 (i386) architectures, it is a _B_T_X client.
+     It is linked statically to libsa(3) and usually located in the directory
+     _/_b_o_o_t.
+
+     It provides a scripting language that can be used to automate tasks, do
+     pre-configuration or assist in recovery procedures.  This scripting lan‐
+     guage is roughly divided in two main components.  The smaller one is a
+     set of commands designed for direct use by the casual user, called
+     "builtin commands" for historical reasons.  The main drive behind these
+     commands is user-friendliness.
+
+     During initialization, llooaaddeerr__ssiimmpp will probe for a console and set the
+     _c_o_n_s_o_l_e variable, or set it to serial console (“comconsole”) if the pre‐
+     vious boot stage used that.  If multiple consoles are selected, they will
+     be listed separated by spaces.  Then, devices are probed, _c_u_r_r_d_e_v and
+     _l_o_a_d_d_e_v are set, and _L_I_N_E_S is set to 24.  After that, _/_b_o_o_t_/_l_o_a_d_e_r_._r_c is
+     processed if available.  These files are processed through the iinncclluuddee
+     command, which reads all of them into memory before processing them, mak‐
+     ing disk changes possible.
+
+     At this point, if an aauuttoobboooott has not been tried, and if _a_u_t_o_b_o_o_t___d_e_l_a_y
+     is not set to “NO” (not case sensitive), then an aauuttoobboooott will be tried.
+     If the system gets past this point, _p_r_o_m_p_t will be set and llooaaddeerr__ssiimmpp
+     will engage interactive mode.  Please note that historically even when
+     _a_u_t_o_b_o_o_t___d_e_l_a_y is set to “0” user will be able to interrupt autoboot
+     process by pressing some key on the console while kernel and modules are
+     being loaded.  In some cases such behaviour may be undesirable, to pre‐
+     vent it set _a_u_t_o_b_o_o_t___d_e_l_a_y to “-1”, in this case llooaaddeerr__ssiimmpp will engage
+     interactive mode only if aauuttoobboooott has failed.
+
+BBUUIILLTTIINN CCOOMMMMAANNDDSS
+     In llooaaddeerr__ssiimmpp, builtin commands take parameters from the command line.
+     Presently, the only way to call them from a script is by using _e_v_a_l_u_a_t_e
+     on a string.  In the case of an error, an error message will be displayed
+     and the interpreter's state will be reset, emptying the stack and restor‐
+     ing interpreting mode.
+
+     The builtin commands available are:
+
+     aauuttoobboooott [_s_e_c_o_n_d_s [_p_r_o_m_p_t]]
+             Proceeds to bootstrap the system after a number of seconds, if
+             not interrupted by the user.  Displays a countdown prompt warning
+             the user the system is about to be booted, unless interrupted by
+             a key press.  The kernel will be loaded first if necessary.  De‐
+             faults to 10 seconds.
+
+     bbccaacchheessttaatt
+             Displays statistics about disk cache usage.  For debugging only.
+
+     bboooott
+     bboooott _k_e_r_n_e_l_n_a_m_e [......]
+     bboooott --ffllaagg ......
+             Immediately proceeds to bootstrap the system, loading the kernel
+             if necessary.  Any flags or arguments are passed to the kernel,
+             but they must precede the kernel name, if a kernel name is pro‐
+             vided.
+
+     eecchhoo [--nn] [⟨message⟩]
+             Displays text on the screen.  A new line will be printed unless
+             --nn is specified.
+
+     hheeaapp    Displays memory usage statistics.  For debugging purposes only.
+
+     hheellpp [topic [subtopic]]
+             Shows help messages read from _/_b_o_o_t_/_l_o_a_d_e_r_._h_e_l_p.  The special
+             topic _i_n_d_e_x will list the topics available.
+
+     iinncclluuddee _f_i_l_e [_f_i_l_e _._._.]
+             Process script files.  Each file, in turn, is completely read
+             into memory, and then each of its lines is passed to the command
+             line interpreter.  If any error is returned by the interpreter,
+             the include command aborts immediately, without reading any other
+             files, and returns an error itself (see _E_R_R_O_R_S).
+
+     llooaadd [--tt _t_y_p_e] _f_i_l_e ......
+             Loads a kernel, kernel loadable module (kld), disk image, or file
+             of opaque contents tagged as being of the type _t_y_p_e.  Kernel and
+             modules can be either in a.out or ELF format.  Any arguments
+             passed after the name of the file to be loaded will be passed as
+             arguments to that file.  Use the md_image type to make the kernel
+             create a file-backed md(4) disk.  This is useful for booting from
+             a temporary rootfs.  Currently, argument passing does not work
+             for the kernel.
+
+     llooaadd__ggeellii [--nn _k_e_y_n_o] _p_r_o_v _f_i_l_e
+             Loads a geli(8) encryption keyfile for the given provider name.
+             The key index can be specified via _k_e_y_n_o or will default to zero.
+
+     llss [--ll] [_p_a_t_h]
+             Displays a listing of files in the directory _p_a_t_h, or the root
+             directory if _p_a_t_h is not specified.  If --ll is specified, file
+             sizes will be shown too.
+
+     llssddeevv [--vv]
+             Lists all of the devices from which it may be possible to load
+             modules, as well as ZFS pools.  If --vv is specified, more details
+             are printed, including ZFS pool information in a format that re‐
+             sembles zzppooooll ssttaattuuss output.
+
+     llssmmoodd [--vv]
+             Displays loaded modules.  If --vv is specified, more details are
+             shown.
+
+     llsszzffss _f_i_l_e_s_y_s_t_e_m
+             A ZFS extended command that can be used to explore the ZFS
+             filesystem hierarchy in a pool.  Lists the immediate children of
+             the _f_i_l_e_s_y_s_t_e_m.  The filesystem hierarchy is rooted at a filesys‐
+             tem with the same name as the pool.
+
+     mmoorree _f_i_l_e [_f_i_l_e _._._.]
+             Display the files specified, with a pause at each _L_I_N_E_S dis‐
+             played.
+
+     ppnnppssccaann [--vv]
+             Scans for Plug-and-Play devices.  This is not functional at
+             present.
+
+     rreeaadd [--tt _s_e_c_o_n_d_s] [--pp _p_r_o_m_p_t] [_v_a_r_i_a_b_l_e]
+             Reads a line of input from the terminal, storing it in _v_a_r_i_a_b_l_e
+             if specified.  A timeout can be specified with --tt, though it will
+             be canceled at the first key pressed.  A prompt may also be dis‐
+             played through the --pp flag.
+
+     rreebboooott  Immediately reboots the system.
+
+     sseett _v_a_r_i_a_b_l_e
+     sseett _v_a_r_i_a_b_l_e=_v_a_l_u_e
+             Set loader's environment variables.
+
+     sshhooww [_v_a_r_i_a_b_l_e]
+             Displays the specified variable's value, or all variables and
+             their values if _v_a_r_i_a_b_l_e is not specified.
+
+     uunnllooaadd  Remove all modules from memory.
+
+     uunnsseett _v_a_r_i_a_b_l_e
+             Removes _v_a_r_i_a_b_l_e from the environment.
+
+     ??       Lists available commands.
+
+   BBUUIILLTTIINN EENNVVIIRROONNMMEENNTT VVAARRIIAABBLLEESS
+     Environment variables can be set and unset through the sseett and uunnsseett
+     builtins, and can have their values interactively examined through the
+     use of the sshhooww builtin.  Their values can also be accessed as described
+     in _B_U_I_L_T_I_N _P_A_R_S_E_R.
+
+     Notice that these environment variables are not inherited by any shell
+     after the system has been booted.
+
+     A few variables are set automatically by llooaaddeerr__ssiimmpp.  Others can affect
+     the behavior of either llooaaddeerr__ssiimmpp or the kernel at boot.  Some options
+     may require a value, while others define behavior just by being set.
+     Both types of builtin variables are described below.
+
+     _a_u_t_o_b_o_o_t___d_e_l_a_y
+               Number of seconds aauuttoobboooott will wait before booting.  Configu‐
+               ration options are described in loader.conf(5).
+
+     _b_o_o_t___a_s_k_n_a_m_e
+               Instructs the kernel to prompt the user for the name of the
+               root device when the kernel is booted.
+
+     _b_o_o_t___c_d_r_o_m
+               Instructs the kernel to try to mount the root file system from
+               CD-ROM.
+
+     _b_o_o_t___d_d_b  Instructs the kernel to start in the DDB debugger, rather than
+               proceeding to initialize when booted.
+
+     _b_o_o_t___d_f_l_t_r_o_o_t
+               Instructs the kernel to mount the statically compiled-in root
+               file system.
+
+     _b_o_o_t___g_d_b  Selects gdb-remote mode for the kernel debugger by default.
+
+     _b_o_o_t___m_u_l_t_i_c_o_n_s
+               Enables multiple console support in the kernel early on boot.
+               In a running system, console configuration can be manipulated
+               by the conscontrol(8) utility.
+
+     _b_o_o_t___m_u_t_e
+               All kernel console output is suppressed when console is muted.
+               In a running system, the state of console muting can be manipu‐
+               lated by the conscontrol(8) utility.
+
+     _b_o_o_t___p_a_u_s_e
+               During the device probe, pause after each line is printed.
+
+     _b_o_o_t___s_e_r_i_a_l
+               Force the use of a serial console even when an internal console
+               is present.
+
+     _b_o_o_t___s_i_n_g_l_e
+               Prevents the kernel from initiating a multi-user startup; in‐
+               stead, a single-user mode will be entered when the kernel has
+               finished device probing.
+
+     _b_o_o_t___v_e_r_b_o_s_e
+               Setting this variable causes extra debugging information to be
+               printed by the kernel during the boot phase.
+
+     _b_o_o_t_f_i_l_e  List of semicolon-separated search path for bootable kernels.
+               The default is “kernel”.
+
+     _c_o_m_c_o_n_s_o_l_e___s_p_e_e_d
+               Defines the speed of the serial console (i386 and amd64 only).
+               If the previous boot stage indicated that a serial console is
+               in use then this variable is initialized to the current speed
+               of the console serial port.  Otherwise it is set to 115200 un‐
+               less this was overridden using the _B_O_O_T___C_O_M_C_O_N_S_O_L_E___S_P_E_E_D vari‐
+               able when llooaaddeerr__ssiimmpp was compiled.  Changes to the
+               _c_o_m_c_o_n_s_o_l_e___s_p_e_e_d variable take effect immediately.
+
+     _c_o_m_c_o_n_s_o_l_e___p_o_r_t
+               Defines the base i/o port used to access console UART (i386 and
+               amd64 only).  If the variable is not set, its assumed value is
+               0x3F8, which corresponds to PC port COM1, unless overridden by
+               _B_O_O_T___C_O_M_C_O_N_S_O_L_E___P_O_R_T variable during the compilation of
+               llooaaddeerr__ssiimmpp.  Setting the _c_o_m_c_o_n_s_o_l_e___p_o_r_t variable automati‐
+               cally set _h_w_._u_a_r_t_._c_o_n_s_o_l_e environment variable to provide a
+               hint to kernel for location of the console.  Loader console is
+               changed immediately after variable _c_o_m_c_o_n_s_o_l_e___p_o_r_t is set.
+
+     _c_o_m_c_o_n_s_o_l_e___p_c_i_d_e_v
+               Defines the location of a PCI device of the 'simple communica‐
+               tion' class to be used as the serial console UART (i386 and
+               amd64 only).  The syntax of the variable is
+               'bus:device:function[:bar]', where all members must be numeric,
+               with possible 0x prefix to indicate a hexadecimal value.  The
+               _b_a_r member is optional and assumed to be 0x10 if omitted.  The
+               bar must decode i/o space.  Setting the variable
+               _c_o_m_c_o_n_s_o_l_e___p_c_i_d_e_v automatically sets the variable
+               _c_o_m_c_o_n_s_o_l_e___p_o_r_t to the base of the selected bar, and hint
+               _h_w_._u_a_r_t_._c_o_n_s_o_l_e.  Loader console is changed immediately after
+               variable _c_o_m_c_o_n_s_o_l_e___p_c_i_d_e_v is set.
+
+     _c_o_n_s_o_l_e   Defines the current console or consoles.  Multiple consoles may
+               be specified.  In that case, the first listed console will be‐
+               come the default console for userland output (e.g. from
+               init(8)).
+
+     _c_u_r_r_d_e_v   Selects the default device to loader the kernel from.  The syn‐
+               tax is:
+                     llooaaddeerr__ddeevviiccee::
+               or
+                     zzffss::ddaattaasseett::
+               Examples:
+                     ddiisskk00pp22::
+                     zzffss::zzrroooott//RROOOOTT//ddeeffaauulltt::
+
+     _d_u_m_p_d_e_v   Sets the device for kernel dumps.  This can be used to ensure
+               that a device is configured before the corresponding _d_u_m_p_d_e_v
+               directive from rc.conf(5) has been processed, allowing kernel
+               panics that happen during the early stages of boot to be cap‐
+               tured.
+
+     _i_n_i_t___c_h_r_o_o_t
+               See init(8).
+
+     _i_n_i_t___e_x_e_c
+               See init(8).
+
+     _i_n_i_t___p_a_t_h
+               Sets the list of binaries which the kernel will try to run as
+               the initial process.  The first matching binary is used.  The
+               default list is “/sbin/init:/sbin/oinit:/sbin/init.bak:
+               /rescue/init”.
+
+     _i_n_i_t___s_c_r_i_p_t
+               See init(8).
+
+     _i_n_i_t___s_h_e_l_l
+               See init(8).
+
+     _i_n_t_e_r_p_r_e_t
+               Has the value “OK” if the Forth's current state is interpret‐
+               ing.
+
+     _L_I_N_E_S     Define the number of lines on the screen, to be used by the
+               pager.
+
+     _m_o_d_u_l_e___p_a_t_h
+               Sets the list of directories which will be searched for modules
+               named in a load command or implicitly required by a dependency.
+               The default value for this variable is
+               “/boot/kernel;/boot/modules”.
+
+     _n_u_m___i_d_e___d_i_s_k_s
+               Sets the number of IDE disks as a workaround for some problems
+               in finding the root disk at boot.  This has been deprecated in
+               favor of _r_o_o_t___d_i_s_k___u_n_i_t.
+
+     _p_r_o_m_p_t    Value of llooaaddeerr__ssiimmpp's prompt.  Defaults to “${interpret}”.  If
+               variable _p_r_o_m_p_t is unset, the default prompt is ‘>’.
+
+     _r_o_o_t___d_i_s_k___u_n_i_t
+               If the code which detects the disk unit number for the root
+               disk is confused, e.g. by a mix of SCSI and IDE disks, or IDE
+               disks with gaps in the sequence (e.g. no primary slave), the
+               unit number can be forced by setting this variable.
+
+     _r_o_o_t_d_e_v   By default the value of _c_u_r_r_d_e_v is used to set the root file
+               system when the kernel is booted.  This can be overridden by
+               setting _r_o_o_t_d_e_v explicitly.
+
+     Other variables are used to override kernel tunable parameters.  The fol‐
+     lowing tunables are available:
+
+     _e_f_i_._r_t_._d_i_s_a_b_l_e_d
+                   Disable UEFI runtime services in the kernel, if applicable.
+                   Runtime services are only available and used if the kernel
+                   is booted in a UEFI environment.
+
+     _h_w_._p_h_y_s_m_e_m    Limit the amount of physical memory the system will use.
+                   By default the size is in bytes, but the kk, KK, mm, MM, gg and
+                   GG suffixes are also accepted and indicate kilobytes,
+                   megabytes and gigabytes respectively.  An invalid suffix
+                   will result in the variable being ignored by the kernel.
+
+     _h_w_._p_c_i_._h_o_s_t___s_t_a_r_t___m_e_m, _h_w_._a_c_p_i_._h_o_s_t___s_t_a_r_t___m_e_m
+                   When not otherwise constrained, this limits the memory
+                   start address.  The default is 0x80000000 and should be set
+                   to at least size of the memory and not conflict with other
+                   resources.  Typically, only systems without PCI bridges
+                   need to set this variable since PCI bridges typically con‐
+                   strain the memory starting address (and the variable is
+                   only used when bridges do not constrain this address).
+
+     _h_w_._p_c_i_._e_n_a_b_l_e___i_o___m_o_d_e_s
+                   Enable PCI resources which are left off by some BIOSes or
+                   are not enabled correctly by the device driver.  Tunable
+                   value set to ON (1) by default, but this may cause problems
+                   with some peripherals.
+
+     _k_e_r_n_._m_a_x_u_s_e_r_s
+                   Set the size of a number of statically allocated system ta‐
+                   bles; see tuning(7) for a description of how to select an
+                   appropriate value for this tunable.  When set, this tunable
+                   replaces the value declared in the kernel compile-time con‐
+                   figuration file.
+
+     _k_e_r_n_._i_p_c_._n_m_b_c_l_u_s_t_e_r_s
+                   Set the number of mbuf clusters to be allocated.  The value
+                   cannot be set below the default determined when the kernel
+                   was compiled.
+
+     _k_e_r_n_._i_p_c_._n_s_f_b_u_f_s
+                   Set the number of sendfile(2) buffers to be allocated.
+                   Overrides NSFBUFS.  Not all architectures use such buffers;
+                   see sendfile(2) for details.
+
+     _k_e_r_n_._m_a_x_s_w_z_o_n_e
+                   Limits the amount of KVM to be used to hold swap metadata,
+                   which directly governs the maximum amount of swap the sys‐
+                   tem can support, at the rate of approximately 200 MB of
+                   swap space per 1 MB of metadata.  This value is specified
+                   in bytes of KVA space.  If no value is provided, the system
+                   allocates enough memory to handle an amount of swap that
+                   corresponds to eight times the amount of physical memory
+                   present in the system.
+
+                   Note that swap metadata can be fragmented, which means that
+                   the system can run out of space before it reaches the theo‐
+                   retical limit.  Therefore, care should be taken to not con‐
+                   figure more swap than approximately half of the theoretical
+                   maximum.
+
+                   Running out of space for swap metadata can leave the system
+                   in an unrecoverable state.  Therefore, you should only
+                   change this parameter if you need to greatly extend the KVM
+                   reservation for other resources such as the buffer cache or
+                   _k_e_r_n_._i_p_c_._n_m_b_c_l_u_s_t_e_r_s.  Modifies kernel option
+                   VM_SWZONE_SIZE_MAX.
+
+     _k_e_r_n_._m_a_x_b_c_a_c_h_e
+                   Limits the amount of KVM reserved for use by the buffer
+                   cache, specified in bytes.  The default maximum is 200MB on
+                   i386, and 400MB on amd64.  This parameter is used to pre‐
+                   vent the buffer cache from eating too much KVM in large-
+                   memory machine configurations.  Only mess around with this
+                   parameter if you need to greatly extend the KVM reservation
+                   for other resources such as the swap zone or
+                   _k_e_r_n_._i_p_c_._n_m_b_c_l_u_s_t_e_r_s.  Note that the NBUF parameter will
+                   override this limit.  Modifies VM_BCACHE_SIZE_MAX.
+
+     _k_e_r_n_._m_s_g_b_u_f_s_i_z_e
+                   Sets the size of the kernel message buffer.  The default
+                   limit of 96KB is usually sufficient unless large amounts of
+                   trace data need to be collected between opportunities to
+                   examine the buffer or dump it to a file.  Overrides kernel
+                   option MSGBUF_SIZE.
+
+     _m_a_c_h_d_e_p_._d_i_s_a_b_l_e___m_t_r_r_s
+                   Disable the use of i686 MTRRs (x86 only).
+
+     _n_e_t_._i_n_e_t_._t_c_p_._t_c_b_h_a_s_h_s_i_z_e
+                   Overrides the compile-time set value of TCBHASHSIZE or the
+                   preset default of 512.  Must be a power of 2.
+
+     _t_w_i_d_d_l_e___d_i_v_i_s_o_r
+                   Throttles the output of the ‘twiddle’ I/O progress indica‐
+                   tor displayed while loading the kernel and modules.  This
+                   is useful on slow serial consoles where the time spent
+                   waiting for these characters to be written can add up to
+                   many seconds.  The default is 16; a value of 32 spins half
+                   as fast, while a value of 8 spins twice as fast.
+
+     _v_m_._k_m_e_m___s_i_z_e  Sets the size of kernel memory (bytes).  This overrides the
+                   value determined when the kernel was compiled.  Modifies
+                   VM_KMEM_SIZE.
+
+     _v_m_._k_m_e_m___s_i_z_e___m_i_n
+
+     _v_m_._k_m_e_m___s_i_z_e___m_a_x
+                   Sets the minimum and maximum (respectively) amount of ker‐
+                   nel memory that will be automatically allocated by the ker‐
+                   nel.  These override the values determined when the kernel
+                   was compiled.  Modifies VM_KMEM_SIZE_MIN and
+                   VM_KMEM_SIZE_MAX.
+
+   ZZFFSS FFEEAATTUURREESS
+     llooaaddeerr__ssiimmpp supports the following format for specifying ZFS filesystems
+     which can be used wherever loader(8) refers to a device specification:
+
+     _z_f_s_:_p_o_o_l_/_f_i_l_e_s_y_s_t_e_m_:
+
+     where _p_o_o_l_/_f_i_l_e_s_y_s_t_e_m is a ZFS filesystem name as described in zfs(8).
+
+     If _/_e_t_c_/_f_s_t_a_b does not have an entry for the root filesystem and
+     _v_f_s_._r_o_o_t_._m_o_u_n_t_f_r_o_m is not set, but _c_u_r_r_d_e_v refers to a ZFS filesystem,
+     then llooaaddeerr__ssiimmpp will instruct kernel to use that filesystem as the root
+     filesystem.
+
+SSEECCUURRIITTYY
+     Access to the llooaaddeerr__ssiimmpp command line provides several ways of compro‐
+     mising system security, including, but not limited to:
+
+     ••   Booting from removable storage.
+
+         One can prevent unauthorized access to the llooaaddeerr__ssiimmpp command line
+         by booting unconditionally in _l_o_a_d_e_r_._r_c.  In order for this to be ef‐
+         fective, one should also configure the firmware (BIOS or UEFI) to
+         prevent booting from unauthorized devices.
+
+FFIILLEESS
+     /boot/loader_simp  llooaaddeerr__ssiimmpp itself.
+     /boot/loader.rc    The script run by llooaaddeerr__ssiimmpp on startup.
+
+EEXXAAMMPPLLEESS
+     Boot in single user mode:
+
+           boot -s
+
+     Load the kernel, a splash screen, and then autoboot in five seconds.  No‐
+     tice that a kernel must be loaded before any other llooaadd command is at‐
+     tempted.
+
+           load kernel
+           load splash_bmp
+           load -t splash_image_data /boot/chuckrulez.bmp
+           autoboot 5
+
+     Set the disk unit of the root device to 2, and then boot.  This would be
+     needed in a system with two IDE disks, with the second IDE disk hardwired
+     to ada2 instead of ada1.
+
+           set root_disk_unit=2
+           boot /boot/kernel/kernel
+
+     Set the default device used for loading a kernel from a ZFS filesystem:
+
+           set currdev=zfs:tank/ROOT/knowngood:
+
+EERRRROORRSS
+     The following values are thrown by llooaaddeerr__ssiimmpp:
+
+           100    Any type of error in the processing of a builtin.
+
+           -1     AAbboorrtt executed.
+
+           -2     AAbboorrtt"" executed.
+
+           -56    QQuuiitt executed.
+
+           -256   Out of interpreting text.
+
+           -257   Need more text to succeed -- will finish on next run.
+
+           -258   BByyee executed.
+
+           -259   Unspecified error.
+
+SSEEEE AALLSSOO
+     libsa(3), loader.conf(5), tuning(7), boot(8), btxld(8)
+
+HHIISSTTOORRYY
+     The llooaaddeerr__ssiimmpp first appeared in FreeBSD 3.1.
+
+AAUUTTHHOORRSS
+     The llooaaddeerr__ssiimmpp was written by Michael Smith <msmith@FreeBSD.org>.
+
+BSD                           September 29, 2021                           BSD

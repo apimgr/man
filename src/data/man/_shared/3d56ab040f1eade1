@@ -1,0 +1,403 @@
+PERLCLASS(1)           Perl Programmers Reference Guide           PERLCLASS(1)
+
+
+
+NNAAMMEE
+       perlclass - Perl class syntax reference
+
+SSYYNNOOPPSSIISS
+           use v5.38;
+           use feature 'class';
+
+           class My::Example 1.234 {
+               field $x;
+
+               ADJUST {
+                   $x = "Hello, world";
+               }
+
+               method print_message {
+                   say $x;
+               }
+           }
+
+           My::Example->new->print_message;
+
+DDEESSCCRRIIPPTTIIOONN
+       This document describes the syntax of Perl's "class" feature, which
+       provides native keywords for object-oriented programming.
+
+   HHiissttoorryy
+       Since Perl 5, support for objects revolved around the concept of
+       _b_l_e_s_s_i_n_g references with a package name (see "bless REF,CLASSNAME" in
+       perlfunc). Such a reference could then be used to call subroutines from
+       the package it was blessed with (or any of its parents). This system,
+       while bare-bones, was flexible enough to allow creation of multiple
+       more advanced, community-driven systems for object orientation. For
+       more information, see perlmod and perlobj.
+
+       The "class" feature is a core implementation of a class syntax that is
+       similar to what one would find in other programming languages. It is
+       not a wrapper around "bless", but a completely new system built right
+       into the perl interpreter.
+
+KKEEYYWWOORRDDSS
+       Enabling the "class" feature allows the usage of the following new
+       keywords in the current lexical scope:
+
+   ccllaassss
+           class NAME BLOCK
+
+           class NAME VERSION BLOCK
+
+           class NAME VERSION : ATTRIBUTES... BLOCK
+
+           class NAME;
+
+           class NAME VERSION;
+
+           class NAME VERSION : ATTRIBUTES...;
+
+       The "class" keyword declares a new package (see "Packages" in perlmod)
+       that is intended to be a class. All other keywords from the "class"
+       feature should be used within the scope of this declaration.
+
+           class WithVersion 1.000 {
+               # class definition goes here
+           }
+
+       Classes can be declared in either block or statement syntax. If a block
+       is used, the body of the block contains the implementation of the
+       class. If the statement form is used, the remainder of the file is used
+       up until the next "class" or "package" statement.
+
+       A "class" declaration can optionally have a version number, similar to
+       the "package" keyword. It can also optionally have attributes. If both
+       are specified, the version number must come first, before the
+       attributes.
+
+       "class" and "package" declarations are similar, but classes
+       automatically get a constructor named "new" - you don't have to (and
+       should not) write one.  Additionally, in the class BLOCK you are
+       allowed to declare fields and methods.
+
+   ffiieelldd
+           field VARIABLE_NAME;
+
+           field VARIABLE_NAME = EXPR;
+
+           field VARIABLE_NAME : ATTRIBUTES;
+
+           field VARIABLE_NAME : ATTRIBUTES = EXPR;
+
+       Fields are variables that are visible in the scope of the class - more
+       specifically within "method" and ADJUST blocks. Each class instance
+       gets its own storage of fields, independent of other instances.
+
+       A field behaves like a normal lexically scoped variable. It has a sigil
+       and is private to the class (though creation of an accessor method will
+       make it accessible from the outside). The main difference is that
+       different instances access different values in the same scope.
+
+           class WithFields {
+               field $scalar = 42;
+               field @array  = qw(this is just an array);
+               field %hash   = (species => 'Martian', planet => 'Mars');
+           }
+
+       Fields may optionally have initializing expressions. If present, the
+       expression will be evaluated within the constructor of each object
+       instance. During each evaluation, the expression can use the value of
+       any previously-set field, as well as any other variables in scope.
+
+           class WithACounter {
+               my $next_count = 1;
+               field $count = $next_count++;
+           }
+
+       When combined with the ":param" field attribute, the defaulting
+       expression can use any of the "=", "//=" or "||=" operators.
+       Expressions using "=" will apply whenever the caller did not pass the
+       corresponding parameter to the constructor at all. Expressions using
+       "//=" will also apply if the caller did pass the parameter but the
+       value was undefined, and expressions using "||=" will apply if the
+       value was false.
+
+       During a field initializing expression, the instance is not yet
+       constructed and so the $self lexical is not available.  However, the
+       special "__CLASS__" token may be used to obtain the name of the class
+       being constructed, for example in order to invoke class methods on it
+       to help in constructing values for fields.
+
+           class WithCustomField {
+               use constant DEFAULT_X => 10;
+               field $x = __CLASS__->DEFAULT_X;
+           }
+
+       This allows subclasses to override the method with different behaviour.
+
+           class DifferentCustomField :isa(WithCustomField) {
+               sub DEFAULT_X { rand > 0.5 ? 20 : 30 }
+           }
+
+       When an instance of "DifferentCustomField" is constructed, the
+       "__CLASS__" expression in the base will yield the correct class name,
+       and so invoke this overridden method instead.
+
+   mmeetthhoodd
+           method METHOD_NAME SIGNATURE BLOCK
+
+           method METHOD_NAME BLOCK
+
+           method SIGNATURE BLOCK
+
+           method BLOCK
+
+       Methods are subroutines intended to be called in the context of class
+       objects.
+
+       A variable named $self populated with the current object instance will
+       automatically be created in the lexical scope of "method".
+
+       Methods always act as if "use feature 'signatures'" is in effect, but
+       $self will not appear in the arguments list as far as the signature is
+       concerned.
+
+           class WithMethods {
+               field $greetings;
+
+               ADJUST {
+                   $greetings = "Hello";
+               }
+
+               method greet($name = "someone") {
+                   say "$greetings, $name";
+               }
+           }
+
+       Just like regular subroutines, methods _c_a_n be anonymous:
+
+           class AnonMethodFactory {
+
+               method get_anon_method {
+                   return method {
+                       return 'this is an anonymous method';
+                   };
+               }
+           }
+
+AATTTTRRIIBBUUTTEESS
+       Specific aspects of the keywords mentioned above are managed using
+       _a_t_t_r_i_b_u_t_e_s. Attributes all start with a colon, and one or more of them
+       can be appended after the item's name, separated by a space.
+
+   CCllaassss aattttrriibbuutteess
+       _:_i_s_a
+
+       Classes may inherit from oonnee superclass, by using the ":isa" class
+       attribute.
+
+           class Example::Base { ... }
+
+           class Example::Subclass :isa(Example::Base) { ... }
+
+       Inherited methods are visible and may be invoked. Fields are always
+       lexical and therefore not visible by inheritance.
+
+       The ":isa" attribute may request a minimum version of the base class.
+       As with "use MODULE VERSION", if the actual version of the base class
+       is too low, compilation will fail.
+
+           class Example::Subclass :isa(Example::Base 2.345) { ... }
+
+       The ":isa" attribute will attempt to "require" the named module if it
+       is not already loaded.
+
+   FFiieelldd aattttrriibbuutteess
+       _:_p_a_r_a_m
+
+       A scalar field with a ":param" attribute will take its value from a
+       named parameter passed to the constructor. By default the parameter
+       will have the same name as the field (minus its leading "$" sigil), but
+       a different name can be specified in the attribute.
+
+           field $x :param;
+           field $y :param(the_y_value);
+
+       If there is no defaulting expression, then the parameter is required by
+       the constructor; the caller must pass it or an exception is thrown.
+       With a defaulting expression this becomes optional.
+
+       _:_r_e_a_d_e_r
+
+       A field with a ":reader" attribute will generate a reader accessor
+       method automatically.  The generated method will have an empty (i.e.
+       zero-argument) signature, and its body will simply return the value of
+       the field variable.
+
+           field $s :reader;
+
+           # Equivalent to
+           field $s;
+           method s () { return $s; }
+
+       By default the accessor method will have the same name as the field
+       (minus the leading sigil), but a different name can be specified in the
+       attribute's value.
+
+           field $x :reader(get_x);
+
+           # Generates a method
+           method get_x () { return $x; }
+
+       Reader methods can be applied to non-scalar fields. When invoked in
+       list context, they yield the contents of the field; in scalar context
+       they yield the count of elements, as if the field variable had been
+       placed in scalar context.
+
+           field @users :reader;
+           ...
+
+           scalar $instance->users;
+
+   MMeetthhoodd aattttrriibbuutteess
+       None yet.
+
+OOBBJJEECCTT LLIIFFEECCYYCCLLEE
+   CCoonnssttrruuccttiioonn
+       Each object begins its life with a constructor call. The constructor is
+       always named "new" and is invoked like a method call on the class name:
+
+           my $object = My::Class->new(%arguments);
+
+       During object construction, class fields are looked up in the
+       %arguments hash and populated where possible.
+
+   AAddjjuussttmmeenntt
+       Object adjustment is a way to run arbitrary user-defined code during
+       object construction. This is done by placing code in "ADJUST" blocks.
+       Every time an object is constructed, its "ADJUST" blocks are executed
+       (in the order in which they are declared).
+
+           class WellAdjusted {
+               field $x :param;
+               ADJUST {
+                   say "Hello!";
+               }
+               ADJUST {
+                   say "x = $x";
+               }
+           }
+
+           my $object = WellAdjusted->new(x => 42);
+           # Output:
+           #   Hello!
+           #   x = 42
+
+       "ADJUST" blocks are syntactically similar to "BEGIN" or "INIT" blocks,
+       which only run once.  However, "ADJUST" blocks, like methods, have
+       access to $self (a lexical variable holding the object being
+       constructed) as well as all object fields created up to that point.
+
+   LLiiffeettiimmee
+       After the construction phase, the object is ready to be used.
+
+       Using "blessed" ("Scalar::Util::blessed" or "builtin::blessed") on the
+       object will return the name of the class, while "reftype"
+       ("Scalar::Util::reftype" or "builtin::reftype") will return the string
+       'OBJECT'.
+
+   DDeessttrruuccttiioonn
+       An object is destroyed when the last reference to it goes away, just as
+       with other data structures in Perl.
+
+TTOODDOO
+       This feature is still experimental and very incomplete. The following
+       list gives an overview of features still to be added or changed:
+
+       •   Roles
+
+           Some syntax for declaring a role (likely a "role" keyword), and for
+           consuming a role into a class (likely a :does() attribute).
+
+       •   Parameters to ADJUST blocks
+
+           Some syntax for declaring that an "ADJUST" block can consume named
+           parameters, which become part of the class constructor's API. This
+           might be inspired by a similar plan to add named arguments to
+           subroutine signatures.
+
+               class X {
+                   ADJUST (:$alpha, :$beta = 123) {
+                      ...
+                   }
+               }
+
+               my $obj = X->new(alpha => 456);
+
+       •   ADJUST blocks as true blocks
+
+           Currently, every ADJUST block is wrapped in its own CV (subroutine)
+           that gets invoked with the full ENTERSUB overhead. It should be
+           possible to use the same mechanism that makes all field initializer
+           expressions appear within the same CV on ADJUST blocks as well,
+           merging them all into a single CV per class. This will make it
+           faster to invoke if a class has more than one of them.
+
+       •   More accessor generator attributes
+
+           Attributes to request that other kinds of accessor methods be
+           generated for fields. Likely ":writer".
+
+               class X {
+                   field $name :writer;
+               }
+
+           Equivalent to
+
+               class X {
+                   field $name;
+                   method set_name ($new) { $name = $new; return $self; }
+               }
+
+       •   Metaprogramming
+
+           An extension of the metaprogramming API (currently proposed by
+           PPC0022 <https://github.com/Perl/PPCs/pull/25>) which adds
+           knowledge of classes, methods, fields, ADJUST blocks, and other
+           such class-related details.
+
+       •   Extension Customisation
+
+           Ways in which out-of-core modules can interact with the class
+           system, including an ability for them to provide new class or field
+           attributes.
+
+KKNNOOWWNN BBUUGGSS
+       The following bugs have been found in the experimental "class" feature:
+
+       •   Since Perl v5.38, inheriting from a parent class which is declared
+           in the same file and which hadn't already been sealed can cause a
+           segmentation fault.  [GH #20890
+           <https://github.com/Perl/perl5/issues/20890>]
+
+       •   Since Perl v5.38 and with the experimental "refaliasing" feature,
+           trying to replace a field variable causes a segmentation fault.
+           [GH #20947 <https://github.com/Perl/perl5/issues/20947>]
+
+       •   Since Perl v5.38, it's possible to craft a class with leaky
+           encapsulation, which can cause a segmentation fault.  [GH #20956
+           <https://github.com/Perl/perl5/issues/20956>]
+
+       •   In Perl v5.38, inheriting from a class would not always attempt to
+           load the parent class (fixed in Perl v5.40).  [GH #21332
+           <https://github.com/Perl/perl5/issues/21332>]
+
+AAUUTTHHOORRSS
+       Paul Evans
+
+       Bartosz Jarzyna
+
+
+
+perl v5.40.1                      2025-01-28                      PERLCLASS(1)

@@ -1,0 +1,257 @@
+The  and  devices  generate bytes randomly with uniform distribu‐
+tion.  Every read from them is independent.  Never blocks.  Some‐
+times blocks.  Will block early at boot if the system’s state  is
+known  to  be  predictable.  Applications should read from or the
+variable when they need randomly generated data, e.g. key  mater‐
+ial  for cryptography or seeds for simulations.  (The variable is
+limited to 256 bytes per read, but  is  otherwise  equivalent  to
+reading  from  and always works even in a environment without re‐
+quiring a populated tree and without opening a  file  descriptor,
+so may be preferable to use in libraries.)  Systems should be en‐
+gineered  to  judiciously  read at least once from at boot before
+running any services that talk to the internet or  otherwise  re‐
+quire  cryptography,  in  order  to  avoid  generating  keys pre‐
+dictably.  may block at any time, so programs that read  from  it
+must  be  prepared to handle blocking.  Interactive programs that
+block due to reads from can be especially frustrating.  If inter‐
+rupted by a signal, reads from either or  may  return  short,  so
+programs  that  handle  signals  must be prepared to retry reads.
+Writing to either or influences subsequent  output  of  both  de‐
+vices,  guaranteed  to  take  effect at next open.  If you have a
+coin in your pocket, you can flip it 256 times and feed the  out‐
+puts  to  to  guarantee your system is in a state that nobody but
+you and the bored security guard watching the surveillance camera
+in  your  office  can  guess:  %  echo  tthhhhhthhhththtthhhhtht‐
+ththttth...  >  /dev/random (Sequence generated from a genuine US
+quarter dollar, guaranteed random.)  The subsystem  provides  the
+following  security  properties  against two different classes of
+attackers, provided that there is  enough  entropy  from  entropy
+sources not seen by attackers: An attacker who has seen some out‐
+puts and can supply some entropy sources’ inputs to the operating
+system cannot predict past or future unseen outputs.  An attacker
+who  has seen the entire state of the machine cannot predict past
+outputs.  One means a single read, no matter  how  short  it  is.
+means  it is conjectured of the cryptography in that any computa‐
+tionally bounded attacker who tries to distinguish  outputs  from
+uniform random cannot do more than negligibly better than uniform
+random  guessing.  The operating system continuously makes obser‐
+vations of hardware devices, such as network packet timings, disk
+seek delays, and keystrokes.  The observations are combined  into
+a  seed  for a cryptographic pseudorandom number generator (PRNG)
+which is used to generate the outputs of both and An attacker may
+be able to guess with nonnegligible chance of success  what  your
+last  keystroke was, but guessing every observation the operating
+system may have made is more difficult.  The  difficulty  of  the
+best  strategy  at  guessing a random variable is analyzed as the
+‐log_2 of the highest probability of  any  outcome,  measured  in
+bits,  and called its or for short in cryptography.  For example:
+A fair coin toss has one bit of entropy.  A fair (six‐sided)  die
+roll  has a little over 2.5 bits of entropy.  A string of two in‐
+dependent fair coin tosses has two bits of entropy.  The toss  of
+a  pair  of fair coins that are glued together has one bit of en‐
+tropy.  A uniform  random  distribution  with  possibilities  has
+log_2 bits of entropy.  An utterance from an accounting troll who
+always  says  has  zero  bits of entropy.  Note that entropy is a
+property of an observable physical process, like a coin toss,  or
+of  a state of knowledge about that physical process; it is not a
+property of a specific sample obtained by observing it, like  the
+string  There  are  also  kinds  of entropy in information theory
+other than min‐entropy, including the more well‐known Shannon en‐
+tropy, but they are not relevant here.  Hardware devices that the
+operating system monitors for observations are called and the ob‐
+servations are combined into an The command  queries  information
+about entropy sources and the entropy pool, and can control which
+entropy  sources  the operating system uses or ignores.  256 bits
+of entropy is typically  considered  intractable  to  guess  with
+classical  computers  and with current models of the capabilities
+of quantum computers.  Systems with  nonvolatile  storage  should
+store  a secret from on disk during installation or shutdown, and
+feed it back during boot, so that the work the  operating  system
+has  done to gather entropy — including the work its operator may
+have done to flip a coin! — can be saved from  one  boot  to  the
+next,  and  so that newly installed systems are not vulnerable to
+generating cryptographic keys predictably.  The boot  loaders  in
+some  ports support a command to load a seed from disk before the
+kernel has started.  For those that don’t, the command can do  it
+once userland has started, for example by setting in which is en‐
+abled by default; see Some people worry about recovery from state
+compromise  — that is, ensuring that even if an attacker sees the
+entire state of the operating system, then the attacker  will  be
+unable to predict any new future outputs as long as the operating
+system  gathers fresh entropy quickly enough.  But if an attacker
+has seen the entire state of your machine, refreshing entropy  is
+probably  the  least  of  your worries, so we do not address that
+threat model  here.   The  subsystem  does  automatically  defend
+against  hardware colluding with an attacker to influence entropy
+sources based on the state of the operating system.  For example,
+a PCI device or CPU  instruction  for  random  number  generation
+which  has  no  side channel to an attacker other than the device
+could be bugged to observe all  other  entropy  sources,  and  to
+carefully  craft that cause a certain number of bits of output to
+be ciphertext that either is predictable to an attacker  or  con‐
+veys a message to an attacker.  No amount of scrutiny by the sys‐
+tem’s  operator  could detect this.  The only way to prevent this
+attack would be for the operator to disable all  entropy  sources
+that may be colluding with an attacker.  If you’re not sure which
+ones are not, you can always disable all of them and fall back to
+the  coin  in  your  pocket.  The and devices support a number of
+ioctls, defined in the header file, for querying and  controlling
+the  entropy  pool.   Since  timing  between hardware events con‐
+tributes to the entropy pool, statistics about the  entropy  pool
+over  time may serve as a side channel for the state of the pool,
+so access to such statistics is restricted to the super‐user  and
+should  be  used with caution.  Several ioctls are concerned with
+particular entropy sources, described by the following structure:
+typedef struct {         char            name[16];       /*  sym‐
+bolic name */         uint32_t        total;          /* estimate
+of entropy provided */         uint32_t        type;           /*
+RND_TYPE_*  value  */          uint32_t        flags;          /*
+RND_FLAG_* mask */ } rndsource_t;
+
+#define RND_TYPE_UNKNOWN #define RND_TYPE_DISK           /*  disk
+device  */  #define RND_TYPE_ENV            /* environment sensor
+(temp, fan, &c.)  */  #define RND_TYPE_NET            /*  network
+device */ #define RND_TYPE_POWER          /* power events */ #de‐
+fine RND_TYPE_RNG            /*     hardware    RNG    */    #de‐
+fine RND_TYPE_SKEW           /*    clock     skew     */     #de‐
+fine RND_TYPE_TAPE           /*     tape     drive     */    #de‐
+fine RND_TYPE_TTY            /*    tty     device     */     #de‐
+fine RND_TYPE_VM             /* virtual memory faults */
+
+#define RND_TYPE_MAX            /* value of highest‐numbered type
+*/
+
+#define RND_FLAG_COLLECT_TIME           /* use timings of samples
+*/  #define RND_FLAG_COLLECT_VALUE          /* use values of sam‐
+ples */ #define RND_FLAG_ESTIMATE_TIME          /*  estimate  en‐
+tropy  of  timings  */ #define RND_FLAG_ESTIMATE_VALUE         /*
+estimate   entropy   of   values   */    #define RND_FLAG_NO_COL‐
+LECT             /*    ignore   samples   from   this   */   #de‐
+fine RND_FLAG_NO_ESTIMATE            /* do not  estimate  entropy
+*/  The following ioctls are supported: Return the number of bits
+of entropy the system is estimated to  have.   typedef  struct  {
+        uint32_t        start;             uint32_t        count;
+        rndsource_t     source[RND_MAXSTATCOUNT];  }   rndstat_t;
+Fill  the  array  with  information  about up to entropy sources,
+starting at The actual number of sources described is returned in
+At most sources may be  requested  at  once.   typedef  struct  {
+        char            name[16];         rndsource_t     source;
+}  rndstat_name_t; Fill with information about the entropy source
+named  or  fail  with  if  there  is  none.   typedef  struct   {
+        char            name[16];           uint32_t        type;
+        uint32_t        flags;          uint32_t        mask;   }
+rndctl_t;  For  each entropy source of the type or if is then for
+the entropy source named replace the flags in by typedef struct {
+        uint32_t        len;             uint32_t        entropy;
+        unsigned         char        data[RND_SAVEWORDS         *
+sizeof(uint32_t)]; } rnddata_t; Feed bytes of data to the entropy
+pool.  The sample is expected to have been drawn  with  at  least
+bits  of entropy.  This ioctl can be used only once per boot.  It
+is intended for a system that saves entropy to disk  on  shutdown
+and  restores  it  on boot, so that the system can immediately be
+unpredictable without having to wait to gather entropy.   typedef
+struct  {         uint32_t poolsize;      /* size of each LFSR in
+pool */         uint32_t threshold;     /* no. bytes of pool hash
+returned */         uint32_t maxentropy;    /* total size of pool
+in bits */         uint32_t added;         /* no. bits of entropy
+ever added */         uint32_t curentropy;    /* current  entropy
+‘balance’  */         uint32_t discarded;     /* no. bits dropped
+when pool full */          uint32_t  generated;     /*  no.  bits
+yielded  by  pool while                                    curen‐
+tropy is zero */ } rndpoolstat_t; Return various statistics about
+entropy.  The following variables provided by can be set by priv‐
+ileged users: (Default on.)  Enables entering data into  the  en‐
+tropy pool.  If disabled, no new data can be entered into the en‐
+tropy  pool, whether by device drivers, by writes to or or by the
+ioctl.  (Default off.)  Enables meaning that even after attaining
+full entropy, the kernel subtracts the number of bits read out of
+the entropy pool from its estimate of the system  entropy.   This
+is not justified by modern cryptography — an adversary will never
+guess  the  256‐bit  secret in a Keccak sponge no matter how much
+output from the sponge they see — but may be useful for  testing.
+Trigger for entropy consolidation: executing causes the system to
+consolidate  pending  entropy  from per‐CPU pools into the global
+pool, and waits until done.  The  following  read‐only  variables
+provide  information  to  privileged users about the state of the
+entropy pool: Number of bits of entropy the system is waiting for
+in the global pool before reads from will return  without  block‐
+ing.   When  zero, the system is considered to have full entropy.
+Number of bits of entropy pending in per‐CPU pools.  This is  the
+amount  of entropy that will be contributed to the global pool at
+the next consolidation, such as from triggering Number  of  times
+system has reached full entropy, or entropy has been consolidated
+with  as an unsigned 32‐bit integer.  Consulted inside the kernel
+by subsystems such as to decide whether to reseed.  Initially set
+to 2ˆ32 - 1 meaning the system has never reached full entropy and
+the entropy has never been consolidated; never again set to  2ˆ32
+-  1.   Never zero, so applications can initialize a cache of the
+epoch to zero to ensure they reseed  the  next  time  they  check
+whether it is different from the stored epoch.  (This section de‐
+scribes  the  current implementation of the subsystem at the time
+of writing.  It may be out‐of‐date by the time you read  it,  and
+nothing  in here should be construed as a guarantee about the be‐
+haviour of the and devices.)  Device drivers gather samples  from
+entropy sources and absorb them into a collection of per‐CPU Kec‐
+cak  sponges called using the kernel API.  The device driver fur‐
+nishes an estimate for the entropy of the sampling process, under
+the assumption that each sample is independent.  When  the  esti‐
+mate of entropy pending among the per‐CPU entropy pools reaches a
+threshold  of  256  bits,  the  entropy is drawn from the per‐CPU
+pools and consolidated into a global pool.  Keys for and the  in‐
+kernel subsystem are extracted from the global pool.  Early after
+boot,  before CPUs have been detected, device drivers instead en‐
+ter directly into the global pool.  If anything in the system ex‐
+tracts data from the pool before the threshold has  been  reached
+at least once, the system will print a warning to the console and
+reset the entropy estimate to zero.  The reason for resetting the
+entropy  estimate  to  zero in this case is that an adversary who
+can witness output from the pool with partial entropy —  say,  32
+bits — can undergo a feasible brute force search to ascertain the
+complete  state  of  the pool; as such, the entropy of the adver‐
+sary’s state of knowledge about the pool is zero.  If the  opera‐
+tor  is  confident  that the drivers’ estimates of the entropy of
+the sampling processes are too conservative, the operator can is‐
+sue to force consolidation into the global  pool.   The  operator
+can  also  fool the system into thinking it has more entropy than
+it does by feeding data from into but  this  voids  the  security
+model  and should be limited to testing purposes.  reads from are
+served by a persistent per‐CPU Hash_DRBG  instance  that  is  re‐
+seeded  from  the  entropy  pool after any entropy consolidation.
+Reads from and reads from are served  by  a  temporary  Hash_DRBG
+seeded  from  the  entropy pool on each read.  When is enabled by
+setting the sysctl variable every read from  is  limited  to  256
+bits,  since  reading  more  than  that would nearly always block
+again.  Uniform random byte source.  May block.   Uniform  random
+byte  source.  Never blocks.  The subsystem may print the follow‐
+ing warnings to the console likely indicating security issues:  A
+process  tried to draw from the entropy pool before enough inputs
+from reliable entropy sources have been entered.  The entropy may
+be low enough that an adversary who sees the output  could  guess
+the state of the pool by brute force, so in this event the system
+resets  its  estimate  of entropy to none.  This message is rate‐
+limited to happen no more often than once per minute, so  if  you
+want  to make sure it is gone you should consult to confirm it is
+zero.  The subsystem may print any of various messages about  ob‐
+taining  an  entropy  seed from the bootloader to diagnose saving
+and loading seeds on disk: The  bootloader  provided  an  entropy
+seed  to  the kernel, which recorded an estimate of N bits of en‐
+tropy in the process that generated it.  The bootloader  did  not
+provide an entropy seed to the kernel before starting the kernel.
+This does not necessarily indicate a problem; not all bootloaders
+support the option, and the setting can serve instead.  The boot‐
+loader  provided an entropy seed of the wrong size to the kernel.
+This may indicate a bug in The seed will be ignored.  The entropy
+seed provided by the bootloader was malformed.  The seed will  be
+entered  into the entropy pool, but it will be considered to con‐
+tribute no entropy.  A buggy bootloader tried to provide  an  en‐
+tropy  seed  more than once to the kernel.  Subsequent seeds will
+be entered into the entropy pool, but they will be considered  to
+contribute  no  entropy.   The system has gathered enough samples
+from interrupt timings and other non‐confident sources of entropy
+for the first time to unblock but it may not  have  full  entropy
+from  a seed or hardware random number generator.  The system has
+full entropy for the first time.  The and devices first  appeared
+in  The  subsystem  was  first  implemented  by  was then largely
+rewritten by and was most recently largely rewritten by Many peo‐
+ple are confused about what and mean.  Unfortunately,  no  amount
+of software engineering can fix that.

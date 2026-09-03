@@ -1,0 +1,70 @@
+The  NetBSD  version  of  PF is obsolete, and its use is strongly
+discouraged.  Use instead.   The  interface  is  a  pseudo‐device
+which  exposes  certain  changes to the state table used by State
+changes can be viewed by invoking on the interface.   If  config‐
+ured  with  a  physical synchronisation interface, will also send
+state changes out on that interface using IP multicast,  and  in‐
+sert  state changes received on that interface from other systems
+into the state table.  By default, all local changes to the state
+table are exposed via However, state  changes  from  packets  re‐
+ceived  by  over the network are not rebroadcast.  States created
+by a rule marked with the keyword are omitted from the  interface
+(see for details).  The interface will attempt to collapse multi‐
+ple  updates  of  the same state into one message where possible.
+The maximum number of times this can be done before the update is
+sent out is controlled by the parameter to ifconfig (see and  the
+example  below  for more details).  Each packet retrieved on this
+interface has a header associated with it of  length  The  header
+indicates  the  version  of  the protocol, address family, action
+taken on the following states, and the number of state table  en‐
+tries  attached in this packet.  This structure is defined in as:
+struct pfsync_header {         u_int8_t version;         u_int8_t
+af;         u_int8_t action;         u_int8_t  count;  };  States
+can  be synchronised between two or more firewalls using this in‐
+terface, by specifying a synchronisation interface using For  ex‐
+ample, the following command sets fxp0 as the synchronisation in‐
+terface: # ifconfig pfsync0 syncdev fxp0 By default, state change
+messages  are  sent out on the synchronisation interface using IP
+multicast packets.  The protocol is IP protocol 240, PFSYNC,  and
+the  multicast group used is 224.0.0.240.  When a peer address is
+specified using the keyword, the peer address is used as a desti‐
+nation for the pfsync traffic.  It is important that  the  pfsync
+traffic be well secured as there is no authentication on the pro‐
+tocol  and  it  would  be  trivial  to spoof packets which create
+states, bypassing the pf ruleset.  Either run the pfsync protocol
+on a trusted network - ideally  a  network  dedicated  to  pfsync
+messages  such  as  a  crossover  cable between two firewalls, or
+specify a peer address and protect the traffic with  (it  is  not
+supported  at  the moment on due to the lack of any encapsulation
+pseudo‐device).  There is  a  one‐to‐one  correspondence  between
+packets  seen  by  on  the interface, and packets sent out on the
+synchronisation interface, i.e. a packet with  4  state  deletion
+messages  on means that the same 4 deletions were sent out on the
+synchronisation interface.  However, the actual  packet  contents
+may differ as the messages sent over the network are "compressed"
+where  possible,  containing only the necessary information.  and
+can be used together to provide automatic failover of a  pair  of
+firewalls configured in parallel.  One firewall handles all traf‐
+fic  - if it dies or is shut down, the second firewall takes over
+automatically.  Both firewalls in this example have three  inter‐
+faces.   sis0  is the external interface, on the 10.0.0.0/24 sub‐
+net; sis1 is the internal interface, on the  192.168.0.0/24  sub‐
+net;  and  sis2 is the interface, using the 192.168.254.0/24 sub‐
+net.  A crossover cable connects the two firewalls via their sis2
+interfaces.  On all three interfaces, firewall A  uses  the  .254
+address,  while firewall B uses .253.  The interfaces are config‐
+ured as follows (firewall A  unless  otherwise  indicated):  inet
+10.0.0.254  255.255.255.0  NONE  inet 192.168.0.254 255.255.255.0
+NONE  inet  192.168.254.254  255.255.255.0  NONE  inet   10.0.0.1
+255.255.255.0   10.0.0.255  vhid  1  pass  foo  inet  192.168.0.1
+255.255.255.0 192.168.0.255 vhid 2 pass bar up syncdev sis2  must
+also  be  configured to allow and traffic through.  The following
+should be added to the top of pass quick on { sis2 } proto pfsync
+pass on { sis0 sis1 } proto carp If it  is  preferable  that  one
+firewall  handle the traffic, the on the backup firewall’s inter‐
+faces should be set to something higher than the primary’s.   For
+example,  if  firewall B is the backup, its would look like this:
+inet 192.168.0.1 255.255.255.0 192.168.0.255 vhid 2  pass  bar  \
+        advskew   100   The  following  must  also  be  added  to
+net.inet.carp.preempt=1 The  device  first  appeared  in  is  not
+available when using as a kernel module.

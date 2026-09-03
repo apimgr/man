@@ -1,0 +1,125 @@
+_R_P_C_._P_C_N_F_S_D(8)               System Manager’s Manual              _R_P_C_._P_C_N_F_S_D(8)
+
+NNAAMMEE
+       pcnfsd, rpc.pcnfsd - (PC)NFS authentication and print request server
+
+SSYYNNOOPPSSIISS
+       //uussrr//ssbbiinn//rrppcc..ppccnnffssdd
+
+DDEESSCCRRIIPPTTIIOONN
+       ppccnnffssdd is an RPC server that supports Sun ONC clients on PC (DOS, OS/2,
+       Macintosh,  and  other) systems. This page describes version two of the
+       ppccnnffssdd server.
+
+       rrppcc..ppccnnffssdd may be started from //eettcc//rrcc..llooccaall or by the iinneettdd(8)  super‐
+       daemon.  It  reads  the configuration file //eettcc//ppccnnffssdd..ccoonnff if present,
+       and then services RPC requests directed to program number 150001.  This
+       release  of  the ppccnnffssdd daemon supports both version 1 and version 2 of
+       the pcnfsd protocol. Consult the rrppccggeenn source file  ppccnnffssdd..xx  for  de‐
+       tails of the protocols.
+
+       The requests serviced by ppccnnffssdd fall into three categories: authentica‐
+       tion,  printing,  and  other. Only the authentication and printing ser‐
+       vices have administrative significance.
+
+AAUUTTHHEENNTTIICCAATTIIOONN
+       When ppccnnffssdd receives a PPCCNNFFSSDD__AAUUTTHH or  PPCCNNFFSSDD22__AAUUTTHH  request,  it  will
+       "log in" the user by validating the username and password and returning
+       the  corresponding  uid, gids, home directory, and umask. If ppccnnffssdd was
+       built with the WWTTMMPP compile‐time option, it will also append  a  record
+       to  the  wwttmmpp(5) data base. If you do not wish to record PC "logins" in
+       this way, you should add a line of the form
+
+              wwttmmpp ooffff
+
+       to the //eettcc//ppccnnffssdd..ccoonnff file.
+
+PPRRIINNTTIINNGG
+       ppccnnffssdd supports a printing model based on the use of  NFS  to  transfer
+       the  actual print data from the client to the server. The client system
+       issues a PPCCNNFFSSDD__PPRR__IINNIITT or PPCCNNFFSSDD22__PPRR__IINNIITT request, and the server  re‐
+       turns  the path to a spool directory which the client may use and which
+       is exported by NFS.  ppccnnffssdd creates a  subdirectory  for  each  of  its
+       clients:  the parent directory is normally //eexxppoorrtt//ppccnnffss and the subdi‐
+       rectory is the hostname of the client system.  If you  wish  to  use  a
+       different parent directory, you should add a line of the form
+
+              ssppoooollddiirr _p_a_t_h
+
+       to the //eettcc//ppccnnffssdd..ccoonnff file.
+
+       Once  a client has mounted the spool directory using NFS and has trans‐
+       ferred print data to a file in this directory, it  will  issue  a  PPCCNN‐‐
+       FFSSDD__PPRR__SSTTAARRTT  or  PPCCNNFFSSDD22__PPRR__SSTTAARRTT  request.   ppccnnffssdd handles this, and
+       most other print‐related requests, by constructing a command  based  on
+       the  printing services of the server operating system and executing the
+       command using the identity of the PC user.  Since  this  involves  set‐
+       user‐id privileges, ppccnnffssdd must be run as root.
+
+       Every  print  request  from the client includes the name of the printer
+       which is to be used. In SunOS, this name corresponds to a printer defi‐
+       nition in the //eettcc//pprriinnttccaapp(5) database. If you wish to define  a  non‐
+       standard  way of processing print data, you should define a new printer
+       and arrange for the client to print to this printer. There are two ways
+       of setting up a new printer.  The first involves the addition of an en‐
+       try to //eettcc//pprriinnttccaapp(5) and the creation of filters to perform the  re‐
+       quired processing. This is outside the scope of this discussion. In ad‐
+       dition,  ppccnnffssdd  includes  a mechanism by which  you can define virtual
+       printers known only to ppccnnffssdd clients. Each printer  is  defined  by  a
+       line in the //eettcc//ppccnnffssdd..ccoonnff file of the following form
+
+              pprriinntteerr _n_a_m_e _a_l_i_a_s_‐_f_o_r _c_o_m_m_a_n_d
+
+       _n_a_m_e  is  the  name of the printer you want to define. _a_l_i_a_s_‐_f_o_r is the
+       name of a "real" printer which corresponds to this printer.  For  exam‐
+       ple,  a  request  to display the queue for _n_a_m_e will be translated into
+       the corresponding request for the printer _a_l_i_a_s_‐_f_o_r. If  you  have  de‐
+       fined  a printer in such a way that there is no "real" printer to which
+       it corresponds, use a single "‐" for this field. (See the definition of
+       the printer tteesstt below for an example.) _c_o_m_m_a_n_d is a command which will
+       be executed whenever a file is printed on _n_a_m_e.  This command  is  exe‐
+       cuted by the Bourne shell, //bbiinn//sshh using the ‐‐cc option. For complex op‐
+       erations  you  should  construct an executable shell program and invoke
+       that in _c_o_m_m_a_n_d.  Within _c_o_m_m_a_n_d the following tokens will be replaced:
+
+       TTookkeenn     SSuubbssttiittuuttiioonn
+
+       $$FFIILLEE     Replaced by the full path name of the print data  file.  When
+                 the command has been executed, the file will be unlinked.
+
+       $$UUSSEERR     Replaced  by the username of the user logged in to the client
+                 system.
+
+       $$HHOOSSTT     Replaced by the host name of the client system.
+
+       Consider the following example //eettcc//ppccnnffssdd..ccoonnff file:
+
+              printer rotated lw /usr/local/bin/enscript ‐2r $FILE
+              printer test ‐ /usr/bin/cp $FILE /usr/tmp/$HOST‐$USER
+
+       If a client system prints a job on the printer rroottaatteedd the utility  eenn‐‐
+       ssccrriipptt will be invoked to pre‐process the file $FILE. In this case, the
+       ‐‐22rr  option  causes the file to be printed in two‐column rotated format
+       on the default PostScript® printer.  If the client requests a  list  of
+       the  print  queue for the printer rroottaatteedd the ppccnnffssdd daemon will trans‐
+       late this into a request for a listing for the printer llww..
+
+       The printer tteesstt is used only  for  testing.  Any  file  sent  to  this
+       printer  will  be copied into //uussrr//ttmmpp..  Any request to list the queue,
+       check the status, etc. of printer tteesstt will  be  rejected  because  the
+       _a_l_i_a_s_‐_f_o_r has been specified as "‐".
+
+FFIILLEESS
+       //eettcc//ppccnnffssdd..ccoonnff    configuration file
+       //eexxppoorrtt//ppccnnffss       default print spool directory
+
+SSEEEE AALLSSOO
+       llpprr(1), llppcc(8)
+
+HHIISSTTOORRYY
+       The  ppccnnffssdd  source  code is distributed by Sun Microsystems, Inc. with
+       their PC/NFS product under terms described in common.h in  that  source
+       code.   Those  terms  require that you be informed that this version of
+       ppccnnffssdd was modified to run on NetBSD and is NOT supported by Sun.
+
+                                 25 April 1991                   _R_P_C_._P_C_N_F_S_D(8)

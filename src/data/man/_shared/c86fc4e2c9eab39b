@@ -1,0 +1,247 @@
+INTR_EVENT(9)            BSD Kernel Developer's Manual           INTR_EVENT(9)
+
+NNAAMMEE
+     iinnttrr__eevveenntt__aadddd__hhaannddlleerr, iinnttrr__eevveenntt__ccrreeaattee, iinnttrr__eevveenntt__ddeessttrrooyy,
+     iinnttrr__eevveenntt__hhaannddllee, iinnttrr__eevveenntt__rreemmoovvee__hhaannddlleerr, iinnttrr__pprriioorriittyy — kernel in‐
+     terrupt handler and thread API
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//bbuuss..hh>>
+     ##iinncclluuddee <<ssyyss//iinntteerrrruupptt..hh>>
+
+     _i_n_t
+     iinnttrr__eevveenntt__aadddd__hhaannddlleerr(_s_t_r_u_c_t _i_n_t_r___e_v_e_n_t _*_i_e, _c_o_n_s_t _c_h_a_r _*_n_a_m_e,
+         _d_r_i_v_e_r___f_i_l_t_e_r___t _f_i_l_t_e_r, _d_r_i_v_e_r___i_n_t_r___t _h_a_n_d_l_e_r, _v_o_i_d _*_a_r_g, _u___c_h_a_r _p_r_i,
+         _e_n_u_m _i_n_t_r___t_y_p_e _f_l_a_g_s, _v_o_i_d _*_*_c_o_o_k_i_e_p);
+
+     _i_n_t
+     iinnttrr__eevveenntt__ccrreeaattee(_s_t_r_u_c_t _i_n_t_r___e_v_e_n_t _*_*_e_v_e_n_t, _v_o_i_d _*_s_o_u_r_c_e, _i_n_t _f_l_a_g_s,
+         _i_n_t _i_r_q, _v_o_i_d _(_*_p_r_e___i_t_h_r_e_a_d_)_(_v_o_i_d _*_), _v_o_i_d _(_*_p_o_s_t___i_t_h_r_e_a_d_)_(_v_o_i_d _*_),
+         _v_o_i_d _(_*_p_o_s_t___f_i_l_t_e_r_)_(_v_o_i_d _*_), _i_n_t _(_*_a_s_s_i_g_n___c_p_u_)_(_v_o_i_d _*_, _i_n_t_),
+         _c_o_n_s_t _c_h_a_r _*_f_m_t, _._._.);
+
+     _i_n_t
+     iinnttrr__eevveenntt__ddeessttrrooyy(_s_t_r_u_c_t _i_n_t_r___e_v_e_n_t _*_i_e);
+
+     _i_n_t
+     iinnttrr__eevveenntt__hhaannddllee(_s_t_r_u_c_t _i_n_t_r___e_v_e_n_t _*_i_e, _s_t_r_u_c_t _t_r_a_p_f_r_a_m_e _*_f_r_a_m_e);
+
+     _i_n_t
+     iinnttrr__eevveenntt__rreemmoovvee__hhaannddlleerr(_v_o_i_d _*_c_o_o_k_i_e);
+
+     _u___c_h_a_r
+     iinnttrr__pprriioorriittyy(_e_n_u_m _i_n_t_r___t_y_p_e _f_l_a_g_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     The interrupt event API provides methods to manage the registration and
+     execution of interrupt handlers and their associated thread contexts.
+
+     Each interrupt event in the system corresponds to a single hardware or
+     software interrupt source.  Each interrupt event maintains a list of in‐
+     terrupt handlers, sorted by priority, which will be invoked when handling
+     the event.  An interrupt event will typically, but not always, have an
+     associated kthread(9), known as the interrupt thread.  Finally, each
+     event contains optional callback functions which will be invoked before
+     and after the handler functions themselves.
+
+     An interrupt handler contains two distinct handler functions: the _f_i_l_t_e_r
+     and the thread _h_a_n_d_l_e_r.  The _f_i_l_t_e_r function is run from interrupt con‐
+     text and is intended to perform quick handling such as acknowledging or
+     masking a hardware interrupt, and queueing work for the ensuing thread
+     _h_a_n_d_l_e_r.  Both functions are optional; each interrupt handler may choose
+     to register a filter, a thread handler, or both.  Each interrupt handler
+     also consists of a name, a set of flags, and an opaque argument which
+     will be passed to both the _f_i_l_t_e_r and _h_a_n_d_l_e_r functions.
+
+   HHaannddlleerr CCoonnssttrraaiinnttss
+     The _f_i_l_t_e_r function is executed inside a critical(9) section.  Therefore,
+     filters may not yield the CPU for any reason, and may only use spin locks
+     to access shared data.  Allocating memory within a filter is not permit‐
+     ted.
+
+     The _h_a_n_d_l_e_r function executes from the context of the associated inter‐
+     rupt kernel thread.  Sleeping is not permitted, but the interrupt thread
+     may be preempted by higher priority threads.  Thus, threaded handler
+     functions may obtain non-sleepable locks, as described in locking(9).
+     Any memory or zone allocations in an interrupt thread must specify the
+     M_NOWAIT flag, and any allocation errors must be handled.
+
+     The exception to these constraints is software interrupt threads, which
+     are allowed to sleep but should be allocated and scheduled using the
+     swi(9) interface.
+
+   FFuunnccttiioonn DDeessccrriippttiioonnss
+     The iinnttrr__eevveenntt__ccrreeaattee() function creates a new interrupt event.  The
+     _e_v_e_n_t argument points to a _s_t_r_u_c_t _i_n_t_r___e_v_e_n_t pointer that will reference
+     the newly created event upon success.  The _s_o_u_r_c_e argument is an opaque
+     pointer which will be passed to the _p_r_e___i_t_h_r_e_a_d, _p_o_s_t___i_t_h_r_e_a_d, and
+     _p_o_s_t___f_i_l_t_e_r callbacks.  The _f_l_a_g_s argument is a mask of properties of
+     this thread.  The only valid flag currently for iinnttrr__eevveenntt__ccrreeaattee() is
+     IE_SOFT to specify that this interrupt thread is a software interrupt.
+     The _e_n_a_b_l_e and _d_i_s_a_b_l_e arguments specify optional functions used to en‐
+     able and disable this interrupt thread's interrupt source.  The _i_r_q argu‐
+     ment is the unique interrupt vector number corresponding to the event.
+     The _p_r_e___i_t_h_r_e_a_d, _p_o_s_t___i_t_h_r_e_a_d, and _p_o_s_t___f_i_l_t_e_r arguments are callback
+     functions that are invoked at different points while handling an inter‐
+     rupt.  This is described in more detail in the _H_a_n_d_l_e_r _C_a_l_l_b_a_c_k_s section,
+     below.  They may be _N_U_L_L to specify no callback.  The _a_s_s_i_g_n___c_p_u argument
+     points to a callback function that will be invoked when binding an inter‐
+     rupt to a particular CPU.  It may be _N_U_L_L if binding is unsupported.  The
+     remaining arguments form a printf(9) argument list that is used to build
+     the base name of the new interrupt thread.  The full name of an interrupt
+     thread is formed by concatenating the base name of the interrupt thread
+     with the names of all of its interrupt handlers.
+
+     The iinnttrr__eevveenntt__ddeessttrrooyy() function destroys a previously created interrupt
+     event by releasing its resources.  An interrupt event can only be de‐
+     stroyed if it has no handlers remaining.
+
+     The iinnttrr__eevveenntt__aadddd__hhaannddlleerr() function adds a new handler to an existing
+     interrupt event specified by _i_e.  The _n_a_m_e argument specifies a name for
+     this handler.  The _f_i_l_t_e_r argument provide the filter function to exe‐
+     cute.  The _h_a_n_d_l_e_r argument provides the handler function to be executed
+     from the event's interrupt thread.  The _a_r_g argument will be passed to
+     the _f_i_l_t_e_r and _h_a_n_d_l_e_r functions when they are invoked.  The _p_r_i argument
+     specifies the priority of this handler, corresponding to the values de‐
+     fined in <_s_y_s_/_p_r_i_o_r_i_t_y_._h>.  It determines the order this handler is
+     called relative to the other handlers for this event, as well as the
+     scheduling priority of the backing kernel thread.  _f_l_a_g_s argument can be
+     used to specify properties of this handler as defined in <_s_y_s_/_b_u_s_._h>.  If
+     _c_o_o_k_i_e_p is not NULL, then it will be assigned a cookie that can be used
+     later to remove this handler.
+
+     The iinnttrr__eevveenntt__hhaannddllee() function is the main entry point into the inter‐
+     rupt handling code.  It must be called from an interrupt context.  The
+     function will execute all filter handlers associated with the interrupt
+     event _i_e, and schedule the associated interrupt thread to run, if appli‐
+     cable.  The _f_r_a_m_e argument is used to pass a pointer to the _s_t_r_u_c_t
+     _t_r_a_p_f_r_a_m_e containing the machine state at the time of the interrupt.  The
+     main body of this function runs within a critical(9) section.
+
+     The iinnttrr__eevveenntt__rreemmoovvee__hhaannddlleerr() function removes an interrupt handler
+     from the interrupt event specified by _i_e.  The _c_o_o_k_i_e argument, obtained
+     from iinnttrr__eevveenntt__aadddd__hhaannddlleerr(), identifies the handler to remove.
+
+     The iinnttrr__pprriioorriittyy() function translates the INTR_TYPE_* interrupt flags
+     into interrupt thread scheduling priorities.
+
+     The interrupt flags not related to the type of a particular interrupt
+     (INTR_TYPE_*) can be used to specify additional properties of both hard‐
+     ware and software interrupt handlers.  The INTR_EXCL flag specifies that
+     this handler cannot share an interrupt thread with another handler.  The
+     INTR_MPSAFE flag specifies that this handler is MP safe in that it does
+     not need the Giant mutex to be held while it is executed.  The
+     INTR_ENTROPY flag specifies that the interrupt source this handler is
+     tied to is a good source of entropy, and thus that entropy should be
+     gathered when an interrupt from the handler's source triggers.  Pres‐
+     ently, the INTR_ENTROPY flag is not valid for software interrupt han‐
+     dlers.
+
+   HHaannddlleerr CCaallllbbaacckkss
+     Each _s_t_r_u_c_t _i_n_t_r___e_v_e_n_t is assigned three optional callback functions when
+     it is created: _p_r_e___i_t_h_r_e_a_d, _p_o_s_t___i_t_h_r_e_a_d, and _p_o_s_t___f_i_l_t_e_r.  These call‐
+     backs are intended to be defined by the interrupt controller driver, to
+     allow for actions such as masking and unmasking hardware interrupt sig‐
+     nals.
+
+     When an interrupt is triggered, all filters are run to determine if any
+     threaded interrupt handlers should be scheduled for execution by the as‐
+     sociated interrupt thread. If no threaded handlers are scheduled, the
+     _p_o_s_t___f_i_l_t_e_r callback is invoked which should acknowledge the interrupt
+     and permit it to trigger in the future.  If any threaded handlers are
+     scheduled, the _p_r_e___i_t_h_r_e_a_d callback is invoked instead.  This handler
+     should acknowledge the interrupt, but it should also ensure that the in‐
+     terrupt will not fire continuously until after the threaded handlers have
+     executed.  Typically this callback masks level-triggered interrupts in an
+     interrupt controller while leaving edge-triggered interrupts alone.  Once
+     all threaded handlers have executed, the _p_o_s_t___i_t_h_r_e_a_d callback is invoked
+     from the interrupt thread to enable future interrupts.  Typically this
+     callback unmasks level-triggered interrupts in an interrupt controller.
+
+RREETTUURRNN VVAALLUUEESS
+     The iinnttrr__eevveenntt__aadddd__hhaannddlleerr(), iinnttrr__eevveenntt__ccrreeaattee(), iinnttrr__eevveenntt__ddeessttrrooyy(),
+     iinnttrr__eevveenntt__hhaannddllee(), and iinnttrr__eevveenntt__rreemmoovvee__hhaannddlleerr() functions return
+     zero on success and non-zero on failure.  The iinnttrr__pprriioorriittyy() function
+     returns a process priority corresponding to the passed in interrupt
+     flags.
+
+EEXXAAMMPPLLEESS
+     The swi_add(9) function demonstrates the use of iinnttrr__eevveenntt__ccrreeaattee() and
+     iinnttrr__eevveenntt__aadddd__hhaannddlleerr().
+
+           int
+           swi_add(struct intr_event **eventp, const char *name, driver_intr_t handler,
+               void *arg, int pri, enum intr_type flags, void **cookiep)
+           {
+                   struct intr_event *ie;
+                   int error = 0;
+
+                   if (flags & INTR_ENTROPY)
+                           return (EINVAL);
+
+                   ie = (eventp != NULL) ? *eventp : NULL;
+
+                   if (ie != NULL) {
+                           if (!(ie->ie_flags & IE_SOFT))
+                                   return (EINVAL);
+                   } else {
+                           error = intr_event_create(&ie, NULL, IE_SOFT, 0,
+                               NULL, NULL, NULL, swi_assign_cpu, "swi%d:", pri);
+                           if (error)
+                                   return (error);
+                           if (eventp != NULL)
+                                   *eventp = ie;
+                   }
+                   if (handler != NULL) {
+                           error = intr_event_add_handler(ie, name, NULL, handler, arg,
+                               PI_SWI(pri), flags, cookiep);
+                   }
+                   return (error);
+           }
+
+EERRRROORRSS
+     The iinnttrr__eevveenntt__aadddd__hhaannddlleerr() function will fail if:
+
+     [EINVAL]           The _i_e or _n_a_m_e arguments are NULL.
+
+     [EINVAL]           The _h_a_n_d_l_e_r and _f_i_l_t_e_r arguments are both NULL.
+
+     [EINVAL]           The IH_EXCLUSIVE flag is specified and the interrupt
+                        thread _i_e already has at least one handler, or the in‐
+                        terrupt thread _i_e already has an exclusive handler.
+
+     The iinnttrr__eevveenntt__ccrreeaattee() function will fail if:
+
+     [EINVAL]           A flag other than IE_SOFT was specified in the _f_l_a_g_s
+                        parameter.
+
+     The iinnttrr__eevveenntt__ddeessttrrooyy() function will fail if:
+
+     [EINVAL]           The _i_e argument is NULL.
+
+     [EBUSY]            The interrupt event pointed to by _i_e has at least one
+                        handler which has not been removed with
+                        iinnttrr__eevveenntt__rreemmoovvee__hhaannddlleerr().
+
+     The iinnttrr__eevveenntt__hhaannddllee() function will fail if:
+
+     [EINVAL]           The _i_e argument is NULL.
+
+     [EINVAL]           There are no interrupt handlers assigned to _i_e.
+
+     [EINVAL]           The interrupt was not acknowledged by any filter and
+                        has no associated thread handler.
+
+     The iinnttrr__eevveenntt__rreemmoovvee__hhaannddlleerr() function will fail if:
+
+     [EINVAL]           The _c_o_o_k_i_e argument is NULL.
+
+SSEEEE AALLSSOO
+     critical(9), kthread(9), locking(9), malloc(9), swi(9), uma(9)
+
+HHIISSTTOORRYY
+     Interrupt threads and their corresponding API first appeared in
+     FreeBSD 5.0.
+
+BSD                            October 30, 2022                            BSD

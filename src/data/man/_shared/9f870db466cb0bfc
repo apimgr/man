@@ -1,0 +1,351 @@
+LOADER_4TH(8)             BSD System Manager's Manual            LOADER_4TH(8)
+
+NNAAMMEE
+     llooaaddeerr__44tthh — kernel bootstrapping final stage
+
+DDEESSCCRRIIPPTTIIOONN
+     The program called llooaaddeerr__44tthh is the final stage of FreeBSD's kernel
+     bootstrapping process.  On IA32 (i386) architectures, it is a _B_T_X client.
+     It is linked statically to libsa(3) and usually located in the directory
+     _/_b_o_o_t.
+
+     It provides a scripting language that can be used to automate tasks, do
+     pre-configuration or assist in recovery procedures.  This scripting lan‐
+     guage is roughly divided in two main components.  The smaller one is a
+     set of commands designed for direct use by the casual user, called
+     "builtin commands" for historical reasons.  The main drive behind these
+     commands is user-friendliness.  The bigger component is an ANS Forth com‐
+     patible Forth interpreter based on FICL, by John Sadler.
+
+     During initialization, llooaaddeerr__44tthh will probe for a console and set the
+     _c_o_n_s_o_l_e variable, or set it to serial console (“comconsole”) if the pre‐
+     vious boot stage used that.  If multiple consoles are selected, they will
+     be listed separated by spaces.  Then, devices are probed, _c_u_r_r_d_e_v and
+     _l_o_a_d_d_e_v are set, and _L_I_N_E_S is set to 24.  Next, FICL is initialized, the
+     builtin words are added to its vocabulary, and _/_b_o_o_t_/_b_o_o_t_._4_t_h is pro‐
+     cessed if it exists.  No disk switching is possible while that file is
+     being read.  The inner interpreter llooaaddeerr__44tthh will use with FICL is then
+     set to iinntteerrpprreett, which is FICL's default.  After that, _/_b_o_o_t_/_l_o_a_d_e_r_._r_c
+     is processed if available.  These files are processed through the iinncclluuddee
+     command, which reads all of them into memory before processing them, mak‐
+     ing disk changes possible.
+
+     At this point, if an aauuttoobboooott has not been tried, and if _a_u_t_o_b_o_o_t___d_e_l_a_y
+     is not set to “NO” (not case sensitive), then an aauuttoobboooott will be tried.
+     If the system gets past this point, _p_r_o_m_p_t will be set and llooaaddeerr__44tthh
+     will engage interactive mode.  Please note that historically even when
+     _a_u_t_o_b_o_o_t___d_e_l_a_y is set to “0” user will be able to interrupt autoboot
+     process by pressing some key on the console while kernel and modules are
+     being loaded.  In some cases such behaviour may be undesirable, to pre‐
+     vent it set _a_u_t_o_b_o_o_t___d_e_l_a_y to “-1”, in this case llooaaddeerr__44tthh will engage
+     interactive mode only if aauuttoobboooott has failed.
+
+BBUUIILLTTIINN CCOOMMMMAANNDDSS
+     In llooaaddeerr__44tthh, builtin commands take parameters from the command line.
+     Presently, the only way to call them from a script is by using _e_v_a_l_u_a_t_e
+     on a string.  If an error condition occurs, an exception will be gener‐
+     ated, which can be intercepted using ANS Forth exception handling words.
+     If not intercepted, an error message will be displayed and the inter‐
+     preter's state will be reset, emptying the stack and restoring interpret‐
+     ing mode.  The commands are described in the loader_simp(8) “BUILTIN
+     COMMANDS” section.
+
+   BBUUIILLTTIINN EENNVVIIRROONNMMEENNTT VVAARRIIAABBLLEESS
+     The environment variables common to all interpreters are described in the
+     loader_simp(8) “BUILTIN ENVIRONMENT VARIABLES” section.
+
+   BBUUIILLTTIINN PPAARRSSEERR
+     When a builtin command is executed, the rest of the line is taken by it
+     as arguments, and it is processed by a special parser which is not used
+     for regular Forth commands.
+
+     This special parser applies the following rules to the parsed text:
+
+     1.   All backslash characters are preprocessed.
+
+          ••   \b , \f , \r , \n and \t are processed as in C.
+
+          ••   \s is converted to a space.
+
+          ••   \v is converted to ASCII 11.
+
+          ••   \z is just skipped.  Useful for things like “\0xf\z\0xf”.
+
+          ••   \0xN and \0xNN are replaced by the hex N or NN.
+
+          ••   \NNN is replaced by the octal NNN ASCII character.
+
+          ••   \" , \' and \$ will escape these characters, preventing them
+              from receiving special treatment in Step 2, described below.
+
+          ••   \\ will be replaced with a single \ .
+
+          ••   In any other occurrence, backslash will just be removed.
+
+     2.   Every string between non-escaped quotes or double-quotes will be
+          treated as a single word for the purposes of the remaining steps.
+
+     3.   Replace any $VARIABLE or ${VARIABLE} with the value of the environ‐
+          ment variable _V_A_R_I_A_B_L_E.
+
+     4.   Space-delimited arguments are passed to the called builtin command.
+          Spaces can also be escaped through the use of \\ .
+
+     An exception to this parsing rule exists, and is described in _B_U_I_L_T_I_N_S
+     _A_N_D _F_O_R_T_H.
+
+   BBUUIILLTTIINNSS AANNDD FFOORRTTHH
+     All builtin words are state-smart, immediate words.  If interpreted, they
+     behave exactly as described previously.  If they are compiled, though,
+     they extract their arguments from the stack instead of the command line.
+
+     If compiled, the builtin words expect to find, at execution time, the
+     following parameters on the stack:
+           _a_d_d_r_N _l_e_n_N _._._. _a_d_d_r_2 _l_e_n_2 _a_d_d_r_1 _l_e_n_1 _N
+     where _a_d_d_r_X _l_e_n_X are strings which will compose the command line that
+     will be parsed into the builtin's arguments.  Internally, these strings
+     are concatenated in from 1 to N, with a space put between each one.
+
+     If no arguments are passed, a 0 _m_u_s_t be passed, even if the builtin ac‐
+     cepts no arguments.
+
+     While this behavior has benefits, it has its trade-offs.  If the execu‐
+     tion token of a builtin is acquired (through '' or [['']]), and then passed
+     to ccaattcchh or eexxeeccuuttee, the builtin behavior will depend on the system state
+     _a_t _t_h_e _t_i_m_e ccaattcchh _o_r eexxeeccuuttee _i_s _p_r_o_c_e_s_s_e_d_!  This is particularly annoying
+     for programs that want or need to handle exceptions.  In this case, the
+     use of a proxy is recommended.  For example:
+           : (boot) boot;
+
+FFIICCLL
+     FICL is a Forth interpreter written in C, in the form of a forth virtual
+     machine library that can be called by C functions and vice versa.
+
+     In llooaaddeerr__44tthh, each line read interactively is then fed to FICL, which
+     may call llooaaddeerr__44tthh back to execute the builtin words.  The builtin
+     iinncclluuddee will also feed FICL, one line at a time.
+
+     The words available to FICL can be classified into four groups.  The ANS
+     Forth standard words, extra FICL words, extra FreeBSD words, and the
+     builtin commands; the latter were already described.  The ANS Forth stan‐
+     dard words are listed in the _S_T_A_N_D_A_R_D_S section.  The words falling in the
+     two other groups are described in the following subsections.
+
+   FFIICCLL EEXXTTRRAA WWOORRDDSS
+     ..eennvv
+
+     ..vveerr
+
+     --rroollll
+
+     22ccoonnssttaanntt
+
+     >>nnaammee
+
+     bbooddyy>>
+
+     ccoommppaarree        This is the STRING word set's ccoommppaarree.
+
+     ccoommppiillee--oonnllyy
+
+     eennddiiff
+
+     ffoorrggeett--wwiidd
+
+     ppaarrssee--wwoorrdd
+
+     sslliitteerraall       This is the STRING word set's sslliitteerraall.
+
+     wwiidd--sseett--ssuuppeerr
+
+     ww@@
+
+     ww!!
+
+     xx..
+
+     eemmppttyy
+
+     cceellll--
+
+     --rroott
+
+   FFRREEEEBBSSDD EEXXTTRRAA WWOORRDDSS
+     $$ (--)    Evaluates the remainder of the input buffer, after having
+               printed it first.
+
+     %% (--)    Evaluates the remainder of the input buffer under a ccaattcchh ex‐
+               ception guard.
+
+     ..##        Works like .  but without outputting a trailing space.
+
+     ffcclloossee (_f_d _-_-)
+               Closes a file.
+
+     ffkkeeyy (_f_d _-_- _c_h_a_r)
+               Reads a single character from a file.
+
+     ffllooaadd (_f_d _-_-)
+               Processes a file _f_d.
+
+     ffooppeenn (_a_d_d_r _l_e_n _m_o_d_e -- _f_d)
+               Opens a file.  Returns a file descriptor, or -1 in case of
+               failure.  The _m_o_d_e parameter selects whether the file is to be
+               opened for read access, write access, or both.  The constants
+               O_RDONLY, O_WRONLY, and O_RDWR are defined in
+               _/_b_o_o_t_/_s_u_p_p_o_r_t_._4_t_h, indicating read only, write only, and read-
+               write access, respectively.
+
+     ffrreeaadd (_f_d _a_d_d_r _l_e_n _-_- _l_e_n_')
+               Tries to read _l_e_n bytes from file _f_d into buffer _a_d_d_r.  Returns
+               the actual number of bytes read, or -1 in case of error or end
+               of file.
+
+     hheeaapp?? (-- _c_e_l_l_s)
+               Return the space remaining in the dictionary heap, in cells.
+               This is not related to the heap used by dynamic memory alloca‐
+               tion words.
+
+     iinnbb (_p_o_r_t _-_- _c_h_a_r)
+               Reads a byte from a port.
+
+     kkeeyy (-- _c_h_a_r)
+               Reads a single character from the console.
+
+     kkeeyy?? (-- _f_l_a_g)
+               Returns ttrruuee if there is a character available to be read from
+               the console.
+
+     mmss (_u _-_-)
+               Waits _u microseconds.
+
+     oouuttbb (_p_o_r_t _c_h_a_r _-_-)
+               Writes a byte to a port.
+
+     sseeccoonnddss (-- _u)
+               Returns the number of seconds since midnight.
+
+     ttiibb>> (-- _a_d_d_r _l_e_n)
+               Returns the remainder of the input buffer as a string on the
+               stack.
+
+     ttrraaccee!! (_f_l_a_g _-_-)
+               Activates or deactivates tracing.  Does not work with ccaattcchh.
+
+   FFRREEEEBBSSDD DDEEFFIINNEEDD EENNVVIIRROONNMMEENNTTAALL QQUUEERRIIEESS
+     arch-i386
+             TTRRUUEE if the architecture is IA32.
+
+     FreeBSD_version
+             FreeBSD version at compile time.
+
+     loader_version
+             llooaaddeerr__44tthh version.
+
+SSEECCUURRIITTYY
+     Access to the llooaaddeerr__44tthh command line provides several ways of compromis‐
+     ing system security, including, but not limited to:
+
+     ••   Booting from removable storage, by setting the _c_u_r_r_d_e_v or _l_o_a_d_d_e_v
+         variables
+
+     ••   Executing binary of choice, by setting the _i_n_i_t___p_a_t_h or _i_n_i_t___s_c_r_i_p_t
+         variables
+
+     ••   Overriding ACPI DSDT to inject arbitrary code into the ACPI subsystem
+
+     One can prevent unauthorized access to the llooaaddeerr__44tthh command line by
+     setting the _p_a_s_s_w_o_r_d, or setting _a_u_t_o_b_o_o_t___d_e_l_a_y to -1.  See
+     loader.conf(5) for details.  In order for this to be effective, one
+     should also configure the firmware (BIOS or UEFI) to prevent booting from
+     unauthorized devices.
+
+MMDD
+     Memory disk (MD) can be used when the llooaaddeerr__44tthh was compiled with
+     _M_D___I_M_A_G_E___S_I_Z_E.  The size of the memory disk is determined by
+     _M_D___I_M_A_G_E___S_I_Z_E.  If MD available, a file system can be embedded into the
+     llooaaddeerr__44tthh with _/_s_y_s_/_t_o_o_l_s_/_e_m_b_e_d___m_f_s_._s_h.  Then, MD will be probed and be
+     set to _c_u_r_r_d_e_v during initialization.
+
+     Currently, MD is only supported in loader.efi(8).
+
+FFIILLEESS
+     /boot/loader                    llooaaddeerr__44tthh itself.
+     /boot/boot.4th                  Additional FICL initialization.
+     /boot/defaults/loader.conf
+     /boot/loader.4th                Extra builtin-like words.
+     /boot/loader.conf
+     /boot/loader.conf.local         llooaaddeerr__44tthh configuration files, as de‐
+                                     scribed in loader.conf(5).
+     /boot/loader.rc                 llooaaddeerr__44tthh bootstrapping script.
+     /boot/loader.help               Loaded by hheellpp.  Contains the help mes‐
+                                     sages.
+     /boot/support.4th               _l_o_a_d_e_r_._c_o_n_f processing words.
+     /usr/share/examples/bootforth/  Assorted examples.
+
+EEXXAAMMPPLLEESS
+     Boot in single user mode:
+
+           boot -s
+
+     Load the kernel, a splash screen, and then autoboot in five seconds.  No‐
+     tice that a kernel must be loaded before any other llooaadd command is at‐
+     tempted.
+
+           load kernel
+           load splash_bmp
+           load -t splash_image_data /boot/chuckrulez.bmp
+           autoboot 5
+
+     Set the disk unit of the root device to 2, and then boot.  This would be
+     needed in a system with two IDE disks, with the second IDE disk hardwired
+     to ada2 instead of ada1.
+
+           set root_disk_unit=2
+           boot /boot/kernel/kernel
+
+     Set the default device used for loading a kernel from a ZFS filesystem:
+
+           set currdev=zfs:tank/ROOT/knowngood:
+
+EERRRROORRSS
+     The following values are thrown by llooaaddeerr__44tthh:
+
+           100    Any type of error in the processing of a builtin.
+
+           -1     AAbboorrtt executed.
+
+           -2     AAbboorrtt"" executed.
+
+           -56    QQuuiitt executed.
+
+           -256   Out of interpreting text.
+
+           -257   Need more text to succeed -- will finish on next run.
+
+           -258   BByyee executed.
+
+           -259   Unspecified error.
+
+SSEEEE AALLSSOO
+     libsa(3), loader.conf(5), tuning(7), boot(8), btxld(8)
+
+SSTTAANNDDAARRDDSS
+     For the purposes of ANS Forth compliance, loader is an _A_N_S _F_o_r_t_h _S_y_s_t_e_m
+     _w_i_t_h _E_n_v_i_r_o_n_m_e_n_t_a_l _R_e_s_t_r_i_c_t_i_o_n_s_, _P_r_o_v_i_d_i_n_g .(, :noname, ?do, parse, pick,
+     roll, refill, to, value, \, false, true, <>, 0<>, compile, , erase, nip,
+     tuck _a_n_d marker _f_r_o_m _t_h_e _C_o_r_e _E_x_t_e_n_s_i_o_n_s _w_o_r_d _s_e_t_, _P_r_o_v_i_d_i_n_g _t_h_e _E_x_c_e_p_‐
+     _t_i_o_n _E_x_t_e_n_s_i_o_n_s _w_o_r_d _s_e_t_, _P_r_o_v_i_d_i_n_g _t_h_e _L_o_c_a_l_s _E_x_t_e_n_s_i_o_n_s _w_o_r_d _s_e_t_, _P_r_o_‐
+     _v_i_d_i_n_g _t_h_e _M_e_m_o_r_y_-_A_l_l_o_c_a_t_i_o_n _E_x_t_e_n_s_i_o_n_s _w_o_r_d _s_e_t_, _P_r_o_v_i_d_i_n_g .s, bye, for‐
+     get, see, words, [if], [else] _a_n_d [then] _f_r_o_m _t_h_e _P_r_o_g_r_a_m_m_i_n_g_-_T_o_o_l_s _e_x_‐
+     _t_e_n_s_i_o_n _w_o_r_d _s_e_t_, _P_r_o_v_i_d_i_n_g _t_h_e _S_e_a_r_c_h_-_O_r_d_e_r _e_x_t_e_n_s_i_o_n_s _w_o_r_d _s_e_t_.
+
+HHIISSTTOORRYY
+     The llooaaddeerr__44tthh first appeared in FreeBSD 3.1.
+
+AAUUTTHHOORRSS
+     The llooaaddeerr__44tthh was written by Michael Smith <msmith@FreeBSD.org>.
+
+     FICL was written by John Sadler <john_sadler@alum.mit.edu>.
+
+BSD                           September 29, 2021                           BSD

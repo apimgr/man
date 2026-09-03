@@ -1,0 +1,174 @@
+NVME(4)                  BSD Kernel Interfaces Manual                  NVME(4)
+
+NNAAMMEE
+     nnvvmmee — NVM Express core driver
+
+SSYYNNOOPPSSIISS
+     To compile this driver into your kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee nnvvmmee
+
+     Or, to load the driver as a module at boot, place the following line in
+     loader.conf(5):
+
+           nvme_load="YES"
+
+     Most users will also want to enable nvd(4) or nda(4) to expose NVM Ex‐
+     press namespaces as disk devices which can be partitioned.  Note that in
+     NVM Express terms, a namespace is roughly equivalent to a SCSI LUN.
+
+DDEESSCCRRIIPPTTIIOONN
+     The nnvvmmee driver provides support for NVM Express (NVMe) controllers, such
+     as:
+
+     ••   Hardware initialization
+
+     ••   Per-CPU IO queue pairs
+
+     ••   API for registering NVMe namespace consumers such as nvd(4) or nda(4)
+
+     ••   API for submitting NVM commands to namespaces
+
+     ••   Ioctls for controller and namespace configuration and management
+
+     The nnvvmmee driver creates controller device nodes in the format _/_d_e_v_/_n_v_m_e_X
+     and namespace device nodes in the format _/_d_e_v_/_n_v_m_e_X_n_s_Y.  Note that the
+     NVM Express specification starts numbering namespaces at 1, not 0, and
+     this driver follows that convention.
+
+CCOONNFFIIGGUURRAATTIIOONN
+     By default, nnvvmmee will create an I/O queue pair for each CPU, provided
+     enough MSI-X vectors and NVMe queue pairs can be allocated.  If not
+     enough vectors or queue pairs are available, nvme(4) will use a smaller
+     number of queue pairs and assign multiple CPUs per queue pair.
+
+     To force a single I/O queue pair shared by all CPUs, set the following
+     tunable value in loader.conf(5):
+
+           hw.nvme.per_cpu_io_queues=0
+
+     To assign more than one CPU per I/O queue pair, thereby reducing the num‐
+     ber of MSI-X vectors consumed by the device, set the following tunable
+     value in loader.conf(5):
+
+           hw.nvme.min_cpus_per_ioq=X
+
+     To force legacy interrupts for all nnvvmmee driver instances, set the follow‐
+     ing tunable value in loader.conf(5):
+
+           hw.nvme.force_intx=1
+
+     Note that use of INTx implies disabling of per-CPU I/O queue pairs.
+
+     To control maximum amount of system RAM in bytes to use as Host Memory
+     Buffer for capable devices, set the following tunable:
+
+           hw.nvme.hmb_max
+
+     The default value is 5% of physical memory size per device.
+
+     The nvd(4) driver is used to provide a disk driver to the system by de‐
+     fault.  The nda(4) driver can also be used instead.  The nvd(4) driver
+     performs better with smaller transactions and few TRIM commands.  It
+     sends all commands directly to the drive immediately.  The nda(4) driver
+     performs better with larger transactions and also collapses TRIM commands
+     giving better performance.  It can queue commands to the drive; combine
+     BIO_DELETE commands into a single trip; and use the CAM I/O scheduler to
+     bias one type of operation over another.  To select the nda(4) driver,
+     set the following tunable value in loader.conf(5):
+
+           hw.nvme.use_nvd=0
+
+     This value may also be set in the kernel config file with
+
+           ooppttiioonnss NNVVMMEE__UUSSEE__NNVVDD==00
+
+     When there is an error, nnvvmmee prints only the most relevant information
+     about the command by default.  To enable dumping of all information about
+     the command, set the following tunable value in loader.conf(5):
+
+           hw.nvme.verbose_cmd_dump=1
+
+     Prior versions of the driver reset the card twice on boot.  This proved
+     to be unnecessary and inefficient, so the driver now resets drive con‐
+     troller only once.  The old behavior may be restored in the kernel config
+     file with
+
+           ooppttiioonnss NNVVMMEE__22XX__RREESSEETT
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     The following controller-level sysctls are currently implemented:
+
+     _d_e_v_._n_v_m_e_._0_._n_u_m___c_p_u_s___p_e_r___i_o_q
+             (R) Number of CPUs associated with each I/O queue pair.
+
+     _d_e_v_._n_v_m_e_._0_._i_n_t___c_o_a_l___t_i_m_e
+             (R/W) Interrupt coalescing timer period in microseconds.  Set to
+             0 to disable.
+
+     _d_e_v_._n_v_m_e_._0_._i_n_t___c_o_a_l___t_h_r_e_s_h_o_l_d
+             (R/W) Interrupt coalescing threshold in number of command comple‐
+             tions.  Set to 0 to disable.
+
+     The following queue pair-level sysctls are currently implemented.  Admin
+     queue sysctls take the format of dev.nvme.0.adminq and I/O queue sysctls
+     take the format of dev.nvme.0.ioq0.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._n_u_m___e_n_t_r_i_e_s
+             (R) Number of entries in this queue pair's command and completion
+             queue.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._n_u_m___t_r
+             (R) Number of nvme_tracker structures currently allocated for
+             this queue pair.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._n_u_m___p_r_p___l_i_s_t
+             (R) Number of nvme_prp_list structures currently allocated for
+             this queue pair.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._s_q___h_e_a_d
+             (R) Current location of the submission queue head pointer as ob‐
+             served by the driver.  The head pointer is incremented by the
+             controller as it takes commands off of the submission queue.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._s_q___t_a_i_l
+             (R) Current location of the submission queue tail pointer as ob‐
+             served by the driver.  The driver increments the tail pointer af‐
+             ter writing a command into the submission queue to signal that a
+             new command is ready to be processed.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._c_q___h_e_a_d
+             (R) Current location of the completion queue head pointer as ob‐
+             served by the driver.  The driver increments the head pointer af‐
+             ter finishing with a completion entry that was posted by the con‐
+             troller.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._n_u_m___c_m_d_s
+             (R) Number of commands that have been submitted on this queue
+             pair.
+
+     _d_e_v_._n_v_m_e_._0_._i_o_q_0_._d_u_m_p___d_e_b_u_g
+             (W) Writing 1 to this sysctl will dump the full contents of the
+             submission and completion queues to the console.
+
+     In addition to the typical pci attachment, the nnvvmmee driver supports at‐
+     taching to a ahci(4) device.  Intel's Rapid Storage Technology (RST)
+     hides the nvme device behind the AHCI device due to limitations in Win‐
+     dows.  However, this effectively hides it from the FreeBSD kernel.  To
+     work around this limitation, FreeBSD detects that the AHCI device sup‐
+     ports RST and when it is enabled.  See ahci(4) for more details.
+
+SSEEEE AALLSSOO
+     nda(4), nvd(4), pci(4), nvmecontrol(8), disk(9)
+
+HHIISSTTOORRYY
+     The nnvvmmee driver first appeared in FreeBSD 9.2.
+
+AAUUTTHHOORRSS
+     The nnvvmmee driver was developed by Intel and originally written by Jim
+     Harris <_j_i_m_h_a_r_r_i_s_@_F_r_e_e_B_S_D_._o_r_g>, with contributions from Joe Golio at EMC.
+
+     This man page was written by Jim Harris <_j_i_m_h_a_r_r_i_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                              June 6, 2020                              BSD

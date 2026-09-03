@@ -1,0 +1,148 @@
+The  network  interface pseudo device encapsulates datagrams into
+IP.  These encapsulated datagrams are  routed  to  a  destination
+host, where they are decapsulated and further routed to their fi‐
+nal  destination.  The appears to the inner datagrams as one hop.
+interfaces are dynamically created and  destroyed  with  the  and
+subcommands.   This driver currently supports the following modes
+of operation: Encapsulated datagrams are prepended an outer data‐
+gram and a GRE header.  The GRE header specifies the type of  the
+encapsulated  datagram and thus allows for tunneling other proto‐
+cols than IP like e.g. AppleTalk.  GRE mode is also  the  default
+tunnel  mode  on Cisco routers.  This is also the default mode of
+operation  of  the  interfaces.    Encapsulated   datagrams   are
+prepended a GRE header, and then they are sent over a UDP socket.
+Userland  may create the socket and it to the kernel using the If
+userland does not supply a socket, then the  kernel  will  create
+one  using  the  addresses and ports supplied by and/or Datagrams
+are encapsulated into IP, but with a shorter encapsulation.   The
+original IP header is modified and the modifications are inserted
+between  the  so  modified header and the original payload.  Like
+only for IP in IP encapsulation.  The interfaces support a number
+of such as: Set the IP address of the local tunnel end.  This  is
+the source address set by or displayed by ifconfig for the inter‐
+face.   Set the IP address of the remote tunnel end.  This is the
+destination address set by or displayed by ifconfig for  the  in‐
+terface.   Query  the IP address that is set for the local tunnel
+end.  This is the address the encapsulation header carries as lo‐
+cal address (i.e. the real address of the  tunnel  start  point.)
+Query the IP address that is set for the remote tunnel end.  This
+is  the  address  the  encapsulated packets are sent to (i.e. the
+real address of the remote tunnel endpoint.)  Set  the  operation
+mode  to the specified IP protocol value.  The protocol is passed
+to the interface in  (struct  ifreq)‐>ifr_flags.   The  operation
+mode  can also be given as IPPROTO_UDP IPPROTO_GRE IPPROTO_MOBILE
+to Query operation mode.  Delegate a socket from  userland  to  a
+tunnel  interface in UDP encapsulation mode.  The file descriptor
+for the socket is passed in (struct ifreq)‐>ifr_value.  Note that
+the IP addresses of the tunnel endpoints may be the same  as  the
+ones  defined  with for the interface (as if IP is encapsulated),
+but need not be, as e.g. when encapsulating AppleTalk.   Configu‐
+ration example: Host X‐‐ Router A  ‐‐‐‐‐‐‐‐‐‐‐‐‐‐tunnel‐‐‐‐‐‐‐‐‐‐
+Router D ‐‐‐‐Host E
+          |                                          |
+           \                                        /
+            +‐‐‐‐‐ Router B ‐‐‐‐‐ Router C ‐‐‐‐‐‐‐‐+ On Router A
+   # route add default B
+   # ifconfig greN create
+   # ifconfig greN A D netmask 0xffffffff linkX up
+   # ifconfig greN tunnel A D
+   # route add E D On Router D (Cisco):
+   Interface TunnelX
+    ip unnumbered D   ! e.g. address from Ethernet interface
+    tunnel source D   ! e.g. address from Ethernet interface
+    tunnel destination A
+   ip route C <some interface and mask>
+   ip route A mask C
+   ip route X mask tunnelX or on Router D
+   # route add default C
+   # ifconfig greN create
+   # ifconfig greN D A
+   #  ifconfig  tunnel  greN D A If all goes well, you should see
+packets flowing ;‐) If you want to reach Router A over the tunnel
+(from Router D (Cisco)), then you have to have an alias on Router
+A for e.g. the Ethernet interface like:
+     ifconfig <etherif> alias Y and on the Cisco
+     ip route Y mask tunnelX A similar setup can be used to  cre‐
+ate  a  link  between  two  private  networks (for example in the
+192.168 subnet) over  the  Internet:  192.168.1.*  ‐‐‐  Router  A
+‐‐‐‐‐‐‐tunnel‐‐‐‐‐‐‐‐ Router B ‐‐‐ 192.168.2.*
+                   \                              /
+                    \                            /
+                      +‐‐‐‐‐ the Internet ‐‐‐‐‐‐+ Assuming Router
+A  has  the  (external)  IP  address  A  and the internal address
+192.168.1.1, while Router B has external address B  and  internal
+address  192.168.2.1,  the  following commands will configure the
+tunnel: On Router A:
+   # ifconfig greN create
+   # ifconfig greN 192.168.1.1 192.168.2.1
+   # ifconfig greN tunnel A B
+   # route add ‐net 192.168.2 ‐netmask 255.255.255.0  192.168.2.1
+On Router B:
+   # ifconfig greN create
+   # ifconfig greN 192.168.2.1 192.168.1.1
+   # ifconfig greN tunnel B A
+   #  route add ‐net 192.168.1 ‐netmask 255.255.255.0 192.168.1.1
+To setup the same tunnel as above, but using GRE in UDP  encapsu‐
+lation  instead  of  GRE encapsulation, set flags and and specify
+source and destination UDP ports.  On Router A:
+   # ifconfig greN create
+   # ifconfig greN link0 link2
+   # ifconfig greN 192.168.1.1 192.168.2.1
+   # ifconfig greN tunnel A,port‐A B,port‐B
+   # route add ‐net 192.168.2 ‐netmask 255.255.255.0  192.168.2.1
+On Router B:
+   # ifconfig greN create
+   # ifconfig greN link0 link2
+   # ifconfig greN 192.168.2.1 192.168.1.1
+   # ifconfig greN tunnel B,port‐B A,port‐A
+   #  route add ‐net 192.168.1 ‐netmask 255.255.255.0 192.168.1.1
+Along these lines, you can use GRE tunnels  to  interconnect  two
+IPv6  networks  over an IPv4 infrastructure, or to hook up to the
+IPv6  internet  via  an  IPv4   tunnel   to   a   Cisco   router.
+2001:db8:1::/64  ‐‐  NetBSD  A  ‐‐‐‐ Tunnel ‐‐‐‐ Cisco B ‐‐‐ IPv6
+Internet
+                   \                              /
+                    \                            /
+                     +‐‐‐‐‐‐ the  Internet  ‐‐‐‐‐‐+  The  example
+will  use  the following addressing: A has the IPv4 address A and
+the IPv6 address  2001:db8:1::1  (connects  to  internal  network
+2001:db8:1::/64).   has external IPv4 address B.  is behind B, so
+A wants to route 0::0/0 (the IPv6 default route) into the tunnel.
+will use a transit network: 2001:db8:ffff::1/64 on the side,  and
+::2/64  on the Cisco side.  Then the following commands will con‐
+figure the tunnel: On Router A
+   # ifconfig greN create
+   # ifconfig greN inet6 2001:db8:ffff::1/64
+   # ifconfig greN tunnel A B
+   # route add ‐inet6  2001:db8:ffff::/64  2001:db8:ffff::2  ‐ifp
+greN
+   # route add ‐inet6 0::0/0 2001:db8:ffff::2 ‐ifp greN On Router
+B (Cisco):
+   Interface TunnelX
+     tunnel mode gre ip
+     ipv6 address 2001:db8:ffff::2/64   ! transfer network
+     tunnel  source  B                    ! e.g. address from LAN
+interface
+     tunnel destination A               !  where  the  tunnel  is
+connected to
+   ipv6  route  2001:db8::/64  TunnelX      !  route this network
+through tunnel The MTU of interfaces is set to 1476 by default to
+match the value used by Cisco routers.  This may not be an  opti‐
+mal  value,  depending  on  the  link between the two tunnel end‐
+points.  It can be adjusted via There needs to be a route to  the
+decapsulating  host  that  does  not run over the tunnel, as this
+would be a loop.  (This is not relevant for  IPv6‐over‐IPv4  tun‐
+nels,  of  course.)  In order to tell to actually mark the inter‐
+face as up, the keyword must be given last on its  command  line.
+The  kernel  must be set to forward datagrams by either option in
+the kernel config file or by issuing the appropriate option to  A
+description of GRE encapsulation can be found in RFC 1701 and RFC
+1702.   A description of MOBILE encapsulation can be found in RFC
+2004.  The GRE RFCs are not yet fully  implemented  (no  GRE  op‐
+tions).   The  MOBILE  encapsulation  appears to have been broken
+since it was first added to until August 2006.  It  is  known  to
+interoperate  with  another  in  MOBILE mode, however, it has not
+been tested for interoperability with any other implementation of
+RFC 2004.  The base system does not contain a daemon for automat‐
+ically establishing a UDP tunnel between  a  host  behind  a  NAT
+router and a host on the Internet.

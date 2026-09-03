@@ -1,0 +1,199 @@
+SYMLINK(7)           BSD Miscellaneous Information Manual           SYMLINK(7)
+
+NNAAMMEE
+     ssyymmlliinnkk — symbolic link handling
+
+DDEESSCCRRIIPPTTIIOONN
+     Symbolic links are files that act as pointers to other files.  To under‐
+     stand their behavior, it is necessary to understand how hard links work.
+     A hard link to a file is indistinguishable from the original file because
+     it is a reference to the object underlying the original file name.
+     Changes to a file are independent of the name used to reference the file.
+     Hard links may not refer to directories and may not reference files on
+     different file systems.  A symbolic link contains the name of the file to
+     which it is linked; i.e., it is a pointer to a name, and not to an under‐
+     lying object.  For this reason, symbolic links may reference directories
+     and may span file systems.
+
+     Because a symbolic link and its referenced object coexist in the filesys‐
+     tem name space, confusion can arise in distinguishing between the link
+     itself and the referenced object.  Historically, commands and system
+     calls have adopted their own link-following conventions in a somewhat ad
+     hoc fashion.  Rules for a more uniform approach, as they are implemented
+     in this system, are outlined here.  It is important that local applica‐
+     tions conform to these rules, too, so that the user interface can be as
+     consistent as possible.
+
+     Symbolic links are handled either by operating on the link itself, or by
+     operating on the object referenced by the link.  In the latter case, an
+     application or system call is said to “follow” the link.  Symbolic links
+     may reference other symbolic links, in which case the links are derefer‐
+     enced until an object that is not a symbolic link is found, a symbolic
+     link which references a file which doesn't exist is found, or a loop is
+     detected.  (Loop detection is done by placing an upper limit on the num‐
+     ber of links that may be followed, with an error resulting if this limit
+     is exceeded.)
+
+     There are three separate areas that need to be discussed.  They are as
+     follows:
+
+           1.   Symbolic links used as file name arguments for system calls.
+           2.   Symbolic links specified as command-line arguments to utili‐
+                ties that are not traversing a file tree.
+           3.   Symbolic links encountered by utilities that are traversing a
+                file tree (either specified on the command line or encountered
+                as part of the file hierarchy walk).
+
+   SSyysstteemm ccaallllss
+     The first area is symbolic links used as file name arguments for system
+     calls.
+
+     Except as noted below, all system calls follow symbolic links.  For exam‐
+     ple, if there were a symbolic link “slink” which pointed to a file named
+     “afile”, the system call “open("slink" ...)” would return a file descrip‐
+     tor to the file “afile”.
+
+     There are at least five system calls that do not follow links, and which
+     operate on the symbolic link itself.  They are: lchown(2), lstat(2),
+     readlink(2), rename(2), and unlink(2).  Because remove(3) is an alias for
+     unlink(2), it also does not follow symbolic links.
+
+     Additionally, the following system calls accept a _f_l_a_g argument to con‐
+     trol whether or not to follow symbolic links: chflagsat(2), fchmodat(2),
+     fchownat(2), fstatat(2), linkat(2), and utimensat(2).
+
+     The 4.4BSD system differs from historical 4BSD systems in that the system
+     call chown(2) has been changed to follow symbolic links.  The lchown(2)
+     system call was added later when the limitations of the new chown(2) be‐
+     came apparent.
+
+   CCoommmmaannddss nnoott ttrraavveerrssiinngg aa ffiillee ttrreeee
+     The second area is symbolic links, specified as command-line file name
+     arguments, to commands which are not traversing a file tree.
+
+     Except as noted below, commands follow symbolic links named as command-
+     line arguments.  For example, if there were a symbolic link “slink” which
+     pointed to a file named “afile”, the command “cat slink” would display
+     the contents of the file “afile”.
+
+     It is important to realize that this rule includes commands which may op‐
+     tionally traverse file trees, e.g., the command “chown owner file” is in‐
+     cluded in this rule, while the command “chown -R owner file” is not.
+     (The latter is described in the third area, below.)
+
+     If it is explicitly intended that the command operate on the symbolic
+     link instead of following the symbolic link — e.g., it is desired that
+     “chown owner slink” change the ownership of “slink”, not of what it
+     points to — the --hh option should be used.  In the above example, “chown
+     owner slink” would change the owner of “afile” to “owner”, while “chown
+     -h owner slink” would change the ownership of “slink”.
+
+     There are several exceptions to this rule.  The mv(1) and rm(1) commands
+     do not follow symbolic links named as arguments, but respectively attempt
+     to rename and delete them.  (Note that if the symbolic link references a
+     file via a relative path, moving it to another directory may very well
+     cause it to stop working, since the path may no longer be correct.)
+
+     The ls(1) command is also an exception to this rule.  For compatibility
+     with historic systems (when llss is not doing a tree walk, i.e., the --RR op‐
+     tion is not specified), the llss command follows symbolic links named as
+     arguments if the --LL option is specified, or if the --FF, --dd, or --ll options
+     are not specified.  (If the --LL option is specified, llss always follows
+     symbolic links.  The --LL option affects its behavior even though it is not
+     doing a walk of a file tree.)
+
+     The file(1) command behaves as ls(1) in that the --LL option makes it fol‐
+     low a symbolic link.  By default, “file slink” will report that “slink”
+     is a symbolic link.  This behavior is different from file(1) on some
+     other systems, where the --hh convention is followed.
+
+     The 4.4BSD system differs from historical 4BSD systems in that the
+     chown(8), chgrp(1), and file(1) commands follow symbolic links specified
+     on the command line (unless the --hh option is used).
+
+   CCoommmmaannddss ttrraavveerrssiinngg aa ffiillee ttrreeee
+     The following commands either optionally or always traverse file trees:
+     chflags(1), chgrp(1), chmod(1), cp(1), du(1), find(1), ls(1), pax(1),
+     rm(1), tar(1), and chown(8).
+
+     It is important to realize that the following rules apply equally to sym‐
+     bolic links encountered during the file tree traversal and symbolic links
+     listed as command-line arguments.
+
+     The first rule applies to symbolic links that reference files that are
+     not of type directory.  Operations that apply to symbolic links are per‐
+     formed on the links themselves, but otherwise the links are ignored.
+
+     For example, the command “chown -R user slink directory” will ignore
+     “slink”, because the --hh option was not given.  Any symbolic links encoun‐
+     tered during the tree traversal will also be ignored.  The command “rm -r
+     slink directory” will remove “slink”, as well as any symbolic links en‐
+     countered in the tree traversal of “directory”, because symbolic links
+     may be removed.  In no case will either chown(8) or rm(1) follow the sym‐
+     link to affect the file which “slink” references.
+
+     The second rule applies to symbolic links that reference files of type
+     directory.  Symbolic links which reference files of type directory are
+     never “followed” by default.  This is often referred to as a “physical”
+     walk, as opposed to a “logical” walk (where symbolic links referencing
+     directories are followed).
+
+     As consistently as possible, it is possible to make commands doing a file
+     tree walk follow any symbolic links named on the command line, regardless
+     of the type of file they reference, by specifying the --HH (for
+     “half-logical”) flag.  This flag is intended to make the command-line
+     name space look like the logical name space.  (Note: for commands that do
+     not always do file tree traversals, the --HH flag will be ignored if the --RR
+     flag is not also specified.)
+
+     For example, the command “chown -HR user slink” will traverse the file
+     hierarchy rooted in the file pointed to by “slink”.  The --HH is not the
+     same as the previously discussed --hh flag.  The --HH flag causes symbolic
+     links specified on the command line to be dereferenced both for the pur‐
+     poses of the action to be performed and the tree walk, and it is as if
+     the user had specified the name of the file to which the symbolic link
+     pointed.
+
+     As consistently as possible, it is possible to make commands doing a file
+     tree walk follow any symbolic links named on the command line, as well as
+     any symbolic links encountered during the traversal, regardless of the
+     type of file they reference, by specifying the --LL (for “logical”) flag.
+     This flag is intended to make the entire name space look like the logical
+     name space.  (Note: for commands that do not always do file tree traver‐
+     sals, the --LL flag will be ignored if the --RR flag is not also specified.)
+
+     For example, the command “chown -LR user slink” will change the owner of
+     the file referenced by “slink”.  If “slink” references a directory, cchhoowwnn
+     will traverse the file hierarchy rooted in the directory that it refer‐
+     ences.  In addition, if any symbolic links are encountered in any file
+     tree that cchhoowwnn traverses, they will be treated in the same fashion as
+     “slink”.
+
+     As consistently as possible, it is possible to specify the default behav‐
+     ior by specifying the --PP (for “physical”) flag.  This flag is intended to
+     make the entire name space look like the physical name space.
+
+     For commands that do not by default do file tree traversals, the --HH, --LL,
+     and --PP flags are ignored if the --RR flag is not also specified.  In addi‐
+     tion, the --HH, --LL, and --PP options may be specified more than once; the
+     last one specified determines the command's behavior.  This is intended
+     to permit aliasing commands to behave one way or the other, and then
+     override that behavior on the command line.
+
+     The ls(1) and rm(1) commands have exceptions to these rules.  The rrmm com‐
+     mand operates on the symbolic link, and not the file it references, and
+     therefore never follows a symbolic link.  The rrmm command does not support
+     the --HH, --LL, or --PP options.
+
+     To maintain compatibility with historic systems, the llss command never
+     follows symbolic links unless the --LL flag is specified.  If the --LL flag
+     is specified, llss follows all symbolic links, regardless of their type,
+     whether specified on the command line or encountered in the tree walk.
+     The llss command does not support the --HH or --PP options.
+
+SSEEEE AALLSSOO
+     chflags(1), chgrp(1), chmod(1), cp(1), du(1), find(1), ln(1), ls(1),
+     mv(1), pax(1), rm(1), tar(1), lchown(2), lstat(2), readlink(2),
+     rename(2), symlink(2), unlink(2), fts_open(3), remove(3), chown(8)
+
+BSD                            September 2, 2019                           BSD

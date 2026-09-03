@@ -1,0 +1,217 @@
+NFSD(8)                   BSD System Manager's Manual                  NFSD(8)
+
+NNAAMMEE
+     nnffssdd — remote NFS server
+
+SSYYNNOOPPSSIISS
+     nnffssdd [--aarrdduuttee] [--nn _n_u_m___s_e_r_v_e_r_s] [--hh _b_i_n_d_i_p] [--pp _p_n_f_s___s_e_t_u_p]
+          [--mm _m_i_r_r_o_r___l_e_v_e_l] [--VV _v_i_r_t_u_a_l___h_o_s_t_n_a_m_e] [----mmaaxxtthhrreeaaddss _m_a_x___t_h_r_e_a_d_s]
+          [----mmiinntthhrreeaaddss _m_i_n___t_h_r_e_a_d_s]
+
+DDEESSCCRRIIPPTTIIOONN
+     The nnffssdd utility runs on a server machine to service NFS requests from
+     client machines.  At least one nnffssdd must be running for a machine to op‐
+     erate as a server.
+
+     Unless otherwise specified, eight servers per CPU for UDP transport are
+     started.
+
+     When nnffssdd is run in an appropriately configured vnet jail, the server is
+     restricted to TCP transport and no pNFS service.  Therefore, the --tt op‐
+     tion must be specified and none of the --uu, --pp and --mm options can be spec‐
+     ified when run in a vnet jail.  See jail(8) for more information.
+
+     The following options are available:
+
+     --rr      Register the NFS service with rpcbind(8) without creating any
+             servers.  This option can be used along with the --uu or --tt options
+             to re-register NFS if the rpcbind server is restarted.
+
+     --dd      Unregister the NFS service with rpcbind(8) without creating any
+             servers.
+
+     --VV _v_i_r_t_u_a_l___h_o_s_t_n_a_m_e
+             Specifies a hostname to be used as a principal name, instead of
+             the default hostname.
+
+     --nn _t_h_r_e_a_d_s
+             This option is deprecated and is limited to a maximum of 256
+             threads.  The options ----mmaaxxtthhrreeaaddss and ----mmiinntthhrreeaaddss should now be
+             used.  The _t_h_r_e_a_d_s argument for ----mmiinntthhrreeaaddss and ----mmaaxxtthhrreeaaddss may
+             be set to the same value to avoid dynamic changes to the number
+             of threads.
+
+     ----mmaaxxtthhrreeaaddss _t_h_r_e_a_d_s
+             Specifies the maximum servers that will be kept around to service
+             requests.
+
+     ----mmiinntthhrreeaaddss _t_h_r_e_a_d_s
+             Specifies the minimum servers that will be kept around to service
+             requests.
+
+     --hh _b_i_n_d_i_p
+             Specifies which IP address or hostname to bind to on the local
+             host.  This option is recommended when a host has multiple inter‐
+             faces.  Multiple --hh options may be specified.
+
+     --aa      Specifies that nfsd should bind to the wildcard IP address.  This
+             is the default if no --hh options are given.  It may also be speci‐
+             fied in addition to any --hh options given.  Note that NFS/UDP does
+             not operate properly when bound to the wildcard IP address
+             whether you use -a or do not use -h.
+
+     --pp _p_n_f_s___s_e_t_u_p
+             Enables pNFS support in the server and specifies the information
+             that the daemon needs to start it.  This option can only be used
+             on one server and specifies that this server will be the MetaData
+             Server (MDS) for the pNFS service.  This can only be done if
+             there is at least one FreeBSD system configured as a Data Server
+             (DS) for it to use.
+
+             The _p_n_f_s___s_e_t_u_p string is a set of fields separated by ',' charac‐
+             ters: Each of these fields specifies one DS.  It consists of a
+             server hostname, followed by a ':' and the directory path where
+             the DS's data storage file system is mounted on this MDS server.
+             This can optionally be followed by a '#' and the mds_path, which
+             is the directory path for an exported file system on this MDS.
+             If this is specified, it means that this DS is to be used to
+             store data files for this mds_path file system only.  If this op‐
+             tional component does not exist, the DS will be used to store
+             data files for all exported MDS file systems.  The DS storage
+             file systems must be mounted on this system before the nnffssdd is
+             started with this option specified.
+             For example:
+
+             nfsv4-data0:/data0,nfsv4-data1:/data1
+
+             would specify two DS servers called nfsv4-data0 and nfsv4-data1
+             that comprise the data storage component of the pNFS service.
+             These two DSs would be used to store data files for all exported
+             file systems on this MDS.  The directories “/data0” and “/data1”
+             are where the data storage servers exported storage directories
+             are mounted on this system (which will act as the MDS).
+             Whereas, for the example:
+
+             nfsv4-data0:/data0#/export1,nfsv4-data1:/data1#/export2
+
+             would specify two DSs as above, however nfsv4-data0 will be used
+             to store data files for “/export1” and nfsv4-data1 will be used
+             to store data files for “/export2”.
+
+             When using IPv6 addresses for DSs be wary of using link local ad‐
+             dresses.  The IPv6 address for the DS is sent to the client and
+             there is no scope zone in it.  As such, a link local address may
+             not work for a pNFS client to DS TCP connection.  When parsed,
+             nnffssdd will only use a link local address if it is the only address
+             returned by getaddrinfo(3) for the DS hostname.
+
+     --mm _m_i_r_r_o_r___l_e_v_e_l
+             This option is only meaningful when used with the --pp option.  It
+             specifies the “mirror_level”, which defines how many of the DSs
+             will have a copy of a file's data storage file.  The default of
+             one implies no mirroring of data storage files on the DSs.  The
+             “mirror_level” would normally be set to 2 to enable mirroring,
+             but can be as high as NFSDEV_MAXMIRRORS.  There must be at least
+             “mirror_level” DSs for each exported file system on the MDS, as
+             specified in the --pp option.  This implies that, for the above ex‐
+             ample using "#/export1" and "#/export2", mirroring cannot be
+             done.  There would need to be two DS entries for each of "#/ex‐
+             port1" and "#/export2" in order to support a “mirror_level” of
+             two.
+
+             If mirroring is enabled, the server must use the Flexible File
+             layout.  If mirroring is not enabled, the server will use the
+             File layout by default, but this default can be changed to the
+             Flexible File layout if the sysctl(8) vfs.nfsd.default_flexfile
+             is set non-zero.
+
+     --tt      Serve TCP NFS clients.
+
+     --uu      Serve UDP NFS clients.
+
+     --ee      Ignored; included for backward compatibility.
+
+     For example, “nfsd -u -t --minthreads 6 --maxthreads 6” serves UDP and
+     TCP transports using six kernel threads (servers).
+
+     For a system dedicated to servicing NFS RPCs, the number of threads
+     (servers) should be sufficient to handle the peak client RPC load.  For
+     systems that perform other services, the number of threads (servers) may
+     need to be limited, so that resources are available for these other ser‐
+     vices.
+
+     The nnffssdd utility listens for service requests at the port indicated in
+     the NFS server specification; see _N_e_t_w_o_r_k _F_i_l_e _S_y_s_t_e_m _P_r_o_t_o_c_o_l
+     _S_p_e_c_i_f_i_c_a_t_i_o_n, RFC1094, _N_F_S_: _N_e_t_w_o_r_k _F_i_l_e _S_y_s_t_e_m _V_e_r_s_i_o_n _3 _P_r_o_t_o_c_o_l
+     _S_p_e_c_i_f_i_c_a_t_i_o_n, RFC1813, _N_e_t_w_o_r_k _F_i_l_e _S_y_s_t_e_m _(_N_F_S_) _V_e_r_s_i_o_n _4 _P_r_o_t_o_c_o_l,
+     RFC7530, _N_e_t_w_o_r_k _F_i_l_e _S_y_s_t_e_m _(_N_F_S_) _V_e_r_s_i_o_n _4 _M_i_n_o_r _V_e_r_s_i_o_n _1 _P_r_o_t_o_c_o_l,
+     RFC5661, _N_e_t_w_o_r_k _F_i_l_e _S_y_s_t_e_m _(_N_F_S_) _V_e_r_s_i_o_n _4 _M_i_n_o_r _V_e_r_s_i_o_n _2 _P_r_o_t_o_c_o_l,
+     RFC7862, _F_i_l_e _S_y_s_t_e_m _E_x_t_e_n_d_e_d _A_t_t_r_i_b_u_t_e_s _i_n _N_F_S_v_4, RFC8276 and _P_a_r_a_l_l_e_l
+     _N_F_S _(_p_N_F_S_) _F_l_e_x_i_b_l_e _F_i_l_e _L_a_y_o_u_t, RFC8435.
+
+     If nnffssdd detects that NFS is not loaded in the running kernel, it will at‐
+     tempt to load a loadable kernel module containing NFS support using
+     kldload(2).  If this fails, or no NFS KLD is available, nnffssdd will exit
+     with an error.
+
+     If nnffssdd is to be run on a host with multiple interfaces or interface
+     aliases, use of the --hh option is recommended.  If you do not use the op‐
+     tion NFS may not respond to UDP packets from the same IP address they
+     were sent to.  Use of this option is also recommended when securing NFS
+     exports on a firewalling machine such that the NFS sockets can only be
+     accessed by the inside interface.  The iippffww utility would then be used to
+     block NFS-related packets that come in on the outside interface.
+
+     If the server has stopped servicing clients and has generated a console
+     message like “nfsd server cache flooded...”, the value for
+     vfs.nfsd.tcphighwater needs to be increased.  This should allow the
+     server to again handle requests without a reboot.  Also, you may want to
+     consider decreasing the value for vfs.nfsd.tcpcachetimeo to several min‐
+     utes (in seconds) instead of 12 hours when this occurs.
+
+     Unfortunately making vfs.nfsd.tcphighwater too large can result in the
+     mbuf limit being reached, as indicated by a console message like
+     “kern.ipc.nmbufs limit reached”.  If you cannot find values of the above
+     ssyyssccttll values that work, you can disable the DRC cache for TCP by setting
+     vfs.nfsd.cachetcp to 0.
+
+     The nnffssdd utility has to be terminated with SIGUSR1 and cannot be killed
+     with SIGTERM or SIGQUIT.  The nnffssdd utility needs to ignore these signals
+     in order to stay alive as long as possible during a shutdown, otherwise
+     loopback mounts will not be able to unmount.  If you have to kill nnffssdd
+     just do a “kill -USR1 <PID of master nfsd>”
+
+EEXXIITT SSTTAATTUUSS
+     The nnffssdd utility exits 0 on success, and >0 if an error occurs.
+
+SSEEEE AALLSSOO
+     nfsstat(1), kldload(2), nfssvc(2), nfsv4(4), pnfs(4), pnfsserver(4),
+     exports(5), stablerestart(5), gssd(8), ipfw(8), jail(8), mountd(8),
+     nfsiod(8), nfsrevoke(8), nfsuserd(8), rpcbind(8)
+
+HHIISSTTOORRYY
+     The nnffssdd utility first appeared in 4.4BSD.
+
+BBUUGGSS
+     If nnffssdd is started when gssd(8) is not running, it will service AUTH_SYS
+     requests only.  To fix the problem you must kill nnffssdd and then restart
+     it, after the gssd(8) is running.
+
+     For a Flexible File Layout pNFS server, if there are Linux clients doing
+     NFSv4.1 or NFSv4.2 mounts, those clients might need the sysctl(8)
+     vfs.nfsd.flexlinuxhack to be set to one on the MDS as a workaround.
+
+     Linux 5.n kernels appear to have been patched such that this sysctl(8)
+     does not need to be set.
+
+     For NFSv4.2, a Copy operation can take a long time to complete.  If there
+     is a concurrent ExchangeID or DelegReturn operation which requires the
+     exclusive lock on all NFSv4 state, this can result in a “stall” of the
+     nnffssdd server.  If your storage is on ZFS without block cloning enabled,
+     setting the sysctl(8) _v_f_s_._z_f_s_._d_m_u___o_f_f_s_e_t___n_e_x_t___s_y_n_c to 0 can often avoid
+     this problem.  It is also possible to set the sysctl(8)
+     _v_f_s_._n_f_s_d_._m_a_x_c_o_p_y_r_a_n_g_e to 10-100 megabytes to try and reduce Copy opera‐
+     tion times.  As a last resort, setting sysctl(8) _v_f_s_._n_f_s_d_._m_a_x_c_o_p_y_r_a_n_g_e to
+     0 disables the Copy operation.
+
+BSD                            February 21, 2025                           BSD

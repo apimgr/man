@@ -1,0 +1,221 @@
+TABLE(5)                    BSD File Formats Manual                   TABLE(5)
+
+NNAAMMEE
+     ttaabbllee — format description for smtpd tables
+
+DDEESSCCRRIIPPTTIIOONN
+     This manual page documents the file format for the various tables used in
+     the smtpd(8) mail daemon.
+
+     The format described here applies to tables as defined in smtpd.conf(5).
+
+TTAABBLLEE TTYYPPEESS
+     There are two types of tables: lists and mappings.  A list consists of a
+     series of values, while a mapping consists of a series of keys and their
+     associated values.  The following illustrates how to declare them as
+     static tables:
+
+           table mylist { value1, value2, value3 }
+           table mymapping { key1 = value1, key2 = value2, key3 = value3 }
+
+     When using a ‘file’ table, a list will be written with each value on a
+     line by itself.
+
+           value1
+           value2
+           value3
+
+     A mapping will be written with each key and value on a line, whitespace
+     and an optional colon separating both columns:
+
+           key1:   value1
+           key2    value2
+           key3    value3
+
+     Blank lines, leading and trailing spaces and tabs are ignored.  Lines
+     whose first non-space character is a hash mark (‘#’) are comments and are
+     ignored.  To force the parsing of a file table as a list rather than a
+     mapping, use this special comment:
+
+           # @list
+
+     A file table can be converted to a Berkeley database using the makemap(8)
+     utility with no syntax change.
+
+     Tables using a ‘file’ or Berkeley DB backend will be referenced as fol‐
+     lows:
+
+           ttaabbllee _n_a_m_e ffiillee:_/_p_a_t_h_/_t_o_/_f_i_l_e
+           ttaabbllee _n_a_m_e ddbb:_/_p_a_t_h_/_t_o_/_f_i_l_e_._d_b
+
+   AAlliiaassiinngg ttaabblleess
+     Aliasing tables are mappings that associate a recipient to one or many
+     destinations.  They can be used in two contexts: primary domain aliases
+     and virtual domain mapping.
+
+           aaccttiioonn _n_a_m_e _m_e_t_h_o_d aalliiaass <table>
+           aaccttiioonn _n_a_m_e _m_e_t_h_o_d vviirrttuuaall <table>
+
+     In a primary domain context, the key is the user part of the recipient
+     address, whilst the value is one or many recipients as described in
+     aliases(5):
+
+           user1   otheruser
+           user2   otheruser1,otheruser2
+           user3   otheruser@example.com
+
+     In a virtual domain context, the key is either a user part, a full email
+     address or a catch-all, following selection rules described in
+     smtpd.conf(5), and the value is one or many recipients as described in
+     aliases(5):
+
+           user1                   otheruser
+           user2@example.org       otheruser1,otheruser2
+           @example.org            otheruser@example.com
+           @                       catchall@example.com
+
+     The following directive shares the same table format, but with a differ‐
+     ent meaning.  Here, the user is allowed to send mail from the listed ad‐
+     dresses:
+
+           lliisstteenn oonn _i_n_t_e_r_f_a_c_e aauutthh [_._._.] sseennddeerrss <_t_a_b_l_e>
+
+   DDoommaaiinn ttaabblleess
+     Domain tables are simple lists of domains or hosts.
+
+           mmaattcchh ffoorr ddoommaaiinn <table> aaccttiioonn _n_a_m_e
+           mmaattcchh hheelloo <table> [_._._.] aaccttiioonn _n_a_m_e
+
+     In that context, the list of domains will be matched against the recipi‐
+     ent domain or against the HELO name advertised by the sending host, re‐
+     spectively.  For ‘static’, ‘file’ and dbopen(3) backends, a wildcard may
+     be used so the domain table may contain:
+
+           example.org
+           *.example.org
+
+   CCrreeddeennttiiaallss ttaabblleess
+     Credentials tables are mappings of credentials.  They can be used in two
+     contexts:
+
+           lliisstteenn oonn _i_n_t_e_r_f_a_c_e ttllss [_._._.] aauutthh <_t_a_b_l_e>
+           aaccttiioonn _n_a_m_e rreellaayy hhoosstt _r_e_l_a_y_-_u_r_l aauutthh <_t_a_b_l_e>
+
+     In a listener context, the credentials are a mapping of username and en‐
+     crypted passwords:
+
+           user1   $2b$10$hIJ4QfMcp.90nJwKqGbKM.MybArjHOTpEtoTV.DgLYAiThuoYmTSe
+           user2   $2b$10$bwSmUOBGcZGamIfRuXGTvuTo3VLbPG9k5yeKNMBtULBhksV5KdGsK
+
+     The passwords are to be encrypted using the smtpctl(8) encrypt subcom‐
+     mand.
+
+     In a relay context, the credentials are a mapping of labels and user‐
+     name:password pairs:
+
+           label1  user:password
+
+     The label must be unique and is used as a selector for the proper creden‐
+     tials when multiple credentials are valid for a single destination.  The
+     password is not encrypted as it must be provided to the remote host.
+
+   NNeettaaddddrr ttaabblleess
+     Netaddr tables are lists of IPv4 and IPv6 network addresses.  They can
+     only be used in the following context:
+
+           mmaattcchh ffrroomm ssrrcc <_t_a_b_l_e> aaccttiioonn _n_a_m_e
+
+     When used as a "from source", the address of a client is compared to the
+     list of addresses in the table until a match is found.
+
+     A netaddr table can contain exact addresses or netmasks, and looks as
+     follow:
+
+           192.168.1.1
+           [::1]
+           192.168.1.0/24
+
+     IPv6 addresses must be enclosed in square brackets.
+
+   UUsseerriinnffoo ttaabblleess
+     Userinfo tables are used in rule context to specify an alternate user‐
+     base, mapping virtual users to local system users by UID, GID and home
+     directory.
+
+           aaccttiioonn _n_a_m_e _m_e_t_h_o_d uusseerrbbaassee <_t_a_b_l_e>
+
+     A userinfo table looks as follows:
+
+           joe     1000:100:/home/virtual/joe
+           jack    1000:100:/home/virtual/jack
+
+     In this example, both joe and jack are virtual users mapped to the local
+     system user with UID 1000 and GID 100, but different home directories.
+     These directories may contain a forward(5) file.  This can be used in
+     conjunction with an alias table that maps an email address or the domain
+     part to the desired virtual username.  For example:
+
+           joe@example.org     joe
+           jack@example.com    jack
+
+   SSoouurrccee ttaabblleess
+     Source tables are lists of IPv4 and IPv6 addresses.  They can only be
+     used in the following context:
+
+           aaccttiioonn _n_a_m_e rreellaayy ssrrcc <_t_a_b_l_e>
+
+     Successive queries to the source table will return the elements one by
+     one.
+
+     A source table looks as follow:
+
+           192.168.1.2
+           192.168.1.3
+           [::1]
+           [::2]
+
+     IPv6 address must be enclosed in square brackets.
+
+   MMaaiillaaddddrr ttaabblleess
+     Mailaddr tables are lists of email addresses.  They can be used in the
+     following contexts:
+
+           mmaattcchh mmaaiill--ffrroomm <_t_a_b_l_e> aaccttiioonn _n_a_m_e
+           mmaattcchh rrccpptt--ttoo <_t_a_b_l_e> aaccttiioonn _n_a_m_e
+
+     A mailaddr entry is used to match an email address against a username, a
+     domain or a full email address.  A "*" wildcard may be used in part of
+     the domain name.
+
+     A mailaddr table looks as follow:
+
+           user
+           @domain
+           user@domain
+           user@*.domain
+
+   AAddddrrnnaammee ttaabblleess
+     Addrname tables are used to map IP addresses to hostnames.  They can be
+     used in both listen context and relay context:
+
+           lliisstteenn oonn _i_n_t_e_r_f_a_c_e hhoossttnnaammeess <_t_a_b_l_e>
+           aaccttiioonn _n_a_m_e rreellaayy hheelloo--ssrrcc <_t_a_b_l_e>
+
+     In listen context, the table is used to look up the server name to adver‐
+     tise depending on the local address of the socket on which a connection
+     is accepted.  In relay context, the table is used to determine the host‐
+     name for the HELO sequence of the SMTP protocol, depending on the local
+     address used for the outgoing connection.
+
+     The format is a mapping from inet4 or inet6 addresses to hostnames:
+
+           [::1]           localhost
+           127.0.0.1       localhost
+           88.190.23.165   www.opensmtpd.org
+
+     IPv6 addresses must be enclosed in square brackets.
+
+SSEEEE AALLSSOO
+     smtpd.conf(5), makemap(8), smtpd(8)
+
+BSD                               May 2, 2024                              BSD

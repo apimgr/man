@@ -1,0 +1,328 @@
+AUDIO(4)                 BSD Kernel Interfaces Manual                 AUDIO(4)
+
+NNAAMMEE
+     aauuddiioo, aauuddiiooccttll — device-independent audio driver layer
+
+SSYYNNOOPPSSIISS
+     aauuddiioo** aatt ......
+
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//iiooccttll..hh>>
+     ##iinncclluuddee <<ssyyss//aauuddiiooiioo..hh>>
+     ##iinncclluuddee <<ssttrriinngg..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The aauuddiioo driver provides support for various audio peripherals.  It pro‐
+     vides a uniform programming interface layer above different underlying
+     audio hardware drivers.
+
+     In addition to hardware mixer controls like those documented in
+     azalia(4), the aauuddiioo driver exposes the _r_e_c_o_r_d_._e_n_a_b_l_e control.  The supe‐
+     ruser can change it with mixerctl(8).  It accepts the following values:
+
+           oonn      Recording is enabled.
+           ooffff     Silence is returned instead of the recorded samples.
+           ssyyssccttll  Behavior is controlled by the _k_e_r_n_._a_u_d_i_o_._r_e_c_o_r_d sysctl(2)
+                   variable.  This is the default.
+
+     There are two types of device files available for audio operation:
+
+           --   Audio devices are used for recording or playback of digital
+               samples.
+
+           --   Control devices are used to manipulate audio device parameters
+               like volume or recording source.  They can also read certain
+               aauuddiioo driver variables while it is in use.
+
+AAUUDDIIOO DDEEVVIICCEESS
+     When audio devices are opened, they attempt to maintain the previous au‐
+     dio sample format and record/playback mode.  In addition, if one is
+     opened read-only (write-only) the device is set to record-only (play-
+     only) mode with recording (playing) unpaused.
+
+     If a writing process does not call write(2) frequently enough to provide
+     samples at the pace the hardware consumes them, silence is inserted.  If
+     a reading process does not call read(2) frequently enough, it will simply
+     miss samples.
+
+     The following ioctl(2) commands are supported on the sample devices:
+
+     AUDIO_GETDEV _a_u_d_i_o___d_e_v_i_c_e___t _*
+             This command fetches the current hardware device information into
+             the _a_u_d_i_o___d_e_v_i_c_e___t _* argument.
+
+             typedef struct audio_device {
+                     char name[MAX_AUDIO_DEV_LEN];
+                     char version[MAX_AUDIO_DEV_LEN];
+                     char config[MAX_AUDIO_DEV_LEN];
+             } audio_device_t;
+
+     AUDIO_SETPAR _s_t_r_u_c_t _a_u_d_i_o___s_w_p_a_r _*
+     AUDIO_GETPAR _s_t_r_u_c_t _a_u_d_i_o___s_w_p_a_r _*
+             Set or get audio parameters as encoded in the _a_u_d_i_o___s_w_p_a_r struc‐
+             ture.
+
+             struct audio_swpar {
+                     unsigned int sig;       /* if 1, encoding is signed */
+                     unsigned int le;        /* if 1, encoding is little-endian */
+                     unsigned int bits;      /* bits per sample */
+                     unsigned int bps;       /* bytes per sample */
+                     unsigned int msb;       /* if 1, bits are msb-aligned */
+                     unsigned int rate;      /* common play & rec sample rate */
+                     unsigned int pchan;     /* play channels */
+                     unsigned int rchan;     /* rec channels */
+                     unsigned int nblks;     /* number of blocks in play buffer */
+                     unsigned int round;     /* common frames per block */
+             };
+
+             When setting the device parameters with AUDIO_SETPAR, the
+             _a_u_d_i_o___s_w_p_a_r structure should first be initialized with
+
+             struct audio_swpar ap;
+
+             AUDIO_INITPAR(&ap);
+
+             and then only the values to be changed should be set.  This en‐
+             sures that the software will work with future versions of the
+             driver.  The driver will attempt to set the given parameters; if
+             the device doesn't support them, it will choose other parameters.
+             Then the software must call AUDIO_GETPAR to obtain the parameters
+             in use.
+
+             The parameters are as follows:
+
+             _b_i_t_s   Number of bits per sample: must be between 1 and 32.
+
+             _b_p_s    Bytes per sample; if specified, it must be large enough to
+                    hold all bits.  By default it's set to the smallest power
+                    of two large enough to hold _b_i_t_s.
+
+             _s_i_g    If set (i.e. non-zero) then the samples are signed; other‐
+                    wise they are unsigned.
+
+             _l_e     If set then the byte order is little endian; if not, it is
+                    big endian.  It is meaningful only if _b_p_s > 1.
+
+             _m_s_b    If set, then the _b_i_t_s are aligned in the packet to the
+                    most significant bit (i.e. lower bits are padded), other‐
+                    wise to the least significant bit (i.e. higher bits are
+                    padded).  It's meaningful only if _b_i_t_s < _b_p_s * 8.
+
+             _r_c_h_a_n  The number of recorded channels; meaningful only if the
+                    device is opened for reading.
+
+             _p_c_h_a_n  The number of channels playing; meaningful only if the de‐
+                    vice is opened for writing.
+
+             _r_a_t_e   The sampling frequency in Hz.
+
+             _n_b_l_k_s  The number of blocks in the play buffer.
+
+             _r_o_u_n_d  The audio block size.
+
+     AUDIO_START
+             Start playback and/or recording immediately.  If the device is
+             open for writing (playback), then the play buffer must be filled
+             with the write(2) syscall.  The buffer size is obtained by multi‐
+             plying the _n_b_l_k_s, _r_o_u_n_d, and _b_p_s parameters obtained with
+             AUDIO_GETPAR.
+
+     AUDIO_STOP
+             Stop playback and recording immediately.
+
+     AUDIO_GETPOS _s_t_r_u_c_t _a_u_d_i_o___p_o_s _*
+             Fetch an atomic snapshot of device timing information in the
+             _a_u_d_i_o___p_o_s structure.
+
+             struct audio_pos {
+                     unsigned int play_pos;  /* total bytes played */
+                     unsigned int play_xrun; /* bytes of silence inserted */
+                     unsigned int rec_pos;   /* total bytes recorded */
+                     unsigned int rec_xrun;  /* bytes dropped */
+             };
+
+             The properties have the following meaning:
+
+             _p_l_a_y___p_o_s   Total number of bytes played by the device since play‐
+                        back started (a.k.a the device wall clock).
+
+             _p_l_a_y___x_r_u_n  The number of bytes corresponding to silence played
+                        because write(2) wasn't called fast enough.
+
+             _r_e_c___p_o_s    Total number of bytes recorded by the device since
+                        recording started (a.k.a the device wall clock).
+
+             _r_e_c___x_r_u_n   The number of bytes dropped because read(2) wasn't
+                        called fast enough.
+
+     AUDIO_GETSTATUS _s_t_r_u_c_t _a_u_d_i_o___s_t_a_t_u_s _*
+             Fetch the current device status from the audio driver in the
+             _a_u_d_i_o___s_t_a_t_u_s structure.  This ioctl(2) is intended for use with
+             diagnostic tools and is of no use to audio programs.
+
+             struct audio_status {
+             #define AUMODE_PLAY     0x01
+             #define AUMODE_RECORD   0x02
+                     int mode;       /* current mode */
+                     int pause;      /* not started yet */
+                     int active;     /* playing/recording in progress */
+             };
+
+             The properties have the following meaning:
+
+             _m_o_d_e    The current mode determined by open(2) flags.
+
+             _p_a_u_s_e   If set, indicates that AUDIO_STOP was called, and the de‐
+                     vice is not attempting to start.
+
+             _a_c_t_i_v_e  If set, indicates that the device is playing and/or
+                     recording.
+
+CCOONNTTRROOLL DDEEVVIICCEESS
+     Control devices support the following ioctl(2) commands:
+
+     AUDIO_GETDEV _a_u_d_i_o___d_e_v_i_c_e___t _*
+     AUDIO_GETPOS _s_t_r_u_c_t _a_u_d_i_o___p_o_s _*
+     AUDIO_GETSTATUS _s_t_r_u_c_t _a_u_d_i_o___s_t_a_t_u_s _*
+     AUDIO_GETPAR _s_t_r_u_c_t _a_u_d_i_o___s_w_p_a_r _*
+     AUDIO_SETPAR _s_t_r_u_c_t _a_u_d_i_o___s_w_p_a_r _*
+             These commands are the same as described above for the audio de‐
+             vices.  While the audio device is open, AUDIO_SETPAR may not be
+             used.
+
+     AUDIO_MIXER_READ _m_i_x_e_r___c_t_r_l___t _*
+     AUDIO_MIXER_WRITE _m_i_x_e_r___c_t_r_l___t _*
+             These commands read the current mixer state or set new mixer
+             state for the specified device _d_e_v.  _t_y_p_e identifies which type
+             of value is supplied in the _m_i_x_e_r___c_t_r_l___t _* argument.
+
+             #define AUDIO_MIXER_CLASS  0
+             #define AUDIO_MIXER_ENUM   1
+             #define AUDIO_MIXER_SET    2
+             #define AUDIO_MIXER_VALUE  3
+             typedef struct mixer_ctrl {
+                     int dev;                        /* input: nth device */
+                     int type;
+                     union {
+                             int ord;                /* enum */
+                             int mask;               /* set */
+                             mixer_level_t value;    /* value */
+                     } un;
+             } mixer_ctrl_t;
+
+             #define AUDIO_MIN_GAIN  0
+             #define AUDIO_MAX_GAIN  255
+             typedef struct mixer_level {
+                     int num_channels;
+                     u_char level[8];                /* [num_channels] */
+             } mixer_level_t;
+             #define AUDIO_MIXER_LEVEL_MONO  0
+             #define AUDIO_MIXER_LEVEL_LEFT  0
+             #define AUDIO_MIXER_LEVEL_RIGHT 1
+
+             For a mixer value, the _v_a_l_u_e field specifies both the number of
+             channels and the values for each channel.  If the channel count
+             does not match the current channel count, the attempt to change
+             the setting may fail (depending on the hardware device driver im‐
+             plementation).  For an enumeration value, the _o_r_d field should be
+             set to one of the possible values as returned by a prior
+             AUDIO_MIXER_DEVINFO command.  The type AUDIO_MIXER_CLASS is only
+             used for classifying particular mmiixxeerr device types and is not
+             used for AUDIO_MIXER_READ or AUDIO_MIXER_WRITE.
+
+     AUDIO_MIXER_DEVINFO _m_i_x_e_r___d_e_v_i_n_f_o___t _*
+             This command is used iteratively to fetch audio mmiixxeerr device in‐
+             formation into the input/output _m_i_x_e_r___d_e_v_i_n_f_o___t _* argument.  To
+             query all the supported devices, start with an index field of 0
+             and continue with successive devices (1, 2, ...) until the com‐
+             mand returns an error.
+
+             typedef struct mixer_devinfo {
+                     int index;              /* input: nth mixer device */
+                     audio_mixer_name_t label;
+                     int type;
+                     int mixer_class;
+                     int next, prev;
+             #define AUDIO_MIXER_LAST        -1
+                     union {
+                             struct audio_mixer_enum {
+                                     int num_mem;
+                                     struct {
+                                             audio_mixer_name_t label;
+                                             int ord;
+                                     } member[32];
+                             } e;
+                             struct audio_mixer_set {
+                                     int num_mem;
+                                     struct {
+                                             audio_mixer_name_t label;
+                                             int mask;
+                                     } member[32];
+                             } s;
+                             struct audio_mixer_value {
+                                     audio_mixer_name_t units;
+                                     int num_channels;
+                                     int delta;
+                             } v;
+                     } un;
+             } mixer_devinfo_t;
+
+             The _l_a_b_e_l field identifies the name of this particular mixer con‐
+             trol.  The _i_n_d_e_x field may be used as the _d_e_v field in
+             AUDIO_MIXER_READ and AUDIO_MIXER_WRITE commands.  The _t_y_p_e field
+             identifies the type of this mixer control.  Enumeration types are
+             typically used for on/off style controls (e.g., a mute control)
+             or for input/output device selection (e.g., select recording in‐
+             put source from CD, line in, or microphone).  Set types are simi‐
+             lar to enumeration types but any combination of the mask bits can
+             be used.
+
+             The _m_i_x_e_r___c_l_a_s_s field identifies what class of control this is.
+             This value is set to the index value used to query the class it‐
+             self.  The (arbitrary) value set by the hardware driver may be
+             determined by examining the _m_i_x_e_r___c_l_a_s_s field of the class it‐
+             self, a mixer of type AUDIO_MIXER_CLASS.  For example, a mixer
+             level controlling the input gain on the “line in” circuit would
+             have a _m_i_x_e_r___c_l_a_s_s that matches an input class device with the
+             name “inputs” (AudioCinputs) and would have a _l_a_b_e_l of “line”
+             (AudioNline).  Mixer controls which control audio circuitry for a
+             particular audio source (e.g., line-in, CD in, DAC output) are
+             collected under the input class, while those which control all
+             audio sources (e.g., master volume, equalization controls) are
+             under the output class.  Hardware devices capable of recording
+             typically also have a record class, for controls that only affect
+             recording, and also a monitor class.
+
+             The _n_e_x_t and _p_r_e_v may be used by the hardware device driver to
+             provide hints for the next and previous devices in a related set
+             (for example, the line in level control would have the line in
+             mute as its “next” value).  If there is no relevant next or pre‐
+             vious value, AUDIO_MIXER_LAST is specified.
+
+             For AUDIO_MIXER_ENUM mixer control types, the enumeration values
+             and their corresponding names are filled in.  For example, a mute
+             control would return appropriate values paired with AudioNon and
+             AudioNoff.  For the AUDIO_MIXER_VALUE and AUDIO_MIXER_SET mixer
+             control types, the channel count is returned; the units name
+             specifies what the level controls (typical values are
+             AudioNvolume, AudioNtreble, and AudioNbass).
+
+     A process may read the control device to get notifications about mixer
+     changes.  Whenever a control changes, the read(2) function fetches an in‐
+     teger identifying the control.  It may be used in the _d_e_v field of the
+     _m_i_x_e_r___c_t_r_l structure to call AUDIO_MIXER_READ.
+
+     In contrast to audio devices, which have the exclusive open property,
+     control devices can be opened at any time in write-only mode.  Only one
+     reader is allowed at a time.
+
+FFIILLEESS
+     /dev/audio_N     Audio device.
+     /dev/audioctl_N  Control device.
+
+SSEEEE AALLSSOO
+     aucat(1), cdio(1), sndioctl(1), ioctl(2), sio_open(3), sioctl_open(3),
+     ac97(4), uaudio(4), sndio(7), audioctl(8), mixerctl(8), sndiod(8),
+     audio(9)
+
+BSD                             March 31, 2022                             BSD

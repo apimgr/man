@@ -1,0 +1,205 @@
+FDC(4)                   BSD Kernel Interfaces Manual                   FDC(4)
+
+NNAAMMEE
+     ffddcc — PC architecture floppy disk controller driver
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ffddcc
+
+     In _/_b_o_o_t_/_d_e_v_i_c_e_._h_i_n_t_s:
+     hhiinntt..ffddcc..00..aatt==""iissaa""
+     hhiinntt..ffddcc..00..ppoorrtt==""00xx33FF00""
+     hhiinntt..ffddcc..00..iirrqq==""66""
+     hhiinntt..ffddcc..00..ddrrqq==""22""
+     hhiinntt..ffddcc..00..ffllaaggss==""00xx00""
+     hhiinntt..ffdd..00..aatt==""ffddcc00""
+     hhiinntt..ffdd..00..ddrriivvee==""00""
+     hhiinntt..ffdd..00..ffllaaggss==""00xx00""
+     hhiinntt..ffdd..11..aatt==""ffddcc00""
+     hhiinntt..ffdd..11..ddrriivvee==""11""
+     hhiinntt..ffdd..11..ffllaaggss==""00xx00""
+
+DDEESSCCRRIIPPTTIIOONN
+   DDeevviiccee UUssaaggee
+     This driver provides access to floppy disk drives.  Floppy disks using
+     either FM (single-density) or MFM (double or high-density) recording can
+     be handled.
+
+     Floppy disk controllers can connect up to four drives each.  The ffddcc
+     driver can currently handle up to two drives per controller (or four
+     drives on ACPI).  Upon driver initialization, an attempt is made to find
+     out the type of the floppy controller in use.  The known controller types
+     are either the original NE765 or i8272 chips, or alternatively _e_n_h_a_n_c_e_d
+     controllers that are compatible with the NE72065 or i82077 chips.  These
+     enhanced controllers (among other enhancements) implement a FIFO for
+     floppy data transfers that will automatically be enabled once an enhanced
+     chip has been detected.  This FIFO activation can be disabled using the
+     per-controller flags value of _0_x_1.
+
+     By default, this driver creates a single device node _/_d_e_v_/_f_d_N for each
+     attached drive with number _N.  For historical reasons, device nodes that
+     use a trailing UFS-style partition letter (ranging from ‘a’ through ‘h’)
+     can also be accessed, which will be implemented as symbolic links to the
+     main device node.
+
+     Accessing the main device node will attempt to autodetect the density of
+     the available medium for multi-density devices.  Thus it is possible to
+     use either a 720 KB medium or a 1440 KB medium in a high-density 3.5 inch
+     standard floppy drive.  Normally, this autodetection will only happen
+     once at the first call to open(2) for the device after inserting the
+     medium.  This assumes the drive offers proper changeline support so media
+     changes can be detected by the driver.  To indicate a drive that does not
+     have the changeline support, this can be overridden using the per-drive
+     device flags value of _0_x_1_0 (causing each call to open(2) to perform the
+     autodetection).
+
+     When trying to use a floppy device with special-density media, other de‐
+     vice nodes can be created, of the form _/_d_e_v_/_f_d_N._M_M_M_M, where _N is the
+     drive number, and _M_M_M_M is a number between one and four digits describing
+     the device density.  Up to 15 additional subdevices per drive can be cre‐
+     ated that way.  The administrator is free to decide on a policy how to
+     assign these numbers.  The two common policies are to either implement
+     subdevices numbered 1 through 15, or to use a number that describes the
+     medium density in kilobytes.  Initially, each of those devices will be
+     configured to the maximal density that is possible for the drive type
+     (like 1200 KB for 5.25 inch HD drives or 1440 KB for 3.5 inch HD drives).
+     The desired density to be used on that subdevice needs to be configured
+     using fdcontrol(8).
+
+     Drive types are configured using the lower four bits of the per-drive de‐
+     vice flags.  The following values can be specified:
+
+           _1   5.25 inch double-density device with 40 cylinders (360 KB na‐
+               tive capacity)
+
+           _2   5.25 inch high-density device with 80 cylinders (1200 KB native
+               capacity)
+
+           _3   3.5 inch double-density device with 80 cylinders (720 KB native
+               capacity)
+
+           _4   3.5 inch high-density device with 80 cylinders (1440 KB native
+               capacity)
+
+           _5   3.5 inch extra-density device with 80 cylinders (2880 KB native
+               capacity, usage currently restricted to at most 1440 KB media)
+
+           _6   Same as type 5, available for compatibility with some BIOSes
+
+     On IA32 architectures, the drive type can be specified as 0 for the
+     drives.  In that case, the CMOS configuration memory will be consulted to
+     obtain the value for that drive.  The ACPI probe automatically determines
+     these values via the _FDE and _FDI methods, but this can be overridden by
+     specifying a drive type hint.
+
+     Normally, each configured drive will be probed at initialization time,
+     using a short seek sequence.  This is intended to find out about drives
+     that have been configured but are actually missing or otherwise not re‐
+     sponding.  (The ACPI probe method does not perform this seek.)  In some
+     environments (like laptops with detachable drives), it might be desirable
+     to bypass this drive probe, and pretend a drive to be there so the driver
+     autoconfiguration will work even if the drive is currently not present.
+     For that purpose, a per-drive device flags value of _0_x_2_0 needs to be
+     specified.
+
+   PPrrooggrraammmmiinngg IInntteerrffaaccee
+     In addition to the normal read and write functionality, the ffddcc driver
+     offers a number of configurable options using ioctl(2).  In order to ac‐
+     cess any of this functionality, programmers need to include the header
+     file <_s_y_s_/_f_d_c_i_o_._h> into their programs.  The call to open(2) can be per‐
+     formed in two possible ways.  When opening the device without the
+     O_NONBLOCK flag set, the device is opened in a normal way, which would
+     cause the main device nodes to perform automatic media density selection,
+     and which will yield a file descriptor that is fully available for any
+     I/O operation or any of the following ioctl(2) commands.
+
+     When opening the device with O_NONBLOCK set, automatic media density se‐
+     lection will be bypassed, and the device remains in a half-opened state.
+     No actual I/O operations are possible, but many of the ioctl(2) commands
+     described below can be performed.  This mode is intended for access to
+     the device without the requirement to have an accessible media present,
+     like for status inquiries to the drive, or in order to format a medium.
+     O_NONBLOCK needs to be cleared before I/O operations are possible on the
+     descriptor, which requires a prior specification of the density using the
+     FD_STYPE command (see below).  Operations that are not allowed on the
+     half-opened descriptor will cause an error value of EAGAIN.
+
+     The following ioctl(2) commands are currently available:
+
+     FD_FORM    Used to format a floppy disk medium.  Third argument is a
+                pointer to a _s_t_r_u_c_t _f_d___f_o_r_m_b specifying which track to format,
+                and which parameters to fill into the ID fields of the floppy
+                disk medium.
+
+     FD_GTYPE   Returns the current density definition record for the selected
+                device.  Third argument is a pointer to _s_t_r_u_c_t _f_d___t_y_p_e.
+
+     FD_STYPE   Adjusts the density definition of the selected device.  Third
+                argument is a pointer to _s_t_r_u_c_t _f_d___t_y_p_e.  For the fixed-den‐
+                sity subdevices (1 through 15 per drive), this operation is
+                restricted to a process with superuser privileges.  For the
+                auto-selecting subdevice 0, the operation is temporarily al‐
+                lowed to any process, but this setting will be lost again upon
+                the next autoselection.  This can be used when formatting a
+                new medium (which will require to open the device using
+                O_NONBLOCK, and thus to later adjust the density using
+                FD_STYPE).
+
+     FD_GOPTS   Obtain the current drive options.  Third argument is a pointer
+                to _i_n_t, containing a bitwise union of the following possible
+                flag values:
+
+                FDOPT_NORETRY   Do not automatically retry operations upon
+                                failure.
+
+                FDOPT_NOERRLOG  Do not cause “hard error” kernel logs for
+                                failed I/O operations.
+
+                FDOPT_NOERROR   Do not indicate I/O errors when returning from
+                                read(2) or write(2) system calls.  The caller
+                                is assumed to use FD_GSTAT calls in order to
+                                inquire about the success of each operation.
+                                This is intended to allow even erroneous data
+                                from bad blocks to be retrieved using normal
+                                I/O operations.
+
+                FDOPT_AUTOSEL   Device performs automatic density selection.
+                                Unlike the above flags, this one is read-only.
+
+     FD_SOPTS   Set device options, see above for their meaning.  Third argu‐
+                ment is a pointer to _i_n_t.  Drive options will always be
+                cleared when closing the descriptor.
+
+     FD_CLRERR  Clear the internal low-level error counter.  Normally, con‐
+                troller-level I/O errors are only logged up to FDC_ERRMAX er‐
+                rors (currently defined to 100).  This command resets the
+                counter.  Requires superuser privileges.
+
+     FD_READID  Read one sector ID field from the floppy disk medium.  Third
+                argument is a pointer to _s_t_r_u_c_t _f_d_c___r_e_a_d_i_d, where the read
+                data will be returned.  Can be used to analyze a floppy disk
+                medium.
+
+     FD_GSTAT   Return the recent floppy disk controller status, if available.
+                Third argument is a pointer to _s_t_r_u_c_t _f_d_c___s_t_a_t_u_s, where the
+                status registers (ST0, ST1, ST2, C, H, R, and N) are being re‐
+                turned.  EINVAL will be caused if no recent status is avail‐
+                able.
+
+     FD_GDTYPE  Returns the floppy disk drive type.  Third argument is a
+                pointer to _e_n_u_m _f_d___d_r_i_v_e_t_y_p_e.  This type is the same as being
+                used in the per-drive configuration flags, or in the CMOS con‐
+                figuration data or ACPI namespace on IA32 systems.
+
+FFIILLEESS
+     /dev/fd*  floppy disk device nodes
+
+SSEEEE AALLSSOO
+     fdread(1), fdwrite(1), ioctl(2), open(2), read(2), write(2),
+     fdcontrol(8), fdformat(8)
+
+AAUUTTHHOORRSS
+     This man page was initially written by Wilko Bulte, and later vastly
+     rewritten by Jörg Wunsch.
+
+BSD                              April 7, 2017                             BSD

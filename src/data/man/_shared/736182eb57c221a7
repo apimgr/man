@@ -1,0 +1,160 @@
+_c_a_p_g_e_t(2)                     System Calls Manual                    _c_a_p_g_e_t(2)
+
+NNAAMMEE
+       capget, capset - set/get capabilities of thread(s)
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<lliinnuuxx//ccaappaabbiilliittyy..hh>> /* Definition of CCAAPP__** and
+                                        __LLIINNUUXX__CCAAPPAABBIILLIITTYY__** constants */
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__ccaappggeett,, ccaapp__uusseerr__hheeaaddeerr__tt _h_d_r_p,,
+                   ccaapp__uusseerr__ddaattaa__tt _d_a_t_a_p));;
+       iinntt ssyyssccaallll((SSYYSS__ccaappsseett,, ccaapp__uusseerr__hheeaaddeerr__tt _h_d_r_p,,
+                   ccoonnsstt ccaapp__uusseerr__ddaattaa__tt _d_a_t_a_p));;
+
+       _N_o_t_e:  glibc provides no wrappers for these system calls, necessitating
+       the use of ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       These two system calls are the raw kernel  interface  for  getting  and
+       setting  thread capabilities.  Not only are these system calls specific
+       to Linux, but the kernel API is likely to change and use of these  sys‐
+       tem  calls (in particular the format of the _c_a_p___u_s_e_r___*___t types) is sub‐
+       ject to extension with each kernel revision, but old programs will keep
+       working.
+
+       The portable interfaces are  ccaapp__sseett__pprroocc(3)  and  ccaapp__ggeett__pprroocc(3);  if
+       possible, you should use those interfaces in applications; see NOTES.
+
+   CCuurrrreenntt ddeettaaiillss
+       Now that you have been warned, some current kernel details.  The struc‐
+       tures are defined as follows.
+
+           #define _LINUX_CAPABILITY_VERSION_1  0x19980330
+           #define _LINUX_CAPABILITY_U32S_1     1
+
+                   /* V2 added in Linux 2.6.25; deprecated */
+           #define _LINUX_CAPABILITY_VERSION_2  0x20071026
+           #define _LINUX_CAPABILITY_U32S_2     2
+
+                   /* V3 added in Linux 2.6.26 */
+           #define _LINUX_CAPABILITY_VERSION_3  0x20080522
+           #define _LINUX_CAPABILITY_U32S_3     2
+
+           typedef struct __user_cap_header_struct {
+              __u32 version;
+              int pid;
+           } *cap_user_header_t;
+
+           typedef struct __user_cap_data_struct {
+              __u32 effective;
+              __u32 permitted;
+              __u32 inheritable;
+           } *cap_user_data_t;
+
+       The  _e_f_f_e_c_t_i_v_e,  _p_e_r_m_i_t_t_e_d, and _i_n_h_e_r_i_t_a_b_l_e fields are bit masks of the
+       capabilities defined in ccaappaabbiilliittiieess(7).  Note that  the  CCAAPP__**  values
+       are  bit  indexes  and need to be bit‐shifted before ORing into the bit
+       fields.  To define the structures for passing to the system  call,  you
+       have   to   use   the   _s_t_r_u_c_t   _____u_s_e_r___c_a_p___h_e_a_d_e_r___s_t_r_u_c_t   and  _s_t_r_u_c_t
+       _____u_s_e_r___c_a_p___d_a_t_a___s_t_r_u_c_t names because the typedefs are only pointers.
+
+       Kernels prior to Linux 2.6.25 prefer 32‐bit capabilities  with  version
+       __LLIINNUUXX__CCAAPPAABBIILLIITTYY__VVEERRSSIIOONN__11.   Linux  2.6.25  added  64‐bit  capability
+       sets, with version __LLIINNUUXX__CCAAPPAABBIILLIITTYY__VVEERRSSIIOONN__22.  There was, however, an
+       API glitch, and Linux 2.6.26 added __LLIINNUUXX__CCAAPPAABBIILLIITTYY__VVEERRSSIIOONN__33  to  fix
+       the problem.
+
+       Note that 64‐bit capabilities use _d_a_t_a_p_[_0_] and _d_a_t_a_p_[_1_], whereas 32‐bit
+       capabilities use only _d_a_t_a_p_[_0_].
+
+       On  kernels  that support file capabilities (VFS capabilities support),
+       these system calls behave slightly differently.  This support was added
+       as an option in Linux 2.6.24, and became fixed (nonoptional)  in  Linux
+       2.6.33.
+
+       For  ccaappggeett()  calls,  one can probe the capabilities of any process by
+       specifying its process ID with the _h_d_r_p_-_>_p_i_d field value.
+
+       For details on the data, see ccaappaabbiilliittiieess(7).
+
+   WWiitthh VVFFSS ccaappaabbiilliittiieess ssuuppppoorrtt
+       VFS capabilities employ a file extended attribute (see xxaattttrr(7)) to al‐
+       low capabilities to be attached to executables.  This  privilege  model
+       obsoletes kernel support for one process asynchronously setting the ca‐
+       pabilities  of another.  That is, on kernels that have VFS capabilities
+       support, when calling ccaappsseett(), the only permitted values for _h_d_r_p_-_>_p_i_d
+       are 0 or, equivalently, the value returned by ggeettttiidd(2).
+
+   WWiitthhoouutt VVFFSS ccaappaabbiilliittiieess ssuuppppoorrtt
+       On older kernels that do not provide VFS capabilities support  ccaappsseett()
+       can,  if  the  caller has the CCAAPP__SSEETTPPCCAAPP capability, be used to change
+       not only the caller’s own capabilities, but also  the  capabilities  of
+       other  threads.   The  call  operates on the capabilities of the thread
+       specified by the _p_i_d field of _h_d_r_p when that is nonzero, or on the  ca‐
+       pabilities  of the calling thread if _p_i_d is 0.  If _p_i_d refers to a sin‐
+       gle‐threaded process, then  _p_i_d  can  be  specified  as  a  traditional
+       process ID; operating on a thread of a multithreaded process requires a
+       thread  ID  of  the  type returned by ggeettttiidd(2).  For ccaappsseett(), _p_i_d can
+       also be: -1, meaning perform the  change  on  all  threads  except  the
+       caller  and  iinniitt(1); or a value less than -1, in which case the change
+       is applied to all members of the process group whose ID is _-_p_i_d.
+
+RREETTUURRNN VVAALLUUEE
+       On success, zero is returned.  On error, -1 is returned, and  _e_r_r_n_o  is
+       set to indicate the error.
+
+       The calls fail with the error EEIINNVVAALL, and set the _v_e_r_s_i_o_n field of _h_d_r_p
+       to  the  kernel preferred value of __LLIINNUUXX__CCAAPPAABBIILLIITTYY__VVEERRSSIIOONN__??  when an
+       unsupported _v_e_r_s_i_o_n value is specified.  In this  way,  one  can  probe
+       what the current preferred capability revision is.
+
+EERRRROORRSS
+       EEFFAAUULLTT Bad  memory  address.  _h_d_r_p must not be NULL.  _d_a_t_a_p may be NULL
+              only when the user is trying to determine the preferred capabil‐
+              ity version format supported by the kernel.
+
+       EEIINNVVAALL One of the arguments was invalid.
+
+       EEPPEERRMM  An attempt was made to add a capability to the permitted set, or
+              to set a capability in the effective set that is not in the per‐
+              mitted set.
+
+       EEPPEERRMM  An attempt was made to add a capability to the inheritable  set,
+              and either:
+
+              •  that capability was not in the caller’s bounding set; or
+
+              •  the  capability was not in the caller’s permitted set and the
+                 caller lacked the CCAAPP__SSEETTPPCCAAPP  capability  in  its  effective
+                 set.
+
+       EEPPEERRMM  The  caller attempted to use ccaappsseett() to modify the capabilities
+              of a thread other than itself, but lacked sufficient  privilege.
+              For  kernels  supporting VFS capabilities, this is never permit‐
+              ted.  For kernels lacking VFS support, the CCAAPP__SSEETTPPCCAAPP  capabil‐
+              ity  is  required.   (A bug in kernels before Linux 2.6.11 meant
+              that this error could also occur if a thread without this  capa‐
+              bility  tried  to  change its own capabilities by specifying the
+              _p_i_d field as a nonzero value (i.e., the value returned  by  ggeett‐‐
+              ppiidd(2)) instead of 0.)
+
+       EESSRRCCHH  No such thread.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+NNOOTTEESS
+       The portable interface to the capability querying and setting functions
+       is provided by the _l_i_b_c_a_p library and is available here:
+       ⟨http://git.kernel.org/cgit/linux/kernel/git/morgan/libcap.git⟩
+
+SSEEEE AALLSSOO
+       cclloonnee(2), ggeettttiidd(2), ccaappaabbiilliittiieess(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                         _c_a_p_g_e_t(2)

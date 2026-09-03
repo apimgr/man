@@ -1,0 +1,342 @@
+DEVSTAT(9)               BSD Kernel Developer's Manual              DEVSTAT(9)
+
+NNAAMMEE
+     ddeevvssttaatt, ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn, ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo,
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo__bbtt, ddeevvssttaatt__nneeww__eennttrryy, ddeevvssttaatt__rreemmoovvee__eennttrryy,
+     ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn, ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn__bbiioo — kernel inter‐
+     face for keeping device statistics
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ddeevviicceessttaatt..hh>>
+
+     _s_t_r_u_c_t _d_e_v_s_t_a_t _*
+     ddeevvssttaatt__nneeww__eennttrryy(_c_o_n_s_t _v_o_i_d _*_d_e_v___n_a_m_e, _i_n_t _u_n_i_t___n_u_m_b_e_r,
+         _u_i_n_t_3_2___t _b_l_o_c_k___s_i_z_e, _d_e_v_s_t_a_t___s_u_p_p_o_r_t___f_l_a_g_s _f_l_a_g_s,
+         _d_e_v_s_t_a_t___t_y_p_e___f_l_a_g_s _d_e_v_i_c_e___t_y_p_e, _d_e_v_s_t_a_t___p_r_i_o_r_i_t_y _p_r_i_o_r_i_t_y);
+
+     _v_o_i_d
+     ddeevvssttaatt__rreemmoovvee__eennttrryy(_s_t_r_u_c_t _d_e_v_s_t_a_t _*_d_s);
+
+     _v_o_i_d
+     ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn(_s_t_r_u_c_t _d_e_v_s_t_a_t _*_d_s, _c_o_n_s_t _s_t_r_u_c_t _b_i_n_t_i_m_e _*_n_o_w);
+
+     _v_o_i_d
+     ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn__bbiioo(_s_t_r_u_c_t _d_e_v_s_t_a_t _*_d_s, _s_t_r_u_c_t _b_i_o _*_b_p);
+
+     _v_o_i_d
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn(_s_t_r_u_c_t _d_e_v_s_t_a_t _*_d_s, _u_i_n_t_3_2___t _b_y_t_e_s,
+         _d_e_v_s_t_a_t___t_a_g___t_y_p_e _t_a_g___t_y_p_e, _d_e_v_s_t_a_t___t_r_a_n_s___f_l_a_g_s _f_l_a_g_s,
+         _c_o_n_s_t _s_t_r_u_c_t _b_i_n_t_i_m_e _*_n_o_w, _c_o_n_s_t _s_t_r_u_c_t _b_i_n_t_i_m_e _*_t_h_e_n);
+
+     _v_o_i_d
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo(_s_t_r_u_c_t _d_e_v_s_t_a_t _*_d_s, _c_o_n_s_t _s_t_r_u_c_t _b_i_o _*_b_p);
+
+     _v_o_i_d
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo__bbtt(_s_t_r_u_c_t _d_e_v_s_t_a_t _*_d_s, _c_o_n_s_t _s_t_r_u_c_t _b_i_o _*_b_p,
+         _c_o_n_s_t _s_t_r_u_c_t _b_i_n_t_i_m_e _*_n_o_w);
+
+DDEESSCCRRIIPPTTIIOONN
+     The devstat subsystem is an interface for recording device statistics, as
+     its name implies.  The idea is to keep reasonably detailed statistics
+     while utilizing a minimum amount of CPU time to record them.  Thus, no
+     statistical calculations are actually performed in the kernel portion of
+     the ddeevvssttaatt code.  Instead, that is left for user programs to handle.
+
+     The historical and antiquated ddeevvssttaatt model assumed a single active IO
+     operation per device, which is not accurate for most disk-like drivers in
+     the 2000s and beyond.  New consumers of the interface should almost cer‐
+     tainly use only the "bio" variants of the start and end transacation rou‐
+     tines.
+
+     ddeevvssttaatt__nneeww__eennttrryy() allocates and initializes _d_e_v_s_t_a_t structure and re‐
+     turns a pointer to it.  ddeevvssttaatt__nneeww__eennttrryy() takes several arguments:
+
+     dev_name     The device name, e.g., da, cd, sa.
+
+     unit_number  Device unit number.
+
+     block_size   Block size of the device, if supported.  If the device does
+                  not support a block size, or if the blocksize is unknown at
+                  the time the device is added to the ddeevvssttaatt list, it should
+                  be set to 0.
+
+     flags        Flags indicating operations supported or not supported by
+                  the device.  See below for details.
+
+     device_type  The device type.  This is broken into three sections: base
+                  device type (e.g., direct access, CDROM, sequential access),
+                  interface type (IDE, SCSI or other) and a pass-through flag
+                  to indicate pas-through devices.  See below for a complete
+                  list of types.
+
+     priority     The device priority.  The priority is used to determine how
+                  devices are sorted within ddeevvssttaatt's list of devices.  De‐
+                  vices are sorted first by priority (highest to lowest), and
+                  then by attach order.  See below for a complete list of
+                  available priorities.
+
+     ddeevvssttaatt__rreemmoovvee__eennttrryy() removes a device from the ddeevvssttaatt subsystem.  It
+     takes the devstat structure for the device in question as an argument.
+     The ddeevvssttaatt generation number is incremented and the number of devices is
+     decremented.
+
+     ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn() registers the start of a transaction with the
+     ddeevvssttaatt subsystem.  Optionally, if the caller already has a bbiinnuuppttiimmee()
+     value available, it may be passed in _*_n_o_w.  Usually the caller can just
+     pass NULL for _n_o_w, and the routine will gather the current bbiinnuuppttiimmee()
+     itself.  The busy count is incremented with each transaction start.  When
+     a device goes from idle to busy, the system uptime is recorded in the
+     _b_u_s_y___f_r_o_m field of the _d_e_v_s_t_a_t structure.
+
+     ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn__bbiioo() records the bbiinnuuppttiimmee() in the provided
+     bio's _b_i_o___t_0 and then invokes ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn().
+
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn() registers the end of a transaction with the
+     ddeevvssttaatt subsystem.  It takes six arguments:
+
+     ds        The _d_e_v_s_t_a_t structure for the device in question.
+
+     bytes     The number of bytes transferred in this transaction.
+
+     tag_type  Transaction tag type.  See below for tag types.
+
+     flags     Transaction flags indicating whether the transaction was a
+               read, write, or whether no data was transferred.
+
+     now       The bbiinnuuppttiimmee() at the end of the transaction, or NULL.
+
+     then      The bbiinnuuppttiimmee() at the beginning of the transaction, or NULL.
+
+     If _n_o_w is NULL, it collects the current time from bbiinnuuppttiimmee().  If _t_h_e_n
+     is NULL, the operation is not tracked in the _d_e_v_s_t_a_t _d_u_r_a_t_i_o_n table.
+
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo() is a thin wrapper for
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo__bbtt() with a NULL _n_o_w parameter.
+
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn__bbiioo__bbtt() is a wrapper for
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn() which pulls all needed information from a
+     _s_t_r_u_c_t _b_i_o prepared by ddeevvssttaatt__ssttaarrtt__ttrraannssaaccttiioonn__bbiioo().  The bio must be
+     ready for bbiiooddoonnee() (i.e., _b_i_o___b_c_o_u_n_t and _b_i_o___r_e_s_i_d must be correctly
+     initialized).
+
+     The _d_e_v_s_t_a_t structure is composed of the following fields:
+
+     sequence0,
+
+     sequence1          An implementation detail used to gather consistent
+                        snapshots of device statistics.
+
+     start_count        Number of operations started.
+
+     end_count          Number of operations completed.  The “busy_count” can
+                        be calculated by subtracting _e_n_d___c_o_u_n_t from
+                        _s_t_a_r_t___c_o_u_n_t.  (_s_e_q_u_e_n_c_e_0 and _s_e_q_u_e_n_c_e_1 are used to get
+                        a consistent snapshot.)  This is the current number of
+                        outstanding transactions for the device.  This should
+                        never go below zero, and on an idle device it should
+                        be zero.  If either one of these conditions is not
+                        true, it indicates a problem.
+
+                        There should be one and only one transaction start
+                        event and one transaction end event for each transac‐
+                        tion.
+
+     dev_links          Each _d_e_v_s_t_a_t structure is placed in a linked list when
+                        it is registered.  The _d_e_v___l_i_n_k_s field contains a
+                        pointer to the next entry in the list of _d_e_v_s_t_a_t
+                        structures.
+
+     device_number      The device number is a unique identifier for each de‐
+                        vice.  The device number is incremented for each new
+                        device that is registered.  The device number is cur‐
+                        rently only a 32-bit integer, but it could be enlarged
+                        if someone has a system with more than four billion
+                        device arrival events.
+
+     device_name        The device name is a text string given by the regis‐
+                        tering driver to identify itself.  (e.g., “da”, “cd”,
+                        “sa”, etc.)
+
+     unit_number        The unit number identifies the particular instance of
+                        the peripheral driver in question.
+
+     bytes[4]           This array contains the number of bytes that have been
+                        read (index DEVSTAT_READ), written (index
+                        DEVSTAT_WRITE), freed or erased (index DEVSTAT_FREE),
+                        or other (index DEVSTAT_NO_DATA).  All values are un‐
+                        signed 64-bit integers.
+
+     operations[4]      This array contains the number of operations of a
+                        given type that have been performed.  The indices are
+                        identical to those for _b_y_t_e_s above.  DEVSTAT_NO_DATA
+                        or "other" represents the number of transactions to
+                        the device which are neither reads, writes, nor frees.
+                        For instance, SCSI drivers often send a test unit
+                        ready command to SCSI devices.  The test unit ready
+                        command does not read or write any data.  It merely
+                        causes the device to return its status.
+
+     duration[4]        This array contains the total bintime corresponding to
+                        completed operations of a given type.  The indices are
+                        identical to those for _b_y_t_e_s above.  (Operations that
+                        complete using the historical
+                        ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn() API and do not provide a
+                        non-NULL _t_h_e_n are not accounted for.)
+
+     busy_time          This is the amount of time that the device busy count
+                        has been greater than zero.  This is only updated when
+                        the busy count returns to zero.
+
+     creation_time      This is the time, as reported by ggeettmmiiccrroottiimmee() that
+                        the device was registered.
+
+     block_size         This is the block size of the device, if the device
+                        has a block size.
+
+     tag_types          This is an array of counters to record the number of
+                        various tag types that are sent to a device.  See be‐
+                        low for a list of tag types.
+
+     busy_from          If the device is not busy, this was the time that a
+                        transaction last completed.  If the device is busy,
+                        this the most recent of either the time that the de‐
+                        vice became busy, or the time that the last transac‐
+                        tion completed.
+
+     flags              These flags indicate which statistics measurements are
+                        supported by a particular device.  These flags are
+                        primarily intended to serve as an aid to userland pro‐
+                        grams that decipher the statistics.
+
+     device_type        This is the device type.  It consists of three parts:
+                        the device type (e.g., direct access, CDROM, sequen‐
+                        tial access, etc.), the interface (IDE, SCSI or other)
+                        and whether or not the device in question is a pass-
+                        through driver.  See below for a complete list of de‐
+                        vice types.
+
+     priority           This is the priority.  This is the first parameter
+                        used to determine where to insert a device in the
+                        ddeevvssttaatt list.  The second parameter is attach order.
+                        See below for a list of available priorities.
+
+     id                 Identification for GEOM nodes.
+
+     Each device is given a device type.  Pass-through devices have the same
+     underlying device type and interface as the device they provide an inter‐
+     face for, but they also have the pass-through flag set.  The base device
+     types are identical to the SCSI device type numbers, so with SCSI periph‐
+     erals, the device type returned from an inquiry is usually ORed with the
+     SCSI interface type and the pass-through flag if appropriate.  The device
+     type flags are as follows:
+
+           typedef enum {
+                   DEVSTAT_TYPE_DIRECT     = 0x000,
+                   DEVSTAT_TYPE_SEQUENTIAL = 0x001,
+                   DEVSTAT_TYPE_PRINTER    = 0x002,
+                   DEVSTAT_TYPE_PROCESSOR  = 0x003,
+                   DEVSTAT_TYPE_WORM       = 0x004,
+                   DEVSTAT_TYPE_CDROM      = 0x005,
+                   DEVSTAT_TYPE_SCANNER    = 0x006,
+                   DEVSTAT_TYPE_OPTICAL    = 0x007,
+                   DEVSTAT_TYPE_CHANGER    = 0x008,
+                   DEVSTAT_TYPE_COMM       = 0x009,
+                   DEVSTAT_TYPE_ASC0       = 0x00a,
+                   DEVSTAT_TYPE_ASC1       = 0x00b,
+                   DEVSTAT_TYPE_STORARRAY  = 0x00c,
+                   DEVSTAT_TYPE_ENCLOSURE  = 0x00d,
+                   DEVSTAT_TYPE_FLOPPY     = 0x00e,
+                   DEVSTAT_TYPE_MASK       = 0x00f,
+                   DEVSTAT_TYPE_IF_SCSI    = 0x010,
+                   DEVSTAT_TYPE_IF_IDE     = 0x020,
+                   DEVSTAT_TYPE_IF_OTHER   = 0x030,
+                   DEVSTAT_TYPE_IF_MASK    = 0x0f0,
+                   DEVSTAT_TYPE_PASS       = 0x100
+           } devstat_type_flags;
+
+     Devices have a priority associated with them, which controls roughly
+     where they are placed in the ddeevvssttaatt list.  The priorities are as fol‐
+     lows:
+
+           typedef enum {
+                   DEVSTAT_PRIORITY_MIN    = 0x000,
+                   DEVSTAT_PRIORITY_OTHER  = 0x020,
+                   DEVSTAT_PRIORITY_PASS   = 0x030,
+                   DEVSTAT_PRIORITY_FD     = 0x040,
+                   DEVSTAT_PRIORITY_WFD    = 0x050,
+                   DEVSTAT_PRIORITY_TAPE   = 0x060,
+                   DEVSTAT_PRIORITY_CD     = 0x090,
+                   DEVSTAT_PRIORITY_DISK   = 0x110,
+                   DEVSTAT_PRIORITY_ARRAY  = 0x120,
+                   DEVSTAT_PRIORITY_MAX    = 0xfff
+           } devstat_priority;
+
+     Each device has associated with it flags to indicate what operations are
+     supported or not supported.  The _d_e_v_s_t_a_t___s_u_p_p_o_r_t___f_l_a_g_s values are as fol‐
+     lows:
+
+     DEVSTAT_ALL_SUPPORTED    Every statistic type is supported by the device.
+
+     DEVSTAT_NO_BLOCKSIZE     This device does not have a blocksize.
+
+     DEVSTAT_NO_ORDERED_TAGS  This device does not support ordered tags.
+
+     DEVSTAT_BS_UNAVAILABLE   This device supports a blocksize, but it is cur‐
+                              rently unavailable.  This flag is most often
+                              used with removable media drives.
+
+     Transactions to a device fall into one of three categories, which are
+     represented in the _f_l_a_g_s passed into ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn().  The
+     transaction types are as follows:
+
+           typedef enum {
+                   DEVSTAT_NO_DATA = 0x00,
+                   DEVSTAT_READ    = 0x01,
+                   DEVSTAT_WRITE   = 0x02,
+                   DEVSTAT_FREE    = 0x03
+           } devstat_trans_flags;
+           #define DEVSTAT_N_TRANS_FLAGS   4
+
+     DEVSTAT_NO_DATA is a type of transactions to the device which are neither
+     reads or writes.  For instance, SCSI drivers often send a test unit ready
+     command to SCSI devices.  The test unit ready command does not read or
+     write any data.  It merely causes the device to return its status.
+
+     There are four possible values for the _t_a_g___t_y_p_e argument to
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn():
+
+     DEVSTAT_TAG_SIMPLE   The transaction had a simple tag.
+
+     DEVSTAT_TAG_HEAD     The transaction had a head of queue tag.
+
+     DEVSTAT_TAG_ORDERED  The transaction had an ordered tag.
+
+     DEVSTAT_TAG_NONE     The device does not support tags.
+
+     The tag type values correspond to the lower four bits of the SCSI tag
+     definitions.  In CAM, for instance, the _t_a_g___a_c_t_i_o_n from the CCB is ORed
+     with 0xf to determine the tag type to pass in to
+     ddeevvssttaatt__eenndd__ttrraannssaaccttiioonn().
+
+     There is a macro, DEVSTAT_VERSION that is defined in <_s_y_s_/_d_e_v_i_c_e_s_t_a_t_._h>.
+     This is the current version of the ddeevvssttaatt subsystem, and it should be
+     incremented each time a change is made that would require recompilation
+     of userland programs that access ddeevvssttaatt statistics.  Userland programs
+     use this version, via the _k_e_r_n_._d_e_v_s_t_a_t_._v_e_r_s_i_o_n ssyyssccttll variable to deter‐
+     mine whether they are in sync with the kernel ddeevvssttaatt structures.
+
+SSEEEE AALLSSOO
+     systat(1), devstat(3), iostat(8), rpc.rstatd(8), vmstat(8)
+
+HHIISSTTOORRYY
+     The ddeevvssttaatt statistics system appeared in FreeBSD 3.0.
+
+AAUUTTHHOORRSS
+     Kenneth Merry <_k_e_n_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     There may be a need for ssppll() protection around some of the ddeevvssttaatt list
+     manipulation code to ensure, for example, that the list of devices is not
+     changed while someone is fetching the _k_e_r_n_._d_e_v_s_t_a_t_._a_l_l ssyyssccttll variable.
+
+BSD                              July 15, 2020                             BSD

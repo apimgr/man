@@ -1,0 +1,115 @@
+FIFOLOG(1)                BSD General Commands Manual               FIFOLOG(1)
+
+NNAAMMEE
+     ffiiffoolloogg__ccrreeaattee, ffiiffoolloogg__wwrriitteerr, ffiiffoolloogg__rreeaaddeerr — initialize, write, seek
+     and extract data from a fifolog
+
+SSYYNNOOPPSSIISS
+     ffiiffoolloogg__ccrreeaattee [--ll _r_e_c_o_r_d_-_s_i_z_e] [--rr _r_e_c_o_r_d_-_c_o_u_n_t] [--ss _s_i_z_e] _f_i_l_e
+     ffiiffoolloogg__rreeaaddeerr [--tt] [--bb _t_s_t_a_r_t] [--BB _T_s_t_a_r_t] [--ee _t_e_n_d] [--EE _T_e_n_d]
+                    [--oo _o_f_i_l_e] [--RR _r_e_g_e_x_p] [--TT _t_i_m_e_f_m_t] _f_i_l_e
+     ffiiffoolloogg__wwrriitteerr [--ww _w_r_i_t_e_-_r_a_t_e] [--ss _s_y_n_c_-_r_a_t_e] [--zz _c_o_m_p_r_e_s_s_i_o_n] _f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+     Fifologs provide a compact round-robin circular storage for recording
+     text and binary information to permanent storage in a bounded and pre‐
+     dictable fashion, time and space wise.
+
+     A fifolog can be stored either directly on a disk partition or in a regu‐
+     lar file.
+
+     The input data stream is encoded, compressed and marked up with time‐
+     stamps before it is written to storage, such that it is possible to seek
+     out a particular time interval in the stored data, without having to de‐
+     compress the entire logfile.
+
+     The ffiiffoolloogg__ccrreeaattee utility is used to initialize the first sector of a
+     disk device or file system file to make it a fifolog and should be called
+     only once.
+
+     Running ffiiffoolloogg__ccrreeaattee on an existing fifolog will reset it so that
+     ffiiffoolloogg__rreeaaddeerr and ffiiffoolloogg__wwrriitteerr will not see the previous contents.
+     (The previous contents are not physically erased, and with a bit of hand-
+     work all but the first record can be easily recovered.)
+
+     If the _f_i_l_e does not already exist, ffiiffoolloogg__ccrreeaattee will attempt to create
+     and ftruncate(2) it to the specified size, defaulting to 86400 records of
+     512 bytes if the --rr, --ll or --ss options do not specify otherwise.
+
+     The ffiiffoolloogg__wwrriitteerr utility will read standard input and write it to the
+     end of the fifolog according to the parameters given.
+
+     Writes happen whenever the output buffer is filled with compressed data
+     or when either of two timers expire, forcing a partially filled buffer to
+     be written.
+
+     The first and faster timer, --ww _w_r_i_t_e_-_r_a_t_e, forces available data to be
+     written but does not flush and reset the compression dictionary.  This
+     timer is intended to minimize the amount of logdata lost in RAM in case
+     of a crash and by default it fires 10 seconds after the previous write.
+
+     The second and slower timer, --ss _s_y_n_c_-_r_a_t_e, forces a full flush and reset
+     of the compression engine and causes the next record written to be a syn‐
+     chronization point with an uncompressed timestamp, making it possible to
+     start reading the logfile from that record.  By default this timer fires
+     a minute after the previous sync.
+
+     The --zz _c_o_m_p_r_e_s_s_i_o_n option controls the zlib(3) compression level; legal
+     values are zero to nine which is the default.
+
+     The ffiiffoolloogg__rreeaaddeerr utility will retrieve records from the fifolog accord‐
+     ing to the specified parameters and write them either to standard output
+     or the file specified with --oo.
+
+     It is possible to specify a start and end time to limit the amount of
+     data ffiiffoolloogg__rreeaaddeerr will report.  The lower-case variants --bb and --ee take
+     a _t_i_m_e___t value, whereas the upper-case variants --BB and --EE take human-
+     readable specifications such as “1 hour ago”.
+
+     The --tt option forces timestamps to be formatted as “YYYYMMDDhhmmss” in‐
+     stead of as _t_i_m_e___t, and --TT allows the specification of an strftime(3)
+     formatting string.
+
+     Finally, records can be filtered such that only records matching the
+     (REG_BASIC) regular expression specified with --RR are output.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     The data stored in the fifolog consists of three layers, an outer layer
+     that allows searches to synchronization points based on timestamps with‐
+     out having to decompress and decode the actual contents, a compression
+     layer implemented with zlib(3), and an inner serialization and timestamp‐
+     ing layer.
+
+     The exact encoding is described in the _f_i_f_o_l_o_g_._h file.
+
+     Fifolog is particularly well suited for use on Flash based media, where
+     it results in much lower write-wear, than a file system with regular log
+     files rotated with newsyslog(8) etc.
+
+EEXXAAMMPPLLEESS
+     Create a fifolog with 1024*1024 records of 512 bytes:
+
+           fifolog_create -r 10m /tmp/fifolog
+
+     Write a single record to this file:
+
+           date | fifolog_writer /tmp/fifolog
+
+     Read it back with human readable timestamps:
+
+           fifolog_reader -t /tmp/fifolog
+
+     One particular useful use of ffiiffoolloogg__wwrriitteerr is with syslogd(8) using a
+     line such as this in syslog.conf(5):
+
+           *.* |fifolog_writer /var/log/syslog_fifolog
+
+HHIISSTTOORRYY
+     The fifolog tools have been liberated from an open source SCADA applica‐
+     tions called “measured”, which monitors and controls remote radio naviga‐
+     tion transmitters for the Danish Air Traffic Control system.
+
+AAUUTTHHOORRSS
+     The fifolog tools were written by Poul-Henning Kamp.
+
+BSD                            February 9, 2008                            BSD

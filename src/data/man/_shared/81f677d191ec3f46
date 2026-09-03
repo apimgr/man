@@ -1,0 +1,195 @@
+NG_L2TP(4)               BSD Kernel Interfaces Manual               NG_L2TP(4)
+
+NNAAMMEE
+     nngg__ll22ttpp — L2TP protocol netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__ll22ttpp..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ll22ttpp node type implements the encapsulation layer of the L2TP proto‐
+     col as described in RFC 2661.  This includes adding the L2TP packet
+     header for outgoing packets and verifying and removing it for incoming
+     packets.  The node maintains the L2TP sequence number state and handles
+     control session packet acknowledgment and retransmission.
+
+HHOOOOKKSS
+     The ll22ttpp node type supports the following hooks:
+
+     _l_o_w_e_r         L2TP frames.
+
+     _c_t_r_l          Control packets.
+
+     _s_e_s_s_i_o_n___h_h_h_h  Session 0xhhhh data packets.
+
+     L2TP control and data packets are transmitted to, and received from, the
+     L2TP peer via the lower hook.  Typically this hook would be connected to
+     the inet/dgram/udp hook of an ng_ksocket(4) node for L2TP over UDP.
+
+     The ctrl hook connects to the local L2TP management entity.  L2TP control
+     messages (without any L2TP headers) are transmitted and received on this
+     hook.  Messages written to this hook are guaranteed to be delivered to
+     the peer reliably, in order, and without duplicates.
+
+     Packets written to the ctrl hook must contain a two byte session ID
+     prepended to the frame (in network order).  This session ID is copied to
+     the outgoing L2TP header.  Similarly, packets read from the ctrl hook
+     will have the received session ID prepended.
+
+     Once an L2TP session has been created, the corresponding session hook may
+     be used to transmit and receive the session's data frames: for the ses‐
+     sion with session ID 0xabcd, the hook is named session_abcd.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_L2TP_SET_CONFIG (sseettccoonnffiigg)
+          This command updates the configuration of the node.  It takes a
+          _s_t_r_u_c_t _n_g___l_2_t_p___c_o_n_f_i_g as an argument:
+
+          /* Configuration for a node */
+          struct ng_l2tp_config {
+              u_char      enabled;        /* enables traffic flow */
+              u_char      match_id;       /* tunnel id must match 'tunnel_id' */
+              uint16_t    tunnel_id;      /* local tunnel id */
+              uint16_t    peer_id;        /* peer's tunnel id */
+              uint16_t    peer_win;       /* peer's max recv window size */
+              uint16_t    rexmit_max;     /* max retransmits before failure */
+              uint16_t    rexmit_max_to;  /* max delay between retransmits */
+          };
+
+          The _e_n_a_b_l_e_d field enables packet processing.  Each time this field
+          is changed back to zero the sequence number state is reset.  In this
+          way, reuse of a node is possible.
+
+          The _t_u_n_n_e_l___i_d field configures the local tunnel ID for the control
+          connection.  The _m_a_t_c_h___i_d field determines how incoming L2TP packets
+          with a tunnel ID field different from _t_u_n_n_e_l___i_d are handled.  If
+          _m_a_t_c_h___i_d is non-zero, they will be dropped; otherwise, they will be
+          dropped only if the tunnel ID is non-zero.  Typically _t_u_n_n_e_l___i_d is
+          set to the local tunnel ID as soon as it is known and _m_a_t_c_h___i_d is
+          set to non-zero after receipt of the SCCRP or SCCCN control message.
+
+          The peer's tunnel ID should be set in _p_e_e_r___i_d as soon as it is
+          learned, typically after receipt of a SCCRQ or SCCRP control mes‐
+          sage.  This value is copied into the L2TP header for outgoing pack‐
+          ets.
+
+          The _p_e_e_r___w_i_n field should be set from the “Receive Window Size” AVP
+          received from the peer.  The default value for this field is one;
+          zero is an invalid value.  As long as _e_n_a_b_l_e_d is non-zero, this
+          value may not be decreased.
+
+          The _r_e_x_m_i_t___m_a_x and _r_e_x_m_i_t___m_a_x___t_o fields configure packet retransmis‐
+          sion.  _r_e_x_m_i_t___m_a_x___t_o is the maximum retransmission delay between
+          packets, in seconds.  The retransmit delay will start at a small
+          value and increase exponentially up to this limit.  The _r_e_x_m_i_t___m_a_x
+          sets the maximum number of times a packet will be retransmitted
+          without being acknowledged before a failure condition is declared.
+          Once a failure condition is declared, each additional retransmission
+          will cause the ll22ttpp node to send a NGM_L2TP_ACK_FAILURE (aacckkffaaiilluurree)
+          control message back to the node that sent the last
+          NGM_L2TP_SET_CONFIG.  Appropriate action should then be taken to
+          shutdown the control connection.
+
+     NGM_L2TP_GET_CONFIG (ggeettccoonnffiigg)
+          Returns the current configuration as a _s_t_r_u_c_t _n_g___l_2_t_p___c_o_n_f_i_g.
+
+     NGM_L2TP_SET_SESS_CONFIG (sseettsseessssccoonnffiigg)
+          This control message configures a single data session.  The corre‐
+          sponding hook must already be connected before sending this command.
+          The argument is a _s_t_r_u_c_t _n_g___l_2_t_p___s_e_s_s___c_o_n_f_i_g:
+
+          /* Configuration for a session hook */
+          struct ng_l2tp_sess_config {
+              uint16_t    session_id;     /* local session id */
+              uint16_t    peer_id;        /* peer's session id */
+              u_char      control_dseq;   /* whether we control data sequencing */
+              u_char      enable_dseq;    /* whether to enable data sequencing */
+              u_char      include_length; /* whether to include length field */
+          };
+
+          The _s_e_s_s_i_o_n___i_d and _p_e_e_r___i_d fields configure the local and remote
+          session IDs, respectively.
+
+          The _c_o_n_t_r_o_l___d_s_e_q and _e_n_a_b_l_e___d_s_e_q fields determine whether sequence
+          numbers are used with L2TP data packets.  If _e_n_a_b_l_e___d_s_e_q is zero,
+          then no sequence numbers are sent and incoming sequence numbers are
+          ignored.  Otherwise, sequence numbers are included on outgoing pack‐
+          ets and checked on incoming packets.
+
+          If _c_o_n_t_r_o_l___d_s_e_q is non-zero, then the setting of _e_n_a_b_l_e___d_s_e_q will
+          never change except by another NGM_L2TP_SET_SESS_CONFIG control mes‐
+          sage.  If _c_o_n_t_r_o_l___d_s_e_q is zero, then the peer controls whether se‐
+          quence numbers are used: if an incoming L2TP data packet contains
+          sequence numbers, _e_n_a_b_l_e___d_s_e_q is set to one, and conversely if an
+          incoming L2TP data packet does not contain sequence numbers,
+          _e_n_a_b_l_e___d_s_e_q is set to zero.  The current value of _e_n_a_b_l_e___d_s_e_q is al‐
+          ways accessible via the NGM_L2TP_GET_SESS_CONFIG control message
+          (see below).  Typically an LNS would set _c_o_n_t_r_o_l___d_s_e_q to one while a
+          LAC would set _c_o_n_t_r_o_l___d_s_e_q to zero (if the Sequencing Required AVP
+          were not sent), thus giving control of data packet sequencing to the
+          LNS.
+
+          The _i_n_c_l_u_d_e___l_e_n_g_t_h field determines whether the L2TP header length
+          field is included in outgoing L2TP data packets.  For incoming pack‐
+          ets, the L2TP length field is always checked when present.
+
+     NGM_L2TP_GET_SESS_CONFIG (ggeettsseessssccoonnffiigg)
+          This command takes a two byte session ID as an argument and returns
+          the current configuration for the corresponding data session as a
+          _s_t_r_u_c_t _n_g___l_2_t_p___s_e_s_s___c_o_n_f_i_g.  The corresponding session hook must be
+          connected.
+
+     NGM_L2TP_GET_STATS (ggeettssttaattss)
+          This command returns a _s_t_r_u_c_t _n_g___l_2_t_p___s_t_a_t_s containing statistics of
+          the L2TP tunnel.
+
+     NGM_L2TP_CLR_STATS (ccllrrssttaattss)
+          This command clears the statistics for the L2TP tunnel.
+
+     NGM_L2TP_GETCLR_STATS (ggeettccllrrssttaattss)
+          Same as NGM_L2TP_GET_STATS, but also atomically clears the statis‐
+          tics as well.
+
+     NGM_L2TP_GET_SESSION_STATS (ggeettsseessssssttaattss)
+          This command takes a two byte session ID as an argument and returns
+          a _s_t_r_u_c_t _n_g___l_2_t_p___s_e_s_s_i_o_n___s_t_a_t_s containing statistics for the corre‐
+          sponding data session.  The corresponding session hook must be con‐
+          nected.
+
+     NGM_L2TP_CLR_SESSION_STATS (ccllrrsseessssssttaattss)
+          This command takes a two byte session ID as an argument and clears
+          the statistics for that data session.  The corresponding session
+          hook must be connected.
+
+     NGM_L2TP_GETCLR_SESSION_STATS (ggeettccllrrsseessssssttaattss)
+          Same as NGM_L2TP_GET_SESSION_STATS, but also atomically clears the
+          statistics as well.
+
+     NGM_L2TP_SET_SEQ (sseettsseeqquueennccee)
+          This command sets the sequence numbers of a not yet enabled node.
+          It takes a _s_t_r_u_c_t _n_g___l_2_t_p___s_e_q___c_o_n_f_i_g as argument, where _x_a_c_k and _n_r
+          respectively _n_s and _r_a_c_k must be the same.  This option is particu‐
+          larly useful if one receives and processes the first packet entirely
+          in userspace and wants to hand over further processing to the node.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_ksocket(4), ng_ppp(4), ng_pptpgre(4), ngctl(8)
+
+     W. Townsley, A. Valencia, A. Rubens, G. Pall, G. Zorn, and B. Palter,
+     _L_a_y_e_r _T_w_o _T_u_n_n_e_l_i_n_g _P_r_o_t_o_c_o_l _L_2_T_P, RFC 2661.
+
+HHIISSTTOORRYY
+     The ll22ttpp node type was developed at Packet Design, LLC,
+     _h_t_t_p_:_/_/_w_w_w_._p_a_c_k_e_t_d_e_s_i_g_n_._c_o_m_/.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_p_a_c_k_e_t_d_e_s_i_g_n_._c_o_m>
+
+BSD                            November 13, 2012                           BSD

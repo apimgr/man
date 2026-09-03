@@ -1,0 +1,126 @@
+PKRU(3)                  BSD Library Functions Manual                  PKRU(3)
+
+NNAAMMEE
+     PPrrootteeccttiioonn KKeeyy RRiigghhttss ffoorr UUsseerr ppaaggeess — provide fast user-managed key-
+     based access control for pages
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<mmaacchhiinnee//ssyyssaarrcchh..hh>>
+
+     _i_n_t
+     xx8866__ppkkrruu__ggeett__ppeerrmm(_u_n_s_i_g_n_e_d _i_n_t _k_e_y_i_d_x, _i_n_t _*_a_c_c_e_s_s, _i_n_t _*_m_o_d_i_f_y);
+
+     _i_n_t
+     xx8866__ppkkrruu__sseett__ppeerrmm(_u_n_s_i_g_n_e_d _i_n_t _k_e_y_i_d_x, _i_n_t _a_c_c_e_s_s, _i_n_t _m_o_d_i_f_y);
+
+     _i_n_t
+     xx8866__ppkkrruu__pprrootteecctt__rraannggee(_v_o_i_d _*_a_d_d_r, _u_n_s_i_g_n_e_d _l_o_n_g _l_e_n,
+         _u_n_s_i_g_n_e_d _i_n_t _k_e_y_i_d_x, _i_n_t _f_l_a_g);
+
+     _i_n_t
+     xx8866__ppkkrruu__uunnpprrootteecctt__rraannggee(_v_o_i_d _*_a_d_d_r, _u_n_s_i_g_n_e_d _l_o_n_g _l_e_n);
+
+DDEESSCCRRIIPPTTIIOONN
+     The protection keys feature provides an additional mechanism, besides the
+     normal page permissions as established by mmap(2) and mprotect(2), to
+     control access to user-mode addresses.  The mechanism gives safety mea‐
+     sures which can be used to avoid incidental read or modification of sen‐
+     sitive memory, or as a debugging feature.  It cannot guard against con‐
+     scious accesses since permissions are user-controllable.
+
+     If supported by hardware, each mapped user linear address has an associ‐
+     ated 4-bit protection key.  A new per-thread PKRU hardware register de‐
+     termines, for each protection key, whether user-mode addresses with that
+     protection key may be read or written.
+
+     Only one key may apply to a given range at a time.  The default protec‐
+     tion key index is zero, it is used even if no key was explicitly assigned
+     to the address, or if the key was removed.
+
+     The protection prevents the system from accessing user addresses as well
+     as the user applications.  When a system call was unable to read or write
+     user memory due to key protection, it returns the EFAULT error code.
+     Note that some side effects may have occurred if this error is reported.
+
+     Protection keys require that the system uses 4-level paging (also called
+     long mode), which means that it is only available on amd64 system.  Both
+     64-bit and 32-bit applications can use protection keys.  More information
+     about the hardware feature is provided in the IA32 Software Developer's
+     Manual published by Intel Corp.
+
+     The key indexes written into the page table entries are managed by the
+     ssyyssaarrcchh() syscall.  Per-key permissions are managed using the user-mode
+     instructions _R_D_P_K_R_U and _W_R_P_K_R_U.  The system provides convenient library
+     helpers for both the syscall and the instructions, described below.
+
+     The xx8866__ppkkrruu__pprrootteecctt__rraannggee() function assigns key _k_e_y_i_d_x to the range
+     starting at _a_d_d_r and having length _l_e_n.  Starting address is truncated to
+     the page start, and the end is rounded up to the end of the page.  After
+     a successful call, the range has the specified key assigned, even if the
+     key is zero and it did not change the page table entries.
+
+     The _f_l_a_g_s argument takes the logical OR of the following values:
+
+     [_A_M_D_6_4___P_K_R_U___E_X_C_L]
+       Only assign the key if the range does not have any other keys assigned
+       (including the zero key).  You must first remove any existing key with
+       xx8866__ppkkrruu__uunnpprrootteecctt__rraannggee() in order for this request to succeed.  If
+       the _A_M_D_6_4___P_K_R_U___E_X_C_L flag is not specified, xx8866__ppkkrruu__pprrootteecctt__rraannggee() re‐
+       places any existing key.
+
+     [_A_M_D_6_4___P_K_R_U___P_E_R_S_I_S_T]
+       The keys assigned to the range are persistent.  They are re-established
+       when the current mapping is destroyed and a new mapping is created in
+       any sub-range of the specified range.  You must use a
+       xx8866__ppkkrruu__uunnpprrootteecctt__rraannggee() call to forget the key.
+
+     The xx8866__ppkkrruu__uunnpprrootteecctt__rraannggee() function removes any keys assigned to the
+     specified range.  Existing mappings are changed to use key index zero in
+     page table entries.  Keys are no longer considered installed for all map‐
+     pings in the range, for the purposes of xx8866__ppkkrruu__pprrootteecctt__rraannggee() with the
+     _A_M_D_6_4___P_K_R_U___E_X_C_L flag.
+
+     The xx8866__ppkkrruu__ggeett__ppeerrmm() function returns access rights for the key speci‐
+     fied by the _k_e_y_i_d_x argument.  If the value pointed to by _a_c_c_e_s_s is zero
+     after the call, no read or write permissions is granted for mappings
+     which are assigned the key _k_e_y_i_d_x.  If _a_c_c_e_s_s is not zero, read access is
+     permitted.  The non-zero value of the variable pointed to by the _m_o_d_i_f_y
+     argument indicates that write access is permitted.
+
+     Conversely, the xx8866__ppkkrruu__sseett__ppeerrmm() establishes the access and modify
+     permissions for the given key index as specified by its arguments.
+
+RREETTUURRNN VVAALLUUEESS
+     Upon successful completion, the value 0 is returned; otherwise the
+     value -1 is returned and the global variable _e_r_r_n_o is set to indicate the
+     error.
+
+EERRRROORRSS
+     [EOPNOTSUPP]       The hardware does not support protection keys.
+
+     [EINVAL]           The supplied key index is invalid (greater than 15).
+
+     [EINVAL]           The supplied _f_l_a_g_s argument for
+                        xx8866__ppkkrruu__pprrootteecctt__rraannggee() has reserved bits set.
+
+     [EFAULT]           The supplied address range does not completely fit
+                        into the user-managed address range.
+
+     [ENOMEM]           The memory shortage prevents the completion of the op‐
+                        eration.
+
+     [EBUSY]            The _A_M_D_6_4___P_K_R_U___E_X_C_L flag was specified for
+                        xx8866__ppkkrruu__pprrootteecctt__rraannggee() and the range already has de‐
+                        fined protection keys.
+
+SSEEEE AALLSSOO
+     mmap(2), mprotect(2), munmap(2), sysarch(2)
+
+SSTTAANNDDAARRDDSS
+     The PPrrootteeccttiioonn functions are non-standard and first appeared in
+     FreeBSD 13.0.
+
+BSD                            February 16, 2019                           BSD

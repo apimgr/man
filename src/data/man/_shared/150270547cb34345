@@ -1,0 +1,288 @@
+_p_i_v_o_t___r_o_o_t(2)                 System Calls Manual                _p_i_v_o_t___r_o_o_t(2)
+
+NNAAMMEE
+       pivot_root - change the root mount
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__ppiivvoott__rroooott,, ccoonnsstt cchhaarr **_n_e_w___r_o_o_t,, ccoonnsstt cchhaarr **_p_u_t___o_l_d));;
+
+       _N_o_t_e: glibc provides no wrapper for ppiivvoott__rroooott(), necessitating the use
+       of ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       ppiivvoott__rroooott() changes the root mount in the mount namespace of the call‐
+       ing  process.  More precisely, it moves the root mount to the directory
+       _p_u_t___o_l_d and makes _n_e_w___r_o_o_t the new root  mount.   The  calling  process
+       must  have the CCAAPP__SSYYSS__AADDMMIINN capability in the user namespace that owns
+       the caller’s mount namespace.
+
+       ppiivvoott__rroooott() changes the root directory and the current working  direc‐
+       tory  of each process or thread in the same mount namespace to _n_e_w___r_o_o_t
+       if they point to the old root directory.  (See  also  NOTES.)   On  the
+       other  hand,  ppiivvoott__rroooott() does not change the caller’s current working
+       directory (unless it is on the old root directory), and thus it  should
+       be followed by a _c_h_d_i_r_(_"_/_"_) call.
+
+       The following restrictions apply:
+
+       •  _n_e_w___r_o_o_t and _p_u_t___o_l_d must be directories.
+
+       •  _n_e_w___r_o_o_t  and  _p_u_t___o_l_d  must not be on the same mount as the current
+          root.
+
+       •  _p_u_t___o_l_d must be at or underneath _n_e_w___r_o_o_t; that is, adding some non‐
+          negative number of "_/_._." suffixes to  the  pathname  pointed  to  by
+          _p_u_t___o_l_d must yield the same directory as _n_e_w___r_o_o_t.
+
+       •  _n_e_w___r_o_o_t  must be a path to a mount point, but can’t be _"_/_".  A path
+          that is not already a mount point can be converted into one by  bind
+          mounting the path onto itself.
+
+       •  The  propagation type of the parent mount of _n_e_w___r_o_o_t and the parent
+          mount of the current root directory must  not  be  MMSS__SSHHAARREEDD;  simi‐
+          larly,  if  _p_u_t___o_l_d is an existing mount point, its propagation type
+          must not be MMSS__SSHHAARREEDD.  These restrictions ensure that  ppiivvoott__rroooott()
+          never propagates any changes to another mount namespace.
+
+       •  The current root directory must be a mount point.
+
+RREETTUURRNN VVAALLUUEE
+       On  success,  zero is returned.  On error, -1 is returned, and _e_r_r_n_o is
+       set to indicate the error.
+
+EERRRROORRSS
+       ppiivvoott__rroooott() may fail with any of the same errors  as  ssttaatt(2).   Addi‐
+       tionally, it may fail with the following errors:
+
+       EEBBUUSSYY  _n_e_w___r_o_o_t  or  _p_u_t___o_l_d is on the current root mount.  (This error
+              covers the pathological case where _n_e_w___r_o_o_t is _"_/_".)
+
+       EEIINNVVAALL _n_e_w___r_o_o_t is not a mount point.
+
+       EEIINNVVAALL _p_u_t___o_l_d is not at or underneath _n_e_w___r_o_o_t.
+
+       EEIINNVVAALL The current root directory is not a mount point (because  of  an
+              earlier cchhrroooott(2)).
+
+       EEIINNVVAALL The  current  root  is  on the rootfs (initial ramfs) mount; see
+              NOTES.
+
+       EEIINNVVAALL Either the mount point at _n_e_w___r_o_o_t, or the parent mount of  that
+              mount point, has propagation type MMSS__SSHHAARREEDD.
+
+       EEIINNVVAALL _p_u_t___o_l_d is a mount point and has the propagation type MMSS__SSHHAARREEDD.
+
+       EENNOOTTDDIIRR
+              _n_e_w___r_o_o_t or _p_u_t___o_l_d is not a directory.
+
+       EEPPEERRMM  The calling process does not have the CCAAPP__SSYYSS__AADDMMIINN capability.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 2.3.41.
+
+NNOOTTEESS
+       A   command‐line   interface  for  this  system  call  is  provided  by
+       ppiivvoott__rroooott(8).
+
+       ppiivvoott__rroooott() allows the caller to switch to a new root filesystem while
+       at the same time placing  the  old  root  mount  at  a  location  under
+       _n_e_w___r_o_o_t  from  where it can subsequently be unmounted.  (The fact that
+       it moves all processes that have a root directory  or  current  working
+       directory  on the old root directory to the new root frees the old root
+       directory of users, allowing the old root mount to  be  unmounted  more
+       easily.)
+
+       One  use  of  ppiivvoott__rroooott()  is  during  system startup, when the system
+       mounts a temporary root filesystem (e.g., an  iinniittrrdd(4)),  then  mounts
+       the real root filesystem, and eventually turns the latter into the root
+       directory  of  all  relevant processes and threads.  A modern use is to
+       set up a root filesystem during the creation of a container.
+
+       The fact that ppiivvoott__rroooott() modifies process root  and  current  working
+       directories in the manner noted in DESCRIPTION is necessary in order to
+       prevent  kernel threads from keeping the old root mount busy with their
+       root and current working directories, even if  they  never  access  the
+       filesystem in any way.
+
+       The  rootfs  (initial ramfs) cannot be ppiivvoott__rroooott()ed.  The recommended
+       method of changing the root filesystem in this case is to delete every‐
+       thing in rootfs, overmount rootfs with the new root, attach  _s_t_d_i_n/_s_t_d_‐
+       _o_u_t/_s_t_d_e_r_r  to  the new _/_d_e_v_/_c_o_n_s_o_l_e, and exec the new iinniitt(1).  Helper
+       programs for this process exist; see sswwiittcchh__rroooott(8).
+
+   ppiivvoott__rroooott(("".."",, ""..""))
+       _n_e_w___r_o_o_t and _p_u_t___o_l_d may be the same  directory.   In  particular,  the
+       following  sequence  allows  a  pivot‐root operation without needing to
+       create and remove a temporary directory:
+
+           chdir(new_root);
+           pivot_root(".", ".");
+           umount2(".", MNT_DETACH);
+
+       This sequence succeeds because the ppiivvoott__rroooott()  call  stacks  the  old
+       root  mount  point  on  top  of the new root mount point at _/.  At that
+       point, the calling process’s root directory and current working  direc‐
+       tory  refer  to the new root mount point (_n_e_w___r_o_o_t).  During the subse‐
+       quent uummoouunntt() call, resolution of _"_._" starts with  _n_e_w___r_o_o_t  and  then
+       moves up the list of mounts stacked at _/, with the result that old root
+       mount point is unmounted.
+
+   HHiissttoorriiccaall nnootteess
+       For many years, this manual page carried the following text:
+
+              ppiivvoott__rroooott() may or may not change the current root and the cur‐
+              rent working directory of any processes or threads which use the
+              old root directory.  The caller of ppiivvoott__rroooott() must ensure that
+              processes with root or current working directory at the old root
+              operate correctly in either case.  An easy way to ensure this is
+              to  change  their root and current working directory to _n_e_w___r_o_o_t
+              before invoking ppiivvoott__rroooott().
+
+       This text, written before the system call implementation was  even  fi‐
+       nalized in the kernel, was probably intended to warn users at that time
+       that  the  implementation  might change before final release.  However,
+       the behavior stated in DESCRIPTION has remained consistent  since  this
+       system call was first implemented and will not change now.
+
+EEXXAAMMPPLLEESS
+       The  program  below demonstrates the use of ppiivvoott__rroooott() inside a mount
+       namespace that is created using cclloonnee(2).  After pivoting to  the  root
+       directory named in the program’s first command‐line argument, the child
+       created  by  cclloonnee(2)  then executes the program named in the remaining
+       command‐line arguments.
+
+       We demonstrate the program by creating a directory that will  serve  as
+       the  new  root filesystem and placing a copy of the (statically linked)
+       bbuussyybbooxx(1) executable in that directory.
+
+           $ mmkkddiirr //ttmmpp//rroooottffss;
+           $ llss --iidd //ttmmpp//rroooottffss;    # Show inode number of new root directory
+           319459 /tmp/rootfs
+           $ ccpp $$((wwhhiicchh bbuussyybbooxx)) //ttmmpp//rroooottffss;
+           $ PPSS11==''bbbbsshh$$ '' ssuuddoo ..//ppiivvoott__rroooott__ddeemmoo //ttmmpp//rroooottffss //bbuussyybbooxx sshh;
+           bbsh$ PPAATTHH==//;
+           bbsh$ bbuussyybbooxx llnn bbuussyybbooxx llnn;
+           bbsh$ llnn bbuussyybbooxx eecchhoo;
+           bbsh$ llnn bbuussyybbooxx llss;
+           bbsh$ llss;
+           busybox  echo     ln       ls
+           bbsh$ llss --iidd //;          # Compare with inode number above
+           319459 /
+           bbsh$ eecchhoo ''hheelllloo wwoorrlldd'';
+           hello world
+
+   PPrrooggrraamm ssoouurrccee
+
+
+       /* pivot_root_demo.c */
+
+       #define _GNU_SOURCE
+       #include <err.h>
+       #include <limits.h>
+       #include <sched.h>
+       #include <signal.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/mman.h>
+       #include <sys/mount.h>
+       #include <sys/stat.h>
+       #include <sys/syscall.h>
+       #include <sys/wait.h>
+       #include <unistd.h>
+
+       static int
+       pivot_root(const char *new_root, const char *put_old)
+       {
+           return syscall(SYS_pivot_root, new_root, put_old);
+       }
+
+       #define STACK_SIZE (1024 * 1024)
+
+       static int              /* Startup function for cloned child */
+       child(void *arg)
+       {
+           char        path[PATH_MAX];
+           char        **args = arg;
+           char        *new_root = args[0];
+           const char  *put_old = "/oldrootfs";
+
+           /* Ensure that 'new_root' and its parent mount don't have
+              shared propagation (which would cause pivot_root() to
+              return an error), and prevent propagation of mount
+              events to the initial mount namespace.  */
+
+           if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) == -1)
+               err(EXIT_FAILURE, "mount-MS_PRIVATE");
+
+           /* Ensure that 'new_root' is a mount point.  */
+
+           if (mount(new_root, new_root, NULL, MS_BIND, NULL) == -1)
+               err(EXIT_FAILURE, "mount-MS_BIND");
+
+           /* Create directory to which old root will be pivoted.  */
+
+           snprintf(path, sizeof(path), "%s/%s", new_root, put_old);
+           if (mkdir(path, 0777) == -1)
+               err(EXIT_FAILURE, "mkdir");
+
+           /* And pivot the root filesystem.  */
+
+           if (pivot_root(new_root, path) == -1)
+               err(EXIT_FAILURE, "pivot_root");
+
+           /* Switch the current working directory to "/".  */
+
+           if (chdir("/") == -1)
+               err(EXIT_FAILURE, "chdir");
+
+           /* Unmount old root and remove mount point.  */
+
+           if (umount2(put_old, MNT_DETACH) == -1)
+               perror("umount2");
+           if (rmdir(put_old) == -1)
+               perror("rmdir");
+
+           /* Execute the command specified in argv[1]...  */
+
+           execv(args[1], &args[1]);
+           err(EXIT_FAILURE, "execv");
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           char *stack;
+
+           /* Create a child process in a new mount namespace.  */
+
+           stack = mmap(NULL, STACK_SIZE, PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_STACK, -1, 0);
+           if (stack == MAP_FAILED)
+               err(EXIT_FAILURE, "mmap");
+
+           if (clone(child, stack + STACK_SIZE,
+                     CLONE_NEWNS | SIGCHLD, &argv[1]) == -1)
+               err(EXIT_FAILURE, "clone");
+
+           /* Parent falls through to here; wait for child.  */
+
+           if (wait(NULL) == -1)
+               err(EXIT_FAILURE, "wait");
+
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       cchhddiirr(2), cchhrroooott(2), mmoouunntt(2), ssttaatt(2), iinniittrrdd(4), mmoouunntt__nnaammeessppaacceess(7),
+       ppiivvoott__rroooott(8), sswwiittcchh__rroooott(8)
+
+Linux man‐pages (unreleased)      2025‐09‐21                     _p_i_v_o_t___r_o_o_t(2)

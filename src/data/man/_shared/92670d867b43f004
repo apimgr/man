@@ -1,0 +1,144 @@
+DTRACE_UDPLITE(4)        BSD Kernel Interfaces Manual        DTRACE_UDPLITE(4)
+
+NNAAMMEE
+     ddttrraaccee__uuddpplliittee — a DTrace provider for tracing events related to the UDP-
+     Lite protocol
+
+SSYYNNOOPPSSIISS
+     uuddpplliittee::::::rreecceeiivvee(_p_k_t_i_n_f_o___t _*, _c_s_i_n_f_o___t _*, _i_p_i_n_f_o___t _*, _u_d_p_l_i_t_e_s_i_n_f_o___t _*,
+         _u_d_p_l_i_t_e_i_n_f_o___t _*);
+
+     uuddpplliittee::::::sseenndd(_p_k_t_i_n_f_o___t _*, _c_s_i_n_f_o___t _*, _i_p_i_n_f_o___t _*, _u_d_p_l_i_t_e_s_i_n_f_o___t _*,
+         _u_d_p_l_i_t_e_i_n_f_o___t _*);
+
+DDEESSCCRRIIPPTTIIOONN
+     The DTrace uuddpplliittee provider allows users to trace events in the
+     udplite(4) protocol implementation.  The uuddpplliittee::::::sseenndd() probe fires
+     whenever the kernel prepares to transmit a UDP-Lite packet, and the
+     uuddpplliittee::::::rreecceeiivvee() probe fires whenever the kernel receives a UDP-Lite
+     packet, unless the UDP-Lite header is incomplete, the destination port is
+     0, the length field is invalid, or the checksum is wrong.  The arguments
+     to these probes can be used to obtain detailed information about the IP
+     and UDP-Lite headers of the corresponding packet.
+
+AARRGGUUMMEENNTTSS
+     The _p_k_t_i_n_f_o___t argument is currently unimplemented and is included for
+     compatibility with other implementations of this provider.  Its fields
+     are:
+
+           _u_i_n_t_p_t_r___t _p_k_t___a_d_d_r  Always set to 0.
+
+     The _c_s_i_n_f_o___t argument is currently unimplemented and is included for com‐
+     patibility with other implementations of this provider.  Its fields are:
+
+           _u_i_n_t_p_t_r___t _c_s___a_d_d_r  Always set to 0.
+
+           _u_i_n_t_6_4___t _c_s___c_i_d    A pointer to the _s_t_r_u_c_t _i_n_p_c_b for this packet,
+                              or NULL.
+
+           _p_i_d___t _c_s___p_i_d       Always set to 0.
+
+     The _i_p_i_n_f_o___t argument contains IP fields common to both IPv4 and IPv6
+     packets.  Its fields are:
+
+           _u_i_n_t_8___t _i_p___v_e_r       IP version of the packet, 4 for IPv4 packets
+                                and 6 for IPv6 packets.
+
+           _u_i_n_t_3_2___t _i_p___p_l_e_n_g_t_h  IP payload size.  This does not include the
+                                size of the IP header or IPv6 option headers.
+
+           _s_t_r_i_n_g _i_p___s_a_d_d_r      IP source address.
+
+           _s_t_r_i_n_g _i_p___d_a_d_d_r      IP destination address.
+
+     The _u_d_p_l_i_t_e_s_i_n_f_o___t argument contains the state of the UDP-Lite connection
+     associated with the packet.  Its fields are:
+
+           _u_i_n_t_p_t_r___t _u_d_p_l_i_t_e_s___a_d_d_r  Pointer to the _s_t_r_u_c_t _i_n_p_c_b containing the
+                                    IP state for the associated socket.
+
+           _u_i_n_t_1_6___t _u_d_p_l_i_t_e_s___l_p_o_r_t  Local UDP-Lite port.
+
+           _u_i_n_t_1_6___t _u_d_p_l_i_t_e_s___r_p_o_r_t  Remote UDP-Lite port.
+
+           _s_t_r_i_n_g _u_d_p_l_i_t_e_s___l_a_d_d_r    Local IPv4 or IPv6 address.
+
+           _s_t_r_i_n_g _u_d_p_l_i_t_e_s___r_a_d_d_r    Remote IPv4 or IPv6 address.
+
+     The _u_d_p_l_i_t_e_i_n_f_o___t argument is the raw UDP-Lite header of the packet, with
+     all fields in host order.  Its fields are:
+
+           _u_i_n_t_1_6___t _u_d_p_l_i_t_e___s_p_o_r_t          Source UDP-Lite port.
+
+           _u_i_n_t_1_6___t _u_d_p_l_i_t_e___d_p_o_r_t          Destination UDP-Lite port.
+
+           _u_i_n_t_1_6___t _u_d_p_l_i_t_e___c_o_v_e_r_a_g_e       Checksum coverage of the UDP-Lite
+                                           header, in bytes, or 0 for full
+                                           coverage.
+
+           _u_i_n_t_1_6___t _u_d_p_l_i_t_e___c_h_e_c_k_s_u_m       A checksum of the UDP-Lite header
+                                           and payload, or 0 if no checksum
+                                           was calculated.
+
+           _s_t_r_u_c_t _u_d_p_l_i_t_e_h_d_r _*_u_d_p_l_i_t_e___h_d_r  A pointer to the raw UDP-Lite
+                                           header.
+
+FFIILLEESS
+     /usr/lib/dtrace/udplite.d  DTrace type and translator definitions for the
+                                uuddpplliittee provider.
+
+EEXXAAMMPPLLEESS
+     The following script counts transmitted packets by destination port.
+
+           udplite:::send
+           {
+                   @num[args[4]->udplite_dport] = count();
+           }
+
+     This script will print some details of each UDP-Lite packet as it is sent
+     or received by the kernel:
+
+           #pragma D option quiet
+           #pragma D option switchrate=10Hz
+
+           dtrace:::BEGIN
+           {
+                   printf(" %10s %36s    %-36s %6s\n", "DELTA(us)", "SOURCE",
+                       "DEST", "COV");
+                   last = timestamp;
+           }
+
+           udplite:::send
+           {
+                   this->elapsed = (timestamp - last) / 1000;
+                   self->dest = strjoin(strjoin(args[2]->ip_daddr, ":"),
+                        lltostr(args[4]->udplite_dport));
+                   printf(" %10d %30s:%-5d -> %-36s %6d\n", this->elapsed,
+                       args[2]->ip_saddr, args[4]->udplite_sport,
+                       self->dest, args[4]->udplite_coverage);
+                   last = timestamp;
+           }
+
+           udplite:::receive
+           {
+                   this->elapsed = (timestamp - last) / 1000;
+                   self->dest = strjoin(strjoin(args[2]->ip_saddr, ":"),
+                        lltostr(args[4]->udplite_sport));
+                   printf(" %10d %30s:%-5d <- %-36s %6d\n", this->elapsed,
+                       args[2]->ip_daddr, args[4]->udplite_dport,
+                       self->dest, args[4]->udplite_coverage);
+                   last = timestamp;
+           }
+
+SSEEEE AALLSSOO
+     dtrace(1), dtrace_ip(4), dtrace_sctp(4), dtrace_tcp(4), dtrace_udp(4),
+     udplite(4), SDT(9)
+
+HHIISSTTOORRYY
+     The uuddpplliittee provider first appeared in FreeBSD 12.0.
+
+AAUUTTHHOORRSS
+     This manual page was written by Mark Johnston <_m_a_r_k_j_@_F_r_e_e_B_S_D_._o_r_g> and
+     Michael Tuexen <_t_u_e_x_e_n_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             August 1, 2018                             BSD

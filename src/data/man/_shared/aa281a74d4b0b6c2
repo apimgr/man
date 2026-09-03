@@ -1,0 +1,122 @@
+BUS_ALLOC_RESOURCE(9)    BSD Kernel Developer's Manual   BUS_ALLOC_RESOURCE(9)
+
+NNAAMMEE
+     bbuuss__aalllloocc__rreessoouurrccee, bbuuss__aalllloocc__rreessoouurrccee__aannyy, bbuuss__aalllloocc__rreessoouurrccee__aannyywwhheerree —
+     allocate resources from a parent bus
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//bbuuss..hh>>
+
+     ##iinncclluuddee <<mmaacchhiinnee//bbuuss..hh>>
+     ##iinncclluuddee <<ssyyss//rrmmaann..hh>>
+     ##iinncclluuddee <<mmaacchhiinnee//rreessoouurrccee..hh>>
+
+     _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*
+     bbuuss__aalllloocc__rreessoouurrccee(_d_e_v_i_c_e___t _d_e_v, _i_n_t _t_y_p_e, _i_n_t _*_r_i_d, _r_m_a_n___r_e_s___t _s_t_a_r_t,
+         _r_m_a_n___r_e_s___t _e_n_d, _r_m_a_n___r_e_s___t _c_o_u_n_t, _u___i_n_t _f_l_a_g_s);
+
+     _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*
+     bbuuss__aalllloocc__rreessoouurrccee__aannyy(_d_e_v_i_c_e___t _d_e_v, _i_n_t _t_y_p_e, _i_n_t _*_r_i_d, _u___i_n_t _f_l_a_g_s);
+
+     _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*
+     bbuuss__aalllloocc__rreessoouurrccee__aannyywwhheerree(_d_e_v_i_c_e___t _d_e_v, _i_n_t _t_y_p_e, _i_n_t _*_r_i_d,
+         _r_m_a_n___r_e_s___t _c_o_u_n_t, _u___i_n_t _f_l_a_g_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     This is an easy interface to the resource-management functions.  It hides
+     the indirection through the parent's method table.  This function gener‐
+     ally should be called in attach, but (except in some rare cases) never
+     earlier.
+
+     The bbuuss__aalllloocc__rreessoouurrccee__aannyy() and bbuuss__aalllloocc__rreessoouurrccee__aannyywwhheerree() functions
+     are convenience wrappers for bbuuss__aalllloocc__rreessoouurrccee().
+     bbuuss__aalllloocc__rreessoouurrccee__aannyy() sets _s_t_a_r_t, _e_n_d, and _c_o_u_n_t to the default re‐
+     source (see description of _s_t_a_r_t below).  bbuuss__aalllloocc__rreessoouurrccee__aannyywwhheerree()
+     sets _s_t_a_r_t and _e_n_d to the default resource and uses the provided _c_o_u_n_t
+     argument.
+
+     The arguments are as follows:
+
+     _d_e_v is the device that requests ownership of the resource.  Before allo‐
+     cation, the resource is owned by the parent bus.
+
+     _t_y_p_e is the type of resource you want to allocate.  It is one of:
+
+     PCI_RES_BUS     for PCI bus numbers
+
+     SYS_RES_IRQ     for IRQs
+
+     SYS_RES_DRQ     for ISA DMA lines
+
+     SYS_RES_IOPORT  for I/O ports
+
+     SYS_RES_MEMORY  for I/O memory
+
+     _r_i_d points to a bus specific handle that identifies the resource being
+     allocated.  For ISA this is an index into an array of resources that have
+     been setup for this device by either the PnP mechanism, or via the hints
+     mechanism.  For PCCARD, this is an index into the array of resources de‐
+     scribed by the PC Card's CIS entry.  For PCI, the offset into PCI config
+     space which has the BAR to use to access the resource.  The bus methods
+     are free to change the RIDs that they are given as a parameter.  You must
+     not depend on the value you gave it earlier.
+
+     _s_t_a_r_t and _e_n_d are the start/end addresses of the resource.  If you spec‐
+     ify values of 0ul for _s_t_a_r_t and ~0ul for _e_n_d and 1 for _c_o_u_n_t, the default
+     values for the bus are calculated.
+
+     _c_o_u_n_t is the size of the resource.  For example, the size of an I/O port
+     is usually 1 byte (but some devices override this).  If you specified the
+     default values for _s_t_a_r_t and _e_n_d, then the default value of the bus is
+     used if _c_o_u_n_t is smaller than the default value and _c_o_u_n_t is used, if it
+     is bigger than the default value.
+
+     _f_l_a_g_s sets the flags for the resource.  You can set one or more of these
+     flags:
+
+     RF_ALLOCATED  resource has been reserved.  The resource still needs to be
+                   activated with bus_activate_resource(9).
+
+     RF_ACTIVE     activate resource atomically.
+
+     RF_PREFETCHABLE
+                   resource is prefetchable.
+
+     RF_SHAREABLE  resource permits contemporaneous sharing.  It should always
+                   be set unless you know that the resource cannot be shared.
+                   It is the bus driver's task to filter out the flag if the
+                   bus does not support sharing.  For example, pccard(4) can‐
+                   not share IRQs while cardbus(4) can.
+
+     RF_UNMAPPED   do not establish implicit mapping when activated via
+                   bus_activate_resource(9).
+
+RREETTUURRNN VVAALLUUEESS
+     A pointer to _s_t_r_u_c_t _r_e_s_o_u_r_c_e is returned on success, a null pointer oth‐
+     erwise.
+
+EEXXAAMMPPLLEESS
+     This is some example code that allocates a 32 byte I/O port range and an
+     IRQ.  The values of _p_o_r_t_i_d and _i_r_q_i_d should be saved in the softc of the
+     device after these calls.
+
+             struct resource *portres, *irqres;
+             int portid, irqid;
+
+             portid = 0;
+             irqid = 0;
+             portres = bus_alloc_resource(dev, SYS_RES_IOPORT, &portid,
+                             0ul, ~0ul, 32, RF_ACTIVE);
+             irqres = bus_alloc_resource_any(dev, SYS_RES_IRQ, &irqid,
+                             RF_ACTIVE | RF_SHAREABLE);
+
+SSEEEE AALLSSOO
+     bus_activate_resource(9), bus_adjust_resource(9), bus_map_resource(9),
+     bus_release_resource(9), device(9), driver(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Alexander Langer <_a_l_e_x_@_b_i_g_._e_n_d_i_a_n_._d_e>
+     with parts by Warner Losh <_i_m_p_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                              May 20, 2016                              BSD

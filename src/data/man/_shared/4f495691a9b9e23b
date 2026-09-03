@@ -1,0 +1,155 @@
+_m_o_v_e___p_a_g_e_s(2)                 System Calls Manual                _m_o_v_e___p_a_g_e_s(2)
+
+NNAAMMEE
+       move_pages - move individual pages of a process to another node
+
+LLIIBBRRAARRYY
+       NUMA (Non‐Uniform Memory Access) policy library (_l_i_b_n_u_m_a, _-_l_n_u_m_a)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<nnuummaaiiff..hh>>
+
+       lloonngg mmoovvee__ppaaggeess((iinntt _p_i_d,, uunnssiiggnneedd lloonngg _c_o_u_n_t,, vvooiidd **_p_a_g_e_s[[_c_o_u_n_t]],,
+                       ccoonnsstt iinntt _n_o_d_e_s[[_c_o_u_n_t]],, iinntt _s_t_a_t_u_s[[_c_o_u_n_t]],,
+                       iinntt _f_l_a_g_s));;
+
+DDEESSCCRRIIPPTTIIOONN
+       mmoovvee__ppaaggeess() moves the specified _p_a_g_e_s of the process _p_i_d to the memory
+       nodes  specified by _n_o_d_e_s.  The result of the move is reflected in _s_t_a_‐
+       _t_u_s.  The _f_l_a_g_s indicate constraints on the pages to be moved.
+
+       _p_i_d is the ID of the process in which pages are to be moved.  If _p_i_d is
+       0, then mmoovvee__ppaaggeess() moves pages of the calling process.
+
+       To move pages in another process requires the following privileges:
+
+       •  Up to and including  Linux  4.12:  the  caller  must  be  privileged
+          (CCAAPP__SSYYSS__NNIICCEE)  or  the  real  or  effective  user ID of the calling
+          process must match the real or  saved‐set  user  ID  of  the  target
+          process.
+
+       •  The  older  rules allowed the caller to discover various virtual ad‐
+          dress choices made by the kernel that could lead to  the  defeat  of
+          address‐space‐layout  randomization  for a process owned by the same
+          UID as the caller, the rules were changed starting with Linux  4.13.
+          Since  Linux  4.13,  permission  is governed by a ptrace access mode
+          PPTTRRAACCEE__MMOODDEE__RREEAADD__RREEAALLCCRREEDDSS check with respect to the target process;
+          see ppttrraaccee(2).
+
+       _c_o_u_n_t is the number of pages to move.  It defines the size of the three
+       arrays _p_a_g_e_s, _n_o_d_e_s, and _s_t_a_t_u_s.
+
+       _p_a_g_e_s is an array of pointers to the pages that should be moved.  These
+       are pointers that should be aligned to page boundaries.  Addresses  are
+       specified as seen by the process specified by _p_i_d.
+
+       _n_o_d_e_s  is  an  array  of integers that specify the desired location for
+       each page.  Each element in the array is a node number.  _n_o_d_e_s can also
+       be NULL, in which case mmoovvee__ppaaggeess() does not move any pages but instead
+       will return the node where each page currently resides, in  the  _s_t_a_t_u_s
+       array.  Obtaining the status of each page may be necessary to determine
+       pages that need to be moved.
+
+       _s_t_a_t_u_s  is  an  array  of integers that return the status of each page.
+       The array contains valid values only if mmoovvee__ppaaggeess() did not return  an
+       error.   Preinitialization  of the array to a value which cannot repre‐
+       sent a real numa node or valid error of  status  array  could  help  to
+       identify pages that have been migrated.
+
+       _f_l_a_g_s  specify  what  types  of pages to move.  MMPPOOLL__MMFF__MMOOVVEE means that
+       only pages that are in exclusive use by the process are  to  be  moved.
+       MMPPOOLL__MMFF__MMOOVVEE__AALLLL means that pages shared between multiple processes can
+       also  be  moved.   The process must be privileged (CCAAPP__SSYYSS__NNIICCEE) to use
+       MMPPOOLL__MMFF__MMOOVVEE__AALLLL.
+
+   PPaaggee ssttaatteess iinn tthhee ssttaattuuss aarrrraayy
+       The following values can be returned in each element of the _s_t_a_t_u_s  ar‐
+       ray.
+
+       00....MMAAXX__NNUUMMNNOODDEESS
+              Identifies the node on which the page resides.
+
+       --EEAACCCCEESS
+              The  page  is mapped by multiple processes and can be moved only
+              if MMPPOOLL__MMFF__MMOOVVEE__AALLLL is specified.
+
+       --EEBBUUSSYY The page is currently busy  and  cannot  be  moved.   Try  again
+              later.   This occurs if a page is undergoing I/O or another ker‐
+              nel subsystem is holding a reference to the page.
+
+       --EEFFAAUULLTT
+              This is a zero page or the memory area  is  not  mapped  by  the
+              process.
+
+       --EEIIOO   Unable to write back a page.  The page has to be written back in
+              order to move it since the page is dirty and the filesystem does
+              not  provide  a  migration function that would allow the move of
+              dirty pages.
+
+       --EEIINNVVAALL
+              A dirty page cannot be moved.  The filesystem does not provide a
+              migration function and has no ability to write back pages.
+
+       --EENNOOEENNTT
+              The page is not present.
+
+       --EENNOOMMEEMM
+              Unable to allocate memory on target node.
+
+RREETTUURRNN VVAALLUUEE
+       On success mmoovvee__ppaaggeess() returns zero.  On error,  it  returns  -1,  and
+       sets _e_r_r_n_o to indicate the error.  If positive value is returned, it is
+       the number of nonmigrated pages.
+
+EERRRROORRSS
+       PPoossiittiivvee vvaalluuee
+              The  number of nonmigrated pages if they were the result of non‐
+              fatal reasons (since Linux 4.17).
+
+       EE22BBIIGG  Too many pages to move.   Since  Linux  2.6.29,  the  kernel  no
+              longer generates this error.
+
+       EEAACCCCEESS One of the target nodes is not allowed by the current cpuset.
+
+       EEFFAAUULLTT Parameter array could not be accessed.
+
+       EEIINNVVAALL Flags other than MMPPOOLL__MMFF__MMOOVVEE and MMPPOOLL__MMFF__MMOOVVEE__AALLLL was specified
+              or an attempt was made to migrate pages of a kernel thread.
+
+       EENNOODDEEVV One of the target nodes is not online.
+
+       EEPPEERRMM  The  caller specified MMPPOOLL__MMFF__MMOOVVEE__AALLLL without sufficient privi‐
+              leges (CCAAPP__SSYYSS__NNIICCEE).  Or, the caller attempted to move pages of
+              a process belonging to another user but did not  have  privilege
+              to do so (CCAAPP__SSYYSS__NNIICCEE).
+
+       EESSRRCCHH  Process does not exist.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 2.6.18.
+
+NNOOTTEESS
+       For information on library support, see nnuummaa(7).
+
+       Use  ggeett__mmeemmppoolliiccyy(2)  with  the MMPPOOLL__FF__MMEEMMSS__AALLLLOOWWEEDD flag to obtain the
+       set of nodes that are allowed by the current cpuset.   Note  that  this
+       information is subject to change at any time by manual or automatic re‐
+       configuration of the cpuset.
+
+       Use of this function may result in pages whose location (node) violates
+       the   memory  policy  established  for  the  specified  addresses  (See
+       mmbbiinndd(2)) and/or the specified process  (See  sseett__mmeemmppoolliiccyy(2)).   That
+       is,  memory  policy  does  not  constrain the destination nodes used by
+       mmoovvee__ppaaggeess().
+
+       The _<_n_u_m_a_i_f_._h_> header is not included  with  glibc,  but  requires  in‐
+       stalling _l_i_b_n_u_m_a_-_d_e_v_e_l or a similar package.
+
+SSEEEE AALLSSOO
+       ggeett__mmeemmppoolliiccyy(2),  mmbbiinndd(2),  sseett__mmeemmppoolliiccyy(2),  nnuummaa(3), nnuummaa__mmaappss(5),
+       ccppuusseett(7), nnuummaa(7), mmiiggrraatteeppaaggeess(8), nnuummaassttaatt(8)
+
+Linux man‐pages (unreleased)      2025‐09‐21                     _m_o_v_e___p_a_g_e_s(2)

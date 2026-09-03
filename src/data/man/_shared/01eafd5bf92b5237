@@ -1,0 +1,124 @@
+GPTBOOT(8)                BSD System Manager's Manual               GPTBOOT(8)
+
+NNAAMMEE
+     ggppttbboooott — GPT bootcode for UFS on BIOS-based computers
+
+DDEESSCCRRIIPPTTIIOONN
+     ggppttbboooott is used on BIOS-based computers to boot from a UFS partition on a
+     GPT-partitioned disk.  ggppttbboooott is installed in a ffrreeeebbssdd--bboooott partition
+     with gpart(8).  For UEFI, gptboot.efi(8) is used instead.  While concep‐
+     tually similar, the details differ.
+
+     When it starts, ggppttbboooott first reads the GPT and determines which drive
+     and partition to boot from, as described under _B_O_O_T_I_N_G, below.  If it
+     does not find an eligible partition, or if the user hits a key within
+     three seconds, ggppttbboooott switches from auto-boot to interactive mode.  In‐
+     teractive mode allows manual selection of the disk, partition, filename,
+     and boot option flags, as described in boot(8).
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     The GPT standard allows a variable number of partitions, but ggppttbboooott only
+     boots from tables with 128 partitions or less.
+
+PPAARRTTIITTIIOONN AATTTTRRIIBBUUTTEESS
+     ggppttbboooott checks and manages several attributes of GPT UFS partitions.
+
+     bboooottmmee      Attempt to boot from this partition.  If more than one parti‐
+                 tion has the bboooottmmee attribute set, ggppttbboooott will attempt to
+                 boot each one until successful.
+
+     bboooottoonnccee    Attempt to boot from this partition only one time.  Setting
+                 this attribute with gpart(8) automatically also sets the
+                 bboooottmmee attribute.  Multiple partitions may have the bboooottoonnccee
+                 and bboooottmmee attributes set.
+
+     bboooottffaaiilleedd  The bboooottffaaiilleedd attribute marks partitions that had the
+                 bboooottoonnccee attribute set, but failed to boot.  This attribute
+                 is managed by the system.  See _B_O_O_T_I_N_G and _P_O_S_T_-_B_O_O_T _A_C_T_I_O_N_S
+                 below for details.
+
+UUSSAAGGEE
+     For normal usage, the user does not have to set or manage any of the par‐
+     tition attributes.  ggppttbboooott will boot from the first UFS partition found.
+
+     The bboooottoonnccee attribute can be used for testing an upgraded operating sys‐
+     tem on an already-working computer.  The existing system partition is
+     left untouched, and the new version of the operating system to be tested
+     is installed on another partition.  The bboooottoonnccee attribute is set on that
+     new test partition.  The next boot is attempted from the test partition.
+     Success or failure will be shown in the system log files.  After a suc‐
+     cessful boot of the test partition, a user script can check the logs and
+     change the bboooottmmee attributes so the test partition becomes the new system
+     partition.  Because the bboooottoonnccee attribute is cleared after an attempted
+     boot, a failed boot will not leave the system attempting to boot from a
+     partition that will never succeed.  Instead, the system will boot from
+     the older, known-working operating system that has not been modified.  If
+     the bboooottmmee attribute is set on any partitions, booting will be attempted
+     from them first.  If no partitions with bboooottmmee attributes are found,
+     booting will be attempted from the first UFS partition found.
+
+BBOOOOTTIINNGG
+     ggppttbboooott first reads the partition table.  All ffrreeeebbssdd--uuffss partitions with
+     only the bboooottoonnccee attribute set, indicating a failed boot, are set to
+     bboooottffaaiilleedd.  ggppttbboooott then scans through all of the ffrreeeebbssdd--uuffss parti‐
+     tions.  Boot behavior depends on the combination of bboooottmmee and bboooottoonnccee
+     attributes set on those partitions.
+
+     bboooottoonnccee ++ bboooottmmee      Highest priority: booting is attempted from each
+                            of the ffrreeeebbssdd--uuffss partitions with both of these
+                            attributes.  On each partition, the bboooottmmee attri‐
+                            bute is removed and the boot attempted.
+
+     bboooottmmee                 Middle priority: booting is attempted from each of
+                            the ffrreeeebbssdd--uuffss partitions with the bboooottmmee attri‐
+                            bute.
+
+     If neither bboooottoonnccee nor bboooottmmee attributes are found on any partitions,
+     booting is attempted from the first ffrreeeebbssdd--uuffss partition on the disk.
+
+PPOOSSTT--BBOOOOTT AACCTTIIOONNSS
+     The startup script _/_e_t_c_/_r_c_._d_/_g_p_t_b_o_o_t checks the attributes of ffrreeeebbssdd--uuffss
+     partitions on all GPT disks.  Partitions with the bboooottffaaiilleedd attribute
+     generate a “boot from X failed” system log message.  Partitions with only
+     the bboooottoonnccee attribute, indicating a partition that successfully booted,
+     generate a “boot from X succeeded” system log message.  The bboooottffaaiilleedd
+     attributes are cleared from all the partitions.  The bboooottoonnccee attribute
+     is cleared from the partition that successfully booted.  There is nor‐
+     mally only one of these.
+
+FFIILLEESS
+     /boot/gptboot  bootcode binary
+     /boot.config   parameters for the boot blocks (optional)
+
+EEXXAAMMPPLLEESS
+     ggppttbboooott is installed in a ffrreeeebbssdd--bboooott partition, usually the first par‐
+     tition on the disk.  A “protective MBR” (see gpart(8)) is typically in‐
+     stalled in combination with ggppttbboooott.
+
+     Install ggppttbboooott on the _a_d_a_0 drive:
+
+           gpart bootcode -b /boot/pmbr -p /boot/gptboot -i 1 ada0
+
+     ggppttbboooott can also be installed without the PMBR:
+
+           gpart bootcode -p /boot/gptboot -i 1 ada0
+
+     Set the bboooottmmee attribute for partition 2:
+
+           gpart set -a bootme -i 2 ada0
+
+     Set the bboooottoonnccee attribute for partition 2, automatically also setting
+     the bboooottmmee attribute:
+
+           gpart set -a bootonce -i 2 ada0
+
+SSEEEE AALLSSOO
+     boot.config(5), rc.conf(5), boot(8), gpart(8)
+
+HHIISSTTOORRYY
+     ggppttbboooott appeared in FreeBSD 7.1.
+
+AAUUTTHHOORRSS
+     This manual page was written by Warren Block <wblock@FreeBSD.org>.
+
+BSD                             March 18, 2022                             BSD

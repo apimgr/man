@@ -1,0 +1,128 @@
+RL(4)                    BSD Kernel Interfaces Manual                    RL(4)
+
+NNAAMMEE
+     rrll — Realtek 8129/8139 10/100 Ethernet device
+
+SSYYNNOOPPSSIISS
+     rrll** aatt ppccii??
+     rrll** aatt ccaarrddbbuuss??
+     rrllpphhyy** aatt mmiiii??
+
+DDEESSCCRRIIPPTTIIOONN
+     The rrll driver provides support for PCI Ethernet adapters and embedded
+     controllers based on the Realtek 8129 and 8139 Fast Ethernet controller
+     chips.  This includes, among others, the following cards:
+
+           Accton MPX5030 CardBus
+           Allied Telesyn AT2550
+           Corega FEther CB-TXD 10/100 Ethernet
+           D-Link DFE-520TX C1, DFE-530TX+, DFE-538TX, DFE-690TXD
+           Encore ENL832-TX-RENT 10/100 M PCI
+           Genius GF100TXR
+           KTX-9130TX 10/100 Fast Ethernet
+           Longshine LCS-8038TX-R
+           NDC Communications NE100TX-E
+           Netgear FA311 v2
+           Netronix Inc. EA-1210 NetEther 10/100
+           Nortel BayStack 21
+           OvisLink LEF-8129TX, LEF-8139TX
+           SMC EZ Card 10/100 PCI 1211-TX
+           TRENDnet TE100-PCBUSR CardBus
+
+     The Realtek controllers use bus master DMA but do not use a descriptor-
+     based data transfer mechanism.  The receiver uses a single fixed size
+     ring buffer from which packets must be copied into mbufs.  For transmis‐
+     sion, there are only four outbound packet address registers which require
+     all outgoing packets to be stored as contiguous buffers.  Furthermore,
+     outbound packet buffers must be longword aligned or else transmission
+     will fail.
+
+     The 8129 differs from the 8139 in that the 8139 has an internal PHY which
+     is controlled through special direct access registers whereas the 8129
+     uses an external PHY via an MII bus.  The 8139 supports both 10 and
+     100Mbps speeds in either full or half duplex.  The 8129 can support the
+     same speeds and modes given an appropriate PHY chip.
+
+     The rrll driver supports the following media types:
+
+     autoselect   Enable autoselection of the media type and options.  This is
+                  only supported if the PHY chip attached to the Realtek con‐
+                  troller supports NWAY autonegotiation.  The user can manu‐
+                  ally override the autoselected mode by adding media options
+                  to the appropriate hostname.if(5) file.
+
+     10baseT      Set 10Mbps operation.  The _m_e_d_i_a_o_p_t option can also be used
+                  to select either _f_u_l_l_-_d_u_p_l_e_x or _h_a_l_f_-_d_u_p_l_e_x modes.
+
+     100baseTX    Set 100Mbps (Fast Ethernet) operation.  The _m_e_d_i_a_o_p_t option
+                  can also be used to select either _f_u_l_l_-_d_u_p_l_e_x or _h_a_l_f_-_d_u_p_l_e_x
+                  modes.
+
+     The rrll driver supports the following media options:
+
+     full-duplex  Force full duplex operation.
+
+     half-duplex  Force half duplex operation.
+
+     Note that the 100baseTX media type is only available if supported by the
+     adapter.  For more information on configuring this device, see
+     ifconfig(8).
+
+DDIIAAGGNNOOSSTTIICCSS
+     rrll00:: ccoouullddnn''tt mmaapp mmeemmoorryy  A fatal initialization error has occurred.
+
+     rrll00:: ccoouullddnn''tt mmaapp iinntteerrrruupptt  A fatal initialization error has occurred.
+
+     rrll00:: wwaattcchhddoogg ttiimmeeoouutt  The device has stopped responding to the network,
+     or there is a problem with the network connection (cable).
+
+     rrll00:: nnoo mmeemmoorryy ffoorr rrxx lliisstt  The driver failed to allocate an mbuf for the
+     receiver ring.
+
+     rrll00:: nnoo mmeemmoorryy ffoorr ttxx lliisstt  The driver failed to allocate an mbuf for the
+     transmitter ring when allocating a pad buffer or collapsing an mbuf chain
+     into a cluster.
+
+SSEEEE AALLSSOO
+     arp(4), ifmedia(4), intro(4), netintro(4), rlphy(4), hostname.if(5),
+     ifconfig(8)
+
+     _T_h_e _R_e_a_l_t_e_k _8_1_2_9 _a_n_d _8_1_3_9 _d_a_t_a_s_h_e_e_t_s, ftp.realtek.com.tw:/lancard/data
+     sheet.
+
+HHIISSTTOORRYY
+     The rrll device driver first appeared in FreeBSD 3.0.  OpenBSD support
+     first appeared in OpenBSD 2.5.
+
+AAUUTTHHOORRSS
+     The rrll driver was written by Bill Paul <_w_p_a_u_l_@_c_t_r_._c_o_l_u_m_b_i_a_._e_d_u>.
+
+BBUUGGSS
+     Since outbound packets must be longword aligned, the transmit routine has
+     to copy an unaligned packet into an mbuf cluster buffer before transmis‐
+     sion.  The driver abuses the fact that the cluster buffer pool is allo‐
+     cated at system startup time in a contiguous region starting at a page
+     boundary.  Since cluster buffers are 2048 bytes, they are longword
+     aligned by definition.  The driver probably should not be depending on
+     this characteristic.
+
+     The Realtek data sheets are of especially poor quality: the grammar and
+     spelling are awful and there is a lot of information missing, particu‐
+     larly concerning the receiver operation.  One particularly important fact
+     that the data sheets fail to mention relates to the way in which the chip
+     fills in the receive buffer.  When an interrupt is posted to signal that
+     a frame has been received, it is possible that another frame might be in
+     the process of being copied into the receive buffer while the driver is
+     busy handling the first one.  If the driver manages to finish processing
+     the first frame before the chip is done DMAing the rest of the next
+     frame, the driver may attempt to process the next frame in the buffer be‐
+     fore the chip has had a chance to finish DMAing all of it.
+
+     The driver can check for an incomplete frame by inspecting the frame
+     length in the header preceding the actual packet data: an incomplete
+     frame will have the magic length of 0xFFF0.  When the driver encounters
+     this value, it knows that it has finished processing all currently avail‐
+     able packets.  Neither this magic value nor its significance are docu‐
+     mented anywhere in the Realtek data sheets.
+
+BSD                              July 16, 2013                             BSD

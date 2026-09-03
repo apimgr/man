@@ -1,0 +1,1147 @@
+RELAYD.CONF(5)              BSD File Formats Manual             RELAYD.CONF(5)
+
+NNAAMMEE
+     rreellaayydd..ccoonnff — relay daemon configuration file
+
+DDEESSCCRRIIPPTTIIOONN
+     rreellaayydd..ccoonnff is the configuration file for the relay daemon, relayd(8).
+
+     rreellaayydd..ccoonnff is divided into the following main sections:
+
+     _M_a_c_r_o_s
+           Definitions of variables that can be used later, simplifying the
+           configuration file.
+
+     _G_l_o_b_a_l _c_o_n_f_i_g_u_r_a_t_i_o_n
+           Global settings for relayd(8).  Do note that the config file allows
+           global settings to be added after defining tables in the config
+           file, but those tables will use the built-in defaults instead of
+           the global settings below them.
+
+     _T_a_b_l_e_s
+           Table definitions describe a list of hosts, in a similar fashion to
+           pf(4) tables.  They are used for relay, redirection, and router
+           target selection with the described options and health checking on
+           the host they contain.
+
+     _R_e_d_i_r_e_c_t_i_o_n_s
+           Redirections are translated to pf(4) rdr-to rules for stateful for‐
+           warding to a target host from a health-checked table on layer 3.
+
+     _R_e_l_a_y_s
+           Relays allow application layer load balancing, TLS acceleration,
+           and general purpose TCP proxying on layer 7.
+
+     _P_r_o_t_o_c_o_l_s
+           Protocols are predefined settings and filter rules for relays.
+
+     _R_o_u_t_e_r_s
+           Routers are used to insert routes with health-checked gateways for
+           (WAN) link balancing.
+
+     Within the sections, a host _a_d_d_r_e_s_s can be specified by IPv4 address,
+     IPv6 address, interface name, interface group, or DNS hostname.  If the
+     address is an interface name, relayd(8) will look up the first IPv4 ad‐
+     dress and any other IPv4 and IPv6 addresses of the specified network in‐
+     terface.  A _p_o_r_t can be specified by number or name.  The port name to
+     number mappings are found in the file _/_e_t_c_/_s_e_r_v_i_c_e_s; see services(5) for
+     details.
+
+     The current line can be extended over multiple lines using a backslash
+     (‘\’).  Comments can be put anywhere in the file using a hash mark (‘#’),
+     and extend to the end of the current line.  Care should be taken when
+     commenting out multi-line text: the comment is effective until the end of
+     the entire block.
+
+     Argument names not beginning with a letter, digit, or underscore must be
+     quoted.
+
+     Additional configuration files can be included with the iinncclluuddee keyword,
+     for example:
+
+           include "/etc/relayd.conf.local"
+
+   MMaaccrrooss
+     A macro is defined with a command of the form _n_a_m_e=_v_a_l_u_e.  The macro _n_a_m_e
+     can contain letters, digits, and underscores and cannot be a reserved
+     word (for example, ttaabbllee, rreellaayy, or ttiimmeeoouutt).  Within unquoted arguments,
+     the string $_n_a_m_e is later expanded to _v_a_l_u_e.
+
+     For example:
+
+           www1="10.0.0.1"
+           www2="10.0.0.2"
+           table <webhosts> {
+                   $www1
+                   $www2
+           }
+
+   GGlloobbaall ccoonnffiigguurraattiioonn
+     Here are the settings that can be set globally:
+
+     aaggeennttxx [ccoonntteexxtt _c_o_n_t_e_x_t] [ppaatthh _p_a_t_h]
+             Export relayd(8) metrics via an agentx compatible (snmp) daemon
+             by connecting to _p_a_t_h.  Metrics can be found under the relaydMI‐
+             BObjects subtree (enterprises.30155.3).  If _p_a_t_h is omitted, it
+             will default to _/_v_a_r_/_a_g_e_n_t_x_/_m_a_s_t_e_r.  _C_o_n_t_e_x_t is the SNMPv3 con‐
+             text and can usually be omitted.
+
+     iinntteerrvvaall _n_u_m_b_e_r
+             Set the interval in seconds at which the hosts will be checked.
+             The default interval is 10 seconds.
+
+     lloogg (ssttaattee cchhaannggeess|hhoosstt cchheecckkss)
+             Log host checks: Either log only the ssttaattee cchhaannggeess of hosts or
+             log all hhoosstt cchheecckkss that were run, even if the state didn't
+             change.  The host state can be “up” (the health check completed
+             successfully), “down” (the host is down or didn't match the check
+             criteria), or “unknown” (the host is disabled or has not been
+             checked yet).
+
+     lloogg ccoonnnneeccttiioonn [eerrrroorrss]
+             When using relays, log all TCP connections.  Optionally log only
+             ccoonnnneeccttiioonn eerrrroorrss.
+
+     pprreeffoorrkk _n_u_m_b_e_r
+             When using relays, run the specified number of processes to han‐
+             dle relayed connections.  This increases the performance and pre‐
+             vents delays when connecting to a relay.  relayd(8) runs 3 relay
+             processes by default and every process will handle all configured
+             relays.
+
+     ssoocckkeett "_p_a_t_h"
+             Create a control socket at _p_a_t_h.  By default _/_v_a_r_/_r_u_n_/_r_e_l_a_y_d_._s_o_c_k
+             is used.
+
+     ttiimmeeoouutt _n_u_m_b_e_r
+             Set the global timeout in milliseconds for checks.  This can be
+             overridden by the timeout value in the table definitions.  The
+             default timeout is 200 milliseconds and it must not exceed the
+             global interval.  The default value is optimized for checks
+             within the same collision domain – use a higher timeout, such as
+             1000 milliseconds, for checks of hosts in other subnets.  If this
+             option is to be set, it should be placed before overrides in ta‐
+             bles.
+
+   TTaabblleess
+     Tables are used to group a set of hosts as the target for redirections or
+     relays; they will be mapped to a pf(4) table for redirections.  Tables
+     may be defined with the following attribute:
+
+     ddiissaabbllee  Start the table disabled – no hosts will be checked in this ta‐
+              ble.  The table can be later enabled through relayctl(8).
+
+     Each table must contain at least one host _a_d_d_r_e_s_s; multiple hosts are
+     separated by newline, comma, or whitespace.  Host entries may be defined
+     with the following attributes:
+
+     iipp ttttll _n_u_m_b_e_r
+            Change the default time-to-live value in the IP headers for host
+            checks.
+
+     ppaarreenntt _n_u_m_b_e_r
+            The optional parent option inherits the state from a parent host
+            with the specified identifier.  The check will be skipped for this
+            host and copied from the parent host.  This can be used to prevent
+            multiple checks on hosts with multiple IP addresses for the same
+            service.  The host identifiers are sequentially assigned to the
+            configured hosts starting with 1; it can be shown with the
+            relayctl(8) sshhooww ssuummmmaarryy commands.
+
+     pprriioorriittyy _n_u_m_b_e_r
+            Change the route priority used when adding a route.  If not speci‐
+            fied, the kernel will set a priority of 8 (RTP_STATIC).  In ordi‐
+            nary use, a fallback route should be added statically with a very
+            high (e.g. 52) priority.  Unused in all other modes.
+
+     rreettrryy _n_u_m_b_e_r
+            The optional retry option adds a tolerance for failed host checks;
+            the check will be retried for _n_u_m_b_e_r more times before setting the
+            host state to down.  If this table is used by a relay, it will
+            also specify the number of retries for outgoing connection at‐
+            tempts.
+
+     For example:
+
+           table <service> { 192.168.1.1, 192.168.1.2, 192.168.2.3 }
+           table <fallback> disable { 10.1.5.1 retry 2 }
+
+           redirect "www" {
+                   listen on www.example.com port 80
+                   forward to <service> check http "/" code 200
+                   forward to <fallback> check http "/" code 200
+           }
+
+     Tables are used by ffoorrwwaarrdd ttoo directives in redirections or relays with a
+     set of general options, health-checking rules, and timings; see the
+     _R_e_d_i_r_e_c_t_i_o_n_s and _R_e_l_a_y_s sections for more information about the forward
+     context.  Table specific configuration directives are described below.
+     Multiple options can be appended to ffoorrwwaarrdd ttoo directives, separated by
+     whitespaces.
+
+     The following options will configure the health-checking method for the
+     table, and is mandatory for redirections:
+
+     cchheecckk hhttttpp _p_a_t_h [hhoosstt _h_o_s_t_n_a_m_e] ccooddee _n_u_m_b_e_r
+             For each host in the table, verify that retrieving the URL _p_a_t_h
+             gives the HTTP return code _n_u_m_b_e_r.  If _h_o_s_t_n_a_m_e is specified, it
+             is used as the “Host:” header to query a specific hostname at the
+             target host.  To validate the HTTP return code, use this shell
+             command:
+
+                   $ echo -n "HEAD <path> HTTP/1.0\r\n\r\n" | \
+                           nc <host> <port> | head -n1
+
+             This prints the status header including the actual return code:
+
+                   HTTP/1.1 200 OK
+
+     cchheecckk hhttttppss _p_a_t_h [hhoosstt _h_o_s_t_n_a_m_e] ccooddee _n_u_m_b_e_r
+             This has the same effect as above but wraps the HTTP request in
+             TLS.
+
+     cchheecckk hhttttpp _p_a_t_h [hhoosstt _h_o_s_t_n_a_m_e] ddiiggeesstt _s_t_r_i_n_g
+             For each host in the table, verify that retrieving the URL _p_a_t_h
+             produces non-binary content whose message digest matches the de‐
+             fined string.  The algorithm used is determined by the string
+             length of the _d_i_g_e_s_t argument, either SHA1 (40 characters) or MD5
+             (32 characters).  If _h_o_s_t_n_a_m_e is specified, it is used as the
+             “Host:” header to query a specific hostname at the target host.
+             The digest does not take the HTTP headers into account.  Do not
+             specify a binary object (such as a graphic) as the target of the
+             request, as rreellaayydd..ccoonnff expects the data returned to be a string.
+             To compute the digest, use this simple command:
+
+                   $ ftp -o - http://host[:port]/path | sha1
+
+             This gives a digest that can be used as-is in a digest statement:
+
+                   a9993e36476816aba3e25717850c26c9cd0d89d
+
+     cchheecckk hhttttppss _p_a_t_h [hhoosstt _h_o_s_t_n_a_m_e] ddiiggeesstt _s_t_r_i_n_g
+             This has the same effect as above but wraps the HTTP request in
+             TLS.
+
+     cchheecckk iiccmmpp
+             Ping hosts in this table to determine whether they are up or not.
+             This method will automatically use ICMP or ICMPV6 depending on
+             the address family of each host.
+
+     cchheecckk ssccrriipptt _p_a_t_h
+             Execute an external program to check the host state.  The program
+             will be executed for each host by specifying the hostname on the
+             command line:
+
+                   /usr/local/bin/checkload.pl front-www1.private.example.com
+
+             relayd(8) expects a positive return value on success and zero on
+             failure.  Note that the script will be executed with the privi‐
+             leges of the "_relayd" user and terminated after _t_i_m_e_o_u_t mil‐
+             liseconds.
+
+     cchheecckk sseenndd _d_a_t_a eexxppeecctt _p_a_t_t_e_r_n [ttllss]
+             For each host in the table, a TCP connection is established on
+             the port specified, then _d_a_t_a is sent.  Incoming data is then
+             read and is expected to match against _p_a_t_t_e_r_n using shell glob‐
+             bing rules.  If _d_a_t_a is an empty string or nnootthhiinngg then nothing
+             is sent on the connection and data is immediately read.  This can
+             be useful with protocols that output a banner like SMTP, NNTP,
+             and FTP.  If the ttllss keyword is present, the transaction will oc‐
+             cur in a TLS tunnel.
+
+     cchheecckk bbiinnaarryy sseenndd _d_a_t_a eexxppeecctt _d_a_t_a [ttllss]
+             For each host in the table, a TCP connection is established on
+             the port specified, then the sseenndd _d_a_t_a is converted into binary
+             and sent.  Incoming (binary) data is then read and is expected to
+             match against a binary conversion of the eexxppeecctt _d_a_t_a using
+             memcmp(3).  _d_a_t_a must be populated with a string containing an
+             even number of hexadecimal single-byte characters and must not be
+             empty.  This can be useful with binary protocols such as LDAP and
+             SNMP.  If the ttllss keyword is present, the transaction will occur
+             in a TLS tunnel.
+
+     cchheecckk ttccpp
+             Use a simple TCP connect to check that hosts are up.
+
+     cchheecckk ttllss
+             Perform a complete TLS handshake with each host to check their
+             availability.
+
+     The following general table options are available:
+
+     ddeemmoottee _g_r_o_u_p
+             Enable the per-table carp(4) demotion option.  This will incre‐
+             ment the carp demotion counter for the specified interface group
+             if all hosts in the table are down.  For more information on in‐
+             terface groups, see the ggrroouupp keyword in ifconfig(8).
+
+     iinntteerrvvaall _n_u_m_b_e_r
+             Override the global interval and specify one for this table.  It
+             must be a multiple of the global interval.
+
+     ttiimmeeoouutt _n_u_m_b_e_r
+             Set the timeout in milliseconds for each host that is checked us‐
+             ing TCP as the transport.  This will override the global timeout,
+             which is 200 milliseconds by default.
+
+     The following options will set the scheduling algorithm to select a host
+     from the specified table:
+
+     mmooddee hhaasshh [_k_e_y]
+             Balances the outgoing connections across the active hosts based
+             on the _k_e_y, IP address and port of the relay.  Additional input
+             can be fed into the hash by looking at HTTP headers and GET vari‐
+             ables; see the _P_r_o_t_o_c_o_l_s section below.  This mode is only sup‐
+             ported by relays.
+
+     mmooddee lleeaasstt--ssttaatteess
+             Forward each outgoing connection to the active host with the
+             least active pf(4) states.  This mode is only supported by redi‐
+             rections.
+
+     mmooddee llooaaddbbaallaannccee [_k_e_y]
+             Balances the outgoing connections across the active hosts based
+             on the _k_e_y, the source IP address of the client, and the IP ad‐
+             dress and port of the relay.  This mode is only supported by re‐
+             lays.
+
+     mmooddee rraannddoomm
+             Distributes the outgoing connections randomly through all active
+             hosts.  This mode is supported by redirections and relays.
+
+     mmooddee rroouunnddrroobbiinn
+             Distributes the outgoing connections using a round-robin sched‐
+             uler through all active hosts.  This is the default mode and will
+             be used if no option has been specified.  This mode is supported
+             by redirections and relays.
+
+     mmooddee ssoouurrccee--hhaasshh [_k_e_y]
+             Balances the outgoing connections across the active hosts based
+             on the _k_e_y and the source IP address of the client.  This mode is
+             supported by redirections and relays.
+
+     The optional _k_e_y argument can be specified for the hhaasshh, llooaaddbbaallaannccee, and
+     ssoouurrccee--hhaasshh modes as either a hex value with a leading ‘0x’ or as a
+     string.  If omitted, relayd(8) generates a random key when the configura‐
+     tion is loaded.
+
+   RReeddiirreeccttiioonnss
+     Redirections represent a pf(4) rdr-to rule.  They are used for stateful
+     redirections to the hosts in the specified tables.  pf(4) rewrites the
+     target IP addresses and ports of the incoming connections, operating on
+     layer 3.  The configuration directives that are valid in the rreeddiirreecctt
+     context are described below:
+
+     ddiissaabbllee
+             The redirection is initially disabled.  It can be later enabled
+             through relayctl(8).
+
+     ffoorrwwaarrdd ttoo <_t_a_b_l_e> [ppoorrtt _n_u_m_b_e_r] _o_p_t_i_o_n_s _._._.
+             Specify the tables of target hosts to be used; see the _T_a_b_l_e_s
+             section above for information about table options.  If the ppoorrtt
+             option is not specified, the first port from the lliisstteenn oonn direc‐
+             tive will be used.  This directive can be specified twice – the
+             second entry will be used as the backup table if all hosts in the
+             main table are down.  At least one entry for the main table is
+             mandatory.
+
+     lliisstteenn oonn _a_d_d_r_e_s_s [ip-proto] ppoorrtt _p_o_r_t [iinntteerrffaaccee _n_a_m_e] [ppfflloogg]
+             Specify an _a_d_d_r_e_s_s and a _p_o_r_t to listen on.  pf(4) will redirect
+             incoming connections for the specified target to the hosts in the
+             main or backup table.  The _p_o_r_t argument can optionally specify a
+             port range instead of a single port; the format is
+             _m_i_n_-_p_o_r_t:_m_a_x_-_p_o_r_t.  The optional argument _i_p_-_p_r_o_t_o can be used to
+             specify an IP protocol like ttccpp or uuddpp; it defaults to ttccpp.  The
+             rule can be optionally restricted to a given interface name.  The
+             optional ppfflloogg keyword will add lloogg to the rule.  The logged
+             packets are sent to pflog(4).
+
+     [mmaattcchh] ppffttaagg _n_a_m_e
+             Automatically tag packets passing through the pf(4) rdr-to rule
+             with the name supplied.  This allows simpler filter rules.  The
+             optional mmaattcchh keyword will change the default rule action from
+             ‘pass in quick’ to ‘match in’ to allow further evaluation in the
+             pf ruleset using the ttaaggggeedd _n_a_m_e rule option.
+
+     rroouuttee ttoo <_t_a_b_l_e> [ppoorrtt _n_u_m_b_e_r] _o_p_t_i_o_n_s _._._.
+             Like the ffoorrwwaarrdd ttoo directive, but directly routes the packets to
+             the target host without modifying the target address using a
+             pf(4) route-to rule.  This can be used for “direct server return”
+             to force the target host to respond via a different gateway.
+             Note that hosts have to accept sessions for the same address as
+             the gateway, which is typically done by configuring a loopback
+             interface on the host with this address.
+
+     sseessssiioonn ttiimmeeoouutt _s_e_c_o_n_d_s
+             Specify the inactivity timeout in seconds for established redi‐
+             rections.  The default timeout is 600 seconds (10 minutes).  The
+             maximum is 2147483647 seconds (68 years).
+
+     ssttiicckkyy--aaddddrreessss
+             This has the same effect as specifying sticky-address for an rdr-
+             to rule in pf.conf(5).  It will ensure that multiple connections
+             from the same source are mapped to the same redirection address.
+
+   RReellaayyss
+     Relays will forward traffic between a client and a target server.  In
+     contrast to redirections and IP forwarding in the network stack, a relay
+     will accept incoming connections from remote clients as a server, open an
+     outgoing connection to a target host, and forward any traffic between the
+     target host and the remote client, operating on layer 7.  A relay is also
+     called an application layer gateway or layer 7 proxy.
+
+     The main purpose of a relay is to provide advanced load balancing func‐
+     tionality based on specified protocol characteristics, such as HTTP head‐
+     ers, to provide TLS acceleration and to allow basic handling of the un‐
+     derlying application protocol.
+
+     The rreellaayy configuration directives are described below:
+
+     ddiissaabbllee
+             Start the relay but immediately close any accepted connections.
+
+     [ttrraannssppaarreenntt] ffoorrwwaarrdd [wwiitthh ttllss] ttoo _a_d_d_r_e_s_s [ppoorrtt _p_o_r_t] _o_p_t_i_o_n_s _._._.
+             Specify the address and port of the target host to connect to.
+             If the ppoorrtt option is not specified, the port from the lliisstteenn oonn
+             directive will be used.  Use the ttrraannssppaarreenntt keyword to enable
+             fully-transparent mode; the source address of the client will be
+             retained in this case.
+
+             The wwiitthh ttllss directive enables client-side TLS mode to connect to
+             the remote host.  Verification of server certificates can be en‐
+             abled by setting the ccaa ffiillee option in the protocol section.
+
+             The following options may be specified for forward directives:
+
+             iinneett    If the requested destination is an IPv6 address,
+                     relayd(8) will forward the connection to an IPv4 address
+                     which is determined by the last 4 octets of the original
+                     IPv6 destination.  For example, if the original IPv6 des‐
+                     tination address is 2001:db8:7395:ffff::a01:101, the ses‐
+                     sion is relayed to the IPv4 address 10.1.1.1 (a01:101).
+
+             iinneett66 _a_d_d_r_e_s_s_-_p_r_e_f_i_x
+                     If the requested destination is an IPv4 address,
+                     relayd(8) will forward the connection to an IPv6 address
+                     which is determined by setting the last 4 octets of the
+                     specified IPv6 _a_d_d_r_e_s_s_-_p_r_e_f_i_x to the 4 octets of the
+                     original IPv4 destination.  For example, if the original
+                     IPv4 destination address is 10.1.1.1 and the specified
+                     address prefix is 2001:db8:7395:ffff::, the session is
+                     relayed to the IPv6 address 2001:db8:7395:ffff::a01:101.
+
+             rreettrryy _n_u_m_b_e_r
+                     The optional host rreettrryy option will be used as a toler‐
+                     ance for failed host connections; the connection will be
+                     retried for _n_u_m_b_e_r more times.
+
+     ffoorrwwaarrdd ttoo <_t_a_b_l_e> [ppoorrtt _p_o_r_t] _o_p_t_i_o_n_s _._._.
+             Like the previous directive, but connect to a host from the spec‐
+             ified table; see the _T_a_b_l_e_s section above for information about
+             table options.  This directive can be specified multiple times –
+             subsequent entries will be used as the backup table if all hosts
+             in the previous table are down.  At least one entry for the main
+             table is mandatory.  As above, use the wwiitthh ttllss directive to en‐
+             able client-side TLS mode when connecting to the remote host.
+
+     ffoorrwwaarrdd ttoo ddeessttiinnaattiioonn _o_p_t_i_o_n_s _._._.
+             When redirecting connections with a divert-to rule in pf.conf(5)
+             to a relay listening on localhost, this directive will look up
+             the real destination address of the intended target host, allow‐
+             ing the relay to be run as a transparent proxy.  If an additional
+             ffoorrwwaarrdd ttoo directive to a specified address or table is present,
+             it will be used as a backup if the lookup failed.  As above, use
+             the wwiitthh ttllss directive to enable client-side TLS mode when con‐
+             necting to the remote host.
+
+     ffoorrwwaarrdd ttoo nnaatt llooookkuupp _o_p_t_i_o_n_s _._._.
+             Like the previous directive, but for redirections with rdr-to in
+             pf.conf(5).
+
+     lliisstteenn oonn _a_d_d_r_e_s_s ppoorrtt _p_o_r_t [ttllss]
+             Specify the address and port for the relay to listen on.  The re‐
+             lay will accept incoming connections to the specified address.
+             If the ttllss keyword is present, the relay will accept connections
+             using the encrypted TLS protocol.
+
+     pprroottooccooll _n_a_m_e
+             Use the specified protocol definition for the relay.  The generic
+             TCP protocol options will be used by default; see the _P_r_o_t_o_c_o_l_s
+             section below.
+
+     sseessssiioonn ttiimmeeoouutt _s_e_c_o_n_d_s
+             Specify the inactivity timeout in seconds for accepted sessions.
+             The default timeout is 600 seconds (10 minutes).  The maximum is
+             2147483647 seconds (68 years).
+
+   TTLLSS rreellaayyss
+     In addition to plain TCP, relayd(8) supports the Transport Layer Security
+     (TLS) cryptographic protocol for authenticated and encrypted relays.
+     relayd(8) can operate as a TLS client or server to offer a variety of op‐
+     tions for different use cases related to TLS.
+
+     TTLLSS cclliieenntt
+             When configuring the relay ffoorrwwaarrdd statements with the wwiitthh ttllss
+             directive, relayd(8) will enable client-side TLS to connect to
+             the remote host.  This is commonly used for TLS tunneling and
+             transparent encapsulation of plain TCP connections.  See the
+             ffoorrwwaarrdd ttoo description in the _R_e_l_a_y_s section for more details.
+
+     TTLLSS sseerrvveerr
+             When specifying the ttllss keyword in the relay lliisstteenn statements,
+             relayd(8) will accept connections from clients as a TLS server.
+             This mode is also known as “TLS acceleration”.  See the lliisstteenn oonn
+             description in the _R_e_l_a_y_s section for more details.
+
+     TTLLSS cclliieenntt aanndd sseerrvveerr
+             When combining both modes, TLS server and client, relayd(8) can
+             filter TLS connections as a man-in-the-middle.  This combined
+             mode is also called “TLS inspection”.  The configuration requires
+             additional X.509 certificate settings; see the ccaa kkeeyy description
+             in the _P_r_o_t_o_c_o_l_s section for more details.
+
+     When configured for “TLS inspection” mode, relayd(8) will listen for in‐
+     coming connections which have been diverted to the local socket by PF.
+     Before accepting and negotiating the incoming TLS connection as a server,
+     it will look up the original destination address on the diverted socket,
+     and pre-connect to the target server as a TLS client to obtain the remote
+     TLS certificate.  It will update or patch the obtained TLS certificate by
+     replacing the included public key with its local server key because it
+     doesn't have the private key of the remote server certificate.  It also
+     updates the X.509 issuer name to the local CA subject name and signs the
+     certificate with its local CA key.  This way it keeps all the other X.509
+     attributes that are already present in the server certificate, including
+     the "green bar" extended validation attributes.  Now it finally accepts
+     the TLS connection from the diverted client using the updated certificate
+     and continues to handle the connection and to connect to the remote
+     server.
+
+   PPrroottooccoollss
+     Protocols are templates defining settings and rules for relays.  They al‐
+     low setting generic TCP options, TLS settings, and rules for the selected
+     application layer protocol.
+
+     The protocol directive is available for a number of different application
+     layer protocols.  There is no generic handler for UDP-based protocols be‐
+     cause it is a stateless datagram-based protocol which has to look into
+     the application layer protocol to find any possible state information.
+
+     ddnnss pprroottooccooll
+             (UDP) Domain Name System (DNS) protocol.  The requested IDs in
+             the DNS header will be used to match the state.  relayd(8) re‐
+             places these IDs with random values to compensate for predictable
+             values generated by some hosts.
+
+     hhttttpp pprroottooccooll
+             Handle the HyperText Transfer Protocol (HTTP, or "HTTPS" if en‐
+             capsulated in a TLS tunnel).
+
+     [ttccpp] pprroottooccooll
+             Generic handler for TCP-based protocols.  This is the default.
+
+     The available configuration directives are described below:
+
+     (bblloocckk|ppaassss|mmaattcchh) [_r_u_l_e]
+             Specify one or more rules to filter connections based on their
+             network or application layer headers; see the _F_i_l_t_e_r _r_u_l_e_s sec‐
+             tion for more details.
+
+     rreettuurrnn eerrrroorr [_o_p_t_i_o_n]
+             Return an error response to the client if an internal operation
+             or the forward connection to the client failed.  By default, the
+             connection will be silently dropped.  The effect of this option
+             depends on the protocol: HTTP will send an error header and page
+             to the client before closing the connection.  Additional valid
+             options are:
+
+             ssttyyllee _s_t_r_i_n_g
+                     Specify a Cascading Style Sheet (CSS) to be used for the
+                     returned HTTP error pages, for example:
+
+                           body { background: #a00000; color: white; }
+
+     ttccpp _o_p_t_i_o_n
+             Enable or disable the specified TCP/IP options; see tcp(4) and
+             ip(4) for more information about the options.  Valid options are:
+
+             bbaacckklloogg _n_u_m_b_e_r
+                     Set the maximum length the queue of pending connections
+                     may grow to.  The backlog option is 10 by default, is
+                     limited to 512 and capped by the kkeerrnn..ssoommaaxxccoonnnn sysctl(8)
+                     variable.
+
+             iipp mmiinnttttll _n_u_m_b_e_r
+                     This option for the underlying IP connection may be used
+                     to discard packets with a TTL lower than the specified
+                     value.  This can be used to implement the Generalized TTL
+                     Security Mechanism (GTSM) according to RFC 5082.
+
+             iipp ttttll _n_u_m_b_e_r
+                     Change the default time-to-live value in the IP headers.
+
+             nnooddeellaayy
+                     Enable the TCP NODELAY option for this connection.  This
+                     is recommended to avoid delays in the relayed data
+                     stream, e.g. for SSH connections.  The default is nnoo
+                     nnooddeellaayy.
+
+             nnoo sspplliiccee
+                     Disable socket splicing for zero-copy data transfer.  The
+                     default is to enable socket splicing.
+
+             ssaacckk    Use selective acknowledgements for this connection.  The
+                     default is nnoo ssaacckk.
+
+             ssoocckkeett bbuuffffeerr _n_u_m_b_e_r
+                     Set the socket-level buffer size for input and output for
+                     this connection.  This will affect the TCP window size.
+
+     ttllss _o_p_t_i_o_n
+             Set the TLS options and session settings.  This is only used if
+             TLS is enabled in the relay.  Valid options are:
+
+             ccaa cceerrtt _p_a_t_h
+                     Specify a CA certificate for TLS inspection.  For more
+                     information, see the ccaa kkeeyy option below.
+
+             ccaa ffiillee _p_a_t_h
+                     This option enables CA verification in TLS client mode.
+                     The daemon will load the CA (Certificate Authority) cer‐
+                     tificates from the specified path to verify the server
+                     certificates.  OpenBSD provides a default CA bundle in
+                     _/_e_t_c_/_s_s_l_/_c_e_r_t_._p_e_m.
+
+             ccaa kkeeyy _p_a_t_h ppaasssswwoorrdd _p_a_s_s_w_o_r_d
+                     Specify a CA key for TLS inspection.  The _p_a_s_s_w_o_r_d argu‐
+                     ment will specify the password to decrypt the CA key
+                     (typically an RSA key).  This option will enable TLS in‐
+                     spection if the following conditions are true:
+
+                           ••   TLS server mode is enabled by the lliisstteenn direc‐
+                               tive: lliisstteenn oonn ...... ttllss.
+                           ••   TLS client mode and divert lookups are enabled
+                               by the ffoorrwwaarrdd directive: ffoorrwwaarrdd wwiitthh ttllss ttoo
+                               ddeessttiinnaattiioonn.
+                           ••   The ccaa cceerrtt option is specified.
+                           ••   The ccaa kkeeyy option is specified.
+
+             cciipphheerrss _s_t_r_i_n_g
+                     Set the string defining the TLS cipher suite.  If not
+                     specified, the default value ‘HIGH:!aNULL’ will be used
+                     (strong crypto cipher suites without anonymous DH).  See
+                     the CIPHERS section of openssl(1) for information about
+                     TLS cipher suites and preference lists.
+
+             cclliieenntt ccaa _p_a_t_h
+                     Require TLS client certificates that can be verified
+                     against the CA certificates in the specified file.
+
+             cclliieenntt--rreenneeggoottiiaattiioonn
+                     Allow client-initiated renegotiation.  To mitigate a po‐
+                     tential DoS risk, the default is nnoo cclliieenntt--rreenneeggoottiiaattiioonn.
+
+             eeccddhhee _c_u_r_v_e_s
+                     Specify a comma separated list of elliptic curves to use
+                     for ECDHE cipher suites, in order of preference.  The
+                     special value of "default" will use the default curves;
+                     see tls_config_set_ecdhecurves(3) for further details.
+
+             eeddhh [ppaarraammss (nnoonnee|aauuttoo|lleeggaaccyy)]
+                     Enable EDH-based cipher suites with Perfect Forward Se‐
+                     crecy (PFS) for older clients that do not support ECDHE.
+                     In aauuttoo mode, the key size of the ephemeral key is auto‐
+                     matically selected based on the size of the private key
+                     used for signing.  In lleeggaaccyy mode, a 1024 bit ephemeral
+                     key is used.  If ppaarraammss is omitted, aauuttoo is used.  The
+                     default is nnoo eeddhh.
+
+             kkeeyyppaaiirr _n_a_m_e
+                     The relay will attempt to look up a private key in
+                     _/_e_t_c_/_s_s_l_/_p_r_i_v_a_t_e_/_n_a_m_e_:_p_o_r_t_._k_e_y and a public certificate
+                     in _/_e_t_c_/_s_s_l_/_n_a_m_e_:_p_o_r_t_._c_r_t, where _p_o_r_t is the specified
+                     port that the relay listens on.  If these files are not
+                     present, the relay will continue to look in
+                     _/_e_t_c_/_s_s_l_/_p_r_i_v_a_t_e_/_n_a_m_e_._k_e_y and _/_e_t_c_/_s_s_l_/_n_a_m_e_._c_r_t.  This
+                     option can be specified multiple times for TLS Server
+                     Name Indication.  If not specified, a keypair will be
+                     loaded using the specified IP address of the relay as
+                     _n_a_m_e.  See ssl(8) for details about TLS server certifi‐
+                     cates.
+
+                     An optional OCSP staple file will be used during TLS
+                     handshakes with this server if it is found as a non-empty
+                     file in _/_e_t_c_/_s_s_l_/_n_a_m_e_:_p_o_r_t_._o_c_s_p or _/_e_t_c_/_s_s_l_/_n_a_m_e_._o_c_s_p.
+                     The file should contain a DER-format OCSP response re‐
+                     trieved from an OCSP server for the certificate in use,
+                     and can be created using ocspcheck(8).
+
+             nnoo cciipphheerr--sseerrvveerr--pprreeffeerreennccee
+                     Prefer the client's cipher list over the server's prefer‐
+                     ences when choosing a cipher for the connection.  The de‐
+                     fault is to prefer the server's cipher list.
+
+             sseessssiioonn ttiicckkeettss
+                     Enable TLS session tickets.  relayd(8) supports stateless
+                     TLS session tickets (RFC 5077) to implement TLS session
+                     resumption for connections not using TLSv1.3.  The de‐
+                     fault is to disable session tickets.
+
+             nnoo ttllssvv11..33
+                     Disable the TLSv1.3 protocol.  The default is to enable
+                     TLSv1.3.
+
+             nnoo ttllssvv11..22
+                     Disable the TLSv1.2 protocol.  The default is to enable
+                     TLSv1.2.
+
+             ssssllvv33   Is deprecated and does nothing.
+
+             ttllssvv11   Enable all TLSv1 protocols.  This is an alias that cur‐
+                     rently includes ttllssvv11..22, and ttllssvv11..33.  The default is nnoo
+                     ttllssvv11.
+
+             ttllssvv11..00
+                     Is deprecated and does nothing.
+
+             ttllssvv11..11
+                     Is deprecated and does nothing.
+
+     hhttttpp _o_p_t_i_o_n
+             Set the HTTP options and session settings.  This is only used if
+             HTTP is enabled in the relay.  Valid options are:
+
+             hheeaaddeerrlleenn _n_u_m_b_e_r
+                     Set the maximum size of all HTTP headers in bytes.  The
+                     default value is 8192 and it is limited to a maximum of
+                     131072.
+
+             wweebbssoocckkeettss
+                     Allow connection upgrade to websocket protocol.  The de‐
+                     fault is nnoo wweebbssoocckkeettss.
+
+   FFiilltteerr rruulleess
+     Relays have the ability to filter connections based on their network or
+     application layer headers.  Filter rules apply options to connections
+     based on the specified filter parameters.
+
+     For each connection that is processed by a relay, the filter rules are
+     evaluated in sequential order, from first to last.  For bblloocckk and ppaassss,
+     the last matching rule decides what action is taken; if no rule matches
+     the connection, the default action is to establish the connection without
+     any additional action.  For mmaattcchh, rules are evaluated every time they
+     match; the pass/block state of a connection remains unchanged.
+
+     The filter action may be one of the following:
+
+     bblloocckk   The connection is blocked.  If a bblloocckk rule matches a new connec‐
+             tion attempt, it will not be established.  bblloocckk rules can also
+             trigger for existing connections after evaluating application
+             layer parameters; any connection of the relay session will be in‐
+             stantly dropped.
+
+     mmaattcchh   The connection is matched.  This action does not alter the con‐
+             nection state, but allows additional parameters to the connec‐
+             tion.
+
+     ppaassss    The connection is passed; relayd(8) will continue to process the
+             relay session normally.
+
+     These filter parameters can be used in the rules:
+
+     rreeqquueesstt or rreessppoonnssee
+             A relay session always consists of two connections: the rreeqquueesstt,
+             a client initiating a new connection to a server via the relay,
+             and the rreessppoonnssee, the server accepting the connection.  Depending
+             on the protocol, an established session can be purely request/re‐
+             sponse-based (like HTTP), exchange data in a bidirectional way
+             (like arbitrary TCP sessions), or just contain a single datagram
+             and an optional response (like UDP-based protocols).  But the
+             client always _r_e_q_u_e_s_t_s to communicate with a remote peer; the
+             server.
+
+     qquuiicckk   If a connection is matched by a rule with the qquuiicckk option set,
+             the rule is considered to be the last matching rule and any fur‐
+             ther evaluation is skipped.
+
+     iinneett or iinneett66
+             Only match connections with the specified address family, either
+             of type IPv4 or IPv6.
+
+     ffrroomm _a_d_d_r_e_s_s[/_p_r_e_f_i_x]
+             This rule only matches for connections from the specified source.
+
+     ttoo _a_d_d_r_e_s_s[/_p_r_e_f_i_x]
+             This rule only matches for connections to the specified destina‐
+             tion.  The destination is the address the client was connecting
+             to, typically the relay's listen address in non-transparent mode,
+             not the address of the forwarded backend connection.
+
+     ffoorrwwaarrdd ttoo <_t_a_b_l_e>
+             Forward the request to a server in the specified table.  With
+             this option, requests can be passed to specific backend servers.
+             A corresponding ffoorrwwaarrdd ttoo declaration in the _R_e_l_a_y_s section is
+             required.
+
+     llaabbeell _s_t_r_i_n_g
+             The label will be printed as part of the error message if the
+             rreettuurrnn eerrrroorr option is set and may contain HTML tags, for exam‐
+             ple:
+
+                   block request url digest 5c1e03f58f8ce0b457474ffb371fd1ef \
+                           label "<a href='http://example.com/adv.pl?id=7359'>\
+                           Advisory provided by example.com</a>"
+
+     nnoo _p_a_r_a_m_e_t_e_r
+             Reset a sticky parameter that was previously set by a matching
+             rule.  The _p_a_r_a_m_e_t_e_r is a keyword that can be either llaabbeell or
+             ttaagg.
+
+     ttaagg _s_t_r_i_n_g
+             Add a "sticky" tag to connections matching this filter rule.
+             Tags can be used to filter the connection by further rules using
+             the ttaaggggeedd option.  Only one tag is assigned per connection; the
+             tag will be replaced if the connection is already tagged.
+
+     ttaaggggeedd _s_t_r_i_n_g
+             Match the connection if it is already tagged with a given tag by
+             a previous rule.
+
+     The following parameters are available when using the hhttttpp protocol:
+
+     mmeetthhoodd _n_a_m_e
+             Match the HTTP request method.  The method is specified by _n_a_m_e
+             and can be either AACCLL, BBAASSEELLIINNEE--CCOONNTTRROOLL, CCHHEECCKKIINN, CCHHEECCKKOOUUTT,
+             CCOONNNNEECCTT, CCOOPPYY, DDEELLEETTEE, GGEETT, HHEEAADD, LLAABBEELL, LLOOCCKK, MMEERRGGEE, MMKKAACCTTIIVVIITTYY,
+             MMKKCCOOLL, MMKKRREEDDIIRREECCTTRREEFF, MMKKWWOORRKKSSPPAACCEE, MMOOVVEE, OOPPTTIIOONNSS, OORRDDEERRPPAATTCCHH,
+             PPAATTCCHH, PPOOSSTT, PPRROOPPFFIINNDD, PPRROOPPPPAATTCCHH, PPUUTT, RREEPPOORRTT, SSEEAARRCCHH, TTRRAACCEE,
+             UUNNCCHHEECCKKOOUUTT, UUNNLLOOCCKK, UUPPDDAATTEE, UUPPDDAATTEERREEDDIIRREECCTTRREEFF, or
+             VVEERRSSIIOONN--CCOONNTTRROOLL.
+
+     _t_y_p_e _o_p_t_i_o_n [[ddiiggeesstt] (_k_e_y|ffiillee _p_a_t_h) [vvaalluuee _v_a_l_u_e]]
+             Match a specified HTTP header entity and an optional kkeeyy and
+             vvaalluuee.  An ooppttiioonn can be specified to modify the matched entity
+             or to trigger an event.  The entity is extracted from the HTTP
+             request or response header and can be either of _t_y_p_e ccooookkiiee,
+             hheeaaddeerr, ppaatthh, qquueerryy, or uurrll.
+
+             Instead of a single _k_e_y, multiple keys can be loaded from a ffiillee
+             specified by _p_a_t_h that contains one key per line.  Lines will be
+             stripped at the first whitespace or newline character and any
+             empty lines or lines beginning with a hash mark (‘#’) will be ig‐
+             nored.
+
+             If the ddiiggeesstt keyword is specified, compare the message digest of
+             the key against the defined string.  The algorithm used is deter‐
+             mined by the string length of the _k_e_y argument, either SHA1 (40
+             characters) or MD5 (32 characters).  To compute the digest, for
+             example for a uurrll, use this simple command:
+
+                   $ echo -n "example.com/path/?args" | sha1
+
+     [_t_y_p_e] may be one of:
+
+     ccooookkiiee _o_p_t_i_o_n [_k_e_y [vvaalluuee _v_a_l_u_e]]
+             Look up the entity as a value in the Cookie header.  This type is
+             only available with the direction rreeqquueesstt.
+
+     hheeaaddeerr _o_p_t_i_o_n [_k_e_y [vvaalluuee _v_a_l_u_e]]
+             Look up the entity in the application protocol headers, like HTTP
+             headers in hhttttpp mode.
+
+     ppaatthh _o_p_t_i_o_n [_k_e_y [vvaalluuee _v_a_l_u_e]]
+             Look up the entity as a value in the URL path when using the hhttttpp
+             protocol.  This type is only available with the direction
+             rreeqquueesstt.  The _k_e_y will match the path of the requested URL with‐
+             out the hostname and query and the value will match the complete
+             query, for example:
+
+                   block path "/index.html"
+                   block path "/cgi-bin/t.cgi" value "foo=bar*"
+
+     ppaatthh ssttrriipp _n_u_m_b_e_r
+             Strip _n_u_m_b_e_r path components from the beginning of the path of
+             the requested URL when using the hhttttpp protocol.  This type is
+             only available with the direction rreeqquueesstt.
+
+     qquueerryy _o_p_t_i_o_n [_k_e_y [vvaalluuee _v_a_l_u_e]]
+             Look up the entity as a query variable in the URL when using the
+             hhttttpp protocol.  This type is only available with the direction
+             rreeqquueesstt, for example:
+
+                   # Will match /cgi-bin/example.pl?foo=bar&ok=yes
+                   pass request query "foo" value "bar"
+
+     uurrll _o_p_t_i_o_n [[ddiiggeesstt] _k_e_y [vvaalluuee _v_a_l_u_e]]
+             Look up the entity as a URL suffix/prefix expression consisting
+             of a canonicalized hostname without port or suffix and a path
+             name or prefix when using the hhttttpp protocol.  This type is only
+             available with the direction rreeqquueesstt, for example:
+
+                   block url "example.com/index.html"
+                   block url "example.com/test.cgi?val=1"
+
+             relayd(8) will match the full URL and different possible suf‐
+             fix/prefix combinations by stripping subdomains and path compo‐
+             nents (up to 5 levels), and the query string.  For example, the
+             following lookups will be done for http://www.exam‐
+             ple.com:81/1/2/3/4/5.html?query=yes:
+
+                   www.example.com/1/2/3/4/5.html?query=yes
+                   www.example.com/1/2/3/4/5.html
+                   www.example.com/
+                   www.example.com/1/
+                   www.example.com/1/2/
+                   www.example.com/1/2/3/
+                   example.com/1/2/3/4/5.html?query=yes
+                   example.com/1/2/3/4/5.html
+                   example.com/
+                   example.com/1/
+                   example.com/1/2/
+                   example.com/1/2/3/
+
+     [_o_p_t_i_o_n] may be one of:
+
+     aappppeenndd  Append the specified _v_a_l_u_e to a protocol entity with the selected
+             _k_e_y name.  If it does not exist, it will be created with the new
+             value.
+
+             The value string may contain predefined macros that will be ex‐
+             panded at runtime:
+
+                   $$HHOOSSTT         The Host header's value of the relay.
+                   $$RREEMMOOTTEE__AADDDDRR  The IP address of the connected client.
+                   $$RREEMMOOTTEE__PPOORRTT  The TCP source port of the connected client.
+                   $$SSEERRVVEERR__AADDDDRR  The configured IP address of the relay.
+                   $$SSEERRVVEERR__PPOORRTT  The configured TCP server port of the relay.
+                   $$SSEERRVVEERR__NNAAMMEE  The server software name of relayd(8).
+                   $$TTIIMMEEOOUUTT      The configured session timeout of the relay.
+
+     hhaasshh    Feed the _v_a_l_u_e of the selected entity into the load balancing
+             hash to select the target host.  See the ttaabbllee keyword in the
+             _R_e_l_a_y_s section above.
+
+     lloogg     Log the _k_e_y name and the _v_a_l_u_e of the entity.
+
+     rreemmoovvee  Remove the entity with the selected _k_e_y name.
+
+     sseett     Like the aappppeenndd directive above, but change the contents of the
+             specified entity.  If _k_e_y does not exist in the request, it will
+             be created with the new _v_a_l_u_e.
+
+             The _v_a_l_u_e string may contain predefined macros that will be ex‐
+             panded at runtime, as detailed for the aappppeenndd directive above.
+
+   RRoouutteerrss
+     Routers represent routing table entries in the kernel forwarding data‐
+     base, see route(4), and a table of associated gateways.  They are used to
+     dynamically insert or remove routes with gateways based on their avail‐
+     ability and health-check results.  A router can include multiple network
+     statements and a single forward statement with a table of one or more
+     gateways.  All entries in a single router directive must match the same
+     address family, either IPv4 or IPv6.
+
+     The kernel supports multipath routing when multiple gateways exist to the
+     same destination address.  The multipath routing behaviour can be changed
+     globally using the sysctl(8) variables _n_e_t_._i_n_e_t_._i_p_._m_u_l_t_i_p_a_t_h and
+     _n_e_t_._i_n_e_t_6_._i_p_6_._m_u_l_t_i_p_a_t_h.  With the default setting of 0, the first route
+     selected will be used for subsequent packets to that destination regard‐
+     less of source.  Setting it to 1 will enable load balancing based on the
+     packet source address across gateways; multiple routes with the same pri‐
+     ority are used equally.  The kernel will also check the link state of the
+     related network interface and try a different route if it is not active.
+
+     The configuration directives that are valid in the rroouutteerrss context are
+     described below:
+
+     ffoorrwwaarrdd ttoo <_t_a_b_l_e> ppoorrtt _n_u_m_b_e_r _o_p_t_i_o_n_s _._._.
+             Specify the table of target gateways to be used; see the _T_a_b_l_e_s
+             section above for information about table options.  This entry is
+             mandatory and must be specified once.
+
+     rroouuttee _a_d_d_r_e_s_s/_p_r_e_f_i_x
+             Specify the network address and prefix length of a route destina‐
+             tion that is reachable via the active gateways.  This entry must
+             be specified at least once in a router directive.
+
+     rrttaabbllee _i_d
+             Add the routes to the kernel routing table with the specified _i_d.
+
+     rrttllaabbeell _l_a_b_e_l
+             Add the routes with the specified _l_a_b_e_l to the kernel routing ta‐
+             ble.
+
+FFIILLEESS
+     /etc/relayd.conf
+             relayd(8) configuration file.
+
+     /etc/examples/relayd.conf
+             Example configuration file.
+
+     /etc/services
+             Service name database.
+
+     /etc/ssl/address.crt
+     /etc/ssl/address:port.crt
+     /etc/ssl/private/address.key
+     /etc/ssl/private/address:port.key
+             Location of the relay TLS server certificates, where _a_d_d_r_e_s_s is
+             the configured IP address and _p_o_r_t is the configured port number
+             of the relay.
+
+     /etc/ssl/cert.pem
+             Default location of the CA bundle that can be used with
+             relayd(8).
+
+EEXXAAMMPPLLEESS
+     This configuration file would create a redirection service “www” which
+     load balances four hosts and falls back to one host containing a “sorry
+     page”:
+
+           www1=front-www1.private.example.com
+           www2=front-www2.private.example.com
+           www3=front-www3.private.example.com
+           www4=front-www4.private.example.com
+
+           interval 5
+
+           table <phphosts> { $www1, $www2, $www3, $www4 }
+           table <sorryhost> disable { sorryhost.private.example.com }
+
+           redirect "www" {
+                   listen on www.example.com port 8080 interface trunk0
+                   listen on www6.example.com port 80 interface trunk0
+
+                   pftag REDIRECTED
+
+                   forward to <phphosts> port 8080 timeout 300 \
+                           check http "/" digest "630aa3c2f..."
+                   forward to <sorryhost> port 8080 timeout 300 check icmp
+           }
+
+     It is possible to specify multiple listen directives with different IP
+     protocols in a single redirection configuration:
+
+           redirect "dns" {
+                   listen on dns.example.com tcp port 53
+                   listen on dns.example.com udp port 53
+
+                   forward to <dnshosts> port 53 check tcp
+           }
+
+     To load balance an IP address over multiple backend servers using a pf(4)
+     rroouuttee--ttoo directive:
+
+           table <backends> { 10.100.42.71 10.100.42.72 10.100.42.73 }
+
+           redirect "xmpp" {
+                   listen on 10.100.42.2 tcp port 5222
+
+                   route to <backends> port 5222 check tcp interface em0
+           }
+
+     The following configuration would add a relay to forward secure HTTPS
+     connections to a pool of HTTP webservers using the llooaaddbbaallaannccee mode (TLS
+     acceleration and layer 7 load balancing).  The HTTP protocol definition
+     will add two HTTP headers containing address information of the client
+     and the server, set the “Keep-Alive” header value to the configured ses‐
+     sion timeout, and include the “sessid” variable in the hash to calculate
+     the target host:
+
+           http protocol "https" {
+                   match header set "X-Forwarded-For" \
+                           value "$REMOTE_ADDR"
+                   match header set "X-Forwarded-By" \
+                           value "$SERVER_ADDR:$SERVER_PORT"
+                   match header set "Keep-Alive" value "$TIMEOUT"
+
+                   match query hash "sessid"
+
+                   pass
+                   block path "/cgi-bin/index.cgi" value "*command=*"
+
+                   tls { no tlsv1.0, ciphers "HIGH" }
+           }
+
+           relay "tlsaccel" {
+                   listen on www.example.com port 443 tls
+                   protocol "https"
+                   forward to <phphosts> port 8080 mode loadbalance check tcp
+           }
+
+     The second relay example will accept incoming connections to port 2222
+     and forward them to a remote SSH server.  The TCP nnooddeellaayy option will al‐
+     low a “smooth” SSH session without delays between keystrokes or displayed
+     output on the terminal:
+
+           protocol "myssh" {
+                   tcp { nodelay, socket buffer 65536 }
+           }
+
+           relay "sshforward" {
+                   listen on www.example.com port 2222
+                   protocol "myssh"
+                   forward to shell.example.com port 22
+           }
+
+     The following relay example will configure “TLS inspection” as described
+     in the _T_L_S _r_e_l_a_y_s section.  To start, first generate a new local CA key
+     and certificate:
+
+           # openssl req -x509 -days 365 -newkey rsa:2048 \
+                   -keyout /etc/ssl/private/ca.key -out /etc/ssl/ca.crt
+
+     A TLS server key and self-signed cert for 127.0.0.1 are also required;
+     see lliisstteenn oonn in the _R_e_l_a_y_s section for more details about certificate
+     locations.  Configure the packet filter with a matching divert rule in
+     pf.conf(5):
+
+           # Divert incoming HTTPS traffic to relayd
+           pass in on vlan1 inet proto tcp to port 443 \
+                   divert-to localhost port 8443
+
+     And finally configure the TLS inspection in rreellaayydd..ccoonnff:
+
+           http protocol httpfilter {
+                   return error
+
+                   pass
+                   match label "Prohibited!"
+                   block url "social.network.example.com/"
+
+                   # New configuration directives for TLS Interception
+                   tls ca key "/etc/ssl/private/ca.key" password "password123"
+                   tls ca cert "/etc/ssl/ca.crt"
+           }
+
+           relay tlsinspect {
+                   listen on 127.0.0.1 port 8443 tls
+                   protocol httpfilter
+                   forward with tls to destination
+           }
+
+     The next simple router configuration example can be used to run redun‐
+     dant, health-checked WAN links:
+
+           table <gateways> { $gw1 ip ttl 1, $gw2 ip ttl 1 }
+           router "uplinks" {
+                   route 0.0.0.0/0
+                   forward to <gateways> check icmp
+           }
+
+SSEEEE AALLSSOO
+     ocspcheck(8), relayctl(8), relayd(8), ssl(8)
+
+HHIISSTTOORRYY
+     The rreellaayydd..ccoonnff file format, formerly known as hhoossttssttaatteedd..ccoonnff, first ap‐
+     peared in OpenBSD 4.1.  It was renamed to rreellaayydd..ccoonnff in OpenBSD 4.3.
+
+AAUUTTHHOORRSS
+     The relayd(8) program was written by Pierre-Yves Ritschard
+     <_p_y_r_@_o_p_e_n_b_s_d_._o_r_g> and Reyk Floeter <_r_e_y_k_@_o_p_e_n_b_s_d_._o_r_g>.
+
+CCAAVVEEAATTSS
+     relayd(8) verification of TLS server certificates is based on a static CA
+     bundle and relayd(8) currently does not support CRLs (Certificate Revoca‐
+     tion Lists).
+
+BSD                              July 8, 2025                              BSD

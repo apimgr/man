@@ -1,0 +1,140 @@
+SPKR(4)                  BSD Kernel Interfaces Manual                  SPKR(4)
+
+NNAAMMEE
+     ssppeeaakkeerr, ssppkkrr — console speaker device driver
+
+SSYYNNOOPPSSIISS
+     ssppkkrr00     aatt ppccppppii??
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssppeeaakkeerr device driver allows applications to control the built-in
+     speaker on machines providing a PCPPI speaker interface.
+
+     Only one process may have this device open at any given time; open(2) and
+     close(2) are used to lock and relinquish it.  An attempt to ooppeenn() when
+     another process has the device locked will return -1 with an EBUSY error
+     indication.  Writes to the device are interpreted as “play strings” in a
+     simple ASCII melody notation.  An iiooccttll() for tone generation at arbi‐
+     trary frequencies is also supported.
+
+     Sound-generation does _n_o_t monopolize the processor; in fact, the driver
+     spends most of its time sleeping while the PC hardware is emitting tones.
+     Other processes may emit beeps while the driver is running.
+
+     Applications may call iiooccttll() on a speaker file descriptor to control the
+     speaker driver directly; definitions for the iiooccttll() interface are in
+     <_d_e_v_/_i_s_a_/_s_p_k_r_i_o_._h>.  The _t_o_n_e___t structure used in these calls has two
+     fields, specifying a frequency (in Hz) and a duration (in 1/100ths of a
+     second).  A frequency of zero is interpreted as a rest.
+
+     At present there are two such ioctls.  The SPKRTONE ioctl accepts a
+     pointer to a single tone structure as a third argument and plays it.  The
+     SPKRTUNE ioctl accepts a pointer to the first of an array of tone struc‐
+     tures and plays them in continuous sequence; this array must be termi‐
+     nated by a final member with a zero duration.
+
+     The play-string language is modelled on the PLAY statement conventions of
+     IBM BASIC 2.0.  The MB, MF and X primitives of PLAY are not useful in a
+     UNIX environment and are omitted.  The “octave-tracking” feature is also
+     new.
+
+     There are 84 accessible notes numbered 1-84 in 7 octaves, each running
+     from C to B, numbered 0-6; the scale is equal-tempered A440 and octave 3
+     starts with middle C.  By default, the play function emits half-second
+     notes with the last 1/16th second being “rest time”.
+
+     Play strings are interpreted left to right as a series of play command
+     groups; letter case is ignored.  Play command groups are as follows:
+
+     CDEFGAB
+          Letters A through G cause the corresponding note to be played in the
+          current octave.  A note letter may optionally be followed by an
+          “accidental sign”, one of ‘#’, ‘+’, or ‘-’; the first two of these
+          cause it to be sharped one half-tone, the last causes it to be flat‐
+          ted one half-tone.  It may also be followed by a time value number
+          and by sustain dots (see below).  Time values are interpreted as for
+          the L command below.
+
+     O ⟨_n⟩
+          If _n is numeric, this sets the current octave.  _n may also be one of
+          ‘L’ or ‘N’ to enable or disable octave-tracking (it is disabled by
+          default).  When octave-tracking is on, interpretation of a pair of
+          letter notes will change octaves if necessary in order to make the
+          smallest possible jump between notes.  Thus "olbc" will be played as
+          "olb>c", and "olcb" as "olc<b".  Octave locking is disabled for one
+          letter note following by ‘>’, ‘<’, and ‘O[0123456]’.
+
+                > -- bump the current octave up one.
+                < -- drop the current octave down one.
+
+     N ⟨_n⟩
+          Play note _n, _n being 1 to 84 or 0 for a rest of current time value.
+          May be followed by sustain dots.
+
+     L ⟨_n⟩
+          Sets the current time value for notes.  The default is L4, quarter
+          notes.  The lowest possible value is 1; values up to 64 are ac‐
+          cepted.  L1 sets whole notes, L2 sets half notes, L4 sets quarter
+          notes, etc.
+
+     P ⟨_n⟩
+          Pause (rest), with _n interpreted as for L.  May be followed by sus‐
+          tain dots.  May also be written ‘~’.
+
+     T ⟨_n⟩
+          Sets the number of quarter notes per minute; default is 120.  Musi‐
+          cal names for common tempi are:
+
+                _D_e_s_c_r_i_p_t_i_o_n    _T_e_m_p_o          _B_e_a_t_s _p_e_r _M_i_n_u_t_e
+                very slow      Larghissimo    40–60
+                very slow      Largo          40–60
+                very slow      Larghetto      60–66
+                very slow      Grave          60–66
+                very slow      Lento          60–66
+                slow           Adagio         66–76
+                slow           Adagietto      66–76
+                medium         Andante        76–108
+                medium         Andantino      76–108
+                fast           Moderato       108–120
+                fast           Allegretto     108–120
+                fast           Allegro        120–168
+                fast           Vivace         120–168
+                fast           Veloce         120–168
+                very fast      Presto         168–208
+                very fast      Prestissimo    168–208
+
+     M[LNS]
+          Set articulation.  MN (N for normal) is the default; the last 1/8th
+          of the note's value is rest time.  You can set ML for legato (no
+          rest space) or MS (staccato) 1/4 rest space.
+
+     Notes (that is, CDEFGAB or N command character groups) may be followed by
+     sustain dots.  Each dot causes the note's value to be lengthened by one-
+     half for each one.  Thus, a note dotted once is held for 3/2 of its un‐
+     dotted value; dotted twice, it is held 9/4, and three times would give
+     27/8.
+
+     Whitespace in play strings is simply skipped and may be used to separate
+     melody sections.
+
+FFIILLEESS
+     /dev/speaker
+
+SSEEEE AALLSSOO
+     intro(4), pcppi(4)
+
+AAUUTTHHOORRSS
+     Eric S. Raymond <_e_s_r_@_s_n_a_r_k_._t_h_y_r_s_u_s_._c_o_m>, Feb 1990
+
+BBUUGGSS
+     Due to roundoff in the pitch tables and slop in the tone-generation and
+     timer hardware (neither of which was designed for precision), neither
+     pitch accuracy nor timings will be mathematically exact.
+
+     There is no volume control.
+
+     In play strings which are very long (longer than your system's physical
+     I/O blocks) note suffixes or numbers may occasionally be parsed incor‐
+     rectly due to crossing a block boundary.
+
+BSD                              July 18, 2024                             BSD

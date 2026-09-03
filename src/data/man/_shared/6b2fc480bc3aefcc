@@ -1,0 +1,289 @@
+_V_I_R_T_U_A_L(5)                    File Formats Manual                   _V_I_R_T_U_A_L(5)
+
+NNAAMMEE
+       virtual - Postfix virtual alias table format
+
+SSYYNNOOPPSSIISS
+       ppoossttmmaapp //eettcc//ppoossttffiixx//vviirrttuuaall
+
+       ppoossttmmaapp --qq ""_s_t_r_i_n_g"" //eettcc//ppoossttffiixx//vviirrttuuaall
+
+       ppoossttmmaapp --qq -- //eettcc//ppoossttffiixx//vviirrttuuaall <<_i_n_p_u_t_f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+       The  optional  vviirrttuuaall(5)  alias table rewrites recipient addresses for
+       all local, all virtual, and all remote mail destinations.  This is  un‐
+       like  the  aalliiaasseess(5)  table  which is used only for llooccaall(8) delivery.
+       This feature is implemented in the  Postfix  cclleeaannuupp(8)  daemon  before
+       mail is queued.
+
+       Virtual  aliasing  is  recursive; to terminate recursion for a specific
+       address, alias that address to itself.
+
+       The main applications of virtual aliasing are:
+
+       •      To redirect mail for one address to one or more addresses.
+
+       •      To implement virtual  alias  domains  where  all  addresses  are
+              aliased to addresses in other domains.
+
+              Virtual  alias  domains  are not to be confused with the virtual
+              mailbox domains that are implemented with the Postfix vviirrttuuaall(8)
+              mail delivery agent. With virtual mailbox domains, each  recipi‐
+              ent address can have its own mailbox.
+
+       Virtual  aliasing  is applied only to recipient envelope addresses, and
+       does not affect message headers.  Use ccaannoonniiccaall(5) mapping  to  rewrite
+       header and envelope addresses in general.
+
+       Normally,  the  vviirrttuuaall(5) alias table is specified as a text file that
+       serves as input to the ppoossttmmaapp(1) command.  The result, an indexed file
+       in ddbbmm or ddbb format, is used for fast searching by the mail system. Ex‐
+       ecute the command "ppoossttmmaapp //eettcc//ppoossttffiixx//vviirrttuuaall" to rebuild an  indexed
+       file after changing the corresponding text file.
+
+       When  the  table  is provided via other means such as NIS, LDAP or SQL,
+       the same lookups are done as for ordinary indexed files.
+
+       Alternatively, the table can be provided as  a  regular-expression  map
+       where  patterns are given as regular expressions, or lookups can be di‐
+       rected to a TCP-based server. In those case, the lookups are done in  a
+       slightly different way as described below under "REGULAR EXPRESSION TA‐
+       BLES" or "TCP-BASED TABLES".
+
+CCAASSEE FFOOLLDDIINNGG
+       The  search string is folded to lowercase before database lookup. As of
+       Postfix 2.3, the search string is not case folded with  database  types
+       such  as  regexp: or pcre: whose lookup fields can match both upper and
+       lower case.
+
+TTAABBLLEE FFOORRMMAATT
+       The input format for the ppoossttmmaapp(1) command is as follows:
+
+       _p_a_t_t_e_r_n _a_d_d_r_e_s_s_, _a_d_d_r_e_s_s_, _._._.
+              When _p_a_t_t_e_r_n matches a mail address, replace it  by  the  corre‐
+              sponding _a_d_d_r_e_s_s.
+
+       blank lines and comments
+              Empty  lines and whitespace-only lines are ignored, as are lines
+              whose first non-whitespace character is a ‘#’.
+
+       multi-line text
+              A logical line starts with  non-whitespace  text.  A  line  that
+              starts with whitespace continues a logical line.
+
+TTAABBLLEE SSEEAARRCCHH OORRDDEERR
+       With  lookups  from  indexed files such as DB or DBM, or from networked
+       tables such as NIS, LDAP or SQL, each _u_s_e_r@_d_o_m_a_i_n query produces a  se‐
+       quence of query patterns as described below.
+
+       Each query pattern is sent to each specified lookup table before trying
+       the next query pattern, until a match is found.
+
+       _u_s_e_r@_d_o_m_a_i_n _a_d_d_r_e_s_s_, _a_d_d_r_e_s_s_, _._._.
+              Redirect  mail  for  _u_s_e_r@_d_o_m_a_i_n  to _a_d_d_r_e_s_s.  This form has the
+              highest precedence.
+
+       _u_s_e_r _a_d_d_r_e_s_s_, _a_d_d_r_e_s_s_, _._._.
+              Redirect mail for _u_s_e_r@_s_i_t_e to _a_d_d_r_e_s_s when  _s_i_t_e  is  equal  to
+              $mmyyoorriiggiinn,  when _s_i_t_e is listed in $mmyyddeessttiinnaattiioonn, or when it is
+              listed in $iinneett__iinntteerrffaacceess or $pprrooxxyy__iinntteerrffaacceess.
+
+              This functionality overlaps with the functionality of the  local
+              _a_l_i_a_s_e_s(5)  database.  The difference is that vviirrttuuaall(5) mapping
+              can be applied to non-local addresses.
+
+       @_d_o_m_a_i_n _a_d_d_r_e_s_s_, _a_d_d_r_e_s_s_, _._._.
+              Redirect mail for other users in _d_o_m_a_i_n to _a_d_d_r_e_s_s.   This  form
+              has the lowest precedence.
+
+              Note:  @_d_o_m_a_i_n  is a wild-card. With this form, the Postfix SMTP
+              server accepts mail for any recipient in _d_o_m_a_i_n,  regardless  of
+              whether  that  recipient exists.  This may turn your mail system
+              into a  backscatter  source:  Postfix  first  accepts  mail  for
+              non-existent  recipients  and  then tries to return that mail as
+              "undeliverable" to the often forged sender address.
+
+              To avoid backscatter with mail for a wild-card  domain,  replace
+              the  wild-card  mapping with explicit 1:1 mappings, or add a re‐
+              ject_unverified_recipient restriction for that domain:
+
+                  smtpd_recipient_restrictions =
+                      ...
+                      reject_unauth_destination
+                      check_recipient_access
+                          inline:{example.com=reject_unverified_recipient}
+                  unverified_recipient_reject_code = 550
+
+              In the above example, Postfix may contact a remote server if the
+              recipient is aliased to a remote address.
+
+RREESSUULLTT AADDDDRREESSSS RREEWWRRIITTIINNGG
+       The lookup result is subject to address rewriting:
+
+       •      When the result has the form @_o_t_h_e_r_d_o_m_a_i_n,  the  result  becomes
+              the same _u_s_e_r in _o_t_h_e_r_d_o_m_a_i_n.  This works only for the first ad‐
+              dress in a multi-address lookup result.
+
+       •      When  "aappppeenndd__aatt__mmyyoorriiggiinn==yyeess", append "@@$$mmyyoorriiggiinn" to addresses
+              without "@domain".
+
+       •      When "aappppeenndd__ddoott__mmyyddoommaaiinn==yyeess", append "..$$mmyyddoommaaiinn" to addresses
+              without ".domain".
+
+AADDDDRREESSSS EEXXTTEENNSSIIOONN
+       When a mail address localpart contains the optional recipient delimiter
+       (e.g., _u_s_e_r_+_f_o_o@_d_o_m_a_i_n), the  lookup  order  becomes:  _u_s_e_r_+_f_o_o@_d_o_m_a_i_n,
+       _u_s_e_r@_d_o_m_a_i_n, _u_s_e_r_+_f_o_o, _u_s_e_r, and @_d_o_m_a_i_n.
+
+       The  pprrooppaaggaattee__uunnmmaattcchheedd__eexxtteennssiioonnss  parameter  controls whether an un‐
+       matched address extension (_+_f_o_o) is propagated to the result of a table
+       lookup.
+
+VVIIRRTTUUAALL AALLIIAASS DDOOMMAAIINNSS
+       Besides virtual aliases, the virtual alias table can also  be  used  to
+       implement  virtual  alias domains. With a virtual alias domain, all re‐
+       cipient addresses are aliased to addresses in other domains.
+
+       Virtual alias domains are not to be confused with the  virtual  mailbox
+       domains  that are implemented with the Postfix vviirrttuuaall(8) mail delivery
+       agent. With virtual mailbox domains, each recipient  address  can  have
+       its own mailbox.
+
+       With  a  virtual alias domain, the virtual domain has its own user name
+       space. Local (i.e. non-virtual) usernames are not visible in a  virtual
+       alias  domain.  In particular, local aalliiaasseess(5) and local mailing lists
+       are not visible as _l_o_c_a_l_n_a_m_e_@_v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n.
+
+       Support for a virtual alias domain looks like:
+
+       /etc/postfix/main.cf:
+           virtual_alias_maps = hash:/etc/postfix/virtual
+
+       Note: some systems use ddbbmm databases instead of hhaasshh.  See  the  output
+       from "ppoossttccoonnff --mm" for available database types.
+
+       /etc/postfix/virtual:
+           _v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n    _a_n_y_t_h_i_n_g (right-hand content does not matter)
+           _p_o_s_t_m_a_s_t_e_r_@_v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n _p_o_s_t_m_a_s_t_e_r
+           _u_s_e_r_1_@_v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n      _a_d_d_r_e_s_s_1
+           _u_s_e_r_2_@_v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n      _a_d_d_r_e_s_s_2_, _a_d_d_r_e_s_s_3
+
+       The _v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n _a_n_y_t_h_i_n_g entry is required for a virtual alias
+       domain.  WWiitthhoouutt  tthhiiss  eennttrryy,,  mmaaiill iiss rreejjeecctteedd wwiitthh ""rreellaayy aacccceessss ddee‐‐
+       nniieedd"",, oorr bboouunncceess wwiitthh ""mmaaiill llooooppss bbaacckk ttoo mmyysseellff""..
+
+       Do not specify virtual alias domain names in the mmaaiinn..ccff  mmyyddeessttiinnaattiioonn
+       or rreellaayy__ddoommaaiinnss configuration parameters.
+
+       With  a  virtual alias domain, the Postfix SMTP server accepts mail for
+       _k_n_o_w_n_-_u_s_e_r_@_v_i_r_t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n, and rejects mail for _u_n_k_n_o_w_n_-_u_s_e_r@_v_i_r_‐
+       _t_u_a_l_-_a_l_i_a_s_._d_o_m_a_i_n as undeliverable.
+
+       Instead of specifying the  virtual  alias  domain  name  via  the  vviirr‐‐
+       ttuuaall__aalliiaass__mmaappss  table,  you  may  also specify it via the mmaaiinn..ccff vviirr‐‐
+       ttuuaall__aalliiaass__ddoommaaiinnss configuration parameter.  This latter parameter uses
+       the same syntax as the mmaaiinn..ccff mmyyddeessttiinnaattiioonn configuration parameter.
+
+RREEGGUULLAARR EEXXPPRREESSSSIIOONN TTAABBLLEESS
+       This section describes how the table lookups change when the  table  is
+       given  in the form of regular expressions. For a description of regular
+       expression lookup table syntax, see rreeggeexxpp__ttaabbllee(5) or ppccrree__ttaabbllee(5).
+
+       Each pattern is a regular expression that is applied to the entire  ad‐
+       dress  being looked up. Thus, _u_s_e_r_@_d_o_m_a_i_n mail addresses are not broken
+       up into their _u_s_e_r and _@_d_o_m_a_i_n constituent parts, nor is _u_s_e_r_+_f_o_o  bro‐
+       ken up into _u_s_e_r and _f_o_o.
+
+       Patterns  are  applied  in the order as specified in the table, until a
+       pattern is found that matches the search string.
+
+       Results are the same as with indexed file lookups, with the  additional
+       feature  that parenthesized substrings from the pattern can be interpo‐
+       lated as $$11, $$22 and so on.
+
+TTCCPP‐‐BBAASSEEDD TTAABBLLEESS
+       This section describes how the table lookups change  when  lookups  are
+       directed   to  a  TCP-based  server.  For  a  description  of  the  TCP
+       client/server lookup  protocol,  see  ttccpp__ttaabbllee(5).   This  feature  is
+       available in Postfix 2.5 and later.
+
+       Each  lookup operation uses the entire address once.  Thus, _u_s_e_r_@_d_o_m_a_i_n
+       mail addresses are not broken up  into  their  _u_s_e_r  and  _@_d_o_m_a_i_n  con‐
+       stituent parts, nor is _u_s_e_r_+_f_o_o broken up into _u_s_e_r and _f_o_o.
+
+       Results are the same as with indexed file lookups.
+
+BBUUGGSS
+       The table format does not understand quoting conventions.
+
+CCOONNFFIIGGUURRAATTIIOONN PPAARRAAMMEETTEERRSS
+       The following mmaaiinn..ccff parameters are especially relevant to this topic.
+       See the Postfix mmaaiinn..ccff file for syntax details and for default values.
+       Use the "ppoossttffiixx rreellooaadd" command after a configuration change.
+
+       vviirrttuuaall__aalliiaass__mmaappss (($$vviirrttuuaall__mmaappss))
+              Optional lookup tables that alias specific mail addresses or do‐
+              mains to other local or remote addresses.
+
+       vviirrttuuaall__aalliiaass__ddoommaaiinnss (($$vviirrttuuaall__aalliiaass__mmaappss))
+              Postfix  is the final destination for the specified list of vir‐
+              tual alias domains, that is, domains for which all addresses are
+              aliased to addresses in other local or remote domains.
+
+       pprrooppaaggaattee__uunnmmaattcchheedd__eexxtteennssiioonnss ((ccaannoonniiccaall,, vviirrttuuaall))
+              What address lookup tables copy an address  extension  from  the
+              lookup key to the lookup result.
+
+       Other parameters of interest:
+
+       iinneett__iinntteerrffaacceess ((aallll))
+              The  network  interface addresses that this mail system receives
+              mail on.
+
+       mmyyddeessttiinnaattiioonn (($$mmyyhhoossttnnaammee,, llooccaallhhoosstt..$$mmyyddoommaaiinn,, llooccaallhhoosstt))
+              The list of domains that are delivered via the  $local_transport
+              mail delivery transport.
+
+       mmyyoorriiggiinn (($$mmyyhhoossttnnaammee))
+              The  domain  name that locally-posted mail appears to come from,
+              and that locally posted mail is delivered to.
+
+       oowwnneerr__rreeqquueesstt__ssppeecciiaall ((yyeess))
+              Enable special  treatment  for  owner-_l_i_s_t_n_a_m_e  entries  in  the
+              aalliiaasseess(5) file, and don’t split owner-_l_i_s_t_n_a_m_e and _l_i_s_t_n_a_m_e-re‐
+              quest  address localparts when the recipient_delimiter is set to
+              "-".
+
+       pprrooxxyy__iinntteerrffaacceess ((eemmppttyy))
+              The network interface addresses that this mail  system  receives
+              mail on by way of a proxy or network address translation unit.
+
+SSEEEE AALLSSOO
+       cleanup(8), canonicalize and enqueue mail
+       postmap(1), Postfix lookup table manager
+       postconf(5), configuration parameters
+       canonical(5), canonical address mapping
+
+RREEAADDMMEE FFIILLEESS
+       Use  "ppoossttccoonnff rreeaaddmmee__ddiirreeccttoorryy" or "ppoossttccoonnff hhttmmll__ddiirreeccttoorryy" to locate
+       this information.
+       ADDRESS_REWRITING_README, address rewriting guide
+       DATABASE_README, Postfix lookup table overview
+       VIRTUAL_README, domain hosting guide
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+AAUUTTHHOORR((SS))
+       Wietse Venema
+       IBM T.J. Watson Research
+       P.O. Box 704
+       Yorktown Heights, NY 10598, USA
+
+       Wietse Venema
+       Google, Inc.
+       111 8th Avenue
+       New York, NY 10011, USA
+
+                                                                    _V_I_R_T_U_A_L(5)

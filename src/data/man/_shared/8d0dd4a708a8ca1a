@@ -1,0 +1,135 @@
+VLAN(4)                  BSD Kernel Interfaces Manual                  VLAN(4)
+
+NNAAMMEE
+     vvllaann, ssvvllaann — IEEE 802.1Q and 802.1ad pseudo-device
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee vvllaann
+
+DDEESSCCRRIIPPTTIIOONN
+     The vvllaann driver provides network interfaces supporting Virtual Local Area
+     Networks (VLANs) on Ethernet networks.  vvllaann interfaces implement virtual
+     networks using the IEEE 802.1Q protocol.  ssvvllaann interfaces implement vir‐
+     tual networks using the IEEE 802.1ad protocol.
+
+     ssvvllaann interfaces allow construction of IEEE 802.1ad-compliant provider
+     bridges.  vvllaann and ssvvllaann interfaces can be configured to provide QinQ or
+     stacked VLANs.
+
+     The interfaces can be created at runtime using the iiffccoonnffiigg vvllaann_N ccrreeaattee
+     command or by setting up a hostname.if(5) configuration file for
+     netstart(8).  The interface itself can be configured with ifconfig(8);
+     see its manual page for more information.
+
+     vvllaann and ssvvllaann interfaces must be configured with a parent Ethernet in‐
+     terface to operate, and a virtual network identifier.  Packets transmit‐
+     ted through a vvllaann or ssvvllaann interface will be encapsulated in their re‐
+     spective protocols and transmitted on the specified physical interface.
+     802.1Q and 802.1ad packets received on the parent interface will be
+     matched to the vvllaann and ssvvllaann interfaces by their respective protocol and
+     virtual network identifiers, and decapsulated for reception on the asso‐
+     ciated virtual interfaces.
+
+     The 802.1Q and 802.1ad protocols include a priority field.  By default,
+     the 802.1p priority in a transmitted packet is based on the priority of
+     packets sent over the interface, which may be altered via pf.conf(5); see
+     the pprriioo option for more information.  Alternatively, ttxxpprriioo can set a
+     specific priority for transmitted packets.
+
+     vvllaann and ssvvllaann interfaces support the following ioctl(2)s:
+
+        SIOCSIFPARENT _s_t_r_u_c_t _i_f___p_a_r_e_n_t _*
+                Set the parent interface.  The parent may only be configured
+                while the virtual interface is administratively down.
+
+        SIOCGIFPARENT _s_t_r_u_c_t _i_f___p_a_r_e_n_t _*
+                Get the currently configured parent interface.
+
+        SIOCDIFPARENT _s_t_r_u_c_t _i_f_r_e_q _*
+                Delete the parent interface configuration.  The parent may
+                only be removed while the virtual interface is administra‐
+                tively down.
+
+        SIOCSVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Set the virtual network identifier.  Valid identifiers are in
+                the range 1 to 4094.
+
+        SIOCGVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Get the currently configured virtual network identifier.
+
+        SIOCDVNETID _s_t_r_u_c_t _i_f_r_e_q _*
+                Clear the current virtual network identifier.  Virtual inter‐
+                faces without a configured virtual network identifier will use
+                0 in their protocols tag field.
+
+        SIOCSIFLLADDR _s_t_r_u_c_t _i_f_r_e_q _*
+                Configure a custom MAC address on the virtual interface.  When
+                the virtual interface is using a custom MAC address, the par‐
+                ent interface will be configured to promiscuously receive
+                packets.  When operating without a custom MAC address, the
+                virtual interface will inherit the parent interfaces MAC ad‐
+                dress.  Configuring 00:00:00:00:00:00 as the MAC address will
+                clear the custom MAC address configuration and resume opera‐
+                tion with the parents MAC address.
+
+     vvllaann and ssvvllaann interfaces use the following capability on parent inter‐
+     faces:
+
+        IFCAP_VLAN_MTU        The parent interface can handle full sized
+                              frames, plus the size of the vlan tag.
+
+     vvllaann interfaces use the following capability on parent interfaces:
+
+        IFCAP_VLAN_HWTAGGING  The parent interface will offload the encapsula‐
+                              tion and decapsulation of 802.1Q frames.
+
+EEXXAAMMPPLLEESS
+     Create an 802.1Q virtual interface on top of the physical interface em0,
+     with virtual network identifier 5:
+
+           # ifconfig vlan0 create
+           # ifconfig vlan0 parent em0 vnetid 5
+           # ifconfig vlan0 10.1.1.100/24
+
+     Create an 802.1Q VLAN interface on network 10, on top of an 802.1ad
+     provider bridge on network 8, on top of the physical interface bge0:
+
+           # ifconfig svlan0 create
+           # ifconfig svlan0 parent bge0 vnetid 8
+           # ifconfig svlan0 up
+           # ifconfig vlan0 create
+           # ifconfig vlan0 parent svlan0 vnetid 10
+           # ifconfig vlan0 10.1.1.101/24
+
+     Configure an 802.1Q VLAN interface with a custom MAC address:
+
+           # ifconfig vlan0 lladdr fe:e1:ba:d0:84:0e
+
+     Remove a custom MAC address from an 802.1Q VLAN interface:
+
+           # ifconfig vlan0 lladdr 00:00:00:00:00:00
+
+     Force the use of priority 1 for transmitted packets, regardless of the
+     packet priority:
+
+           # ifconfig vlan0 txprio 1
+
+SSEEEE AALLSSOO
+     inet(4), ip(4), netintro(4), hostname.if(5), pf.conf(5), ifconfig(8),
+     netstart(8)
+
+     _I_E_E_E _8_0_2_._1_Q _s_t_a_n_d_a_r_d,
+     https://standards.ieee.org/standard/802_1Q-2018.html.
+
+     _I_E_E_E _8_0_2_._1_a_d _s_t_a_n_d_a_r_d, Provider Bridges, QinQ.
+
+AAUUTTHHOORRSS
+     Originally Garrett Wollman <_w_o_l_l_m_a_n_@_f_r_e_e_b_s_d_._o_r_g>.
+
+CCAAVVEEAATTSS
+     Some Ethernet chips will either discard or truncate Ethernet frames that
+     are larger than 1514 bytes.  This causes a problem as 802.1Q and 802.1ad
+     tagged frames can be up to 1518 bytes.  Most controller chips can be told
+     not to discard large frames and/or to increase the allowed frame size.
+
+BSD                           September 12, 2022                           BSD

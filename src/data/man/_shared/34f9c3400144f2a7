@@ -1,0 +1,192 @@
+APMD(8)                BSD/i386 System Manager's Manual                APMD(8)
+
+NNAAMMEE
+     aappmmdd — Advanced Power Management monitor daemon
+
+SSYYNNOOPPSSIISS
+     aappmmdd [--dd] [--ff --ffiillee] [--ss] [--vv]
+
+DDEESSCCRRIIPPTTIIOONN
+     The aappmmdd utility monitors the occurrence of the specified Advanced Power
+     Management (APM) events and, if one of the events occurs, it executes the
+     sequence of commands corresponding to the event.  Only the events speci‐
+     fied in the configuration file are notified to aappmmdd; all other events are
+     ignored.  For each event posted by the APM BIOS, aappmmdd invokes the se‐
+     quence of commands specified in the configuration file.  When aappmmdd is
+     running with monitoring suspend/standby requests, the kernel will not
+     process those requests.  Therefore, if you wish action to be taken when
+     these events occur, you need to explicitly configure the appropriate com‐
+     mands or built-in functions in the configuration file.
+
+     The aappmmdd utility recognizes the following runtime options:
+
+     --dd      Starts in debug mode.  This causes aappmmdd to execute in the fore‐
+             ground instead of in daemon mode.
+
+     --ff _f_i_l_e
+             Specifies a different configuration file _f_i_l_e to be used in place
+             of the default _/_e_t_c_/_a_p_m_d_._c_o_n_f.
+
+     --ss      Causes aappmmdd to simulate a POWERSTATECHANGE event when a power
+             state change is detected (AC_POWER_STATE) but the bios of the
+             laptop does not report it.  This enables you to do things like
+             dimming the LCD backlight when you unplug the power cord.
+
+     --vv      Verbose mode.
+
+     When aappmmdd starts, it reads the configuration file (_/_e_t_c_/_a_p_m_d_._c_o_n_f as de‐
+     fault) and notifies the set of events to be monitored to the APM device
+     driver.  When it terminates, the APM device driver automatically cancels
+     monitored events.
+
+     If the aappmmdd process receives a SIGHUP, it will reread its configuration
+     file and notify the APM device driver of any changes to its configura‐
+     tion.
+
+     The aappmmdd utility uses the device _/_d_e_v_/_a_p_m_c_t_l to issue ioctl(2) requests
+     for monitoring events and for controlling the APM system.  This device
+     file is opened exclusively, so only a single aappmmdd process can be running
+     at any time.
+
+     When aappmmdd receives an APM event, it forks a child process to execute the
+     commands specified in the configuration file and then continues listening
+     for more events.  The child process executes the commands specified, one
+     at a time and in the order that they are listed.
+
+     While aappmmdd is processing the command list for SUSPEND/STANDBY requests,
+     the APM kernel device driver issues notifications to APM BIOS once per
+     second so that the BIOS knows that there are still some commands pending,
+     and that it should not complete the request just yet.
+
+     The aappmmdd utility creates the file _/_v_a_r_/_r_u_n_/_a_p_m_d_._p_i_d, and stores its
+     process id there.  This can be used to kill or reconfigure aappmmdd.
+
+CCOONNFFIIGGUURRAATTIIOONN FFIILLEE
+     The structure of the aappmmdd configuration file is quite simple.  For exam‐
+     ple:
+
+     apm_event SUSPENDREQ {
+            exec "sync && sync && sync";
+            exec "sleep 1";
+            exec "zzz";
+     }
+
+     will cause aappmmdd to receive the APM event ‘SUSPENDREQ’ (which may be
+     posted by an LCD close), run the ‘sync’ command 3 times and wait for a
+     while, then execute zzzzzz (aappmm --zz) to put the system in the suspend state.
+
+     ••   The apm_event keyword
+
+               ‘apm_event’ is the keyword which indicates the start of config‐
+               uration for each event.
+
+     ••   APM events
+
+               If you wish to execute the same commands for different events,
+               the event names should be delimited by a comma.  The following
+               are valid event names:
+
+               - Events ignored by the kernel if aappmmdd is running:
+
+                     STANDBYREQ
+                     USERSTANDBYREQ
+                     SUSPENDREQ      should include sync in the command list,
+                     USERSUSPENDREQ  should include sync in the command list,
+                     BATTERYLOW      only zzz should be specified in the com‐
+                                     mand list.
+
+               - Events passed to aappmmdd after kernel handling:
+
+                     NORMRESUME
+                     CRITRESUME
+                     STANDBYRESUME
+                     POWERSTATECHANGE
+                     UPDATETIME
+                     CAPABILITIESCHANGE
+
+               Other events will not be sent to aappmmdd.
+
+     ••   command line syntax
+
+               In the example above, the three lines beginning with ‘exec’ are
+               commands for the event.  Each line should be terminated with a
+               semicolon.  The command list for the event should be enclosed
+               by ‘{’ and ‘}’.  The aappmmdd utility uses _/_b_i_n_/_s_h for double-quo‐
+               tation enclosed command execution, just as with system(3).
+               Each command is executed in order until the end of the list is
+               reached or a command finishes with a non-zero status code.  The
+               aappmmdd utility will report any failed command's status code via
+               syslog(3) and will then reject the request event posted by the
+               APM BIOS.
+
+     ••   Built-in functions
+
+               You can also specify aappmmdd built-in functions instead of command
+               lines.  A built-in function name should be terminated with a
+               semicolon, just as with a command line.  The following built-in
+               functions are currently supported:
+
+
+               - reject  Reject last request posted by APM BIOS.  This can be
+                         used to reject a SUSPEND request when the LCD is
+                         closed and put the system in a STANDBY state instead.
+
+FFIILLEESS
+     /etc/apmd.conf
+     /dev/apmctl
+     /var/run/apmd.pid
+
+EEXXAAMMPPLLEESS
+     Sample configuration commands include:
+
+     apm_event SUSPENDREQ {
+             exec "/etc/rc.suspend apm suspend";
+     }
+
+     apm_event USERSUSPENDREQ {
+             exec "sync && sync && sync";
+             exec "sleep 1";
+             exec "apm -z";
+     }
+
+     apm_event NORMRESUME {
+             exec "/etc/rc.resume apm suspend";
+     }
+
+     apm_event STANDBYRESUME {
+             exec "/etc/rc.resume apm standby";
+     }
+
+     # resume event configuration for serial mouse users by
+     # reinitializing a moused(8) connected to a serial port.
+     #
+     #apm_event NORMRESUME {
+     #       exec "kill -HUP `cat /var/run/moused.pid`";
+     #}
+     #
+     # suspend request event configuration for ATA HDD users:
+     # execute standby instead of suspend.
+     #
+     #apm_event SUSPENDREQ {
+     #       reject;
+     #       exec "sync && sync && sync";
+     #       exec "sleep 1";
+     #       exec "apm -Z";
+     #}
+
+SSEEEE AALLSSOO
+     apm(4), apm(8)
+
+HHIISSTTOORRYY
+     The aappmmdd utility appeared in FreeBSD 3.3.
+
+AAUUTTHHOORRSS
+     Mitsuru IWASAKI <_i_w_a_s_a_k_i_@_F_r_e_e_B_S_D_._o_r_g>
+     KOIE Hidetaka <_k_o_i_e_@_s_u_r_i_._c_o_._j_p>
+
+     Some contributions made by Warner Losh <_i_m_p_@_F_r_e_e_B_S_D_._o_r_g>, Hiroshi
+     Yamashita <_b_l_u_e_m_o_o_n_@_m_s_j_._b_i_g_l_o_b_e_._n_e_._j_p>, Yoshihiko SARUMARU
+     <_m_i_s_t_r_a_l_@_i_m_a_s_y_._o_r_._j_p>, Norihiro Kumagai <_k_u_m_a_@_n_k_._r_i_m_._o_r_._j_p>, NAKAGAWA
+     Yoshihisa <_n_a_k_a_g_a_w_a_@_j_p_._F_r_e_e_B_S_D_._o_r_g>, and Nick Hilliard <_n_i_c_k_@_f_o_o_b_a_r_._o_r_g>.
+
+BSD                              June 28, 1999                             BSD

@@ -1,0 +1,166 @@
+RELEASE(8)                BSD System Manager's Manual               RELEASE(8)
+
+NNAAMMEE
+     rreelleeaassee — building an OpenBSD release
+
+DDEESSCCRRIIPPTTIIOONN
+     There are several steps necessary to build a release:
+
+           1.   Update sources.
+           2.   Build and install a new kernel.
+           3.   Build a new base system.
+           4.   Make and validate the base system release.
+           5.   Build and install Xenocara.
+           6.   Make and validate the Xenocara release.
+           7.   Create boot and installation disk images.
+           8.   Make the third party packages.
+
+     This manual describes the steps for the _r_e_l_e_a_s_e and _s_t_a_b_l_e branches.  To
+     build a _c_u_r_r_e_n_t release, additional steps may be required.  See
+     hhttttppss::////wwwwww..ooppeennbbssdd..oorrgg//ffaaqq//ccuurrrreenntt..hhttmmll for any needed workarounds.
+
+     Commands to be run as a user are preceded by a dollar sign ‘$’.  Commands
+     that must be run as the superuser are preceded by a hash mark ‘#’.  Priv‐
+     ileges will be de-escalated to the user bbuuiilldd whenever possible.
+
+     Most of the defaults can be overridden by setting the appropriate vari‐
+     ables in mk.conf(5).
+
+   11.. UUppddaattee ssoouurrcceess
+     A rreelleeaassee should use sources that were checked out using the same cvs(1)
+     tag.  There are two families of tags:
+
+     OPENBSD_x_y_BASE  The sources for the OpenBSD x.y release.
+
+     OPENBSD_x_y       The sources for the OpenBSD x.y stable branch.  It con‐
+                       tains the patches described in
+                       hhttttppss::////wwwwww..ooppeennbbssdd..oorrgg//ssttaabbllee..hhttmmll.
+
+     See hhttttppss::////wwwwww..ooppeennbbssdd..oorrgg//aannoonnccvvss..hhttmmll for instructions on fetching the
+     sources for the first time.
+
+     To update existing sources to the versions identified by one of the above
+     tags, use the commands:
+
+           $ cd /usr/src && cvs up -r TAG -Pd
+           $ cd /usr/xenocara && cvs up -r TAG -Pd
+           $ cd /usr/ports && cvs up -r TAG -Pd
+
+     WWaarrnniinngg: cvs(1) tags are ‘sticky’.  See cvs(1) for more information.
+
+   22.. BBuuiilldd aanndd iinnssttaallll aa nneeww kkeerrnneell
+     Always build and install a new kernel and reboot before building the pro‐
+     grams that will use the kernel.  This ensures that any new system calls,
+     for example, will be present when needed.
+
+           # cd /sys/arch/$(machine)/compile/GENERIC.MP
+
+     Replace _G_E_N_E_R_I_C_._M_P with a different kernel configuration if necessary.
+
+     Create the build directory and configuration file, then compile and in‐
+     stall the kernel:
+
+           # make obj
+           # make config
+           # make && make install
+
+     The current kernel is copied to _/_o_b_s_d and the new kernel to _/_b_s_d.  Re‐
+     boot.
+
+   33.. BBuuiilldd aa nneeww bbaassee ssyysstteemm
+     The build process will place the object files in a tree under _/_u_s_r_/_o_b_j.
+     This directory must be owned by build:wobj with mode 770.
+
+     Create the tree of obj directories and begin the build:
+
+           # cd /usr/src
+           # make obj && make build
+
+     After the build is completed, update _/_e_t_c, _/_v_a_r, and _/_d_e_v, using
+     sysmerge(8) and MAKEDEV(8):
+
+           # sysmerge
+           # cd /dev && ./MAKEDEV all
+
+     At this point, the base system is up to date with the code that will be
+     made into a release.
+
+   44.. MMaakkee aanndd vvaalliiddaattee tthhee bbaassee ssyysstteemm rreelleeaassee
+     The base system release consists of at least one generic kernel, some in‐
+     stallation media, the release tarballs, installation instructions, and
+     checksum files.
+
+     On arm64 and armv7 architectures, additional files are required.  Install
+     the following packages using pkg_add(1) or from ports(7):
+
+           arm64   raspberrypi-firmware u-boot-rpi
+           armv7   dtb u-boot-arm
+
+     Create a _R_E_L_E_A_S_E_D_I_R directory to store the release files.  This directory
+     must be writable by bbuuiilldd.
+
+     To build a release, it is necessary to prepare a filesystem mounted with
+     the _n_o_p_e_r_m mount(8) option.  Either standard FFS or mount_mfs(8) may be
+     used.  The root of this filesystem must have owner bbuuiilldd and mode 700.
+     On this filesystem, create a _D_E_S_T_D_I_R directory.  This will be the root of
+     a complete OpenBSD installation.
+
+     WWaarrnniinngg: _D_E_S_T_D_I_R and _R_E_L_E_A_S_E_D_I_R must not refer to any directory with _/_m_n_t
+     in its path, as _/_m_n_t is used in the release generation process.  The
+     vnd(4) device vnd0 is also used and must not be configured.
+
+     Make the release and check the contents of the release tarballs:
+
+           # export DESTDIR=your-destdir RELEASEDIR=your-releasedir
+           # cd /usr/src/etc && make release
+           # cd /usr/src/distrib/sets && sh checkflist
+           # unset RELEASEDIR DESTDIR
+
+   55.. BBuuiilldd aanndd iinnssttaallll XXeennooccaarraa
+     Xenocara is based on the X.Org modular build system.  Its sources are
+     supposed to be in _/_u_s_r_/_x_e_n_o_c_a_r_a.  The _/_u_s_r_/_s_r_c tree is also needed while
+     building Xenocara.  The object directory _/_u_s_r_/_x_o_b_j should be empty and
+     owned by build:wobj with mode 770.
+
+     The following steps will build and install Xenocara.
+
+           # cd /usr/xenocara
+           # make bootstrap
+           # make obj
+           # make build
+
+   66.. MMaakkee aanndd vvaalliiddaattee tthhee XXeennooccaarraa rreelleeaassee
+     Xenocara uses _D_E_S_T_D_I_R and _R_E_L_E_A_S_E_D_I_R as described above.  Use a different
+     _D_E_S_T_D_I_R for the Xenocara release than for the base release, as the con‐
+     tents of _D_E_S_T_D_I_R will be removed.
+
+     The steps to build and validate the Xenocara release are:
+
+           # export DESTDIR=your-destdir RELEASEDIR=your-releasedir
+           # make release
+           # make checkdist
+           # unset RELEASEDIR DESTDIR
+
+     At this point, OpenBSD base system and X Window System tarballs are in
+     _R_E_L_E_A_S_E_D_I_R.
+
+   77.. CCrreeaattee bboooott aanndd iinnssttaallllaattiioonn ddiisskk iimmaaggeess
+     The disk images install${_V_E_R_S_I_O_N}.img and install${_V_E_R_S_I_O_N}.iso are suit‐
+     able for installs without network connectivity.  They contain the tar‐
+     balls built in the previous steps.
+
+           # export RELDIR=your-releasedir RELXDIR=your-xenocara-releasedir
+           # cd /usr/src/distrib/$(machine)/iso && make
+           # make install
+
+     The two installer images are now stored in the local release directory.
+
+   88.. MMaakkee tthhee tthhiirrdd ppaarrttyy ppaacckkaaggeess
+     The ports subsystem of contributed applications is capable of producing
+     packages for installation, either individually or in bulk.  This is de‐
+     scribed in ports(7).
+
+SSEEEE AALLSSOO
+     cvs(1), pkg_add(1), mk.conf(5), ports(7), sysmerge(8)
+
+BSD                             August 19, 2025                            BSD

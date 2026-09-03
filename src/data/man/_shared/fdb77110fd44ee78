@@ -1,0 +1,162 @@
+SEND(4)                  BSD Kernel Interfaces Manual                  SEND(4)
+
+NNAAMMEE
+     sseenndd — Kernel side support for Secure Neighbor Discovery (SeND)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+     ##iinncclluuddee <<nneettiinneett66//sseenndd..hh>>
+
+     _i_n_t
+     ssoocckkeett(_P_F___I_N_E_T_6, _S_O_C_K___R_A_W, _I_P_P_R_O_T_O___S_E_N_D);
+
+     To load the driver as a module at boot time, place the following line in
+     loader.conf(5):
+
+           send_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     IPv6 nodes use the Neighbor Discovery Protocol (NDP) to discover other
+     nodes on the link, to determine their link-layer addresses to find
+     routers, and to maintain reachability information about the paths to ac‐
+     tive members.  NDP is vulnerable to various attacks [RFC3756].  Secure
+     Neighbor Discovery is a set of extensions to NDP that counter threats to
+     NDP [RFC3971].
+
+     Kernel side support for SeND consists of a kernel module with hooks that
+     divert relevant packets (Neighbor Solicitations, Neighbor Advertisements,
+     Router Solicitations, Router Advertisements and Redirects) from the NDP
+     stack, send them to user space on a dedicated socket and reinject them
+     back for further processing.  Hooks are triggered only if the sseenndd module
+     is loaded.
+
+     The native SeND socket is similar to a raw IP socket, but with its own,
+     internal pseudo-protocol (IPPROTO_SEND).  Struct sockaddr_send is defined
+     in <_n_e_t_i_n_e_t_6_/_s_e_n_d_._h>.  It defines the total length of the structure, the
+     address family, packet's incoming or outgoing direction from the inter‐
+     face's point of view, and the interface index.
+
+     struct sockaddr_send {
+             unsigned char           send_len;       /* total length */
+             sa_family_t             send_family;    /* address family */
+             int                     send_direction;
+             int                     send_ifidx;
+             char                    send_zero[8];
+     };
+
+     The address family is always _A_F___I_N_E_T_6.  The _s_e_n_d___d_i_r_e_c_t_i_o_n variable de‐
+     notes the direction of the packet from the interface's point of view and
+     has either the value SND_IN or SND_OUT.  The _s_e_n_d___i_f_i_d_x variable is the
+     interface index of the receiving or sending interface.  The _s_e_n_d___z_e_r_o
+     variable is padding and must always be zero.
+
+     In case that no user space application is connected to the send socket,
+     processing continues normally as if the module was not loaded.
+
+IINNPPUUTT HHOOOOKK
+     The input hook is named after the input path of the incoming or outgoing
+     NDP packets, on the way from the wire, through the nd6 stack, to user
+     space.  Relevant packets are identified by adding an mbuf_tag (see
+     mbuf_tags(9)) to the mbuf(9), if the sseenndd module is loaded.  It is then
+     passed on to the kernel-userland interface for either cryptographic pro‐
+     tection or validation by the SeND application.  The hook takes an argu‐
+     ment that describes the direction of the packet, both in case of incoming
+     and outgoing packets.  SND_IN is the direction of the incoming packets
+     that are usually protected by the SeND options and then sent to user
+     space for cryptographic validation.  SND_OUT is the outgoing direction.
+     It describes both reply and locally originated outgoing packets that are
+     sent to user space for the addition of SeND options.
+
+IINNCCOOMMIINNGG PPAACCKKEETTSS
+     The incoming ND packet from the wire:
+
+                                             kernelspace ( userspace
+                                                         )
+      incoming SeND/ND packet                            (
+                 |                                       )
+                 v                 ( SND_IN )            (
+                icmp6_input() -> send_input_hook ---> send socket ----+
+                 :                                       )            |
+                 :             #                 #       (            |
+        normal   :             #                 #       )            v
+      processing :             #     send.ko     #       (    SeND application
+         path    :             #                 #       )            |
+                 :             #                 #       (            |
+                 v                                       )            |
+        icmp6/nd6_??_input() <- protocol switch  <--- send socket <---+
+                 |         structure (IPPPROTO_SEND)     )
+                 |                ( SND_IN )             (
+                 v                                       )
+      continue normal ND processing                      (
+
+OOUUTTGGOOIINNGG PPAACCKKEETTSS
+     Outgoing ND packet (reply or locally triggered):
+
+                                             kernelspace ( userspace
+                                                         )
+      nd6_na_input()                                     (
+      +PACKET_TAG_ND_OUTGOING                            )
+      |                                                  )
+      |   outgoing packet                                (
+      |          |                                       )
+      |          v                                       (
+      |   icmp6_redirect_output()                        )
+      |   nd6_ns_output()                                (
+      |   nd6_na_output()                                )
+      |   +PACKET_TAG_ND_OUTGOING                        (
+      |          |                                       )
+      |          +-----------<- rip6_output() <----------)----- rtsol/rtadvd/..
+      |          |              +PACKET_TAG_ND_OUTGOING  (
+      |          v                                       )
+      |       ip6_output()                               (
+      |          |                                       )
+      +-------->-+                                       (
+                 |                                       )
+                 v                ( SND_OUT )            (
+             nd6_output_lle() -> send_input_hook ---> send socket ----+
+      -PACKET_TAG_ND_OUTGOING                            )            |
+                 :             #                 #       (            |
+        normal   :             #                 #       )            v
+      processing :             #     send.ko     #       (    SeND application
+         path    :             #                 #       )            |
+                 :             #                 #       (            |
+                 v                                       )            |
+         (*ifp->if_output)() <- protocol switch  <--- send socket <---+
+                 |         structure (IPPPROTO_SEND)     )
+                 |                ( SND_OUT )            (
+                 v                                       )
+      continue with normal packet output                 (
+
+EERRRROORRSS
+     A socket operation may fail with one of the following errors returned:
+
+     [EEXIST]           Another user space SeND application is bound to the
+                        socket.
+
+     [ENOBUFS]          Shortage of space to receive the incoming (SeND-pro‐
+                        tected) or outgoing (SeND-validated) packet from the
+                        SeND application.
+
+     [ENOSYS]           A packet received from user space and passed to the
+                        NDP stack for further processing is neither Neighbor
+                        Solicitation, Neighbor Advertisement, Router Solicita‐
+                        tion, Router Advertisement nor Redirect.
+
+     [ENOENT]           Occurs if interface output routines fail to send the
+                        packet out of the interface.
+
+SSEEEE AALLSSOO
+     recvfrom(2), sendto(2), socket(2), loader.conf(5)
+
+HHIISSTTOORRYY
+     The sseenndd module first appeared in FreeBSD 9.0.
+
+AAUUTTHHOORRSS
+     Ana Kukec <_a_n_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>, University of Zagreb
+
+BBUUGGSS
+     Due to the lack of NDP locking, it is currently not possible to unload
+     the sseenndd module.
+
+BSD                           September 19, 2010                           BSD

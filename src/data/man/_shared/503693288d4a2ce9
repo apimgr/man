@@ -1,0 +1,326 @@
+MITIGATIONS(7)       BSD Miscellaneous Information Manual       MITIGATIONS(7)
+
+NNAAMMEE
+     mmiittiiggaattiioonnss — FreeBSD Security Vulnerability Mitigations
+
+SSYYNNOOPPSSIISS
+     In FreeBSD, various security mitigations are employed to limit the impact
+     of vulnerabilities and protect the system from malicious attacks.  Some
+     of these mitigations have run-time controls to enable them on a global or
+     per-process basis, some are optionally enabled or disabled at compile
+     time, and some are inherent to the implementation and have no controls.
+
+     The following vulnerability mitigations are covered in this document:
+
+     ••   Address Space Layout Randomization (ASLR)
+     ••   Position Independent Executable (PIE)
+     ••   Write XOR Execute page protection policy
+     ••   PROT_MAX
+     ••   Relocation Read-Only (RELRO)
+     ••   Bind Now
+     ••   Stack Overflow Protection
+     ••   Supervisor Mode Memory Protection
+     ••   Capsicum
+     ••   Firmware and Microcode
+     ••   Architectural Vulnerability Mitigations
+
+     Please note that the effectiveness and availability of these mitigations
+     may vary depending on the FreeBSD version and system configuration.
+
+DDEESSCCRRIIPPTTIIOONN
+     Security vulnerability mitigations are techniques employed in FreeBSD to
+     limit the potential impact of security vulnerabilities in software and
+     hardware.  It is essential to understand that mitigations do not directly
+     address the underlying security issues.  They are not a substitute for
+     secure coding practices.  Mitigations serve as an additional layer of de‐
+     fense, helping to reduce the likelihood of a successful exploitation of
+     vulnerabilities by making it more difficult for attackers to achieve
+     their objectives.
+
+     This manual page describes the security mitigations implemented in
+     FreeBSD to enhance the overall security of the operating system.  Each
+     mitigation is designed to protect against specific types of attacks and
+     vulnerabilities.
+
+SSOOFFTTWWAARREE VVUULLNNEERRAABBIILLIITTYY MMIITTIIGGAATTIIOONNSS
+   AAddddrreessss SSppaaccee LLaayyoouutt RRaannddoommiizzaattiioonn ((AASSLLRR))
+     Address Space Layout Randomization (ASLR) is a security mitigation tech‐
+     nique that works by randomizing the memory addresses where system and ap‐
+     plication code, data, and libraries are loaded, making it more challeng‐
+     ing for attackers to predict the memory layout and exploit vulnerabili‐
+     ties.
+
+     ASLR introduces randomness into the memory layout during process execu‐
+     tion, reducing the predictability of memory addresses.  ASLR is intended
+     to make exploitation more difficult in the event that an attacker discov‐
+     ers a software vulnerability, such as a buffer overflow.
+
+     ASLR can be enabled on both a global and per-process basis.  Global con‐
+     trol is provided by a separate set of sysctl(8) knobs for 32- and 64-bit
+     processes.  It can be or disabled on a per-process basis via
+     proccontrol(1).  Note that an ASLR mode change takes effect upon address
+     space change, i.e., upon execve(2).
+
+     Global controls for 32-bit processes:
+
+     _k_e_r_n_._e_l_f_3_2_._a_s_l_r_._e_n_a_b_l_e      Enable ASLR for 32-bit ELF binaries, other
+                                 than Position Independent Exectutable (PIE)
+                                 binaries.
+
+     _k_e_r_n_._e_l_f_3_2_._a_s_l_r_._p_i_e___e_n_a_b_l_e  Enable ASLR for 32-bit Position Independent
+                                 Executable (PIE) ELF binaries.
+
+     _k_e_r_n_._e_l_f_3_2_._a_s_l_r_._h_o_n_o_r___s_b_r_k  Reserve the legacy sbrk(2) region for compat‐
+                                 ibility with older binaries.
+
+     _k_e_r_n_._e_l_f_3_2_._a_s_l_r_._s_t_a_c_k       Randomize the stack location for 32-bit ELF
+                                 binaries.
+
+     Global controls for 64-bit processes:
+
+     _k_e_r_n_._e_l_f_6_4_._a_s_l_r_._e_n_a_b_l_e      Enable ASLR for 64-bit ELF binaries, other
+                                 than Position Independent Exectutable (PIE)
+                                 binaries.
+
+     _k_e_r_n_._e_l_f_6_4_._a_s_l_r_._p_i_e___e_n_a_b_l_e  Enable ASLR for 64-bit Position Independent
+                                 Executable (PIE) ELF binaries.
+
+     _k_e_r_n_._e_l_f_6_4_._a_s_l_r_._h_o_n_o_r___s_b_r_k  Reserve the legacy sbrk(2) region for compat‐
+                                 ibility with older binaries.
+
+     _k_e_r_n_._e_l_f_6_4_._a_s_l_r_._s_t_a_c_k       Randomize the stack location for 64-bit ELF
+                                 binaries.
+
+     To execute a command with ASLR enabled or disabled:
+
+     proccontrol --mm _a_s_l_r [--ss _e_n_a_b_l_e | _d_i_s_a_b_l_e] _c_o_m_m_a_n_d
+
+   PPoossiittiioonn IInnddeeppeennddeenntt EExxeeccuuttaabbllee ((PPIIEE))
+     PIE binaries are executable files that do not have a fixed load address.
+     They can be loaded at an arbitrary memory address by the rtld(1) run-time
+     linker.  With ASLR they are loaded at a random address on each execution.
+
+   WWrriittee XXOORR EExxeeccuuttee ppaaggee pprrootteeccttiioonn ppoolliiccyy
+     Write XOR Execute (W^X) is a vulnerability mitigation strategy that
+     strengthens the security of the system by controlling memory access per‐
+     missions.
+
+     Under the W^X mitigation, memory pages may be writable (W) or executable
+     (E), but not both at the same time.  This means that code execution is
+     prevented in areas of memory that are designated as writable, and writing
+     or modification of memory is restricted in areas marked for execution.
+     Applications that perform Just In Time (JIT) compilation need to be
+     adapted to be compatible with W^X.
+
+     There are separate sysctl(8) knobs to control W^X policy enforcement for
+     32- and 64-bit processes.  The W^X policy is enabled by setting the ap‐
+     propriate allow_wx sysctl to 0.
+
+     _k_e_r_n_._e_l_f_3_2_._a_l_l_o_w___w_x  Allow 32-bit processes to map pages simultaneously
+                          writable and executable.
+
+     _k_e_r_n_._e_l_f_6_4_._a_l_l_o_w___w_x  Allow 64-bit processes to map pages simultaneously
+                          writable and executable.
+
+   PPRROOTT__MMAAXX
+     PROT_MAX is a FreeBSD-specific extension to mmap(2).  PROT_MAX provides
+     the ability to set the maximum protection of a region allocated by
+     mmap(2) and later altered by mprotect(2).  For example, memory allocated
+     originally with an mmap prot argument of PROT_MAX(PROT_READ | PROT_WRITE)
+     | PROT_READ may be made writable by a future mprotect(2) call, but may
+     not be made executable.
+
+   RReellooccaattiioonn RReeaadd--OOnnllyy ((RREELLRROO))
+     Relocation Read-Only (RELRO) is a mitigation tool that makes certain por‐
+     tions of a program's address space that contain ELF metadata read-only,
+     after relocation processing by rtld(1).
+
+     When enabled in isolation the RELRO option provides _p_a_r_t_i_a_l _R_E_L_R_O sup‐
+     port.  In this case the Procedure Linkage Table (PLT)-related part of the
+     Global Offset Table (GOT) (in the section typically named .got.plt) re‐
+     mains writable.
+
+     RELRO is enabled by default.  The src.conf(5) build-time option
+     _W_I_T_H_O_U_T___R_E_L_R_O may be used to disable it.
+
+   BBIINNDD__NNOOWW
+     The _W_I_T_H___B_I_N_D___N_O_W src.conf(5) build-time option causes binaries to be
+     built with the DF_BIND_NOW flag set.  The run-time loader rtld(1) will
+     then perform all relocation processing when the process starts, instead
+     of on demand (on the first access to each symbol).
+
+     When enabled in combination with RELRO (which is enabled by default) this
+     provides _f_u_l_l _R_E_L_R_O.  The entire GOT (.got and .got.plt) are made read-
+     only at program startup, preventing attacks on the relocation table.
+     Note that this results in a nonstandard Application Binary Interface
+     (ABI), and it is possible that some applications may not function cor‐
+     rectly.
+
+   SSttaacckk OOvveerrffllooww PPrrootteeccttiioonn
+     FreeBSD supports stack overflow protection using the Stack Smashing Pro‐
+     tector (SSP) compiler feature.  In userland, SSP adds a per-process ran‐
+     domized canary at the end of every stack frame which is checked for cor‐
+     ruption upon return from the function.  In the kernel, a single random‐
+     ized canary is used globally except on aarch64, which has a PERTHREAD_SSP
+     config(8) option to enable per-thread randomized canaries.  If stack cor‐
+     ruption is detected, then the process aborts to avoid potentially mali‐
+     cious execution as a result of the corruption.  SSP may be enabled or
+     disabled when building FreeBSD base with the src.conf(5) SSP knob.
+
+     When _W_I_T_H___S_S_P is enabled, which is the default, world is built with the
+     --ffssttaacckk--pprrootteeccttoorr--ssttrroonngg compiler option.  The kernel is built with the
+     --ffssttaacckk--pprrootteeccttoorr option.
+
+     In addition to SSP, a “FORTIFY_SOURCE” implementation is supported up to
+     level 2 by defining ___F_O_R_T_I_F_Y___S_O_U_R_C_E to 1 or 2 before including any
+     FreeBSD headers.  FreeBSD world builds can set _F_O_R_T_I_F_Y___S_O_U_R_C_E to provide
+     a default value for ___F_O_R_T_I_F_Y___S_O_U_R_C_E.  When enabled, “FORTIFY_SOURCE” en‐
+     ables extra bounds checking in various functions that accept buffers to
+     be written into.  These functions currently have extra bounds checking
+     support:
+
+           bbccooppyy()      bbzzeerroo()     ffggeettss()     ggeettccwwdd()      ggeettss()
+           mmeemmccppyy()     mmeemmmmoovvee()   mmeemmsseett()    rreeaadd()        rreeaaddlliinnkk()
+           ssnnpprriinnttff()   sspprriinnttff()   ssttppccppyy()    ssttppnnccppyy()     ssttrrccaatt()
+           ssttrrccppyy()     ssttrrnnccaatt()   ssttrrnnccppyy()   vvssnnpprriinnttff()   vvsspprriinnttff()
+
+     “FORTIFY_SOURCE” requires compiler support from clang(1) or gcc(1), which
+     provide the __builtin_object_size(3) function that is used to determine
+     the bounds of an object.  This feature works best at optimization levels
+     --OO11 and above, as some object sizes may be less obvious without some data
+     that the compiler would collect in an optimization pass.
+
+     Similar to SSP, violating the bounds of an object will cause the program
+     to abort in an effort to avoid malicious execution.  This effectively
+     provides finer-grained protection than SSP for some class of function and
+     system calls, along with some protection for buffers allocated as part of
+     the program data.
+
+   SSuuppeerrvviissoorr mmooddee mmeemmoorryy pprrootteeccttiioonn
+     Certain processors include features that prevent unintended access to
+     memory pages accessible to userspace (non-privileged) code, while in a
+     privileged mode.  One feature prevents execution, intended to mitigate
+     exploitation of kernel vulnerabilities from userland.  Another feature
+     prevents unintended reads from or writes to user space memory from the
+     kernel.  This also provides effective protection against NULL pointer
+     dereferences from kernel.
+
+           AArrcchhiitteeccttuurree    FFeeaattuurree    AAcccceessss TTyyppee PPrreevveenntteedd
+           amd64           SMAP       Read / Write
+           amd64           SMEP       Execute
+           arm64           PAN        Read / Write
+           arm64           PXN        Execute
+           riscv           SUM        Read / Write
+           riscv           -          Execute
+
+     These features are automatically used by the kernel.  There is no user-
+     facing configuration.
+
+   CCaappssiiccuumm
+     Capsicum is a lightweight OS capability and sandbox framework.  See
+     capsicum(4) for more information.
+
+HHAARRDDWWAARREE VVUULLNNEERRAABBIILLIITTYY MMIITTIIGGAATTIIOONNSS
+   FFiirrmmwwaarree aanndd MMiiccrrooccooddee
+     Recent years have seen an unending stream of new hardware vulnerabili‐
+     ties, notably CPU ones generally caused by detectable microarchitectural
+     side-effects of speculative execution which leak private data from some
+     other thread or process or sometimes even internal CPU state that is nor‐
+     mally inaccessible.  Hardware vendors usually address these vulnerabili‐
+     ties as they are discovered by releasing microcode updates, which may
+     then be bundled into platform firmware updates (historically called BIOS
+     updates for PCs) or packages to be updated by the operating system at
+     boot time.
+
+     Platform firmware updates, if available from the manufacturer, are the
+     best defense as they provide coverage during early boot.  Install them
+     with _s_y_s_u_t_i_l_s_/_f_l_a_s_h_r_o_m from the FreeBSD Ports Collection.
+
+     If platform firmware updates are no longer available, packaged microcode
+     is available for installation at _s_y_s_u_t_i_l_s_/_c_p_u_-_m_i_c_r_o_c_o_d_e and can be loaded
+     at runtime using loader.conf(5), see the package message for more de‐
+     tails.
+
+     The best defense overall against hardware vulnerabilities is to timely
+     apply these updates when available, as early as possible in the boot
+     process, and to disable the affected hardware's problematic functionali‐
+     ties when possible (e.g., CPU Simultaneous Multi-Threading).  Software
+     mitigations are only partial substitutes for these, but they can be help‐
+     ful on out-of-support hardware or as complements for just-discovered vul‐
+     nerabilities not yet addressed by vendors.  Some software mitigations de‐
+     pend on hardware capabilities provided by a microcode update.
+
+   AArrcchhiitteeccttuurraall VVuullnneerraabbiilliittyy MMiittiiggaattiioonnss
+     FreeBSD's usual policy is to apply by default all OS-level mitigations
+     that do not require recompilation, except those the particular hardware
+     it is running on is known not to be vulnerable to (which sometimes
+     requires firmware updates), or those that are extremely detrimental to
+     performance in proportion to the protection they actually provide.  OS-
+     level mitigations generally can have noticeable performance impacts on
+     specific workloads.  If your threat model allows it, you may want to try
+     disabling some of them in order to possibly get better performance.  Con‐
+     versely, minimizing the risks may require you to explicitly enable the
+     most expensive ones.  The description of each vulnerability/mitigation
+     indicates whether it is enabled or disabled by default and under which
+     conditions.  It also lists the knobs to tweak to force a particular sta‐
+     tus.
+
+   ZZeennbblleeeedd
+     The “Zenbleed” vulnerability exclusively affects AMD processors based on
+     the Zen2 microarchitecture.  In contrast with, e.g., Meltdown and the
+     different variants of Spectre, which leak data by leaving microarchitec‐
+     tural traces, Zenbleed is a genuine hardware bug affecting the CPU's ar‐
+     chitectural state.  With particular sequences of instructions whose last
+     ones are mispredicted by speculative execution, it is possible to make
+     appear in an XMM register data previously put in some XMM register by
+     some preceding or concurrent task executing on the same physical core
+     (disabling Simultaneous Muti-Threading (SMT) is thus not a sufficient
+     protection).
+
+     According to the vulnerability's discoverer, all Zen2-based processors
+     are affected (see hhttttppss::////lloocckk..ccmmppxxcchhgg88bb..ccoomm//zzeennbblleeeedd..hhttmmll).  As of Au‐
+     gust 2023, AMD has not publicly listed any corresponding errata but has
+     issued a security bulletin (AMD-SB-7008) entitled “Cross-Process
+     Information Leak” indicating that platform firmware fixing the vulnera‐
+     bility will be distributed to manufacturers no sooner than the end of
+     2023, except for Rome processors for which it is already available.  No
+     standalone CPU microcodes have been announced so far.  The only readily-
+     applicable fix mentioned by the discoverer is to set a bit of an undocu‐
+     mented MSR, which reportedly completely stops XMM register leaks.
+
+     FreeBSD currently sets this bit by default on all Zen2 processors.  In
+     the future, it might set it by default only on those Zen2 processors
+     whose microcode has not been updated to revisions fixing the vulnerabil‐
+     ity, once such microcode updates have been actually released and commu‐
+     nity-tested.  To this mitigation are associated the following knobs:
+
+     _m_a_c_h_d_e_p_._m_i_t_i_g_a_t_i_o_n_s_._z_e_n_b_l_e_e_d_._e_n_a_b_l_e
+             A read-write integer tunable and sysctl indicating whether the
+             mitigation should be forcibly disabled (0), enabled (1) or if it
+             is left to FreeBSD to selectively apply it (2).  Any other inte‐
+             ger value is silently converted to and treated as value 2.  Note
+             that this setting is silently ignored when running on non-Zen2
+             processors to ease applying a common configuration to heteroge‐
+             neous machines.
+
+     _m_a_c_h_d_e_p_._m_i_t_i_g_a_t_i_o_n_s_._z_e_n_b_l_e_e_d_._s_t_a_t_e
+             A read-only string indicating the current mitigation state.  It
+             can be either “Not applicable”, if the processor is not
+             Zen2-based, “Mitigation enabled” or “Mitigation disabled”.  This
+             state is automatically updated each time the sysctl
+             _m_a_c_h_d_e_p_._m_i_t_i_g_a_t_i_o_n_s_._z_e_n_b_l_e_e_d_._e_n_a_b_l_e is written to.  Note that it
+             can become inaccurate if the chicken bit is set or cleared di‐
+             rectly via cpuctl(4) (which includes the cpucontrol(8) utility).
+
+     The performance impact and threat models related to these mitigations
+     should be considered when configuring and deploying them in a FreeBSD
+     system.
+
+     Additional mitigation knobs are listed in the _K_N_O_B_S _A_N_D _T_W_E_A_K_S section of
+     security(7).
+
+SSEEEE AALLSSOO
+     elfctl(1), proccontrol(1), rtld(1), mmap(2), src.conf(5), sysctl.conf(5),
+     security(7), cpucontrol(8), sysctl(8)
+
+BSD                              June 1, 2024                              BSD

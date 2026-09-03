@@ -1,0 +1,231 @@
+_s_y_s_c_a_l_l(2)                    System Calls Manual                   _s_y_s_c_a_l_l(2)
+
+NNAAMMEE
+       syscall - indirect system call
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       lloonngg ssyyssccaallll((lloonngg _n_u_m_b_e_r,, ......));;
+
+   Feature Test Macro Requirements for glibc (see ffeeaattuurree__tteesstt__mmaaccrrooss(7)):
+
+       ssyyssccaallll():
+           Since glibc 2.19:
+               _DEFAULT_SOURCE
+           Before glibc 2.19:
+               _BSD_SOURCE || _SVID_SOURCE
+
+DDEESSCCRRIIPPTTIIOONN
+       ssyyssccaallll()  is  a  small  library  function that invokes the system call
+       whose assembly language interface has the  specified  _n_u_m_b_e_r  with  the
+       specified  arguments.  Employing ssyyssccaallll() is useful, for example, when
+       invoking a system call that has no wrapper function in the C library.
+
+       ssyyssccaallll() saves CPU registers before making the system  call,  restores
+       the  registers  upon  return from the system call, and stores any error
+       returned by the system call in eerrrrnnoo(3).
+
+       Symbolic constants for system call numbers can be found in  the  header
+       file _<_s_y_s_/_s_y_s_c_a_l_l_._h_>.
+
+RREETTUURRNN VVAALLUUEE
+       The  return value is defined by the system call being invoked.  In gen‐
+       eral, a 0 return value indicates success.  A -1 return value  indicates
+       an error, and an error number is stored in _e_r_r_n_o.
+
+EERRRROORRSS
+       EENNOOSSYYSS The requested system call number is not implemented.
+
+       Other errors are specific to the invoked system call.
+
+NNOOTTEESS
+       ssyyssccaallll() first appeared in 4BSD.
+
+   AArrcchhiitteeccttuurree‐‐ssppeecciiffiicc rreeqquuiirreemmeennttss
+       Each architecture ABI has its own requirements on how system call argu‐
+       ments  are  passed  to  the kernel.  For system calls that have a glibc
+       wrapper (e.g., most system calls), glibc handles the details of copying
+       arguments to the right registers in a manner suitable for the architec‐
+       ture.  However, when using ssyyssccaallll() to make a system call, the  caller
+       might  need  to handle architecture‐dependent details; this requirement
+       is most commonly encountered on certain 32‐bit architectures.
+
+       For example, on the ARM architecture  Embedded  ABI  (EABI),  a  64‐bit
+       value  (e.g.,  _l_o_n_g  _l_o_n_g)  must  be  aligned to an even register pair.
+       Thus, using ssyyssccaallll() instead of the wrapper  provided  by  glibc,  the
+       rreeaaddaahheeaadd(2)  system call would be invoked as follows on the ARM archi‐
+       tecture with the EABI in little endian mode:
+
+           syscall(SYS_readahead, fd, 0,
+                   (unsigned int) (offset & 0xFFFFFFFF),
+                   (unsigned int) (offset >> 32),
+                   count);
+
+       Since the offset argument is 64 bits, and the first  argument  (_f_d)  is
+       passed in _r_0, the caller must manually split and align the 64‐bit value
+       so  that it is passed in the _r_2/_r_3 register pair.  That means inserting
+       a dummy value into _r_1 (the second argument of 0).  Care  also  must  be
+       taken  so that the split follows endian conventions (according to the C
+       ABI for the platform).
+
+       Similar issues can occur on MIPS with  the  O32  ABI,  on  PowerPC  and
+       parisc with the 32‐bit ABI, and on Xtensa.
+
+       Note  that  while the parisc C ABI also uses aligned register pairs, it
+       uses a shim layer to hide the issue from user space.
+
+       The  affected  system  calls   are   ffaaddvviissee6644__6644(2),   ffttrruunnccaattee6644(2),
+       ppoossiixx__ffaaddvviissee(2),      pprreeaadd6644(2),      ppwwrriittee6644(2),      rreeaaddaahheeaadd(2),
+       ssyynncc__ffiillee__rraannggee(2), and ttrruunnccaattee6644(2).
+
+       This does not affect syscalls that manually split and  assemble  64‐bit
+       values  such  as  __llllsseeeekk(2),  pprreeaaddvv(2),  pprreeaaddvv22(2),  ppwwrriitteevv(2), and
+       ppwwrriitteevv22(2).  Welcome to the wonderful world of historical baggage.
+
+   AArrcchhiitteeccttuurree ccaalllliinngg ccoonnvveennttiioonnss
+       Every architecture has its own way of invoking and passing arguments to
+       the kernel.  The details for various architectures are  listed  in  the
+       two tables below.
+
+       The first table lists the instruction used to transition to kernel mode
+       (which  might  not be the fastest or best way to transition to the ker‐
+       nel, so you might have to refer to vvddssoo(7)), the register used to indi‐
+       cate the system call number, the register(s) used to return the  system
+       call   result,   and   the   register   used   to   signal   an  error.
+       l2   l2   l2   l2   l1   l2   l.          Arch/ABI  Instruction    Sys‐
+       tem    Ret  Ret  Error     Notes            call  #    val  val2  _ al‐
+       pha     callsys   v0   v0   a4   a3   1,                              6
+       arc  trap0     r8   r0   ‐    ‐                           arm/OABI  swi
+       NR    ‐    r0   ‐    ‐    2    arm/EABI  swi     0x0   r7   r0   r1   ‐
+       arm64     svc           #0   w8   x0   x1   ‐           blackfin  excpt
+       0x0 P0   R0   ‐    ‐   i386 int    $0x80 eax  eax  edx  ‐    ia64 break
+       0x100000 r15  r8   r9   r10  1,  6 loongarch syscall 0 a7   a0   ‐    ‐
+       m68k trap           #0   d0   d0   ‐    ‐           microblaze     brki
+       r14,8     r12  r3   ‐    ‐    mips syscall   v0   v0   v1   a3   1,   6
+       nios2     trap r2   r2   ‐    r7       parisc    ble        0x100(%sr2,
+       %r0)     r20  r28  ‐    ‐   powerpc   sc   r0   r3   ‐    r0   1   pow‐
+       erpc64 sc   r0   r3   ‐    cr0.SO    1
+       riscv     ecall     a7   a0   a1   ‐                           s390 svc
+       0     r1   r2   r3   ‐    3  s390x     svc  0     r1   r2   r3   ‐    3
+       superh    trapa    #31     r3   r0   r1   ‐    4,     6     sparc/32  t
+       0x10    g1   o0   o1   psr/csr   1,            6            sparc/64  t
+       0x6d    g1   o0   o1   psr/csr   1,                                   6
+       tile swint1    R10  R00  ‐    R01  1
+       x86‐64    syscall   eax  rax  rdx  ‐    5
+       x32  syscall   eax  rax  rdx  ‐    5
+       xtensa    syscall   a2   a2   ‐    ‐
+
+       Notes:
+
+       •  On  a few architectures, a register is used as a boolean (0 indicat‐
+          ing no error, and -1 indicating an error) to signal that the  system
+          call  failed.   The actual error value is still contained in the re‐
+          turn register.  On sparc, the carry bit (_c_s_r) in the processor  sta‐
+          tus  register  (_p_s_r)  is  used  instead of a full register.  On pow‐
+          erpc64, the summary overflow bit (_S_O) in field 0  of  the  condition
+          register (_c_r_0) is used.
+
+       •  _N_R is the system call number.
+
+       •  For  s390  and  s390x, _N_R (the system call number) may be passed di‐
+          rectly with _s_v_c _N_R if it is less than 256.
+
+       •  On SuperH additional trap numbers are supported  for  historic  rea‐
+          sons, but ttrraappaa#31 is the recommended "unified" ABI.
+
+       •  The x32 ABI shares syscall table with x86‐64 ABI, but there are some
+          nuances:
+
+          •  In  order  to indicate that a system call is called under the x32
+             ABI, an additional bit, ____XX3322__SSYYSSCCAALLLL__BBIITT, is bitwise  ORed  with
+             the  system  call number.  The ABI used by a process affects some
+             process behaviors,  including  signal  handling  or  system  call
+             restarting.
+
+          •  Since x32 has different sizes for _l_o_n_g and pointer types, layouts
+             of some (but not all; _s_t_r_u_c_t _t_i_m_e_v_a_l or _s_t_r_u_c_t _r_l_i_m_i_t are 64‐bit,
+             for  example) structures are different.  In order to handle this,
+             additional system calls are  added  to  the  system  call  table,
+             starting  from  number  512 (without the ____XX3322__SSYYSSCCAALLLL__BBIITT).  For
+             example, ____NNRR__rreeaaddvv is defined as 19 for the x86‐64  ABI  and  as
+             _____X_3_2___S_Y_S_C_A_L_L___B_I_T  |  551155  for  the x32 ABI.  Most of these addi‐
+             tional system calls are actually identical to  the  system  calls
+             used  for  providing  i386 compat.  There are some notable excep‐
+             tions, however, such as pprreeaaddvv22(2), which uses _s_t_r_u_c_t _i_o_v_e_c enti‐
+             ties with 4‐byte pointers and  sizes  ("compat_iovec"  in  kernel
+             terms),  but  passes  an 8‐byte _p_o_s argument in a single register
+             and not two, as is done in every other ABI.
+
+       •  Some architectures (namely, Alpha, IA‐64,  MIPS,  SuperH,  sparc/32,
+          and sparc/64) use an additional register ("Retval2" in the above ta‐
+          ble)  to  pass  back  a  second return value from the ppiippee(2) system
+          call; Alpha uses this technique in the  architecture‐specific  ggeettxx‐‐
+          ppiidd(2),  ggeettxxuuiidd(2), and ggeettxxggiidd(2) system calls as well.  Other ar‐
+          chitectures do not use the second return value register in the  sys‐
+          tem call interface, even if it is defined in the System V ABI.
+
+       The second table shows the registers used to pass the system call argu‐
+       ments.                       l    l2   l2   l2   l2   l2   l2   l2   l.
+       Arch/ABI  arg1 arg2 arg3 arg4 arg5 arg6 arg7 Notes        _         al‐
+       pha     a0   a1   a2   a3   a4   a5   ‐
+       arc  r0   r1   r2   r3   r4   r5   ‐
+       arm/OABI  r0   r1   r2   r3   r4   r5   r6
+       arm/EABI  r0   r1   r2   r3   r4   r5   r6
+       arm64     x0   x1   x2   x3   x4   x5   ‐                        black‐
+       fin  R0   R1   R2   R3   R4   R5   ‐
+       i386 ebx  ecx  edx  esi  edi  ebp  ‐
+       ia64 out0 out1 out2 out3 out4 out5 ‐                              loon‐
+       garch a0   a1   a2   a3   a4   a5   a6
+       m68k d1   d2   d3   d4   d5   a0   ‐                            microb‐
+       laze     r5   r6   r7   r8   r9   r10  ‐
+       mips/o32  a0   a1   a2   a3   ‐    ‐    ‐    1
+       mips/n32,64    a0   a1   a2   a3   a4   a5   ‐
+       nios2     r4   r5   r6   r7   r8   r9   ‐
+       parisc    r26  r25  r24  r23  r22  r21  ‐                          pow‐
+       erpc   r3   r4   r5   r6   r7   r8   r9                            pow‐
+       erpc64 r3   r4   r5   r6   r7   r8   ‐
+       riscv     a0   a1   a2   a3   a4   a5   ‐
+       s390 r2   r3   r4   r5   r6   r7   ‐
+       s390x     r2   r3   r4   r5   r6   r7   ‐                           su‐
+       perh    r4   r5   r6   r7   r0   r1   r2
+       sparc/32  o0   o1   o2   o3   o4   o5   ‐
+       sparc/64  o0   o1   o2   o3   o4   o5   ‐
+       tile R00  R01  R02  R03  R04  R05  ‐
+       x86‐64    rdi  rsi  rdx  r10  r8   r9   ‐
+       x32  rdi  rsi  rdx  r10  r8   r9   ‐
+       xtensa    a6   a3   a4   a5   a8   a9   ‐
+
+       Notes:
+
+       •  The  mips/o32 system call convention passes arguments 5 through 8 on
+          the user stack.
+
+       Note that these tables don’t cover the entire  calling  convention—some
+       architectures  may  indiscriminately clobber other registers not listed
+       here.
+
+EEXXAAMMPPLLEESS
+       #define _GNU_SOURCE
+       #include <signal.h>
+       #include <sys/syscall.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       int
+       main(void)
+       {
+           pid_t tid;
+
+           tid = syscall(SYS_gettid);
+           syscall(SYS_tgkill, getpid(), tid, SIGHUP);
+       }
+
+SSEEEE AALLSSOO
+       __ssyyssccaallll(2), iinnttrroo(2), ssyyssccaallllss(2), eerrrrnnoo(3), vvddssoo(7)
+
+Linux man‐pages (unreleased)      2025‐05‐22                        _s_y_s_c_a_l_l(2)

@@ -1,0 +1,166 @@
+IBV_GET_CQ_EVENT(3)     Libibverbs Programmer's Manual     IBV_GET_CQ_EVENT(3)
+
+
+
+NNAAMMEE
+       ibv_get_cq_event,  ibv_ack_cq_events  -  get and acknowledge completion
+       queue (CQ) events
+
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<iinnffiinniibbaanndd//vveerrbbss..hh>>
+
+       iinntt iibbvv__ggeett__ccqq__eevveenntt((ssttrruucctt iibbvv__ccoommpp__cchhaannnneell _*_c_h_a_n_n_e_l,,
+                            ssttrruucctt iibbvv__ccqq _*_*_c_q,, vvooiidd _*_*_c_q___c_o_n_t_e_x_t));;
+
+       vvooiidd iibbvv__aacckk__ccqq__eevveennttss((ssttrruucctt iibbvv__ccqq _*_c_q,, uunnssiiggnneedd iinntt _n_e_v_e_n_t_s));;
+
+
+DDEESSCCRRIIPPTTIIOONN
+       iibbvv__ggeett__ccqq__eevveenntt(()) waits for the next completion event in  the  comple‐
+       tion  event  channel  _c_h_a_n_n_e_l.  Fills the arguments _c_q with the CQ that
+       got the event and _c_q___c_o_n_t_e_x_t with the CQ's context.
+
+       iibbvv__aacckk__ccqq__eevveennttss(()) acknowledges _n_e_v_e_n_t_s events on the CQ _c_q.
+
+
+RREETTUURRNN VVAALLUUEE
+       iibbvv__ggeett__ccqq__eevveenntt(()) returns 0 on success, and -1 on error.
+
+       iibbvv__aacckk__ccqq__eevveennttss(()) returns no value.
+
+NNOOTTEESS
+       All completion events that iibbvv__ggeett__ccqq__eevveenntt(()) returns must be  acknowl‐
+       edged  using iibbvv__aacckk__ccqq__eevveennttss(()).  To avoid races, destroying a CQ will
+       wait for all completion events to be acknowledged;  this  guarantees  a
+       one-to-one correspondence between acks and successful gets.
+
+       Calling  iibbvv__aacckk__ccqq__eevveennttss(())  may  be relatively expensive in the data‐
+       path, since it must take a mutex.  Therefore it may be better to  amor‐
+       tize  this  cost by keeping a count of the number of events needing ac‐
+       knowledgement and acking several  completion  events  in  one  call  to
+       iibbvv__aacckk__ccqq__eevveennttss(()).
+
+EEXXAAMMPPLLEESS
+       The  following  code example demonstrates one possible way to work with
+       completion events. It performs the following steps:
+
+       Stage I: Preparation
+       1. Creates a CQ
+       2. Requests for notification upon a new (first) completion event
+
+       Stage II: Completion Handling Routine
+       3. Wait for the completion event and ack it
+       4. Request for notification upon the next completion event
+       5. Empty the CQ
+
+       Note that an extra event may be triggered without having a  correspond‐
+       ing  completion  entry in the CQ.  This occurs if a completion entry is
+       added to the CQ between Step 4 and Step 5, and the CQ is  then  emptied
+       (polled) in Step 5.
+
+       cq = ibv_create_cq(ctx, 1, ev_ctx, channel, 0);
+       if (!cq) {
+               fprintf(stderr, "Failed to create CQ\n");
+               return 1;
+       }
+
+       /* Request notification before any completion can be created */
+       if (ibv_req_notify_cq(cq, 0)) {
+               fprintf(stderr, "Couldn't request CQ notification\n");
+               return 1;
+       }
+
+       .
+       .
+       .
+
+       /* Wait for the completion event */
+       if (ibv_get_cq_event(channel, &ev_cq, &ev_ctx)) {
+               fprintf(stderr, "Failed to get cq_event\n");
+               return 1;
+       }
+
+       /* Ack the event */
+       ibv_ack_cq_events(ev_cq, 1);
+
+       /* Request notification upon the next completion event */
+       if (ibv_req_notify_cq(ev_cq, 0)) {
+               fprintf(stderr, "Couldn't request CQ notification\n");
+               return 1;
+       }
+
+       /* Empty the CQ: poll all of the completions from the CQ (if any exist) */
+       do {
+               ne = ibv_poll_cq(cq, 1, &wc);
+               if (ne < 0) {
+                       fprintf(stderr, "Failed to poll completions from the CQ\n");
+                       return 1;
+               }
+
+               /* there may be an extra event with no completion in the CQ */
+               if (ne == 0)
+                       continue;
+
+               if (wc.status != IBV_WC_SUCCESS) {
+                       fprintf(stderr, "Completion with status 0x%x was found\n", wc.status);
+                       return 1;
+               }
+       } while (ne);
+
+       The  following  code example demonstrates one possible way to work with
+       completion events in non-blocking  mode.   It  performs  the  following
+       steps:
+
+       1. Set the completion event channel to be non-blocked
+       2. Poll the channel until there it has a completion event
+       3. Get the completion event and ack it
+
+       /* change the blocking mode of the completion channel */
+       flags = fcntl(channel->fd, F_GETFL);
+       rc = fcntl(channel->fd, F_SETFL, flags | O_NONBLOCK);
+       if (rc < 0) {
+            fprintf(stderr, "Failed to change file descriptor of completion event channel\n");
+            return 1;
+       }
+
+
+       /*
+        * poll the channel until it has an event and sleep ms_timeout
+        * milliseconds between any iteration
+        */
+       my_pollfd.fd      = channel->fd;
+       my_pollfd.events  = POLLIN;
+       my_pollfd.revents = 0;
+
+       do {
+            rc = poll(&my_pollfd, 1, ms_timeout);
+       } while (rc == 0);
+       if (rc < 0) {
+            fprintf(stderr, "poll failed\n");
+            return 1;
+       }
+       ev_cq = cq;
+
+       /* Wait for the completion event */
+       if (ibv_get_cq_event(channel, &ev_cq, &ev_ctx)) {
+               fprintf(stderr, "Failed to get cq_event\n");
+               return 1;
+       }
+
+       /* Ack the event */
+       ibv_ack_cq_events(ev_cq, 1);
+
+
+SSEEEE AALLSSOO
+       iibbvv__ccrreeaattee__ccoommpp__cchhaannnneell(3),   iibbvv__ccrreeaattee__ccqq(3),   iibbvv__rreeqq__nnoottiiffyy__ccqq(3),
+       iibbvv__ppoollll__ccqq(3)
+
+
+AAUUTTHHOORRSS
+       Dotan Barak
+              <_d_o_t_a_n_b_a_@_g_m_a_i_l_._c_o_m>
+
+
+
+libibverbs                        2006-10-31               IBV_GET_CQ_EVENT(3)

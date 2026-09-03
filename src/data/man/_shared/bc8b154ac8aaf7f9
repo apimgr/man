@@ -1,0 +1,264 @@
+_P_R_O_V_I_D_E_R_‐_R_A_N_D(7)                    OpenSSL                   _P_R_O_V_I_D_E_R_‐_R_A_N_D(7)
+
+NNAAMMEE
+       provider-rand - The random number generation library <-> provider
+       functions
+
+LLIIBBRRAARRYY
+       libcrypto, ‐lcrypto
+
+SSYYNNOOPPSSIISS
+        #include <openssl/core_dispatch.h>
+        #include <openssl/core_names.h>
+
+        /*
+         * None of these are actual functions, but are displayed like this for
+         * the function signatures for functions that are offered as function
+         * pointers in OSSL_DISPATCH arrays.
+         */
+
+        /* Context management */
+        void *OSSL_FUNC_rand_newctx(void *provctx, void *parent,
+                                    const OSSL_DISPATCH *parent_calls);
+        void OSSL_FUNC_rand_freectx(void *ctx);
+
+        /* Random number generator functions: NIST */
+        int OSSL_FUNC_rand_instantiate(void *ctx, unsigned int strength,
+                                       int prediction_resistance,
+                                       const unsigned char *pstr, size_t pstr_len,
+                                       const OSSL_PARAM params[]);
+        int OSSL_FUNC_rand_uninstantiate(void *ctx);
+        int OSSL_FUNC_rand_generate(void *ctx, unsigned char *out, size_t outlen,
+                                    unsigned int strength, int prediction_resistance,
+                                    const unsigned char *addin, size_t addin_len);
+        int OSSL_FUNC_rand_reseed(void *ctx, int prediction_resistance,
+                                  const unsigned char *ent, size_t ent_len,
+                                  const unsigned char *addin, size_t addin_len);
+
+        /* Random number generator functions: additional */
+        size_t OSSL_FUNC_rand_nonce(void *ctx, unsigned char *out, size_t outlen,
+                                    int strength, size_t min_noncelen,
+                                    size_t max_noncelen);
+        size_t OSSL_FUNC_rand_get_seed(void *ctx, unsigned char **buffer,
+                                       int entropy, size_t min_len, size_t max_len,
+                                       int prediction_resistance,
+                                       const unsigned char *adin, size_t adin_len);
+        void OSSL_FUNC_rand_clear_seed(void *ctx, unsigned char *buffer, size_t b_len);
+        int OSSL_FUNC_rand_verify_zeroization(void *ctx);
+
+        /* Context Locking */
+        int OSSL_FUNC_rand_enable_locking(void *ctx);
+        int OSSL_FUNC_rand_lock(void *ctx);
+        void OSSL_FUNC_rand_unlock(void *ctx);
+
+        /* RAND parameter descriptors */
+        const OSSL_PARAM *OSSL_FUNC_rand_gettable_params(void *provctx);
+        const OSSL_PARAM *OSSL_FUNC_rand_gettable_ctx_params(void *ctx, void *provctx);
+        const OSSL_PARAM *OSSL_FUNC_rand_settable_ctx_params(void *ctx, void *provctx);
+
+        /* RAND parameters */
+        int OSSL_FUNC_rand_get_params(OSSL_PARAM params[]);
+        int OSSL_FUNC_rand_get_ctx_params(void *ctx, OSSL_PARAM params[]);
+        int OSSL_FUNC_rand_set_ctx_params(void *ctx, const OSSL_PARAM params[]);
+
+DDEESSCCRRIIPPTTIIOONN
+       This documentation is primarily aimed at provider authors. See
+       pprroovviiddeerr(7) for further information.
+
+       The RAND operation enables providers to implement random number
+       generation algorithms and random number sources and make them available
+       to applications via the API function EEVVPP__RRAANNDD(3).
+
+   CCoonntteexxtt MMaannaaggeemmeenntt FFuunnccttiioonnss
+       OOSSSSLL__FFUUNNCC__rraanndd__nneewwccttxx(()) should create and return a pointer to a
+       provider side structure for holding context information during a rand
+       operation.  A pointer to this context will be passed back in a number
+       of the other rand operation function calls.  The parameter _p_r_o_v_c_t_x is
+       the provider context generated during provider initialisation (see
+       pprroovviiddeerr(7)).  The parameter _p_a_r_e_n_t specifies another rand instance to
+       be used for seeding purposes.  If NULL and the specific instance
+       supports it, the operating system will be used for seeding.  The
+       parameter _p_a_r_e_n_t___c_a_l_l_s points to the dispatch table for _p_a_r_e_n_t.  Thus,
+       the parent need not be from the same provider as the new instance.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ffrreeeeccttxx(()) is passed a pointer to the provider side rand
+       context in the _m_c_t_x parameter.  If it receives NULL as _c_t_x value, it
+       should not do anything other than return.  This function should free
+       any resources associated with that context.
+
+   RRaannddoomm NNuummbbeerr GGeenneerraattoorr FFuunnccttiioonnss:: NNIISSTT
+       These functions correspond to those defined in NIST SP 800-90A and SP
+       800-90C.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__iinnssttaannttiiaattee(()) is used to instantiate the DRBG _c_t_x at a
+       requested security _s_t_r_e_n_g_t_h.  In addition, _p_r_e_d_i_c_t_i_o_n___r_e_s_i_s_t_a_n_c_e can be
+       requested.  Additional input _a_d_d_i_n of length _a_d_d_i_n___l_e_n bytes can
+       optionally be provided.  The parameters specified in _p_a_r_a_m_s configure
+       the DRBG and these should be processed before instantiation.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__uunniinnssttaannttiiaattee(()) is used to uninstantiate the DRBG _c_t_x.
+       After being uninstantiated, a DRBG is unable to produce output until it
+       is instantiated anew.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeenneerraattee(()) is used to generate random bytes from the
+       DRBG _c_t_x.  It will generate _o_u_t_l_e_n bytes placing them into the buffer
+       pointed to by _o_u_t.  The generated bytes will meet the specified
+       security _s_t_r_e_n_g_t_h and, if _p_r_e_d_i_c_t_i_o_n___r_e_s_i_s_t_a_n_c_e is true, the bytes will
+       be produced after reseeding from a live entropy source.  Additional
+       input _a_d_d_i_n of length _a_d_d_i_n___l_e_n bytes can optionally be provided.
+
+   RRaannddoomm NNuummbbeerr GGeenneerraattoorr FFuunnccttiioonnss:: AAddddiittiioonnaall
+       OOSSSSLL__FFUUNNCC__rraanndd__nnoonnccee(()) is used to generate a nonce of the given
+       _s_t_r_e_n_g_t_h with a length from _m_i_n___n_o_n_c_e_l_e_n to _m_a_x___n_o_n_c_e_l_e_n. If the output
+       buffer _o_u_t is NULL, the length of the nonce should be returned.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeett__sseeeedd(()) is used by deterministic generators to obtain
+       their seeding material from their parent.  The seed bytes will meet the
+       specified security level of _e_n_t_r_o_p_y bits and there will be between
+       _m_i_n___l_e_n and _m_a_x___l_e_n inclusive bytes in total.  If _p_r_e_d_i_c_t_i_o_n___r_e_s_i_s_t_a_n_c_e
+       is true, the bytes will be produced from a live entropy source.
+       Additional input _a_d_d_i_n of length _a_d_d_i_n___l_e_n bytes can optionally be
+       provided.  A pointer to the seed material is returned in _*_b_u_f_f_e_r and
+       this must be freed by a later call to OOSSSSLL__FFUUNNCC__rraanndd__cclleeaarr__sseeeedd(()).
+
+       OOSSSSLL__FFUUNNCC__rraanndd__cclleeaarr__sseeeedd(()) frees a seed _b_u_f_f_e_r of length _b___l_e_n bytes
+       which was previously allocated by OOSSSSLL__FFUUNNCC__rraanndd__ggeett__sseeeedd(()).
+
+       OOSSSSLL__FFUUNNCC__rraanndd__vveerriiffyy__zzeerrooiizzaattiioonn(()) is used to determine if the
+       internal state of the DRBG is zero.  This capability is mandated by
+       NIST as part of the self tests, it is unlikely to be useful in other
+       circumstances.
+
+   CCoonntteexxtt LLoocckkiinngg
+       When DRBGs are used by multiple threads, there must be locking employed
+       to ensure their proper operation.  Because locking introduces an
+       overhead, it is disabled by default.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__eennaabbllee__lloocckkiinngg(()) allows locking to be turned on for a
+       DRBG and all of its parent DRBGs.  From this call onwards, the DRBG can
+       be used in a thread safe manner.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__lloocckk(()) is used to lock a DRBG.  Once locked, exclusive
+       access is guaranteed.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__uunnlloocckk(()) is used to unlock a DRBG.
+
+   RRaanndd PPaarraammeetteerrss
+       See OOSSSSLL__PPAARRAAMM(3) for further details on the parameters structure used
+       by these functions.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeett__ppaarraammss(()) gets details of parameter values associated
+       with the provider algorithm and stores them in _p_a_r_a_m_s.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__sseett__ccttxx__ppaarraammss(()) sets rand parameters associated with
+       the given provider side rand context _c_t_x to _p_a_r_a_m_s.  Any parameter
+       settings are additional to any that were previously set.  Passing NULL
+       for _p_a_r_a_m_s should return true.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeett__ccttxx__ppaarraammss(()) gets details of currently set parameter
+       values associated with the given provider side rand context _c_t_x and
+       stores them in _p_a_r_a_m_s.  Passing NULL for _p_a_r_a_m_s should return true.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeettttaabbllee__ppaarraammss(()), OOSSSSLL__FFUUNNCC__rraanndd__ggeettttaabbllee__ccttxx__ppaarraammss(()),
+       and OOSSSSLL__FFUUNNCC__rraanndd__sseettttaabbllee__ccttxx__ppaarraammss(()) all return constant
+       OOSSSSLL__PPAARRAAMM(3) arrays as descriptors of the parameters that
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeett__ppaarraammss(()), OOSSSSLL__FFUUNNCC__rraanndd__ggeett__ccttxx__ppaarraammss(()), and
+       OOSSSSLL__FFUUNNCC__rraanndd__sseett__ccttxx__ppaarraammss(()) can handle, respectively.
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeettttaabbllee__ccttxx__ppaarraammss(()) and
+       OOSSSSLL__FFUUNNCC__rraanndd__sseettttaabbllee__ccttxx__ppaarraammss(()) will return the parameters
+       associated with the provider side context _c_t_x in its current state if
+       it is not NULL.  Otherwise, they return the parameters associated with
+       the provider side algorithm _p_r_o_v_c_t_x.
+
+       Parameters currently recognised by built‐in rands are as follows. Not
+       all parameters are relevant to, or are understood by all rands:
+
+       "state" (OOSSSSLL__RRAANNDD__PPAARRAAMM__SSTTAATTEE) <integer>
+           Returns the state of the random number generator.
+
+       "strength" (OOSSSSLL__RRAANNDD__PPAARRAAMM__SSTTRREENNGGTTHH) <unsigned integer>
+           Returns the bit strength of the random number generator.
+
+       For  rands  that  are also deterministic random bit generators (DRBGs),
+       these additional parameters are  recognised.  Not  all  parameters  are
+       relevant to, or are understood by all DRBG rands:
+
+       "reseed_requests" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__RREESSEEEEDD__RREEQQUUEESSTTSS) <unsigned integer>
+           Reads  or  set the number of generate requests before reseeding the
+           associated RAND ctx.
+
+       "reseed_time_interval" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__RREESSEEEEDD__TTIIMMEE__IINNTTEERRVVAALL) <integer>
+           Reads or set the number of elapsed  seconds  before  reseeding  the
+           associated RAND ctx.
+
+       "max_request" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__RREESSEEEEDD__RREEQQUUEESSTTSS) <unsigned integer>
+           Specifies  the  maximum  number of bytes that can be generated in a
+           single call to OSSL_FUNC_rand_generate.
+
+       "min_entropylen" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMIINN__EENNTTRROOPPYYLLEENN) <unsigned integer>
+       "max_entropylen" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMAAXX__EENNTTRROOPPYYLLEENN) <unsigned integer>
+           Specify the minimum and maximum number of bytes of random  material
+           that can be used to seed the DRBG.
+
+       "min_noncelen" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMIINN__NNOONNCCEELLEENN) <unsigned integer>
+       "max_noncelen" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMAAXX__NNOONNCCEELLEENN) <unsigned integer>
+           Specify  the  minimum and maximum number of bytes of nonce that can
+           be used to instantiate the DRBG.
+
+       "max_perslen" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMAAXX__PPEERRSSLLEENN) <unsigned integer>
+       "max_adinlen" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMAAXX__AADDIINNLLEENN) <unsigned integer>
+           Specify the minimum and maximum number of bytes of  personalisation
+           string that can be used with the DRBG.
+
+       "reseed_counter" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__RREESSEEEEDD__CCOOUUNNTTEERR) <unsigned integer>
+           Specifies the number of times the DRBG has been seeded or reseeded.
+
+       "digest" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__DDIIGGEESSTT) <UTF8 string>
+       "cipher" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__CCIIPPHHEERR) <UTF8 string>
+       "mac" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__MMAACC) <UTF8 string>
+           Sets  the  name of the underlying cipher, digest or MAC to be used.
+           It must name a suitable algorithm for the DRBG that’s being used.
+
+       "properties" (OOSSSSLL__DDRRBBGG__PPAARRAAMM__PPRROOPPEERRTTIIEESS) <UTF8 string>
+           Sets  the  properties  to  be  queried  when  trying  to  fetch  an
+           underlying  algorithm.   This  must  be  given  together  with  the
+           algorithm naming parameter to be considered valid.
+
+RREETTUURRNN VVAALLUUEESS
+       OOSSSSLL__FFUUNNCC__rraanndd__nneewwccttxx(()) should return the newly created  provider  side
+       rand context, or NULL on failure.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeettttaabbllee__ppaarraammss(()),  OOSSSSLL__FFUUNNCC__rraanndd__ggeettttaabbllee__ccttxx__ppaarraammss(())
+       and  OOSSSSLL__FFUUNNCC__rraanndd__sseettttaabbllee__ccttxx__ppaarraammss(())  should  return  a   constant
+       OOSSSSLL__PPAARRAAMM(3) array, or NULL if none is offered.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__nnoonnccee(()) returns the size of the generated nonce, or 0 on
+       error.
+
+       OOSSSSLL__FFUUNNCC__rraanndd__ggeett__sseeeedd(())  returns the size of the generated seed, or 0
+       on error.
+
+       All of the remaining functions should return 1  for  success  or  0  on
+       error.
+
+NNOOTTEESS
+       The  RAND  life‐cycle  is  described  in lliiffee__ccyyccllee--rraanndd(7).  Providers
+       should ensure that the various transitions listed there are  supported.
+       At   some   point  the  EVP  layer  will  begin  enforcing  the  listed
+       transitions.
+
+SSEEEE AALLSSOO
+       pprroovviiddeerr(7), RRAANNDD(7), EEVVPP__RRAANNDD(7), lliiffee__ccyyccllee--rraanndd(7), EEVVPP__RRAANNDD(3)
+
+HHIISSTTOORRYY
+       The provider RAND interface was introduced in OpenSSL 3.0.
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2020-2021 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in   the   file   LICENSE   in   the   source   distribution   or    at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐07                  _P_R_O_V_I_D_E_R_‐_R_A_N_D(7)

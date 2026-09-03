@@ -1,0 +1,467 @@
+LLVM-SYMBOLIZER(1)                   LLVM                   LLVM-SYMBOLIZER(1)
+
+
+
+NNAAMMEE
+       llvm-symbolizer - convert addresses into source code locations
+
+SSYYNNOOPPSSIISS
+       llllvvmm--ssyymmbboolliizzeerr [_o_p_t_i_o_n_s] [_a_d_d_r_e_s_s_e_s_._._.]
+
+DDEESSCCRRIIPPTTIIOONN
+       llllvvmm--ssyymmbboolliizzeerr  reads  input names and addresses from the command-line
+       and prints corresponding source code locations to standard  output.  It
+       can    also   symbolize   logs   containing   _S_y_m_b_o_l_i_z_e_r   _M_a_r_k_u_p   via
+       _-_-_f_i_l_t_e_r_-_m_a_r_k_u_p.
+
+       If no address is specified on the command-line, it reads the  addresses
+       from standard input. If no input name is specified on the command-line,
+       but addresses are, or if at any time an input value is not  recognized,
+       the input is simply echoed to the output.
+
+       Input  names  can  be  specified  together with the addresses either on
+       standard input or as positional arguments on the command-line.  By  de‐
+       fault,  input names are interpreted as object file paths. However, pre‐
+       fixing a name with BBUUIILLDDIIDD:: states that it is a  hex  build  ID  rather
+       than a path. This will look up the corresponding debug binary. For con‐
+       sistency, prefixing a name with FFIILLEE:: explicitly states that it  is  an
+       object file path (the default).
+
+       A positional argument or standard input value can be preceded by "DATA"
+       or "CODE" to indicate that the address should be symbolized as data  or
+       executable  code  respectively.  If neither is specified, "CODE" is as‐
+       sumed. DATA is symbolized as address and symbol size rather  than  line
+       number.
+
+       llllvvmm--ssyymmbboolliizzeerr  parses options from the environment variable LLLLVVMM__SSYYMM‐‐
+       BBOOLLIIZZEERR__OOPPTTSS after parsing options from the command line.  LLLLVVMM__SSYYMMBBOOLL‐‐
+       IIZZEERR__OOPPTTSS  is  primarily  useful for supplementing the command-line op‐
+       tions when llllvvmm--ssyymmbboolliizzeerr is invoked by another program or runtime.
+
+EEXXAAMMPPLLEESS
+       All of the following examples use the following two source files as in‐
+       put.  They use a mixture of C-style and C++-style linkage to illustrate
+       how these names are printed differently (see _-_-_d_e_m_a_n_g_l_e).
+
+          // test.h
+          extern "C" inline int foz() {
+            return 1234;
+          }
+
+          // test.cpp
+          #include "test.h"
+          int bar=42;
+
+          int foo() {
+            return bar;
+          }
+
+          int baz() {
+            volatile int k = 42;
+            return foz() + k;
+          }
+
+          int main() {
+            return foo() + baz();
+          }
+
+       These files are built as follows:
+
+          $ clang -g test.cpp -o test.elf
+          $ clang -g -O2 test.cpp -o inlined.elf
+
+       Example 1 - addresses and object on command-line:
+
+          $ llvm-symbolizer --obj=test.elf 0x4004d0 0x400490
+          foz
+          /tmp/test.h:1:0
+
+          baz()
+          /tmp/test.cpp:11:0
+
+       Example 2 - addresses on standard input:
+
+          $ cat addr.txt
+          0x4004a0
+          0x400490
+          0x4004d0
+          $ llvm-symbolizer --obj=test.elf < addr.txt
+          main
+          /tmp/test.cpp:15:0
+
+          baz()
+          /tmp/test.cpp:11:0
+
+          foz
+          /tmp/./test.h:1:0
+
+       Example 3 - object specified with address:
+
+          $ llvm-symbolizer "test.elf 0x400490" "FILE:inlined.elf 0x400480"
+          baz()
+          /tmp/test.cpp:11:0
+
+          foo()
+          /tmp/test.cpp:8:10
+
+          $ cat addr2.txt
+          FILE:test.elf 0x4004a0
+          inlined.elf 0x400480
+
+          $ llvm-symbolizer < addr2.txt
+          main
+          /tmp/test.cpp:15:0
+
+          foo()
+          /tmp/test.cpp:8:10
+
+       Example 4 - BUILDID and FILE prefixes:
+
+          $ llvm-symbolizer "FILE:test.elf 0x400490" "DATA BUILDID:123456789abcdef 0x601028"
+          baz()
+          /tmp/test.cpp:11:0
+
+          bar
+          6295592 4
+
+          $ cat addr3.txt
+          FILE:test.elf 0x400490
+          DATA BUILDID:123456789abcdef 0x601028
+
+          $ llvm-symbolizer < addr3.txt
+          baz()
+          /tmp/test.cpp:11:0
+
+          bar
+          6295592 4
+
+       Example 5 - CODE and DATA prefixes:
+
+          $ llvm-symbolizer --obj=test.elf "CODE 0x400490" "DATA 0x601028"
+          baz()
+          /tmp/test.cpp:11:0
+
+          bar
+          6295592 4
+
+          $ cat addr4.txt
+          CODE test.elf 0x4004a0
+          DATA inlined.elf 0x601028
+
+          $ llvm-symbolizer < addr4.txt
+          main
+          /tmp/test.cpp:15:0
+
+          bar
+          6295592 4
+
+       Example 6 - path-style options:
+
+       This example uses the same source file as above, but the source  file's
+       full  path  is  /tmp/foo/test.cpp and is compiled as follows. The first
+       case shows the default absolute path, the second --basenames,  and  the
+       third shows --relativenames.
+
+          $ pwd
+          /tmp
+          $ clang -g foo/test.cpp -o test.elf
+          $ llvm-symbolizer --obj=test.elf 0x4004a0
+          main
+          /tmp/foo/test.cpp:15:0
+          $ llvm-symbolizer --obj=test.elf 0x4004a0 --basenames
+          main
+          test.cpp:15:0
+          $ llvm-symbolizer --obj=test.elf 0x4004a0 --relativenames
+          main
+          foo/test.cpp:15:0
+
+OOPPTTIIOONNSS
+       ----aaddjjuusstt--vvmmaa <<ooffffsseett>>
+              Add  the specified offset to object file addresses when perform‐
+              ing lookups.  This can be used to perform lookups as if the  ob‐
+              ject were relocated by the offset.
+
+       ----bbaasseennaammeess,, --ss
+              Print  just  the file's name without any directories, instead of
+              the absolute path.
+
+       ----bbuuiilldd--iidd
+              Look up the object using the given  build  ID,  specified  as  a
+              hexadecimal string. Mutually exclusive with _-_-_o_b_j.
+
+       ----ccoolloorr [[==<<aallwwaayyss||aauuttoo||nneevveerr>>]]
+              Specify  whether  to use color in _-_-_f_i_l_t_e_r_-_m_a_r_k_u_p mode. Defaults
+              to aauuttoo, which detects whether standard output  supports  color.
+              Specifying ----ccoolloorr alone is equivalent to ----ccoolloorr==aallwwaayyss.
+
+       ----ddeebbuugg--ffiillee--ddiirreeccttoorryy <<ppaatthh>>
+              Provide  a  path to a directory with a _._b_u_i_l_d_-_i_d subdirectory to
+              search for debug information for stripped binaries. Multiple in‐
+              stances of this argument are searched in the order given.
+
+       ----ddeebbuuggiinnffoodd,, ----nnoo--ddeebbuuggiinnffoodd
+              Whether or not to try debuginfod lookups for debug binaries. Un‐
+              less specified, debuginfod is only enabled if libcurl  was  com‐
+              piled in (LLLLVVMM__EENNAABBLLEE__CCUURRLL) and at least one server URL was pro‐
+              vided by the environment variable DDEEBBUUGGIINNFFOODD__UURRLLSS.
+
+       ----ddeemmaannggllee,, --CC
+              Print demangled function names, if the names are  mangled  (e.g.
+              the  mangled  name ___Z_3_b_a_z_v becomes _b_a_z_(_), whilst the non-mangled
+              name _f_o_z is printed as is). Defaults to true.
+
+       ----ddwwpp <<ppaatthh>>
+              Use the specified DWP file at <<ppaatthh>> for any CUs that have split
+              DWARF debug data.
+
+       ----ffaallllbbaacckk--ddeebbuugg--ppaatthh <<ppaatthh>>
+              When a separate file contains debug data, and is referenced by a
+              GNU debug link section, use the specified path as  a  basis  for
+              locating  the  debug  data if it cannot be found relative to the
+              object.
+
+       ----ffiilltteerr--mmaarrkkuupp
+              Reads from standard input, converts contained _S_y_m_b_o_l_i_z_e_r  _M_a_r_k_u_p
+              into  human-readable  form,  and  prints the results to standard
+              output. The following markup elements are not yet supported:
+
+              • {{{{{{hheexxddiicctt}}}}}}
+
+              • {{{{{{dduummppffiillee}}}}}}
+
+              The {{{{{{bbtt}}}}}} backtrace element reports frames using the  follow‐
+              ing syntax:
+
+              ##<<nnuummbbeerr>>[[..<<iinnlliinnee>>]]  <<aaddddrreessss>>  <<ffuunnccttiioonn>>  <<ffiillee>>::<<lliinnee>>::<<ccooll>>
+              ((<<mmoodduullee>>++<<rreellaattiivvee aaddddrreessss>>))
+
+              <<iinnlliinnee>> provides frame  numbers  for  calls  inlined  into  the
+              caller  coresponding to <<nnuummbbeerr>>. The inlined call numbers start
+              at 1 and increase from callee to caller.
+
+              <<aaddddrreessss>> is an address inside the call instruction to the func‐
+              tion.   The  address  may  not  be the start of the instruction.
+              <<rreellaattiivvee aaddddrreessss>> is the corresponding virtual  offset  in  the
+              <<mmoodduullee>> loaded at that address.
+
+       ----ffuunnccttiioonnss [[==<<nnoonnee||sshhoorrtt||lliinnkkaaggee>>]],, --ff
+              Specify  the way function names are printed (omit function name,
+              print short function name, or print full linkage  name,  respec‐
+              tively). Defaults to lliinnkkaaggee.
+
+       ----hheellpp,, --hh
+              Show help and usage for this command.
+
+       ----iinnlliinniinngg,, ----iinnlliinneess,, --ii
+              If  a source code location is in an inlined function, prints all
+              the inlined frames. This is the default.
+
+       ----nnoo--iinnlliinneess
+              Don't print inlined frames.
+
+       ----nnoo--ddeemmaannggllee
+              Don't print demangled function names.
+
+       ----oobbjj <<ppaatthh>>,, ----eexxee,, --ee
+              Path to object file to be symbolized. If --  is  specified,  read
+              the object directly from the standard input stream. Mutually ex‐
+              clusive with _-_-_b_u_i_l_d_-_i_d.
+
+       ----oouuttppuutt--ssttyyllee <<LLLLVVMM||GGNNUU||JJSSOONN>>
+              Specify the preferred output style. Defaults to LLLLVVMM.  When  the
+              output  style is set to GGNNUU, the tool follows the style of GNU's
+              aaddddrr22lliinnee.  The differences from the LLLLVVMM style are:
+
+              • Does not print the column of a source code location.
+
+              • Does not add an empty line after the report for an address.
+
+              • Does not replace the name of an inlined function with the name
+                of the topmost caller when inlined frames are not shown.
+
+              • Prints  an  address's  debug-data  discriminator  when  it  is
+                non-zero. One way to produce discriminators is to compile with
+                clang's -fdebug-info-for-profiling.
+
+              JJSSOONN  ssttyyllee  pprroovviiddeess  aa mmaacchhiinnee rreeaaddaabbllee oouuttppuutt iinn JJSSOONN.. IIff aadd‐‐
+              ddrreesssseess aarree
+                     supplied via stdin, the output JSON will be a  series  of
+                     individual  objects.  Otherwise, all results will be con‐
+                     tained in a single array.
+
+                 $ llvm-symbolizer --obj=inlined.elf 0x4004be 0x400486 -p
+                 baz() at /tmp/test.cpp:11:18
+                  (inlined by) main at /tmp/test.cpp:15:0
+
+                 foo() at /tmp/test.cpp:6:3
+
+                 $ llvm-symbolizer --output-style=LLVM --obj=inlined.elf 0x4004be 0x400486 -p --no-inlines
+                 main at /tmp/test.cpp:11:18
+
+                 foo() at /tmp/test.cpp:6:3
+
+                 $ llvm-symbolizer --output-style=GNU --obj=inlined.elf 0x4004be 0x400486 -p --no-inlines
+                 baz() at /tmp/test.cpp:11
+                 foo() at /tmp/test.cpp:6
+
+                 $ clang -g -fdebug-info-for-profiling test.cpp -o profiling.elf
+                 $ llvm-symbolizer --output-style=GNU --obj=profiling.elf 0x401167 -p --no-inlines
+                 main at /tmp/test.cpp:15 (discriminator 2)
+
+                 $ llvm-symbolizer --output-style=JSON --obj=inlined.elf 0x4004be 0x400486 -p
+                 [
+                   {
+                     "Address": "0x4004be",
+                     "ModuleName": "inlined.elf",
+                     "Symbol": [
+                       {
+                         "Column": 18,
+                         "Discriminator": 0,
+                         "FileName": "/tmp/test.cpp",
+                         "FunctionName": "baz()",
+                         "Line": 11,
+                         "StartAddress": "0x4004be",
+                         "StartFileName": "/tmp/test.cpp",
+                         "StartLine": 9
+                       },
+                       {
+                         "Column": 0,
+                         "Discriminator": 0,
+                         "FileName": "/tmp/test.cpp",
+                         "FunctionName": "main",
+                         "Line": 15,
+                         "StartAddress": "0x4004be",
+                         "StartFileName": "/tmp/test.cpp",
+                         "StartLine": 14
+                       }
+                     ]
+                   },
+                   {
+                     "Address": "0x400486",
+                     "ModuleName": "inlined.elf",
+                     "Symbol": [
+                       {
+                         "Column": 3,
+                         "Discriminator": 0,
+                         "FileName": "/tmp/test.cpp",
+                         "FunctionName": "foo()",
+                         "Line": 6,
+                         "StartAddress": "0x400486",
+                         "StartFileName": "/tmp/test.cpp",
+                         "StartLine": 5
+                       }
+                     ]
+                   }
+                 ]
+
+       ----pprreettttyy--pprriinntt,, --pp
+              Print human readable output. If _-_-_i_n_l_i_n_i_n_g is specified, the en‐
+              closing scope is prefixed by (inlined by).  For JSON output, the
+              option will cause JSON to be indented and split over new  lines.
+              Otherwise, the JSON output will be printed in a compact form.
+
+                 $ llvm-symbolizer --obj=inlined.elf 0x4004be --inlining --pretty-print
+                 baz() at /tmp/test.cpp:11:18
+                  (inlined by) main at /tmp/test.cpp:15:0
+
+       ----pprriinntt--aaddddrreessss,, ----aaddddrreesssseess,, --aa
+              Print  address  before  the  source  code  location. Defaults to
+              false.
+
+                 $ llvm-symbolizer --obj=inlined.elf --print-address 0x4004be
+                 0x4004be
+                 baz()
+                 /tmp/test.cpp:11:18
+                 main
+                 /tmp/test.cpp:15:0
+
+                 $ llvm-symbolizer --obj=inlined.elf 0x4004be --pretty-print --print-address
+                 0x4004be: baz() at /tmp/test.cpp:11:18
+                  (inlined by) main at /tmp/test.cpp:15:0
+
+       ----pprriinntt--ssoouurrccee--ccoonntteexxtt--lliinneess <<NN>>
+              Print NN lines of source context for each symbolized address.
+
+                 $ llvm-symbolizer --obj=test.elf 0x400490 --print-source-context-lines=3
+                 baz()
+                 /tmp/test.cpp:11:0
+                 10  :   volatile int k = 42;
+                 11 >:   return foz() + k;
+                 12  : }
+
+       ----rreellaattiivveennaammeess
+              Print the file's path relative to the compilation directory, in‐
+              stead  of the absolute path. If the command-line to the compiler
+              included the full path, this will be the same as the default.
+
+       ----vveerrbboossee
+              Print verbose address, line and column information.
+
+                 $ llvm-symbolizer --obj=inlined.elf --verbose 0x4004be
+                 baz()
+                   Filename: /tmp/test.cpp
+                   Function start filename: /tmp/test.cpp
+                   Function start line: 9
+                   Function start address: 0x4004b6
+                   Line: 11
+                   Column: 18
+                 main
+                   Filename: /tmp/test.cpp
+                   Function start filename: /tmp/test.cpp
+                   Function start line: 14
+                   Function start address: 0x4004b0
+                   Line: 15
+                   Column: 18
+
+       ----vveerrssiioonn,, --vv
+              Print version information for the tool.
+
+       @@<<FFIILLEE>>
+              Read command-line options from response file _<_F_I_L_E_>.
+
+WWIINNDDOOWWSS//PPDDBB SSPPEECCIIFFIICC OOPPTTIIOONNSS
+       ----ddiiaa  Use the Windows DIA SDK for symbolization. If the DIA SDK is not
+              found,  llvm-symbolizer will fall back to the native implementa‐
+              tion.
+
+MMAACCHH--OO SSPPEECCIIFFIICC OOPPTTIIOONNSS
+       ----ddeeffaauulltt--aarrcchh <<aarrcchh>>
+              If a binary contains object  files  for  multiple  architectures
+              (e.g.  it  is  a  Mach-O universal binary), symbolize the object
+              file for a given architecture.  You can also specify the  archi‐
+              tecture by writing bbiinnaarryy__nnaammee::aarrcchh__nnaammee in the input (see exam‐
+              ple below). If the architecture is not specified in either  way,
+              the address will not be symbolized. Defaults to empty string.
+
+                 $ cat addr.txt
+                 /tmp/mach_universal_binary:i386 0x1f84
+                 /tmp/mach_universal_binary:x86_64 0x100000f24
+
+                 $ llvm-symbolizer < addr.txt
+                 _main
+                 /tmp/source_i386.cc:8
+
+                 _main
+                 /tmp/source_x86_64.cc:8
+
+       ----ddssyymm--hhiinntt <<ppaatthh//ttoo//ffiillee..ddSSYYMM>>
+              If  the debug info for a binary isn't present in the default lo‐
+              cation, look for the debug info at the .dSYM path  provided  via
+              this option. This flag can be used multiple times.
+
+EEXXIITT SSTTAATTUUSS
+       llllvvmm--ssyymmbboolliizzeerr  returns  0. Other exit codes imply an internal program
+       error.
+
+SSEEEE AALLSSOO
+       llllvvmm--aaddddrr22lliinnee((11))
+
+AAUUTTHHOORR
+       Maintained by the LLVM Team (https://llvm.org/).
+
+CCOOPPYYRRIIGGHHTT
+       2003-2023, LLVM Project
+
+
+
+16                                2023-05-24                LLVM-SYMBOLIZER(1)

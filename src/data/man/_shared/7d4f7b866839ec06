@@ -1,0 +1,170 @@
+_p_t_h_r_e_a_d___c_a_n_c_e_l(3)          Library Functions Manual          _p_t_h_r_e_a_d___c_a_n_c_e_l(3)
+
+NNAAMMEE
+       pthread_cancel - send a cancelation request to a thread
+
+LLIIBBRRAARRYY
+       POSIX threads library (_l_i_b_p_t_h_r_e_a_d, _-_l_p_t_h_r_e_a_d)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<pptthhrreeaadd..hh>>
+
+       iinntt pptthhrreeaadd__ccaanncceell((pptthhrreeaadd__tt _t_h_r_e_a_d));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The pptthhrreeaadd__ccaanncceell() function sends a cancelation request to the thread
+       _t_h_r_e_a_d.   Whether  and when the target thread reacts to the cancelation
+       request depends on two attributes that are under the  control  of  that
+       thread: its cancelability _s_t_a_t_e and _t_y_p_e.
+
+       A   thread’s  cancelability  state,  determined  by  pptthhrreeaadd__sseettccaanncceell‐‐
+       ssttaattee(3), can be _e_n_a_b_l_e_d (the default for new threads) or _d_i_s_a_b_l_e_d.  If
+       a thread has disabled cancelation, then a cancelation  request  remains
+       queued  until  the thread enables cancelation.  If a thread has enabled
+       cancelation, then its cancelability type  determines  when  cancelation
+       occurs.
+
+       A  thread’s  cancelation  type, determined by pptthhrreeaadd__sseettccaanncceellttyyppee(3),
+       may be either _a_s_y_n_c_h_r_o_n_o_u_s or _d_e_f_e_r_r_e_d (the default for  new  threads).
+       Asynchronous cancelability means that the thread can be canceled at any
+       time  (usually  immediately,  but  the system does not guarantee this).
+       Deferred cancelability means that cancelation will be delayed until the
+       thread next calls a function that is a _c_a_n_c_e_l_a_t_i_o_n _p_o_i_n_t.   A  list  of
+       functions  that  are  or  may  be  cancelation  points  is  provided in
+       pptthhrreeaaddss(7).
+
+       When a cancelation request is acted on, the following steps  occur  for
+       _t_h_r_e_a_d (in this order):
+
+       (1)  Cancelation  clean‐up  handlers  are popped (in the reverse of the
+            order   in   which   they   were   pushed)   and   called.    (See
+            pptthhrreeaadd__cclleeaannuupp__ppuusshh(3).)
+
+       (2)  Thread‐specific data destructors are called, in an unspecified or‐
+            der.  (See pptthhrreeaadd__kkeeyy__ccrreeaattee(3).)
+
+       (3)  The thread is terminated.  (See pptthhrreeaadd__eexxiitt(3).)
+
+       The  above steps happen asynchronously with respect to the pptthhrreeaadd__ccaann‐‐
+       cceell() call; the return status of pptthhrreeaadd__ccaanncceell()  merely  informs  the
+       caller whether the cancelation request was successfully queued.
+
+       After  a  canceled thread has terminated, a join with that thread using
+       pptthhrreeaadd__jjooiinn(3) obtains PPTTHHRREEAADD__CCAANNCCEELLEEDD as the thread’s  exit  status.
+       (Joining  with  a  thread  is the only way to know that cancelation has
+       completed.)
+
+RREETTUURRNN VVAALLUUEE
+       On success, pptthhrreeaadd__ccaanncceell() returns 0; on error, it returns a  nonzero
+       error number.
+
+EERRRROORRSS
+       EESSRRCCHH  No thread with the ID _t_h_r_e_a_d could be found.
+
+AATTTTRRIIBBUUTTEESS
+       For  an  explanation  of  the  terms  used in this section, see aattttrriibb‐‐
+       uutteess(7).  allbox; lbx lb lb l l l.  Interface Attribute Value T{
+       pptthhrreeaadd__ccaanncceell() T}   Thread safety  MT‐Safe
+
+VVEERRSSIIOONNSS
+       On Linux, cancelation is implemented using signals.  Under the NPTL
+       threading implementation, the first real‐time signal (i.e., signal 32)
+       is used for this purpose.  On LinuxThreads, the second real‐time signal
+       is used, if real‐time signals are available, otherwise SSIIGGUUSSRR22 is used.
+
+SSTTAANNDDAARRDDSS
+       POSIX.1‐2008.
+
+HHIISSTTOORRYY
+       glibc 2.0 POSIX.1‐2001.
+
+EEXXAAMMPPLLEESS
+       The program below creates a thread and then cancels it.  The main
+       thread joins with the canceled thread to check that its exit status was
+       PPTTHHRREEAADD__CCAANNCCEELLEEDD.  The following shell session shows what happens when
+       we run the program:
+
+           $ ./a.out
+           thread_func(): started; cancelation disabled
+           main(): sending cancelation request
+           thread_func(): about to enable cancelation
+           main(): thread was canceled
+
+   PPrrooggrraamm ssoouurrccee
+
+       #include <err.h>
+       #include <pthread.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <unistd.h>
+
+       static void *
+       thread_func(void *ignored_argument)
+       {
+           int s;
+
+           /* Disable cancelation for a while, so that we don't
+              immediately react to a cancelation request.  */
+
+           s = pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+           if (s != 0)
+               errc(EXIT_FAILURE, s, "pthread_setcancelstate");
+
+           printf("%s(): started; cancelation disabled\n", __func__);
+           sleep(5);
+           printf("%s(): about to enable cancelation\n", __func__);
+
+           s = pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
+           if (s != 0)
+               errc(EXIT_FAILURE, s, "pthread_setcancelstate");
+
+           /* sleep() is a cancelation point.  */
+
+           sleep(1000);        /* Should get canceled while we sleep */
+
+           /* Should never get here.  */
+
+           printf("%s(): not canceled!\n", __func__);
+           return NULL;
+       }
+
+       int
+       main(void)
+       {
+           pthread_t thr;
+           void *res;
+           int s;
+
+           /* Start a thread and then send it a cancelation request.  */
+
+           s = pthread_create(&thr, NULL, &thread_func, NULL);
+           if (s != 0)
+               errc(EXIT_FAILURE, s, "pthread_create");
+
+           sleep(2);           /* Give thread a chance to get started */
+
+           printf("%s(): sending cancelation request\n", __func__);
+           s = pthread_cancel(thr);
+           if (s != 0)
+               errc(EXIT_FAILURE, s, "pthread_cancel");
+
+           /* Join with thread to see what its exit status was.  */
+
+           s = pthread_join(thr, &res);
+           if (s != 0)
+               errc(EXIT_FAILURE, s, "pthread_join");
+
+           if (res == PTHREAD_CANCELED)
+               printf("%s(): thread was canceled\n", __func__);
+           else
+               printf("%s(): thread wasn't canceled (shouldn't happen!)\n",
+                      __func__);
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       pptthhrreeaadd__cclleeaannuupp__ppuusshh(3), pptthhrreeaadd__ccrreeaattee(3), pptthhrreeaadd__eexxiitt(3),
+       pptthhrreeaadd__jjooiinn(3), pptthhrreeaadd__kkeeyy__ccrreeaattee(3), pptthhrreeaadd__sseettccaanncceellssttaattee(3),
+       pptthhrreeaadd__sseettccaanncceellttyyppee(3), pptthhrreeaadd__tteessttccaanncceell(3), pptthhrreeaaddss(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                 _p_t_h_r_e_a_d___c_a_n_c_e_l(3)

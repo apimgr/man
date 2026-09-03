@@ -1,0 +1,161 @@
+LAGG(4)                  BSD Kernel Interfaces Manual                  LAGG(4)
+
+NNAAMMEE
+     llaagggg — link aggregation and link failover interface
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee llaagggg
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           if_lagg_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The llaagggg interface allows aggregation of multiple network interfaces as
+     one virtual llaagggg interface for the purpose of providing fault-tolerance
+     and high-speed links.
+
+     Each llaagggg interface is created at runtime using interface cloning.  This
+     is most easily done with the ifconfig(8) ccrreeaattee command or using the
+     _c_l_o_n_e_d___i_n_t_e_r_f_a_c_e_s variable in rc.conf(5).
+
+     A llaagggg interface can be created using the iiffccoonnffiigg llaagggg_N ccrreeaattee command.
+     It can use different link aggregation protocols specified using the
+     llaaggggpprroottoo _p_r_o_t_o option.  Child interfaces can be added using the llaaggggppoorrtt
+     _c_h_i_l_d_-_i_f_a_c_e option and removed using the --llaaggggppoorrtt _c_h_i_l_d_-_i_f_a_c_e option.
+
+     The driver currently supports the aggregation protocols ffaaiilloovveerr (the de‐
+     fault), llaaccpp, llooaaddbbaallaannccee, rroouunnddrroobbiinn, bbrrooaaddccaasstt, and nnoonnee.  The proto‐
+     cols determine which ports are used for outgoing traffic and whether a
+     specific port accepts incoming traffic.  The interface link state is used
+     to validate if the port is active or not.
+
+     ffaaiilloovveerr     Sends traffic only through the active port.  If the master
+                  port becomes unavailable, the next active port is used.  The
+                  first interface added is the master port; any interfaces
+                  added after that are used as failover devices.
+
+                  By default, received traffic is only accepted when it is re‐
+                  ceived through the active port.  This constraint can be re‐
+                  laxed by setting the _n_e_t_._l_i_n_k_._l_a_g_g_._f_a_i_l_o_v_e_r___r_x___a_l_l sysctl(8)
+                  variable to a nonzero value, which is useful for certain
+                  bridged network setups.
+
+     llaaccpp         Supports the IEEE 802.1AX (formerly 802.3ad) Link Aggrega‐
+                  tion Control Protocol (LACP) and the Marker Protocol.  LACP
+                  will negotiate a set of aggregable links with the peer in to
+                  one or more Link Aggregated Groups.  Each LAG is composed of
+                  ports of the same speed, set to full-duplex operation.  The
+                  traffic will be balanced across the ports in the LAG with
+                  the greatest total speed, in most cases there will only be
+                  one LAG which contains all ports.  In the event of changes
+                  in physical connectivity, Link Aggregation will quickly con‐
+                  verge to a new configuration.
+
+     llooaaddbbaallaannccee  Balances outgoing traffic across the active ports based on
+                  hashed protocol header information and accepts incoming
+                  traffic from any active port.  This is a static setup and
+                  does not negotiate aggregation with the peer or exchange
+                  frames to monitor the link.  The hash includes the Ethernet
+                  source and destination address, and, if available, the VLAN
+                  tag, and the IP source and destination address.
+
+     rroouunnddrroobbiinn   Distributes outgoing traffic using a round-robin scheduler
+                  through all active ports and accepts incoming traffic from
+                  any active port.  Using rroouunnddrroobbiinn mode can cause unordered
+                  packet arrival at the client.  Throughput might be limited
+                  as the client performs CPU-intensive packet reordering.
+
+     bbrrooaaddccaasstt    Sends frames to all ports of the LAG and receives frames on
+                  any port of the LAG.
+
+     nnoonnee         This protocol is intended to do nothing: it disables any
+                  traffic without disabling the llaagggg interface itself.
+
+     The MTU of the first interface to be added is used as the lagg MTU.  All
+     additional interfaces are required to have exactly the same value.
+
+     The llooaaddbbaallaannccee and llaaccpp modes will use the RSS hash from the network
+     card if available to avoid computing one, this may give poor traffic dis‐
+     tribution if the hash is invalid or uses less of the protocol header in‐
+     formation.  Local hash computation can be forced per interface by setting
+     the --uussee__fflloowwiidd ifconfig(8) flag.  The default for new interfaces is set
+     via the _n_e_t_._l_i_n_k_._l_a_g_g_._d_e_f_a_u_l_t___u_s_e___f_l_o_w_i_d sysctl(8).
+
+     When creating a llaagggg interface, the llaaggggttyyppee can be specified as either
+     eetthheerrnneett or iinnffiinniibbaanndd.  If neither is specified then the default is
+     eetthheerrnneett.
+
+EEXXAAMMPPLLEESS
+     Create a link aggregation using LACP with two bge(4) Gigabit Ethernet in‐
+     terfaces:
+
+           # ifconfig bge0 up
+           # ifconfig bge1 up
+           # ifconfig lagg0 create
+           # ifconfig lagg0 laggproto lacp laggport bge0 laggport bge1 \
+                   192.168.1.1 netmask 255.255.255.0
+
+     Create a link aggregation using ROUNDROBIN with two bge(4) Gigabit Ether‐
+     net interfaces and set a stride of 500 packets per interface:
+
+           # ifconfig bge0 up
+           # ifconfig bge1 up
+           # ifconfig lagg0 create
+           # ifconfig lagg0 laggproto roundrobin laggport bge0 laggport bge1 \
+                   192.168.1.1 netmask 255.255.255.0
+           # ifconfig lagg0 rr_limit 500
+
+     The following example uses an active failover interface to set up roaming
+     between wired and wireless networks using two network devices.  Whenever
+     the wired master interface is unplugged, the wireless failover device
+     will be used:
+
+           # ifconfig em0 ether 00:11:22:33:44:55 up
+           # ifconfig wlan0 create wlandev ath0 ssid my_net up
+           # ifconfig lagg0 create
+           # ifconfig lagg0 laggproto failover laggport em0 laggport wlan0 \
+                   192.168.1.1 netmask 255.255.255.0
+
+     (Note the MAC address of the wired device is forced to match that of the
+     wireless device, ‘00:11:22:33:44:55’ in this example, as some common
+     wireless devices will not allow MAC addresses to be changed.)
+
+     The following example shows how to create an infiniband failover inter‐
+     face.
+
+           # ifconfig ib0 up
+           # ifconfig ib1 up
+           # ifconfig lagg0 create laggtype infiniband
+           # ifconfig lagg0 laggproto failover laggport ib0 laggport ib1 \
+                   1.1.1.1 netmask 255.255.255.0
+
+     Configure two ethernets for failover with static IP in /etc/rc.conf(5):
+
+           cloned_interfaces="lagg0"
+           ifconfig_lagg0="laggproto failover laggport bge0 laggport bge1 \
+                   10.1.29.21/24"
+           ifconfig_bge0="up"
+           ifconfig_bge1="up"
+
+SSEEEE AALLSSOO
+     ng_one2many(4), rc.conf(5), ifconfig(8), sysctl(8)
+
+HHIISSTTOORRYY
+     The llaagggg device first appeared in FreeBSD 6.3.
+
+AAUUTTHHOORRSS
+     The llaagggg driver was written under the name ttrruunnkk by Reyk Floeter
+     <_r_e_y_k_@_o_p_e_n_b_s_d_._o_r_g>.  The LACP implementation was written by YAMAMOTO
+     Takashi for NetBSD.
+
+BBUUGGSS
+     There is no way to configure LACP administrative variables, including
+     system and port priorities.  The current implementation always performs
+     active-mode LACP and uses 0x8000 as system and port priorities.
+
+BSD                            January 16, 2023                            BSD

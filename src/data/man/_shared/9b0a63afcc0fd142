@@ -1,0 +1,275 @@
+LDAPD.CONF(5)               BSD File Formats Manual              LDAPD.CONF(5)
+
+NNAAMMEE
+     llddaappdd..ccoonnff — LDAP daemon configuration file
+
+DDEESSCCRRIIPPTTIIOONN
+     llddaappdd..ccoonnff is the configuration file for the LDAP daemon ldapd(8).
+
+     The current line can be extended over multiple lines using a backslash
+     (‘\’).  Comments can be put anywhere in the file using a hash mark (‘#’),
+     and extend to the end of the current line.  Care should be taken when
+     commenting out multi-line text: the comment is effective until the end of
+     the entire block.
+
+     Argument names not beginning with a letter, digit, or underscore must be
+     quoted.  Arguments containing whitespace should be surrounded by double
+     quotes (").
+
+     A macro is defined with a command of the form _n_a_m_e=_v_a_l_u_e.  The macro _n_a_m_e
+     can contain letters, digits, and underscores and cannot be a reserved
+     word (for example, _l_i_s_t_e_n, _n_a_m_e_s_p_a_c_e, or _p_o_r_t).  Within unquoted argu‐
+     ments, the string $_n_a_m_e is later expanded to _v_a_l_u_e.
+
+     For example:
+
+           wan_if = "fxp0"
+           listen on $wan_if
+           listen on $wan_if tls
+
+     Additional configuration files can be included with the iinncclluuddee keyword,
+     for example:
+
+           include "/etc/ldap/sub.namespace.conf"
+
+     Additional schema files can be included with the sscchheemmaa keyword, for ex‐
+     ample:
+
+           schema "/etc/ldap/inetorgperson.schema"
+
+     The syntax of llddaappdd..ccoonnff is described below.
+
+GGLLOOBBAALL CCOONNFFIIGGUURRAATTIIOONN
+     lliisstteenn oonn _i_n_t_e_r_f_a_c_e [ppoorrtt _p_o_r_t] [lleeggaaccyy] [ttllss | llddaappss | sseeccuurree]
+             [cceerrttiiffiiccaattee _n_a_m_e]
+             Specify an _i_n_t_e_r_f_a_c_e and _p_o_r_t to listen on.  An IP address, do‐
+             main name or absolute path may be used in place of _i_n_t_e_r_f_a_c_e.  An
+             absolute path is used to listen on a unix domain socket.
+
+             Secured connections are provided either using STARTTLS (ttllss), by
+             default on port 389, or LDAPS (llddaappss), by default on port 636.
+             ttllss and llddaappss connections will use the defaults from libtls.  If
+             compatibility with the insecure TLSv1.0 and TLSv1.1 protocols and
+             ciphers is required, they can be enabled with the lleeggaaccyy keyword.
+             Creation of certificates is documented in starttls(8).  If no
+             certificate _n_a_m_e is specified, the _/_e_t_c_/_l_d_a_p_/_c_e_r_t_s directory is
+             searched for a file named by joining the interface name with a
+             .crt extension, e.g. _/_e_t_c_/_l_d_a_p_/_c_e_r_t_s_/_f_x_p_0_._c_r_t.
+
+             If the certificate name is an absolute path, a .crt and .key ex‐
+             tension are appended to form the certificate path and key path
+             respectively.
+
+             Only secured connections accept plain text password authentica‐
+             tion.  Connections using TLS or unix domain sockets are always
+             considered secured.  The sseeccuurree keyword can be used to mark an
+             otherwise insecure connection secured, e.g. if IPsec is used.
+
+     referral _U_R_L
+             Specify a default referral.  If no namespace matches the base DN
+             in a request, the request is delegated to another LDAP server in‐
+             stead of returning an error.
+
+             This option can be given multiple times, in which case the URLs
+             are considered equal.  Clients may choose to follow any of the
+             referral URLs.
+
+             The URL has the following format:
+
+                   ldap://ldap.example.com
+                   ldaps://ldap.example.com:3890
+
+     rootdn _d_n
+             Specify the distinguished name of the root user for all name‐
+             spaces.  The root user is always allowed to read and write en‐
+             tries in all local namespaces.
+
+     rootpw _p_a_s_s_w_o_r_d
+             Password for the root user.  Specified either in plain text, or
+             in hashed format.  See AUTHENTICATION in ldapd(8).
+
+     schema _f_i_l_e_n_a_m_e
+             Add schema definitions from the specified file.  For a descrip‐
+             tion of the schema file syntax see _S_C_H_E_M_A below.
+
+NNAAMMEESSPPAACCEESS
+     A namespace is a subtree of the global X.500 DIT (Directory Information
+     Tree), also known as a naming context.  All entries' distinguished names
+     (DN) have the same suffix, which is used to identify the namespace.  The
+     suffix should consist of the domain components, in reverse order, of your
+     domain name, as recommended by RFC 2247.
+
+           namespace "dc=example,dc=com" {
+                   rootdn "cn=admin,dc=example,dc=com"
+                   rootpw "secret"
+           }
+
+     When matching requests against namespace suffixes, the most specific
+     match is used.  Each namespace stores data in a separate database file.
+
+     A namespace has the following configuration properties:
+
+     referral _U_R_L
+             Specify a referral to return for requests matching the suffix.
+
+     rootdn _d_n
+             Specify the distinguished name of the root user for the name‐
+             space.  The root user is always allowed to read and write entries
+             in the namespace.  The distinguished name must have the same suf‐
+             fix as the namespace.
+
+     rootpw _p_a_s_s_w_o_r_d
+             Password for the root user.  Specified either in plain text, or
+             in hashed format.  See AUTHENTICATION in ldapd(8).
+
+     index _a_t_t_r_i_b_u_t_e
+             Maintain an index on the specified attribute.  This index can be
+             used for equality, presence, prefix substring and range searches.
+             ldapd(8) will update the index on each modification.  If you add
+             an index to an existing namespace, you need to run ldapctl(8) to
+             index the existing entries.
+
+     fsync _o_n | _o_f_f
+             If _o_f_f, data will not be forced to disk after each commit.  Dis‐
+             abling fsync can increase write speed substantially, but may lead
+             to data loss.  The default value is on.
+
+     cache-size _s_i_z_e
+             Set the cache size for data entries.  The _s_i_z_e is specified in
+             number of pages.  Note that more than the configured number of
+             pages may exist in the cache, as dirty pages and pages referenced
+             by cursors are excluded from cache expiration.
+
+             Cached pages are expired in a least recently used (LRU) order.
+
+     index-cache-size _s_i_z_e
+             Set the cache size for the index database.
+
+     relax schema
+             Disables checking of required and optional object attributes
+             against schema.  All attributes and values are matched as case-
+             insensitive strings.  All attributes are considered multi-valued.
+
+     strict schema
+             Enables checking of required and optional object attributes
+             against schema.  This is the default.
+
+     aallllooww | ddeennyy
+             Allow or deny access to parts of the namespace.
+
+             Each request to the ldapd(8) daemon evaluates the filter rules in
+             sequential order, from first to last.  The last matching rule de‐
+             cides what action is taken.  If no rule matches the request, the
+             default action is to allow the request.  The root DN is always
+             allowed to perform any request.
+
+             The allow/deny statement operates on all access types by default.
+             This can be restricted by an access type specification:
+
+             read access
+                     Restricts the filter rule to search operations.
+
+             write access
+                     Restricts the filter rule to add, delete and modify oper‐
+                     ations.
+
+             bind access
+                     Restricts the filter rule to bind operations.
+
+             The scope of the filter rule can be restricted by the _t_o keyword:
+
+             to subtree _D_N
+                     The filter rule applies to the distinguished name, as
+                     well as for all its descendants.
+
+             to children of _D_N
+                     The filter rule applies to all the direct children of the
+                     distinguished name.
+
+             to _D_N   The filter rule applies to the distinguished name only.
+
+             to any  The filter rule applies to any distinguished name in the
+                     namespace.  This is the default if no scope is specified.
+
+             to root
+                     The filter rule applies to the root DSE.
+
+             The scope can be restricted to an optional attribute:
+
+             attribute _n_a_m_e
+                     The filter rule applies to the specified attribute.
+
+             Finally, the filter rule can match a bind DN:
+
+             by any  The filter rule matches by any bind dn, including anony‐
+                     mous binds.
+
+             by _D_N   The filter rule matches only if the requestor has previ‐
+                     ously performed a bind as the specified distinguished
+                     name.
+
+             by self
+                     The filter rule matches only if the requestor has previ‐
+                     ously performed a bind as the distinguished name that is
+                     being requested.  Typically used to allow users to modify
+                     their own data.
+
+     use compression [level _l_e_v_e_l]
+             Enable compression of entries and optionally specify compression
+             level (0 - 9).  By default, no compression is used.
+
+SSCCHHEEMMAA
+     Schema files define the structure and format of entries in the directory
+     tree.  There are three types of definitions in a schema file:
+
+     attributetype
+             (_o_i_d [NAME name] [DESC description] [OBSOLETE] [SUP oid]
+             [EQUALITY oid] [ORDERING oid] [SUBSTR oid] [SYNTAX oid]
+             [SINGLE-VALUE] [COLLECTIVE] [NO-USER-MODIFICATION] [USAGE
+             {userApplications | directoryOperation | distributedOperation |
+             dSAOperation}])
+
+             An attribute type definition specifies the syntax of attribute
+             values, whether it allows multiple values and how it can be com‐
+             pared in search requests.  For a complete description of attri‐
+             bute type definitions, see section 4.1.2 in RFC 4512.
+
+     objectclass
+             (_o_i_d [NAME name] [DESC description] [OBSOLETE] [SUP oids]
+             [{ABSTRACT | STRUCTURAL | AUXILIARY}] [MUST oids] [MAY oids])
+
+             An object class definition specifies which attributes are re‐
+             quired and which are allowed.  For a complete description of ob‐
+             ject class definitions, see section 4.1.1 in RFC 4512.
+
+     objectidentifier _s_y_m_b_o_l_i_c_-_n_a_m_e _O_I_D
+             Defines a symbolic name for the object identifier.  A symbolic
+             name can be used in place of a numeric OID in definitions of at‐
+             tribute types, object classes and other symbolic OIDs.  A descen‐
+             dant OID can be defined in terms of another symbolic OID by ap‐
+             pending a numeric OID after a colon, for example:
+
+                   objectidentifier MyOidRoot 1.2.3.4
+                   objectidentifier MyOidAttributes MyOidRoot:5.6
+                   objectidentifier MyOidObjects MyOidRoot:7
+
+             This would define MyOidAttributes as a symbolic name for the OID
+             1.2.3.4.5.6, and MyOidObjects for 1.2.3.4.7.
+
+FFIILLEESS
+     /etc/ldapd.conf           Default ldapd(8) configuration file.
+     /etc/examples/ldapd.conf  Example configuration file.
+     /etc/ldap/*.schema        Default schema definition files.
+     /etc/ldap/certs/          Default directory for TLS certificates.
+
+SSEEEE AALLSSOO
+     ldapctl(8), ldapd(8)
+
+SSTTAANNDDAARRDDSS
+     K. Zeilenga, _L_i_g_h_t_w_e_i_g_h_t _D_i_r_e_c_t_o_r_y _A_c_c_e_s_s _P_r_o_t_o_c_o_l _(_L_D_A_P_)_: _D_i_r_e_c_t_o_r_y
+     _I_n_f_o_r_m_a_t_i_o_n _M_o_d_e_l_s, RFC 4512, June 2006.
+
+HHIISSTTOORRYY
+     The llddaappdd..ccoonnff file format first appeared in OpenBSD 4.8.
+
+BSD                              July 7, 2025                              BSD

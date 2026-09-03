@@ -1,0 +1,354 @@
+GSS_ACCEPT_SEC_CONTEXT(3)     Programmer's Manual    GSS_ACCEPT_SEC_CONTEXT(3)
+
+NNAAMMEE
+     ggssss__aacccceepptt__sseecc__ccoonntteexxtt — Accept a security context initiated by a peer
+     application
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ggssssaappii//ggssssaappii..hh>>
+
+     _O_M___u_i_n_t_3_2
+     ggssss__aacccceepptt__sseecc__ccoonntteexxtt(_O_M___u_i_n_t_3_2 _*_m_i_n_o_r___s_t_a_t_u_s,
+         _g_s_s___c_t_x___i_d___t _*_c_o_n_t_e_x_t___h_a_n_d_l_e,
+         _c_o_n_s_t _g_s_s___c_r_e_d___i_d___t _a_c_c_e_p_t_o_r___c_r_e_d___h_a_n_d_l_e,
+         _c_o_n_s_t _g_s_s___b_u_f_f_e_r___t _i_n_p_u_t___t_o_k_e_n___b_u_f_f_e_r,
+         _c_o_n_s_t _g_s_s___c_h_a_n_n_e_l___b_i_n_d_i_n_g_s___t _i_n_p_u_t___c_h_a_n___b_i_n_d_i_n_g_s,
+         _c_o_n_s_t _g_s_s___n_a_m_e___t _*_s_r_c___n_a_m_e, _g_s_s___O_I_D _*_m_e_c_h___t_y_p_e,
+         _g_s_s___b_u_f_f_e_r___t _o_u_t_p_u_t___t_o_k_e_n, _O_M___u_i_n_t_3_2 _*_r_e_t___f_l_a_g_s, _O_M___u_i_n_t_3_2 _*_t_i_m_e___r_e_c,
+         _g_s_s___c_r_e_d___i_d___t _*_d_e_l_e_g_a_t_e_d___c_r_e_d___h_a_n_d_l_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     Allows a remotely initiated security context between the application and
+     a remote peer to be established.  The routine may return a _o_u_t_p_u_t___t_o_k_e_n
+     which should be transferred to the peer application, where the peer ap‐
+     plication will present it to gss_init_sec_context(3).  If no token need
+     be sent, ggssss__aacccceepptt__sseecc__ccoonntteexxtt() will indicate this by setting the
+     length field of the _o_u_t_p_u_t___t_o_k_e_n argument to zero.  To complete the con‐
+     text establishment, one or more reply tokens may be required from the
+     peer application; if so, ggssss__aacccceepptt__sseecc__ccoonntteexxtt() will return a status
+     flag of GSS_S_CONTINUE_NEEDED, in which case it should be called again
+     when the reply token is received from the peer application, passing the
+     token to ggssss__aacccceepptt__sseecc__ccoonntteexxtt() via the _i_n_p_u_t___t_o_k_e_n parameters.
+
+     Portable applications should be constructed to use the token length and
+     return status to determine whether a token needs to be sent or waited
+     for.  Thus a typical portable caller should always invoke
+     ggssss__aacccceepptt__sseecc__ccoonntteexxtt() within a loop:
+
+     gss_ctx_id_t context_hdl = GSS_C_NO_CONTEXT;
+
+     do {
+       receive_token_from_peer(input_token);
+       maj_stat = gss_accept_sec_context(&min_stat,
+                                         &context_hdl,
+                                         cred_hdl,
+                                         input_token,
+                                         input_bindings,
+                                         &client_name,
+                                         &mech_type,
+                                         output_token,
+                                         &ret_flags,
+                                         &time_rec,
+                                         &deleg_cred);
+       if (GSS_ERROR(maj_stat)) {
+         report_error(maj_stat, min_stat);
+       };
+       if (output_token->length != 0) {
+         send_token_to_peer(output_token);
+
+         gss_release_buffer(&min_stat, output_token);
+       };
+       if (GSS_ERROR(maj_stat)) {
+         if (context_hdl != GSS_C_NO_CONTEXT)
+           gss_delete_sec_context(&min_stat,
+                                  &context_hdl,
+                                  GSS_C_NO_BUFFER);
+         break;
+       };
+     } while (maj_stat & GSS_S_CONTINUE_NEEDED);
+
+     Whenever the routine returns a major status that includes the value
+     GSS_S_CONTINUE_NEEDED, the context is not fully established and the fol‐
+     lowing restrictions apply to the output parameters:
+
+     The value returned via the _t_i_m_e___r_e_c parameter is undefined unless the ac‐
+     companying _r_e_t___f_l_a_g_s parameter contains the bit GSS_C_PROT_READY_FLAG,
+     indicating that per-message services may be applied in advance of a suc‐
+     cessful completion status, the value returned via the _m_e_c_h___t_y_p_e parameter
+     may be undefined until the routine returns a major status value of
+     GSS_S_COMPLETE.
+
+     The values of the GSS_C_DELEG_FLAG, GSS_C_MUTUAL_FLAG, GSS_C_REPLAY_FLAG,
+     GSS_C_SEQUENCE_FLAG, GSS_C_CONF_FLAG, GSS_C_INTEG_FLAG and
+     GSS_C_ANON_FLAG bits returned via the _r_e_t___f_l_a_g_s parameter should contain
+     the values that the implementation expects would be valid if context es‐
+     tablishment were to succeed.
+
+     The values of the GSS_C_PROT_READY_FLAG and GSS_C_TRANS_FLAG bits within
+     _r_e_t___f_l_a_g_s should indicate the actual state at the time
+     ggssss__aacccceepptt__sseecc__ccoonntteexxtt() returns, whether or not the context is fully es‐
+     tablished.
+
+     Although this requires that GSS-API implementations set the
+     GSS_C_PROT_READY_FLAG in the final _r_e_t___f_l_a_g_s returned to a caller (i.e.
+     when accompanied by a GSS_S_COMPLETE status code), applications should
+     not rely on this behavior as the flag was not defined in Version 1 of the
+     GSS-API.  Instead, applications should be prepared to use per-message
+     services after a successful context establishment, according to the
+     GSS_C_INTEG_FLAG and GSS_C_CONF_FLAG values.
+
+     All other bits within the _r_e_t___f_l_a_g_s argument should be set to zero.
+     While the routine returns GSS_S_CONTINUE_NEEDED, the values returned via
+     the _r_e_t___f_l_a_g_s argument indicate the services that the implementation ex‐
+     pects to be available from the established context.
+
+     If the initial call of ggssss__aacccceepptt__sseecc__ccoonntteexxtt() fails, the implementation
+     should not create a context object, and should leave the value of the
+     context_handle parameter set to GSS_C_NO_CONTEXT to indicate this.  In
+     the event of a failure on a subsequent call, the implementation is per‐
+     mitted to delete the "half-built" security context (in which case it
+     should set the _c_o_n_t_e_x_t___h_a_n_d_l_e parameter to GSS_C_NO_CONTEXT ), but the
+     preferred behavior is to leave the security context (and the context_han‐
+     dle parameter) untouched for the application to delete (using
+     gss_delete_sec_context(3) ).
+
+     During context establishment, the informational status bits
+     GSS_S_OLD_TOKEN and GSS_S_DUPLICATE_TOKEN indicate fatal errors, and GSS-
+     API mechanisms should always return them in association with a routine
+     error of GSS_S_FAILURE. This requirement for pairing did not exist in
+     version 1 of the GSS-API specification, so applications that wish to run
+     over version 1 implementations must special-case these codes.
+
+PPAARRAAMMEETTEERRSS
+     context_handle       Context handle for new context.  Supply
+                          GSS_C_NO_CONTEXT for first call; use value returned
+                          in subsequent calls.  Once ggssss__aacccceepptt__sseecc__ccoonntteexxtt()
+                          has returned a value via this parameter, resources
+                          have been assigned to the corresponding context, and
+                          must be freed by the application after use with a
+                          call to gss_delete_sec_context(3).
+
+     acceptor_cred_handle
+                          Credential handle claimed by context acceptor.
+                          Specify GSS_C_NO_CREDENTIAL to accept the context as
+                          a default principal.  If GSS_C_NO_CREDENTIAL is
+                          specified, but no default acceptor principal is de‐
+                          fined, GSS_S_NO_CRED will be returned.
+
+     input_token_buffer   Token obtained from remote application.
+
+     input_chan_bindings  Application-specified bindings.  Allows application
+                          to securely bind channel identification information
+                          to the security context.  If channel bindings are
+                          not used, specify GSS_C_NO_CHANNEL_BINDINGS.
+
+     src_name             Authenticated name of context initiator.  After use,
+                          this name should be deallocated by passing it to
+                          gss_release_name(3).  If not required, specify NULL.
+
+     mech_type            Security mechanism used.  The returned OID value
+                          will be a pointer into static storage, and should be
+                          treated as read-only by the caller (in particular,
+                          it does not need to be freed).  If not required,
+                          specify NULL.
+
+     output_token         Token to be passed to peer application.  If the
+                          length field of the returned token buffer is 0, then
+                          no token need be passed to the peer application.  If
+                          a non-zero length field is returned, the associated
+                          storage must be freed after use by the application
+                          with a call to gss_release_buffer(3).
+
+     ret_flags            Contains various independent flags, each of which
+                          indicates that the context supports a specific ser‐
+                          vice option.  If not needed, specify NULL.  Symbolic
+                          names are provided for each flag, and the symbolic
+                          names corresponding to the required flags should be
+                          logically-ANDed with the _r_e_t___f_l_a_g_s value to test
+                          whether a given option is supported by the context.
+                          The flags are:
+
+                          GSS_C_DELEG_FLAG
+
+                              True   Delegated credentials are available via
+                                     the delegated_cred_handle parameter
+
+                              False  No credentials were delegated
+
+                          GSS_C_MUTUAL_FLAG
+
+                              True   Remote peer asked for mutual authentica‐
+                                     tion
+
+                              False  Remote peer did not ask for mutual au‐
+                                     thentication
+
+                          GSS_C_REPLAY_FLAG
+
+                              True   Replay of protected messages will be de‐
+                                     tected
+
+                              False  Replayed messages will not be detected
+
+                          GSS_C_SEQUENCE_FLAG
+
+                              True   Out-of-sequence protected messages will
+                                     be detected
+
+                              False  Out-of-sequence messages will not be de‐
+                                     tected
+
+                          GSS_C_CONF_FLAG
+
+                              True   Confidentiality service may be invoked by
+                                     calling the gss_wrap(3) routine
+
+                              False  No confidentiality service (via
+                                     gss_wrap(3)) available.  gss_wrap(3) will
+                                     provide message encapsulation, data-ori‐
+                                     gin authentication and integrity services
+                                     only.
+
+                          GSS_C_INTEG_FLAG
+
+                              True   Integrity service may be invoked by call‐
+                                     ing either gss_get_mic(3) or gss_wrap(3)
+                                     routines.
+
+                              False  Per-message integrity service unavail‐
+                                     able.
+
+                          GSS_C_ANON_FLAG
+
+                              True   The initiator does not wish to be authen‐
+                                     ticated; the _s_r_c___n_a_m_e parameter (if re‐
+                                     quested) contains an anonymous internal
+                                     name.
+
+                              False  The initiator has been authenticated nor‐
+                                     mally.
+
+                          GSS_C_PROT_READY_FLAG
+
+                              True   Protection services (as specified by the
+                                     states of the GSS_C_CONF_FLAG and
+                                     GSS_C_INTEG_FLAG) are available if the
+                                     accompanying major status return value is
+                                     either GSS_S_COMPLETE or
+                                     GSS_S_CONTINUE_NEEDED.
+
+                              False  Protection services (as specified by the
+                                     states of the GSS_C_CONF_FLAG and
+                                     GSS_C_INTEG_FLAG) are available only if
+                                     the accompanying major status return
+                                     value is GSS_S_COMPLETE.
+
+                          GSS_C_TRANS_FLAG
+
+                              True   The resultant security context may be
+                                     transferred to other processes via a call
+                                     to gss_export_sec_context(3).
+
+                              False  The security context is not transferable.
+
+                          All other bits should be set to zero.
+
+     time_rec             Number of seconds for which the context will remain
+                          valid.  Specify NULL if not required.
+
+     delegated_cred_handle
+                          Credential handle for credentials received from con‐
+                          text initiator.  Only valid if GSS_C_DELEG_FLAG in
+                          _r_e_t___f_l_a_g_s is true, in which case an explicit creden‐
+                          tial handle (i.e. not GSS_C_NO_CREDENTIAL) will be
+                          returned; if false, ggssss__aacccceepptt__ccoonntteexxtt() will set
+                          this parameter to GSS_C_NO_CREDENTIAL.  If a creden‐
+                          tial handle is returned, the associated resources
+                          must be released by the application after use with a
+                          call to gss_release_cred(3).  Specify NULL if not
+                          required.
+
+     minor_status         Mechanism specific status code.
+
+RREETTUURRNN VVAALLUUEESS
+     GSS_S_CONTINUE_NEEDED       Indicates that a token from the peer applica‐
+                                 tion is required to complete the context, and
+                                 that gss_accept_sec_context must be called
+                                 again with that token.
+
+     GSS_S_DEFECTIVE_TOKEN       Indicates that consistency checks performed
+                                 on the input_token failed.
+
+     GSS_S_DEFECTIVE_CREDENTIAL  Indicates that consistency checks performed
+                                 on the credential failed.
+
+     GSS_S_NO_CRED               The supplied credentials were not valid for
+                                 context acceptance, or the credential handle
+                                 did not reference any credentials.
+
+     GSS_S_CREDENTIALS_EXPIRED   The referenced credentials have expired.
+
+     GSS_S_BAD_BINDINGS          The input_token contains different channel
+                                 bindings to those specified via the in‐
+                                 put_chan_bindings parameter.
+
+     GSS_S_NO_CONTEXT            Indicates that the supplied context handle
+                                 did not refer to a valid context.
+
+     GSS_S_BAD_SIG               The input_token contains an invalid MIC.
+
+     GSS_S_OLD_TOKEN             The input_token was too old.  This is a fatal
+                                 error during context establishment.
+
+     GSS_S_DUPLICATE_TOKEN       The input_token is valid, but is a duplicate
+                                 of a token already processed.  This is a fa‐
+                                 tal error during context establishment.
+
+     GSS_S_BAD_MECH              The received token specified a mechanism that
+                                 is not supported by the implementation or the
+                                 provided credential.
+
+SSEEEE AALLSSOO
+     gss_delete_sec_context(3), gss_export_sec_context(3), gss_get_mic(3),
+     gss_init_sec_context(3), gss_release_buffer(3), gss_release_cred(3),
+     gss_release_name(3), gss_wrap(3)
+
+SSTTAANNDDAARRDDSS
+     RFC 2743  Generic Security Service Application Program Interface Version
+               2, Update 1
+
+     RFC 2744  Generic Security Service API Version 2 : C-bindings
+
+HHIISSTTOORRYY
+     The ggssss__aacccceepptt__sseecc__ccoonntteexxtt function first appeared in FreeBSD 7.0.
+
+AAUUTTHHOORRSS
+     John Wray, Iris Associates
+
+CCOOPPYYRRIIGGHHTT
+     Copyright (C) The Internet Society (2000).  All Rights Reserved.
+
+     This document and translations of it may be copied and furnished to oth‐
+     ers, and derivative works that comment on or otherwise explain it or as‐
+     sist in its implementation may be prepared, copied, published and dis‐
+     tributed, in whole or in part, without restriction of any kind, provided
+     that the above copyright notice and this paragraph are included on all
+     such copies and derivative works.  However, this document itself may not
+     be modified in any way, such as by removing the copyright notice or ref‐
+     erences to the Internet Society or other Internet organizations, except
+     as needed for the purpose of developing Internet standards in which case
+     the procedures for copyrights defined in the Internet Standards process
+     must be followed, or as required to translate it into languages other
+     than English.
+
+     The limited permissions granted above are perpetual and will not be re‐
+     voked by the Internet Society or its successors or assigns.
+
+     This document and the information contained herein is provided on an "AS
+     IS" basis and THE INTERNET SOCIETY AND THE INTERNET ENGINEERING TASK
+     FORCE DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+     LIMITED TO ANY WARRANTY THAT THE USE OF THE INFORMATION HEREIN WILL NOT
+     INFRINGE ANY RIGHTS OR ANY IMPLIED WARRANTIES OF MERCHANTABILITY OR FIT‐
+     NESS FOR A PARTICULAR PURPOSE.
+
+BSD                            January 26, 2010                            BSD

@@ -1,0 +1,146 @@
+DOMAIN(9)                BSD Kernel Developer's Manual               DOMAIN(9)
+
+NNAAMMEE
+     ddoommaaiinn, pprroottoossww — programming interface for kernel socket implementation
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//kkeerrnneell..hh>>
+     ##iinncclluuddee <<ssyyss//pprroottoossww..hh>>
+     ##iinncclluuddee <<ssyyss//ddoommaaiinn..hh>>
+
+     _v_o_i_d
+     ddoommaaiinn__aadddd(_s_t_r_u_c_t _d_o_m_a_i_n _*_d_o_m);
+
+     _v_o_i_d
+     ddoommaaiinn__rreemmoovvee(_s_t_r_u_c_t _d_o_m_a_i_n _*_d_o_m);
+
+     _v_o_i_d
+     DDOOMMAAIINN__SSEETT(_d_o_m_a_i_n);
+
+     _i_n_t
+     pprroottoossww__rreeggiisstteerr(_s_t_r_u_c_t _d_o_m_a_i_n _*_d_o_m, _s_t_r_u_c_t _p_r_o_t_o_s_w _*_p_r);
+
+     _i_n_t
+     pprroottoossww__uunnrreeggiisstteerr(_s_t_r_u_c_t _p_r_o_t_o_s_w _*_p_r);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ddoommaaiinn subsystem allows implementation of communication protocols
+     that are exposed to the userland via the socket(2) API.  When an applica‐
+     tion performs a ssoocckkeett(_d_o_m_a_i_n, _t_y_p_e, _p_r_o_t_o_c_o_l) syscall, the kernel
+     searches for a ddoommaaiinn matching the _d_o_m_a_i_n argument, then within this do‐
+     main, searches for a protocol matching _t_y_p_e.  If the third argument,
+     _p_r_o_t_o_c_o_l, is not 0, that value must also match.  The structure found must
+     implement certain methods, so that socket(2) API works for this particu‐
+     lar kind of a socket.
+
+     A minimal ddoommaaiinn structure implementing a domain shall be initialized
+     with sparse C99 initializer and has public fields as follows:
+
+     struct domain {
+         /*
+          * Mandatory fields.
+          */
+         int dom_family;     /* PF_xxx, first argument of socket(2) */
+         char        *dom_name;      /* text name of the domain */
+         u_int       dom_nprotosw;   /* length of dom_protosw[] */
+         /*
+          * Following methods are optional.
+          */
+         int (*dom_probe)(void);                     /* check for support */
+         struct rib_head *(*dom_rtattach)(uint32_t); /* init route table */
+         void (*dom_rtdetach)(struct rib_head *);    /* clean up table */
+         void *(*dom_ifattach)(struct ifnet *);      /* interface attach */
+         void (*dom_ifdetach)(struct ifnet *, void *);/* & detach callbacks */
+         int (*dom_ifmtu)(struct ifnet *);           /* mtu change */
+         /*
+          * Mandatory variable size array of pointers to protosw structs.
+          */
+         struct  protosw *dom_protosw[];
+     };
+
+     Each domain contains the _d_o_m___p_r_o_t_o_s_w array of protocol switch structures
+     (_s_t_r_u_c_t _p_r_o_t_o_s_w _*), one for each socket type supported.  The array may
+     have NULL spacers for loadable protocols.  Sparse C99 initializers shall
+     be used to initialize pprroottoossww structures.  The structure has mandatory
+     field _p_r___t_y_p_e and mandatory _p_r___a_t_t_a_c_h method.  The rest of the methods
+     are optional, but a meaningful protocol should implement some.
+
+     struct protosw {
+         short       pr_type;        /* second argument of socket(2) */
+         short       pr_protocol;    /* third argument of socket(2) or 0 */
+         short       pr_flags;       /* see protosw.h */
+         pr_soreceive_t  *pr_soreceive;  /* recv(2) */
+         pr_rcvd_t       *pr_rcvd;       /* soreceive_generic() if PR_WANTRCV */
+         pr_sosend_t     *pr_sosend;     /* send(2) */
+         pr_send_t       *pr_send;       /* send(2) via sosend_generic() */
+         pr_ready_t      *pr_ready;      /* sendfile/ktls readyness */
+         pr_sopoll_t     *pr_sopoll;     /* poll(2) */
+         pr_attach_t     *pr_attach;     /* creation: socreate(), sonewconn() */
+         pr_detach_t     *pr_detach;     /* destruction: sofree() */
+         pr_connect_t    *pr_connect;    /* connect(2) */
+         pr_disconnect_t *pr_disconnect; /* sodisconnect() */
+         pr_close_t      *pr_close;      /* close(2) */
+         pr_shutdown_t   *pr_shutdown;   /* shutdown(2) */
+         pr_abort_t      *pr_abort;      /* abrupt tear down: soabort() */
+         pr_aio_queue_t  *pr_aio_queue;  /* aio(9) */
+         pr_bind_t       *pr_bind;       /* bind(2) */
+         pr_bindat_t     *pr_bindat;     /* bindat(2) */
+         pr_listen_t     *pr_listen;     /* listen(2) */
+         pr_accept_t     *pr_accept;     /* accept(2) */
+         pr_connectat_t  *pr_connectat;  /* connectat(2) */
+         pr_connect2_t   *pr_connect2;   /* socketpair(2) */
+         pr_control_t    *pr_control;    /* ioctl(2) */
+         pr_rcvoob_t     *pr_rcvoob;     /* soreceive_rcvoob() */
+         pr_ctloutput_t  *pr_ctloutput;  /* control output (from above) */
+         pr_peeraddr_t   *pr_peeraddr;   /* getpeername(2) */
+         pr_sockaddr_t   *pr_sockaddr;   /* getsockname(2) */
+         pr_sense_t      *pr_sense;      /* stat(2) */
+     };
+
+     The following functions handle the registration of new domains and proto‐
+     cols.
+
+     ddoommaaiinn__aadddd() adds a new protocol domain to the system.  In most cases
+     ddoommaaiinn__aadddd() is not called directly, instead DDOOMMAAIINN__SSEETT() is used, which
+     is a wrapper around SSYYSSIINNIITT() macro.  If the new domain has defined a
+     _d_o_m___p_r_o_b_e routine, it is called first in ddoommaaiinn__aadddd() to determine if the
+     domain should be supported on the current system.  If the probe routine
+     returns a non-0 value, then the domain will not be added.  Once a domain
+     is added it cannot be completely unloaded.  This is because there is no
+     reference counting system in place to determine if there are any active
+     references from sockets within that domain.  However, the exprimental
+     ddoommaaiinn__rreemmoovvee() exists, and unloadable domains may be supported in the
+     future.
+
+     pprroottoossww__rreeggiisstteerr() dynamically adds a protocol to a domain, if the latter
+     has an empty slot in its _d_o_m___p_r_o_t_o_s_w.  Dynamically added protocol can
+     later be unloaded with pprroottoossww__uunnrreeggiisstteerr().
+
+RREETTUURRNN VVAALLUUEESS
+     The ddoommaaiinn__aadddd() never fails, but it may not add a domain if its
+     _d_o_m___p_r_o_b_e fails.
+
+     The pprroottoossww__rreeggiisstteerr() function may fail if:
+
+     [EEXIST]           A protocol with the same value of _p_r___t_y_p_e and
+                        _p_r___p_r_o_t_o_c_o_l already exists in the domain.
+
+     [ENOMEM]           The domain doesn't have any NULL slots in its
+                        _d_o_m___p_r_o_t_o_s_w.
+
+SSEEEE AALLSSOO
+     socket(2), SYSINIT(9)
+
+HHIISSTTOORRYY
+     The ddoommaaiinn subsystem first appeared in 4.3BSD as the part of the very
+     first socket(2) API implementation.
+
+     The ddoommaaiinn subsystem and this manual page were significantly rewritten in
+     FreeBSD 14.
+
+AAUUTTHHOORRSS
+     This manual page was written by Chad David <_d_a_v_i_d_c_@_a_c_n_s_._a_b_._c_a> and
+     Gleb Smirnoff <_g_l_e_b_i_u_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                           September 14, 2022                           BSD

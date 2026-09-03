@@ -1,0 +1,116 @@
+BUS_SETUP_INTR(9)        BSD Kernel Developer's Manual       BUS_SETUP_INTR(9)
+
+NNAAMMEE
+     BBUUSS__SSEETTUUPP__IINNTTRR, bbuuss__sseettuupp__iinnttrr, BBUUSS__TTEEAARRDDOOWWNN__IINNTTRR, bbuuss__tteeaarrddoowwnn__iinnttrr —
+     create, attach and teardown an interrupt handler
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//bbuuss..hh>>
+
+     _i_n_t
+     BBUUSS__SSEETTUUPP__IINNTTRR(_d_e_v_i_c_e___t _d_e_v, _d_e_v_i_c_e___t _c_h_i_l_d, _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*_i_r_q,
+         _i_n_t _f_l_a_g_s, _d_r_i_v_e_r___f_i_l_t_e_r___t _*_f_i_l_t_e_r, _d_r_i_v_e_r___i_n_t_r___t _*_i_t_h_r_e_a_d,
+         _v_o_i_d _*_a_r_g, _v_o_i_d _*_*_c_o_o_k_i_e_p);
+
+     _i_n_t
+     bbuuss__sseettuupp__iinnttrr(_d_e_v_i_c_e___t _d_e_v, _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*_r, _i_n_t _f_l_a_g_s,
+         _d_r_i_v_e_r___f_i_l_t_e_r___t _f_i_l_t_e_r, _d_r_i_v_e_r___i_n_t_r___t _i_t_h_r_e_a_d, _v_o_i_d _*_a_r_g,
+         _v_o_i_d _*_*_c_o_o_k_i_e_p);
+
+     _i_n_t
+     BBUUSS__TTEEAARRDDOOWWNN__IINNTTRR(_d_e_v_i_c_e___t _d_e_v, _d_e_v_i_c_e___t _c_h_i_l_d, _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*_i_r_q,
+         _v_o_i_d _*_c_o_o_k_i_e_p);
+
+     _i_n_t
+     bbuuss__tteeaarrddoowwnn__iinnttrr(_d_e_v_i_c_e___t _d_e_v, _s_t_r_u_c_t _r_e_s_o_u_r_c_e _*_r, _v_o_i_d _*_c_o_o_k_i_e_p);
+
+DDEESSCCRRIIPPTTIIOONN
+     The BBUUSS__SSEETTUUPP__IINNTTRR() method will create and attach an interrupt handler
+     to an interrupt previously allocated by the resource manager's
+     BUS_ALLOC_RESOURCE(9) method.  The _f_l_a_g_s are found in <_s_y_s_/_b_u_s_._h>, and
+     give the broad category of interrupt.  The _f_l_a_g_s also tell the interrupt
+     handlers about certain device driver characteristics.  INTR_EXCL marks
+     the handler as being an exclusive handler for this interrupt.
+     INTR_MPSAFE tells the scheduler that the interrupt handler is well be‐
+     haved in a preemptive environment (``SMP safe''), and does not need to be
+     protected by the ``Giant Lock'' mutex.  INTR_ENTROPY marks the interrupt
+     as being a good source of entropy - this may be used by the entropy de‐
+     vice _/_d_e_v_/_r_a_n_d_o_m.
+
+     To define a time-critical handler that will not execute any potentially
+     blocking operation, use the _f_i_l_t_e_r argument.  See the _F_i_l_t_e_r _R_o_u_t_i_n_e_s
+     section below for information on writing a filter.  Otherwise, use the
+     _i_t_h_r_e_a_d argument.  The defined handler will be called with the value _a_r_g
+     as its only argument.  See the _i_t_h_r_e_a_d _R_o_u_t_i_n_e_s section below for more
+     information on writing an interrupt handler.
+
+     The _c_o_o_k_i_e_p argument is a pointer to a _v_o_i_d _* that BBUUSS__SSEETTUUPP__IINNTTRR() will
+     write a cookie for the parent bus' use to if it is successful in estab‐
+     lishing an interrupt.  Driver writers may assume that this cookie will be
+     non-zero.  The nexus driver will write 0 on failure to _c_o_o_k_i_e_p.
+
+     The interrupt handler will be detached by BBUUSS__TTEEAARRDDOOWWNN__IINNTTRR().  The
+     cookie needs to be passed to BBUUSS__TTEEAARRDDOOWWNN__IINNTTRR() in order to tear down
+     the correct interrupt handler.  Once BBUUSS__TTEEAARRDDOOWWNN__IINNTTRR() returns, it is
+     guaranteed that the interrupt function is not active and will no longer
+     be called.
+
+     Mutexes are not allowed to be held across calls to these functions.
+
+   FFiilltteerr RRoouuttiinneess
+     A filter runs in primary interrupt context.  In this context, normal mu‐
+     texes cannot be used.  Only the spin lock version of these can be used
+     (specified by passing MTX_SPIN to mmttxx__iinniitt() when initializing the mu‐
+     tex).  wakeup(9) and similar routines can be called.  Atomic operations
+     from _m_a_c_h_i_n_e_/_a_t_o_m_i_c may be used.  Reads and writes to hardware through
+     bus_space(9) may be used.  PCI configuration registers may be read and
+     written.  All other kernel interfaces cannot be used.
+
+     In this restricted environment, care must be taken to account for all
+     races.  A careful analysis of races should be done as well.  It is gener‐
+     ally cheaper to take an extra interrupt, for example, than to protect
+     variables with spinlocks.  Read, modify, write cycles of hardware regis‐
+     ters need to be carefully analyzed if other threads are accessing the
+     same registers.
+
+     Generally, a filter routine will use one of two strategies.  The first
+     strategy is to simply mask the interrupt in hardware and allow the
+     ithread routine to read the state from the hardware and then reenable in‐
+     terrupts.  The ithread also acknowledges the interrupt before re-enabling
+     the interrupt source in hardware.  Most PCI hardware can mask its inter‐
+     rupt source.
+
+     The second common approach is to use a filter with multiple taskqueue(9)
+     tasks.  In this case, the filter acknowledges the interrupts and queues
+     the work to the appropriate taskqueue.  Where one has to multiplex dif‐
+     ferent kinds of interrupt sources, like a network card's transmit and re‐
+     ceive paths, this can reduce lock contention and increase performance.
+
+     You should not malloc(9) from inside a filter.  You may not call anything
+     that uses a normal mutex.  Witness may complain about these.
+
+   iitthhrreeaadd RRoouuttiinneess
+     You can do whatever you want in an ithread routine, except sleep.  Care
+     must be taken not to sleep in an ithread.  In addition, one should mini‐
+     mize lock contention in an ithread routine because contested locks ripple
+     over to all other ithread routines on that interrupt.
+
+   SSlleeeeppiinngg
+     Sleeping is voluntarily giving up control of your thread.  All the sleep
+     routine found in msleep(9) sleep.  Waiting for a condition variable de‐
+     scribed in condvar(9) is sleeping.  Calling any function that does any of
+     these things is sleeping.
+
+RREETTUURRNN VVAALLUUEESS
+     Zero is returned on success, otherwise an appropriate error is returned.
+
+SSEEEE AALLSSOO
+     random(4), device(9), driver(9), locking(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Jeroen Ruigrok van der Werven
+     <_a_s_m_o_d_a_i_@_F_r_e_e_B_S_D_._o_r_g> based on the manual pages for BBUUSS__CCRREEAATTEE__IINNTTRR() and
+     BBUUSS__CCOONNNNEECCTT__IINNTTRR() written by Doug Rabson <_d_f_r_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            November 3, 2010                            BSD

@@ -1,0 +1,151 @@
+IEEE80211_PROTO(9)       BSD Kernel Developer's Manual      IEEE80211_PROTO(9)
+
+NNAAMMEE
+     iieeeeee8800221111__pprroottoo — 802.11 state machine support
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneett8800221111//iieeeeee8800221111__vvaarr..hh>>
+
+     _v_o_i_d
+     iieeeeee8800221111__ssttaarrtt__aallll(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*);
+
+     _v_o_i_d
+     iieeeeee8800221111__ssttoopp__aallll(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*);
+
+     _v_o_i_d
+     iieeeeee8800221111__ssuussppeenndd__aallll(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*);
+
+     _v_o_i_d
+     iieeeeee8800221111__rreessuummee__aallll(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*);
+
+     enum ieee80211_state;
+
+     _i_n_t
+     iieeeeee8800221111__nneeww__ssttaattee(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_v_a_p _*, _e_n_u_m _i_e_e_e_8_0_2_1_1___s_t_a_t_e, _i_n_t);
+
+     _v_o_i_d
+     iieeeeee8800221111__wwaaiitt__ffoorr__ppaarreenntt(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*);
+
+DDEESSCCRRIIPPTTIIOONN
+     The nneett8800221111 layer that supports 802.11 device drivers uses a state ma‐
+     chine to control operation of vaps.  These state machines vary according
+     to the vap operating mode.  Station mode state machines follow the 802.11
+     MLME states in the protocol specification.  Other state machines are sim‐
+     pler and reflect operational work such as scanning for a BSS or automati‐
+     cally selecting a channel to operate on.  When multiple vaps are opera‐
+     tional the state machines are used to coordinate operation such as choos‐
+     ing a channel.  The state machine mechanism also serves to bind the
+     nneett8800221111 layer to a driver; this is described more below.
+
+     The following states are defined for state machines:
+
+     IEEE80211_S_INIT   Default/initial state.  A vap in this state should not
+                        hold any dynamic state (e.g. entries for associated
+                        stations in the node table).  The driver must quiesce
+                        the hardware; e.g. there should be no interrupts fir‐
+                        ing.
+
+     IEEE80211_S_SCAN   Scanning for a BSS or choosing a channel to operate
+                        on.  Note that scanning can also take place in other
+                        states (e.g. when background scanning is active); this
+                        state is entered when initially bringing a vap to an
+                        operational state or after an event such as a beacon
+                        miss (in station mode).
+
+     IEEE80211_S_AUTH   Authenticating to an access point (in station mode).
+                        This state is normally reached from IEEE80211_S_SCAN
+                        after selecting a BSS, but may also be reached from
+                        IEEE80211_S_ASSOC or IEEE80211_S_RUN if the authenti‐
+                        cation handshake fails.
+
+     IEEE80211_S_ASSOC  Associating to an access point (in station mode).
+                        This state is reached from IEEE80211_S_AUTH after suc‐
+                        cessfully authenticating or from IEEE80211_S_RUN if a
+                        DisAssoc frame is received.
+
+     IEEE80211_S_CAC    Doing Channel Availability Check (CAC).  This state is
+                        entered only when DFS is enabled and the channel se‐
+                        lected for operation requires CAC.
+
+     IEEE80211_S_RUN    Operational.  In this state a vap can transmit data
+                        frames, accept requests for stations associating, etc.
+                        Beware that data traffic is also gated by whether the
+                        associated “port” is authorized.  When
+                        WPA/802.11i/802.1x is operational authorization may
+                        happen separately; e.g. in station mode
+                        wpa_supplicant(8) must complete the handshakes and
+                        plumb the necessary keys before a port is authorized.
+                        In this state a BSS is operational and associated
+                        state is valid and may be used; e.g.  _i_c___b_s_s and
+                        _i_c___b_s_s_c_h_a_n are guaranteed to be usable.
+
+     IEEE80211_S_CSA    Channel Switch Announcement (CSA) is pending.  This
+                        state is reached only from IEEE80211_S_RUN when either
+                        a CSA is received from an access point (in station
+                        mode) or the local station is preparing to change
+                        channel.  In this state traffic may be muted depending
+                        on the Mute setting in the CSA.
+
+     IEEE80211_S_SLEEP  Asleep to save power (in station mode).  This state is
+                        reached only from IEEE80211_S_RUN when power save op‐
+                        eration is enabled and the local station is deemed
+                        sufficiently idle to enter low power mode.
+
+     Note that states are ordered (as shown above); e.g. a vap must be in the
+     IEEE80211_S_RUN or “greater” before it can transmit frames.  Certain
+     nneett8800221111 data are valid only in certain states; e.g. the _i_v___b_s_s_c_h_a_n that
+     specifies the channel for the operating BSS should never be used except
+     in IEEE80211_S_RUN or greater.
+
+SSTTAATTEE CCHHAANNGGEESS
+     State machine changes are typically handled internal to the nneett8800221111
+     layer in response to ioctl(2) requests, received frames, or external
+     events such as a beacon miss.  The iieeeeee8800221111__nneeww__ssttaattee() function is used
+     to initiate a state machine change on a vap.  The new state and an op‐
+     tional argument are supplied.  The request is initially processed to han‐
+     dle coordination of multiple vaps.  For example, only one vap at a time
+     can be scanning, if multiple vaps request a change to IEEE80211_S_SCAN
+     the first will be permitted to run and the others will be _d_e_f_e_r_r_e_d until
+     the scan operation completes at which time the selected channel will be
+     adopted.  Similarly nneett8800221111 handles coordination of combinations of vaps
+     such as an AP and station vap where the station may need to roam to fol‐
+     low the AP it is associated to (dragging along the AP vap to the new
+     channel).  Another important coordination is the handling of
+     IEEE80211_S_CAC and IEEE80211_S_CSA.  No more than one vap can ever be
+     actively changing state at a time.  In fact nneett8800221111 single-threads the
+     state machine logic in a dedicated taskqueue(9) thread that is also used
+     to synchronize work such as scanning and beacon miss handling.
+
+     After multi-vap scheduling/coordination is done the per-vap _i_v___n_e_w_s_t_a_t_e
+     method is called to carry out the state change work.  Drivers use this
+     entry to setup private state and then dispatch the call to the nneett8800221111
+     layer using the previously defined method pointer (in OOP-parlance they
+     call the “super method” ).
+
+     nneett8800221111 handles two state changes specially.  On transition to
+     IEEE80211_S_RUN the IFF_DRV_OACTIVE bit on the vap's transmit queue is
+     cleared so traffic can flow.  On transition to IEEE80211_S_INIT any state
+     in the scan cache associated with the vap is flushed and any frames pend‐
+     ing on the transmit queue are flushed.
+
+DDRRIIVVEERR IINNTTEEGGRRAATTIIOONN
+     Drivers are expected to override the _i_v___n_e_w_s_t_a_t_e method to interpose
+     their own code and handle setup work required by state changes.  Other‐
+     wise drivers must call iieeeeee8800221111__ssttaarrtt__aallll() in response to being marked
+     up through an SIOCSIFFLAGS ioctl request and they should use
+     iieeeeee8800221111__ssuussppeenndd__aallll() and iieeeeee8800221111__rreessuummee__aallll() to implement sus‐
+     pend/resume support.
+
+     There is also an iieeeeee8800221111__ssttoopp__aallll() call to force all vaps to an
+     IEEE80211_S_INIT state but this should not be needed by a driver; control
+     is usually handled by nneett8800221111 or, in the case of card eject or vap de‐
+     stroy, work will be initiated outside the driver.
+
+SSEEEE AALLSSOO
+     ioctl(2), wpa_supplicant(8), ieee80211(9), ifnet(9), taskqueue(9)
+
+HHIISSTTOORRYY
+     The state machine concept was part of the original iieeeeee8800221111 code base
+     that first appeared in NetBSD 1.5.
+
+BSD                             August 4, 2009                             BSD

@@ -1,0 +1,286 @@
+The  driver  is  the machine independent layer over anything that
+can source or sink a data stream, whether a physical or jack on a
+soundcard, cabled to some  external  synthesizer  or  input  con‐
+troller,  an  on‐board  programmable  tone generator, or a single
+jack, synthesizer, or controller component within  a  complex  or
+device  that  has  several such components and appears as several
+streams.  One data stream is a unidirectional stream of messages,
+as could be carried over one cable in  the  specification.   Many
+messages carry a four‐bit channel number, creating up to 16 chan‐
+nels  within a single stream.  There may be multiple consumers of
+a stream, each configured to react only to messages  on  specific
+channels;  the sets of channels different consumers react to need
+not be disjoint.  Many modern devices such as  multitimbral  key‐
+boards  and  tone generators listen on all 16 channels, or may be
+viewed as collections of 16 independent consumers each  listening
+on  one channel.  defines some messages that take no channel num‐
+ber, and apply to all consumers of the stream on which  they  are
+sent.   For an inbound stream, is a promiscuous receiver, captur‐
+ing all messages regardless of channel number.  For  an  outbound
+stream,  the  writer  can  specify  a channel number per message;
+there is no notion of binding the stream to one destination chan‐
+nel in advance.  A single device instance is the endpoint of  one
+outbound  stream,  one  inbound  stream,  or one of each.  In the
+third case, the write and read  sides  are  independent  streams.
+For  example,  a  soundcard  driver  may map its and jacks to the
+write and read sides of a single device instance, but those jacks
+can be cabled to completely different pieces of  gear.   Informa‐
+tion  from and a diagram of any external cabling, will help clar‐
+ify the mapping.  Drivers can attach include  soundcard  drivers,
+many  of  which  support a resembling Roland’s and handled by de‐
+vices via and on‐board devices that can make  sounds,  whether  a
+lowly  speaker  or  a Yamaha Serial port and connections are cur‐
+rently science fiction.  The protocol permits some forms of  mes‐
+sage compression such as running status and hidden note‐off.  Re‐
+ceived  messages  on  inbound streams are always canonicalized by
+before presentation to higher layers.  Messages for  transmission
+are  accepted  by  in any valid form.  Access to device instances
+can be through the raw device nodes, or through the sequencer,  A
+device  supports and the corresponding filters, and may be opened
+only when it is not already open.  It may be opened in  or  mode,
+but a later or will return -1 if the device has no associated in‐
+put  or output stream, respectively.  Bytes written are passed as
+quickly as possible to the underlying  driver  as  complete  mes‐
+sages; a maximum of two bytes at the end of a may remain buffered
+if they do not complete a message, until completed by a following
+A  will  not block or return when it could immediately return any
+nonzero count, and messages received are available to as soon  as
+they are complete, with a maximum of two received bytes remaining
+buffered  if they do not complete a message.  As all messages are
+three bytes or fewer except for System Exclusive, which can  have
+arbitrary  length,  these  rules imply that System Exclusive mes‐
+sages are the only ones of which some bytes can be delivered  be‐
+fore all are available.  System Realtime messages are passed with
+minimum delay in either direction, ahead of any possible buffered
+incomplete  message.   As a result, they will never interrupt any
+message except possibly System Exclusive.  A with a buffer  large
+enough  to  accommodate the first complete message available will
+be satisfied with as many  complete  messages  as  will  fit.   A
+buffer too small for the first complete message will be filled to
+capacity.   Therefore,  an  application that reads from an device
+with buffers of three bytes or larger  need  never  parse  across
+read  boundaries  to assemble a received message, except possibly
+in the case of a System Exclusive message.  However, if  the  ap‐
+plication  reads  through a buffering layer such as this property
+will not be preserved.  The driver itself supports the operations
+and Underlying devices may support others.   The  value  returned
+for  reflects  the  size in bytes of complete messages (or System
+Exclusive chunks) ready to read.  If the returns and a of size is
+issued, bytes will be read, but if a of size < is  issued,  fewer
+than bytes may be read if does not fall on a message/chunk bound‐
+ary.   Raw  access can be used to receive bulk dumps from synthe‐
+sizers, download bulk data to them, and so on.   Simple  patching
+of one device to another can be done at the command line, as with
+which  will loop all messages received on the input stream of in‐
+put stream  back to its output stream in real time.  However,  an
+attempt to record and play back music with will be disappointing.
+The  file will contain all of the notes that were played, but be‐
+cause messages carry no explicit timing, the will reproduce  them
+all  at  once,  as  fast as they can be transmitted.  To preserve
+timing information, the sequencer device can be used.  The proto‐
+col includes a keepalive function called Active Sensing.  In  any
+receiver that has received at least one Active Sense message, the
+feature  is  suppressed  and no timeout applies.  If at least one
+such message has been received, the lapse of any  subsequent  300
+ms  interval without receipt of any message reflects loss of com‐
+munication, and the receiver should silence any currently  sound‐
+ing  notes  and  return to non‐Active‐Sensing behavior.  A sender
+using Active Sensing generally avoids 300 ms gaps in transmission
+by sending Active Sense messages (which have no other effect)  as
+needed  when  there  is no other traffic to send in the interval.
+This feature can be important for which relies on  separate  Note
+On and Note Off messages, to avoid notes stuck on indefinitely if
+communication  is  interrupted before a Note Off message arrives.
+This protocol is supported in An outbound  stream  will  be  kept
+alive by sending Active Sense messages as needed, beginning after
+any  real traffic is sent on the stream, and continuing until the
+stream is closed.  On an inbound stream, if any Active Sense  has
+been  received, then a process reading an device will see an end‐
+of‐file indication if the input timeout elapses.  The stream  re‐
+mains  open,  the driver reverts to enforcing no timeout, and the
+process may continue to read for more input.  Subsequent  receipt
+of  an Active Sense message will re‐arm the timeout.  As received
+Active Sense messages are handled by they are not included  among
+messages  read  from  the device.  These rules support end‐to‐end
+Active Sensing behavior in simple cases without special action in
+an application.  For example, in if the input stream to is  lost,
+the  command  exits;  on  the of ceases to send Active Sense mes‐
+sages, and the receiving device will detect the loss and  silence
+any outstanding notes.  To play music using the raw would require
+an  application to issue many small writes with very precise tim‐
+ing.  The sequencer device, can manage the timing of data in  the
+kernel,  to  avoid such demanding real‐time constraints on a user
+process.  The device can be opened only when it  is  not  already
+open.   When opened, the sequencer internally opens all instances
+existing in the system that are not already  open  at  their  raw
+nodes; any attempts to open them at their raw nodes while the se‐
+quencer  is  open  will  fail.   All  access to the corresponding
+streams will then be through the sequencer.  Reads and writes  of
+pass  eight‐byte event structures defined in (which see for their
+documentation and examples of use).  Some  events  correspond  to
+messages,  and  carry an integer field to identify one of the de‐
+vices opened by the sequencer.  Other events carry timing  infor‐
+mation  interpreted or generated by the sequencer itself.  A mes‐
+sage received on an input stream is wrapped in a sequencer  event
+along  with  the  device  index  of the stream it arrived on, and
+queued for the reader of If a  measurable  time  interval  passed
+since  the last preceding message, a timing event that represents
+a delay for that interval is queued ahead of the received  event.
+The  sequencer  handles  output events by interpreting any timing
+event, and routing any message event at the proper time to an un‐
+derlying output stream according to its index.  Therefore can  be
+expected  to capture and reproduce an input performance including
+timing.  The process of playing back a  complex  file  is  illus‐
+trated  below.  The file may contain several tracks—four, in this
+example—of events, each marked with a device  index  and  a  time
+stamp,  that may overlap in time.  In the example, and are device
+indices of the three output streams; the left‐hand digit in  each
+input  event represents a channel on the selected stream, and the
+right‐hand digit represents a time for  the  event’s  occurrence.
+As  illustrated,  the input tracks are not firmly associated with
+output streams; any track may contain events for any stream.
+     |      |     a2|4     |
+   a0|3     |     c1|3   c0|3
+     |    b0|2    b1|2     |
+     |    b1|1      |    c0|1
+   a0|0     |     b0|0     |
+     v      v       v      v
+  +‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐+
+  | merge to 1 ordered stream |
+  | user code, eg midiplay(1) |
+  +‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐‐+
+              b1|2
+              b0|2
+              c0|1
+              b1|1
+              b0|0
+              a0|0
+                v
+  _______+‐‐‐‐‐‐‐‐‐‐‐‐‐+_______user
+         | /dev/music  |     kernel
+         | (sequencer) |
+         +‐‐‐‐‐‐‐‐‐‐‐‐‐+
+           |    1    0
+     +‐‐‐‐‐’    |    ’‐‐‐‐‐.
+     0          0          |
+     v          v          v
+  +‐‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐‐+
+  |midi(4)| |midi(4) | |midi(4)  |
+  |rmidia | |rmidib  | |rmidic   |
+  +‐‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐‐+
+  | mpu(4)| |umidi(4)| |midisyn  |
+  +‐‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐+ +‐‐‐‐‐‐‐‐‐+
+  |  HW   |     |      | opl(4)  |
+  | MIDI  |     U      +‐‐‐‐‐‐‐‐‐+
+  | UART  |      S     | internal|
+  +‐‐‐‐‐‐‐+       B    |   tone  |
+      |           |    |generator|
+      v           |    +‐‐‐‐‐‐‐‐‐+
+   external       v
+  MIDI device  external
+              MIDI device A user process must  merge  the  tracks
+into  a  single stream of sequencer and timing events in order by
+desired timing.  The sequencer obeys the timing events  and  dis‐
+tributes  the  events to the three destinations, in this case two
+external devices connected to a sound card and a  interface,  and
+an  tone generator on a sound card.  Use of with the sequencer is
+supported, however, there is no guarantee that a will  not  block
+or  return if it begins with a timer‐wait event, even if reported
+the sequencer writable.  The delivery of a realtime message ahead
+of buffered bytes of an incomplete message may cause the realtime
+message to seem, in a saved byte stream, to have  arrived  up  to
+640  us  earlier  than  it really did, at 1.0 data rates.  Higher
+data rates make the effect less significant.   Another  sequencer
+device, is provided only for backward compatibility with an obso‐
+lete  interface  in  which  some  sequencer events were four‐byte
+records.  It is not further documented here, and  the  should  be
+used in new code.  The emulation is implemented only for writing,
+and that might not be complete.  Some hardware devices supporting
+lack  transmit‐ready  interrupts, and some have the capability in
+hardware but currently lack driver support.  They can  be  recog‐
+nized  by  the  annotation  in While suitable for music playback,
+they may have an objectionable impact  on  system  responsiveness
+during  bulk  transmission  such as patch downloads, and are best
+avoided for that purpose if other suitable devices  are  present.
+Buffer space in itself is adequate for about 200 ms of traffic at
+data rates, per stream.  Event counters record bytes and messages
+discarded  because of protocol errors or buffer overruns, and can
+be viewed with They can be useful in diagnosing flaky cables  and
+other  communication  problems.   A  raw sound generator uses the
+layer to present a message‐driven interface attachable  by  While
+accepts  messages  for  transmission in any valid mixture of com‐
+pressed or canonical form, they are always presented to an under‐
+lying driver in the form it prefers.  Drivers for simple  devices
+register  their  preference  for  a compressed byte stream, while
+those like which uses a packet protocol, or which interprets com‐
+plete messages, register for intact canonical messages.  This de‐
+sign eliminates the need  for  compression  and  canonicalization
+logic  from  all  layers  above and below itself.  In addition to
+other errors documented for the family of system  calls,  can  be
+returned if the bytes to be written on a raw device would violate
+protocol.   For  ports using the ISA bus: For ports using the PCI
+bus: The driver first appeared in It was overhauled and this man‐
+ual page rewritten for Some sequencer events and  operations  are
+unimplemented,  as  notes.   source‐compatible  sequencer  macros
+should be added to implemented with the ones in so sources  writ‐
+ten for OSS can be easily compiled.  The sequencer blocks (or re‐
+turns  only when its buffer physically fills, which can represent
+an arbitrary latency because of buffered timing events.  As a re‐
+sult, interrupting a process writing the sequencer may not inter‐
+rupt music playback for a considerable time.  The sequencer could
+enforce a reasonable latency bound by examining timing events  as
+they are enqueued and blocking appropriately.  enables signal de‐
+livery  to  the  calling process only; is not supported.  The se‐
+quencer can only be a timing master, but  does  not  send  timing
+messages  to synchronize any slave device; it cannot be slaved to
+timing messages received on any interface (which would presumably
+require a PLL algorithm similar to NTP’s, and expertise  in  that
+area to implement it).  The sequencer ignores timing messages re‐
+ceived on any interface and does not pass them along to the read‐
+ing  process,  and the OSS operations to change that behavior are
+unimplemented.  The will report successfully setting any timebase
+up to ridiculously high resolutions, though  the  actual  resolu‐
+tion,  and  therefore  jitter,  is  constrained by Comparable se‐
+quencer implementations typically allow a selection  from  avail‐
+able  sources  of  time interrupts that may be programmable.  The
+device number in a sequencer event is treated on  as  index  into
+the array of devices the sequencer has opened, but on as the unit
+number  of  the  source device; these are usually the same if the
+sequencer has opened all the devices (that is, none  was  already
+open  at  its  raw node when the sequencer was opened), but might
+not be the same otherwise.  There is at present no  way  to  make
+reception nonpromiscuous, should anyone have a reason to want to.
+There  should  be ways to override default Active Sense behavior.
+As one obvious case, if an application is  seen  to  send  Active
+Sense  explicitly,  should  refrain  from adding its own.  On re‐
+ceive, there should be an option to  pass  Active  Sense  through
+rather  than interpreting it, for apps that wish to handle or ig‐
+nore it themselves and never see When a stream is open by the se‐
+quencer, Active Sense messages received on the stream are  passed
+to  the sequencer and not interpreted by The sequencer at present
+neither does anything itself with Active Sense messages received,
+nor supports the for making them available to the  user  process.
+System  Exclusive  messages  can be received by reading a raw de‐
+vice, but not by reading the sequencer; they are discarded on re‐
+ceipt when the stream is open by the sequencer, rather than being
+presented as the OSS‐defined sequencer events.  is  too  rudimen‐
+tary  at  present  to  get  satisfactory results from any onboard
+synth.  It lacks the required special interpretation of the  Gen‐
+eral  percussion channel in GM mode.  More devices should be sup‐
+ported; some sound cards with synthesis capability  have  drivers
+that  implement  the but not the interface.  Voice stealing algo‐
+rithm does not follow  the  General  Developer  Guidelines.   se‐
+quencer  compatibility  is lacking, but becoming important to ap‐
+plications.  It would require the function  of  merging  multiple
+tracks  into  a single ordered stream to be moved from user space
+into the sequencer.  Assuming the sequencer  driven  by  periodic
+interrupts,  timing  wheels  could be used as in itself.  Similar
+functionality will be in OSS4; with the right  infrastructure  it
+should  be possible to support both.  When merging streams, a no‐
+tion of transaction is  needed  to  group  critical  message  se‐
+quences.   If or have no such notion, it should be provided as an
+upward‐compatible extension.  I would rather have  itself  return
+an  error  (by the POSIX description looks most appropriate) if a
+read or write mode is requested that is not supported by the  in‐
+stance, rather than letting succeed and or return -1, but so help
+me, the latter seems the more common practice.

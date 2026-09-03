@@ -1,0 +1,181 @@
+NAMEI(9)                 BSD Kernel Developer's Manual                NAMEI(9)
+
+NNAAMMEE
+     nnaammeeii, NNDDIINNIITT, NNDDIINNIITT__AATT, NNDDFFRREEEE__PPNNBBUUFF — pathname translation and lookup
+     operations
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//ffccnnttll..hh>>
+     ##iinncclluuddee <<ssyyss//nnaammeeii..hh>>
+
+     _i_n_t
+     nnaammeeii(_s_t_r_u_c_t _n_a_m_e_i_d_a_t_a _*_n_d_p);
+
+     _v_o_i_d
+     NNDDIINNIITT(_s_t_r_u_c_t _n_a_m_e_i_d_a_t_a _*_n_d_p, _e_n_u_m _n_a_m_e_i_o_p _o_p, _u___i_n_t_6_4___t _f_l_a_g_s,
+         _e_n_u_m _u_i_o___s_e_g _s_e_g_f_l_g, _c_o_n_s_t _c_h_a_r _*_n_a_m_e_p);
+
+     _v_o_i_d
+     NNDDIINNIITT__AATT(_s_t_r_u_c_t _n_a_m_e_i_d_a_t_a _*_n_d_p, _e_n_u_m _n_a_m_e_i_o_p _o_p, _u___i_n_t_6_4___t _f_l_a_g_s,
+         _e_n_u_m _u_i_o___s_e_g _s_e_g_f_l_g, _c_o_n_s_t _c_h_a_r _*_n_a_m_e_p, _i_n_t _d_i_r_f_d);
+
+     _v_o_i_d
+     NNDDFFRREEEE__PPNNBBUUFF(_s_t_r_u_c_t _n_a_m_e_i_d_a_t_a _*_n_d_p);
+
+DDEESSCCRRIIPPTTIIOONN
+     The nnaammeeii facility allows the client to perform pathname translation and
+     lookup operations.  The nnaammeeii functions will increment the reference
+     count for the vnode in question.  The reference count has to be decre‐
+     mented after use of the vnode, by using either vrele(9) or vput(9), de‐
+     pending on whether the LOCKLEAF flag was specified or not.
+
+     The NNDDIINNIITT() macro is used to initialize nnaammeeii components.  It takes the
+     following arguments:
+
+     _n_d_p     A pointer to the _s_t_r_u_c_t _n_a_m_e_i_d_a_t_a to initialize.
+
+     _o_p      The operation which nnaammeeii() will perform.  The following opera‐
+             tions are valid: LOOKUP, CREATE, DELETE, and RENAME.  The latter
+             three are just setup for those effects; just calling nnaammeeii() will
+             not result in VVOOPP__RREENNAAMMEE() being called.
+
+     _f_l_a_g_s   Operation flags, described in the next section.  Several of these
+             can be effective at the same time.
+
+     _s_e_g_f_l_g  UIO segment indicator.  This indicates if the name of the object
+             is in userspace (UIO_USERSPACE) or in the kernel address space
+             (UIO_SYSSPACE).
+
+     _n_a_m_e_p   Pointer to the component's pathname buffer (the file or directory
+             name that will be looked up).
+
+     The NNDDIINNIITT__AATT() macro is similar to NNDDIINNIITT(), but takes one extra argu‐
+     ment:
+
+     _d_i_r_f_d   File descriptor referencing a directory, or the special value
+             AT_FDCWD meaning the calling thread's current working directory.
+             Lookups will be performed relative to this directory.
+
+     The NNDDFFRREEEE__PPNNBBUUFF() macro is used to free the pathname buffer.  It must be
+     called exactly once for each successful nnaammeeii() call.  It takes the fol‐
+     lowing argument:
+
+     _n_d_p     A pointer to a _s_t_r_u_c_t _n_a_m_e_i_d_a_t_a that was used in a successful
+             nnaammeeii() call.
+
+NNAAMMEEII OOPPEERRAATTIIOONN FFLLAAGGSS
+     The nnaammeeii() function takes the following set of “operation flags” that
+     influence its operation:
+
+     LOCKLEAF    Lock vnode on return with LK_EXCLUSIVE unless LOCKSHARED is
+                 also set.  VOP_UNLOCK(9) should be used to release the lock
+                 (or vput(9) which is equivalent to calling VOP_UNLOCK(9) fol‐
+                 lowed by vrele(9), all in one).
+
+     LOCKPARENT  This flag lets the nnaammeeii() function return the parent (direc‐
+                 tory) vnode, _n_i___d_v_p in locked state, unless it is identical
+                 to _n_i___v_p, in which case _n_i___d_v_p is not locked per se (but may
+                 be locked due to LOCKLEAF).  If a lock is enforced, it should
+                 be released using vput(9) or VOP_UNLOCK(9) and vrele(9).
+
+     LOCKSHARED  Lock vnode on return with LK_SHARED, if permitted by the file
+                 system that owns the vnode.  The file system must explicitly
+                 permit this by setting MNTK_LOOKUP_SHARED in
+                 mp->mnt_kern_flag during mount and by calling
+                 VVNN__LLOOCCKK__AASSHHAARREE() when allocating the vnode.  If LOCKLEAF is
+                 specified but shared locking is not permitted, then the vnode
+                 will be returned with LK_EXCLUSIVE.  VOP_UNLOCK(9) should be
+                 used to release the lock (or vput(9) which is equivalent to
+                 calling VOP_UNLOCK(9) followed by vrele(9), all in one).
+
+     WANTPARENT  This flag allows the nnaammeeii() function to return the parent
+                 (directory) vnode in an unlocked state.  The parent vnode
+                 must be released separately by using vrele(9).
+
+     NOCACHE     Avoid nnaammeeii() creating this entry in the namecache if it is
+                 not already present.  Normally, nnaammeeii() will add entries to
+                 the name cache if they are not already there.
+
+     FOLLOW      With this flag, nnaammeeii() will follow the symbolic link if the
+                 last part of the path supplied is a symbolic link (i.e., it
+                 will return a vnode for whatever the link points at, instead
+                 for the link itself).
+
+     NOFOLLOW    Do not follow symbolic links (pseudo).  This flag is not
+                 looked for by the actual code, which looks for FOLLOW.
+                 NOFOLLOW is used to indicate to the source code reader that
+                 symlinks are intentionally not followed.
+
+AALLLLOOCCAATTEEDD EELLEEMMEENNTTSS
+     The _n_a_m_e_i_d_a_t_a structure is composed of the following fields:
+
+     _n_i___s_t_a_r_t_d_i_r      In the normal case, this is either the current directory
+                      or the root.  It is the current directory if the name
+                      passed in does not start with ‘/’ and we have not gone
+                      through any symlinks with an absolute path, and the root
+                      otherwise.
+
+                      In this case, it is only used by vvffss__llooookkuupp(), and
+                      should not be considered valid after a call to nnaammeeii().
+
+     _n_i___d_v_p           Vnode pointer to directory of the object on which lookup
+                      is performed.  This is available on successful return if
+                      LOCKPARENT or WANTPARENT is set.  It is locked if
+                      LOCKPARENT is set.
+
+     _n_i___v_p            Vnode pointer to the resulting object, NULL otherwise.
+                      The _v___u_s_e_c_o_u_n_t field of this vnode is incremented.  If
+                      LOCKLEAF is set, it is also locked.
+
+     _n_i___c_n_d_._c_n___p_n_b_u_f  The pathname buffer contains the location of the file or
+                      directory that will be used by the nnaammeeii operations.  It
+                      is managed by the uma(9) zone allocation interface.
+
+RREETTUURRNN VVAALLUUEESS
+     If successful, nnaammeeii() will return 0, otherwise it will return an error.
+
+FFIILLEESS
+     src/sys/kern/vfs_lookup.c
+
+EERRRROORRSS
+     Errors which nnaammeeii() may return:
+
+     [ENOTDIR]          A component of the specified pathname is not a direc‐
+                        tory when a directory is expected.
+
+     [ENAMETOOLONG]     A component of a pathname exceeded 255 characters, or
+                        an entire pathname exceeded 1023 characters.
+
+     [ENOENT]           A component of the specified pathname does not exist,
+                        or the pathname is an empty string.
+
+     [EACCES]           An attempt is made to access a file in a way forbidden
+                        by its file access permissions.
+
+     [ELOOP]            Too many symbolic links were encountered in translat‐
+                        ing the pathname.
+
+     [EISDIR]           An attempt is made to open a directory with write mode
+                        specified.
+
+     [EINVAL]           The last component of the pathname specified for a
+                        DELETE or RENAME operation is ‘.’.
+
+     [EROFS]            An attempt is made to modify a file or directory on a
+                        read-only file system.
+
+SSEEEE AALLSSOO
+     uio(9), uma(9), VFS(9), vnode(9), vput(9), vref(9), vrele(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Eivind Eklund <_e_i_v_i_n_d_@_F_r_e_e_B_S_D_._o_r_g> and
+     later significantly revised by Hiten M. Pandya <_h_m_p_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     The LOCKPARENT flag does not always result in the parent vnode being
+     locked.  This results in complications when the LOCKPARENT is used.  In
+     order to solve this for the cases where both LOCKPARENT and LOCKLEAF are
+     used, it is necessary to resort to recursive locking.
+
+BSD                              May 16, 2025                              BSD

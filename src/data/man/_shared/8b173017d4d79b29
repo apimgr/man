@@ -1,0 +1,293 @@
+_l_i_r_c(4)                    Kernel Interfaces Manual                    _l_i_r_c(4)
+
+NNAAMMEE
+       lirc - lirc devices
+
+DDEESSCCRRIIPPTTIIOONN
+       The  _/_d_e_v_/_l_i_r_c_* character devices provide a low‐level bidirectional in‐
+       terface to infra‐red (IR) remotes.  Most of these devices can  receive,
+       and some can send.  When receiving or sending data, the driver works in
+       two different modes depending on the underlying hardware.
+
+       Some hardware (typically TV‐cards) decodes the IR signal internally and
+       provides  decoded  button presses as scancode values.  Drivers for this
+       kind of hardware work in LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE mode.  Such  hardware  usu‐
+       ally  does  not support sending IR signals.  Furthermore, such hardware
+       can only decode a limited set of IR protocols, usually only the  proto‐
+       col  of  the  specific remote which is bundled with, for example, a TV‐
+       card.
+
+       Other hardware provides a stream of pulse/space durations.   Such  dri‐
+       vers work in LLIIRRCC__MMOODDEE__MMOODDEE22 mode.  Such hardware can be used with (al‐
+       most)  any  kind  of remote.  This type of hardware can also be used in
+       LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE mode, in which case the kernel IR decoders will  de‐
+       code  the  IR.   These  decoders  can  be  written in extended BPF (see
+       bbppff(2)) and attached to the lliirrcc device.  Sometimes, this kind of hard‐
+       ware also supports sending IR data.
+
+       The LLIIRRCC__GGEETT__FFEEAATTUURREESS ioctl (see below) allows probing for whether  re‐
+       ceiving  and  sending  is  supported, and in which modes, amongst other
+       features.
+
+   RReeaaddiinngg iinnppuutt wwiitthh tthhee LLIIRRCC__MMOODDEE__MMOODDEE22 mmooddee
+       In the LLIIRRCC__MMOODDEE__MMOODDEE22 mode, the  data  returned  by  rreeaadd(2)  provides
+       32‐bit  values  representing  a space or a pulse duration.  The time of
+       the duration (microseconds) is encoded in the  lower  24  bits.   Pulse
+       (also  known as flash) indicates a duration of infrared light being de‐
+       tected, and space (also known as gap) indicates a duration with no  in‐
+       frared.   If  the  duration  of space exceeds the inactivity timeout, a
+       special timeout package is delivered, which marks the end of a message.
+       The upper 8 bits indicate the type of package:
+
+       LLIIRRCC__MMOODDEE22__SSPPAACCEE
+           Value reflects a space duration (microseconds).
+
+       LLIIRRCC__MMOODDEE22__PPUULLSSEE
+           Value reflects a pulse duration (microseconds).
+
+       LLIIRRCC__MMOODDEE22__FFRREEQQUUEENNCCYY
+           Value reflects a  frequency  (Hz);  see  the  LLIIRRCC__SSEETT__MMEEAASSUURREE__CCAARR‐‐
+           RRIIEERR__MMOODDEE ioctl.
+
+       LLIIRRCC__MMOODDEE22__TTIIMMEEOOUUTT
+           Value  reflects  a  space duration (microseconds).  The package re‐
+           flects a timeout; see the LLIIRRCC__SSEETT__RREECC__TTIIMMEEOOUUTT__RREEPPOORRTTSS ioctl.
+
+       LLIIRRCC__MMOODDEE22__OOVVEERRFFLLOOWW
+           The IR receiver encountered an overflow, and as a  result  data  is
+           missing (since Linux 5.18).
+
+   RReeaaddiinngg iinnppuutt wwiitthh tthhee LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE mmooddee
+       In  the  LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE mode, the data returned by rreeaadd(2) reflects
+       decoded button presses, in the struct _l_i_r_c___s_c_a_n_c_o_d_e.  The  scancode  is
+       stored  in  the  _s_c_a_n_c_o_d_e  field,  and  the  IR  protocol  is stored in
+       _r_c___p_r_o_t_o.  This field has one the values of the _e_n_u_m _r_c___p_r_o_t_o.
+
+   WWrriittiinngg oouuttppuutt wwiitthh tthhee LLIIRRCC__MMOODDEE__PPUULLSSEE mmooddee
+       The  data  written  to  the  character  device  using  wwrriittee(2)  is   a
+       pulse/space  sequence  of  integer  values.  Pulses and spaces are only
+       marked implicitly by their position.  The data must start and end  with
+       a  pulse,  thus  it  must always include an odd number of samples.  The
+       wwrriittee(2) function blocks until the data has  been  transmitted  by  the
+       hardware.   If  more  data  is provided than the hardware can send, the
+       wwrriittee(2) call fails with the error EEIINNVVAALL.
+
+   WWrriittiinngg oouuttppuutt wwiitthh tthhee LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE mmooddee
+       The data written to the character  devices  must  be  a  single  struct
+       _l_i_r_c___s_c_a_n_c_o_d_e.  The _s_c_a_n_c_o_d_e and _r_c___p_r_o_t_o fields must be filled in, all
+       other  fields must be 0.  The kernel IR encoders will convert the scan‐
+       code to pulses and spaces.  The protocol or scancode is invalid, or the
+       lliirrcc device cannot transmit.
+
+IIOOCCTTLL CCOOMMMMAANNDDSS
+       #include <linux/lirc.h>    /* But see BUGS */
+
+       int ioctl(int fd, int cmd, int *val);
+
+       The following iiooccttll(2) operations are provided by  the  lliirrcc  character
+       device to probe or change specific lliirrcc hardware settings.
+
+   AAllwwaayyss SSuuppppoorrtteedd CCoommmmaannddss
+       _/_d_e_v_/_l_i_r_c* devices always support the following commands:
+
+       LLIIRRCC__GGEETT__FFEEAATTUURREESS (_v_o_i_d)
+           Returns a bit mask of combined features bits; see FEATURES.
+
+       If  a device returns an error code for LLIIRRCC__GGEETT__FFEEAATTUURREESS, it is safe to
+       assume it is not a lliirrcc device.
+
+   OOppttiioonnaall CCoommmmaannddss
+       Some lliirrcc devices support the commands listed below.  Unless  otherwise
+       stated,  these  fail  with the error EENNOOTTTTYY if the operation isn’t sup‐
+       ported, or with the error EEIINNVVAALL if the operation  failed,  or  invalid
+       arguments were provided.  If a driver does not announce support of cer‐
+       tain features, invoking the corresponding ioctls will fail with the er‐
+       ror EENNOOTTTTYY.
+
+       LLIIRRCC__GGEETT__RREECC__MMOODDEE (_v_o_i_d)
+              If  the  lliirrcc  device has no receiver, this operation fails with
+              the error EENNOOTTTTYY.  Otherwise, it returns the receive mode, which
+              will be one of:
+
+              LLIIRRCC__MMOODDEE__MMOODDEE22
+                     The driver returns a sequence of pulse/space durations.
+
+              LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE
+                     The driver returns struct _l_i_r_c___s_c_a_n_c_o_d_e values,  each  of
+                     which represents a decoded button press.
+
+       LLIIRRCC__SSEETT__RREECC__MMOODDEE (_i_n_t)
+              Set  the  receive  mode.   _v_a_l  is  either LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE or
+              LLIIRRCC__MMOODDEE__MMOODDEE22.  If the lliirrcc device has no receiver, this oper‐
+              ation fails with the error EENNOOTTTTYY..
+
+       LLIIRRCC__GGEETT__SSEENNDD__MMOODDEE (_v_o_i_d)
+              Return the send mode.  LLIIRRCC__MMOODDEE__PPUULLSSEE or LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE  is
+              supported.  If the lliirrcc device cannot send, this operation fails
+              with the error EENNOOTTTTYY..
+
+       LLIIRRCC__SSEETT__SSEENNDD__MMOODDEE (_i_n_t)
+              Set   the  send  mode.   _v_a_l  is  either  LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE  or
+              LLIIRRCC__MMOODDEE__PPUULLSSEE.  If the lliirrcc device cannot send, this operation
+              fails with the error EENNOOTTTTYY.
+
+       LLIIRRCC__SSEETT__SSEENNDD__CCAARRRRIIEERR (_i_n_t)
+              Set the modulation frequency.  The  argument  is  the  frequency
+              (Hz).
+
+       LLIIRRCC__SSEETT__SSEENNDD__DDUUTTYY__CCYYCCLLEE (_i_n_t)
+              Set  the  carrier  duty  cycle.   _v_a_l  is  a number in the range
+              [0,100] which describes the pulse width as a percentage  of  the
+              total  cycle.  Currently, no special meaning is defined for 0 or
+              100, but the values are reserved for future use.
+
+       LLIIRRCC__GGEETT__MMIINN__TTIIMMEEOOUUTT((_v_o_i_d))
+       LLIIRRCC__GGEETT__MMAAXX__TTIIMMEEOOUUTT((_v_o_i_d))
+              Some devices have internal timers that can  be  used  to  detect
+              when  there  has  been no IR activity for a long time.  This can
+              help lliirrccdd(8) in detecting that an IR signal is finished and can
+              speed up the decoding process.  These operations return  integer
+              values  with  the  minimum/maximum  timeout that can be set (mi‐
+              croseconds).  Some devices have a fixed timeout.  For such  dri‐
+              vers,  LLIIRRCC__GGEETT__MMIINN__TTIIMMEEOOUUTT  and  LLIIRRCC__GGEETT__MMAAXX__TTIIMMEEOOUUTT will fail
+              with the error EENNOOTTTTYY.
+
+       LLIIRRCC__SSEETT__RREECC__TTIIMMEEOOUUTT (_i_n_t)
+              Set the integer value for IR inactivity timeout  (microseconds).
+              To  be  accepted, the value must be within the limits defined by
+              LLIIRRCC__GGEETT__MMIINN__TTIIMMEEOOUUTT and LLIIRRCC__GGEETT__MMAAXX__TTIIMMEEOOUUTT.  A value of 0 (if
+              supported by the hardware) disables all  hardware  timeouts  and
+              data should be reported as soon as possible.  If the exact value
+              cannot  be  set,  then  the next possible value _g_r_e_a_t_e_r than the
+              given value should be set.
+
+       LLIIRRCC__GGEETT__RREECC__TTIIMMEEOOUUTT (_v_o_i_d)
+              Return the current inactivity timeout (microseconds).  Available
+              since Linux 4.18.
+
+       LLIIRRCC__SSEETT__RREECC__TTIIMMEEOOUUTT__RREEPPOORRTTSS (_i_n_t)
+              Enable (_v_a_l is 1) or disable (_v_a_l  is  0)  timeout  packages  in
+              LLIIRRCC__MMOODDEE__MMOODDEE22.   The  behavior  of  this  operation has varied
+              across kernel versions:
+
+              •  Since Linux 5.17: timeout packages  are  always  enabled  and
+                 this ioctl is a no‐op.
+
+              •  Since  Linux  4.16:  timeout packages are enabled by default.
+                 Each time the lliirrcc device is opened, the LLIIRRCC__SSEETT__RREECC__TTIIMMEEOOUUTT
+                 operation can be used to disable (and, if desired,  to  later
+                 re‐enable) the timeout on the file descriptor.
+
+              •  In  Linux  4.15 and earlier: timeout packages are disabled by
+                 default, and enabling them (via LLIIRRCC__SSEETT__RREECC__TTIIMMEEOOUUTT) on  any
+                 file  descriptor  associated with the lliirrcc device has the ef‐
+                 fect of enabling timeouts for all file descriptors  referring
+                 to that device (until timeouts are disabled again).
+
+       LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR (_i_n_t)
+              Set  the upper bound of the receive carrier frequency (Hz).  See
+              LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR__RRAANNGGEE.
+
+       LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR__RRAANNGGEE (_i_n_t)
+              Sets the lower bound of the receive carrier frequency (Hz).  For
+              this to take  affect,  first  set  the  lower  bound  using  the
+              LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR__RRAANNGGEE ioctl, and then the upper bound using
+              the LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR ioctl.
+
+       LLIIRRCC__SSEETT__MMEEAASSUURREE__CCAARRRRIIEERR__MMOODDEE (_i_n_t)
+              Enable  (_v_a_l  is  1) or disable (_v_a_l is 0) the measure mode.  If
+              enabled, from the next  key  press  on,  the  driver  will  send
+              LLIIRRCC__MMOODDEE22__FFRREEQQUUEENNCCYY packets.  By default, this should be turned
+              off.
+
+       LLIIRRCC__GGEETT__RREECC__RREESSOOLLUUTTIIOONN (_v_o_i_d)
+              Return the driver resolution (microseconds).
+
+       LLIIRRCC__SSEETT__TTRRAANNSSMMIITTTTEERR__MMAASSKK (_i_n_t)
+              Enable  the set of transmitters specified in _v_a_l, which contains
+              a bit mask where each enabled transmitter is  a  1.   The  first
+              transmitter  is encoded by the least significant bit, and so on.
+              When an invalid bit mask is given, for example a bit is set even
+              though the device does not have so many transmitters, this oper‐
+              ation returns the number  of  available  transmitters  and  does
+              nothing otherwise.
+
+       LLIIRRCC__SSEETT__WWIIDDEEBBAANNDD__RREECCEEIIVVEERR (_i_n_t)
+              Some  devices  are  equipped  with  a special wide band receiver
+              which is intended to be used to learn the output of an  existing
+              remote.  This ioctl can be used to enable (_v_a_l equals 1) or dis‐
+              able  (_v_a_l  equals  0) this functionality.  This might be useful
+              for devices that otherwise have narrow band receivers that  pre‐
+              vent  them to be used with certain remotes.  Wide band receivers
+              may also be more precise.  On the other hand, their disadvantage
+              usually is reduced range of reception.
+
+              Note: wide band receiver may be implicitly enabled if you enable
+              carrier reports.  In that case, it will be disabled as  soon  as
+              you  disable carrier reports.  Trying to disable a wide band re‐
+              ceiver while carrier reports are active will do nothing.
+
+FFEEAATTUURREESS
+       the LLIIRRCC__GGEETT__FFEEAATTUURREESS ioctl returns a bit mask describing  features  of
+       the driver.  The following bits may be returned in the mask:
+
+       LLIIRRCC__CCAANN__RREECC__MMOODDEE22
+              The driver is capable of receiving using LLIIRRCC__MMOODDEE__MMOODDEE22.
+
+       LLIIRRCC__CCAANN__RREECC__SSCCAANNCCOODDEE
+              The driver is capable of receiving using LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE.
+
+       LLIIRRCC__CCAANN__SSEETT__SSEENNDD__CCAARRRRIIEERR
+              The  driver  supports  changing  the  modulation frequency using
+              LLIIRRCC__SSEETT__SSEENNDD__CCAARRRRIIEERR.
+
+       LLIIRRCC__CCAANN__SSEETT__SSEENNDD__DDUUTTYY__CCYYCCLLEE
+              The   driver   supports   changing   the   duty   cycle    using
+              LLIIRRCC__SSEETT__SSEENNDD__DDUUTTYY__CCYYCCLLEE.
+
+       LLIIRRCC__CCAANN__SSEETT__TTRRAANNSSMMIITTTTEERR__MMAASSKK
+              The  driver  supports  changing  the active transmitter(s) using
+              LLIIRRCC__SSEETT__TTRRAANNSSMMIITTTTEERR__MMAASSKK.
+
+       LLIIRRCC__CCAANN__SSEETT__RREECC__CCAARRRRIIEERR
+              The driver supports setting the receive carrier frequency  using
+              LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR.   Any  lliirrcc  device since the drivers were
+              merged in Linux 2.6.36 must have  LLIIRRCC__CCAANN__SSEETT__RREECC__CCAARRRRIIEERR__RRAANNGGEE
+              set if LLIIRRCC__CCAANN__SSEETT__RREECC__CCAARRRRIIEERR feature is set.
+
+       LLIIRRCC__CCAANN__SSEETT__RREECC__CCAARRRRIIEERR__RRAANNGGEE
+              The driver supports LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR__RRAANNGGEE.  The lower bound
+              of  the  carrier  must  first be set using the LLIIRRCC__SSEETT__RREECC__CCAARR‐‐
+              RRIIEERR__RRAANNGGEE ioctl, before using the LLIIRRCC__SSEETT__RREECC__CCAARRRRIIEERR ioctl to
+              set the upper bound.
+
+       LLIIRRCC__CCAANN__GGEETT__RREECC__RREESSOOLLUUTTIIOONN
+              The driver supports LLIIRRCC__GGEETT__RREECC__RREESSOOLLUUTTIIOONN.
+
+       LLIIRRCC__CCAANN__SSEETT__RREECC__TTIIMMEEOOUUTT
+              The driver supports LLIIRRCC__SSEETT__RREECC__TTIIMMEEOOUUTT.
+
+       LLIIRRCC__CCAANN__MMEEAASSUURREE__CCAARRRRIIEERR
+              The driver supports measuring of the modulation frequency  using
+              LLIIRRCC__SSEETT__MMEEAASSUURREE__CCAARRRRIIEERR__MMOODDEE.
+
+       LLIIRRCC__CCAANN__UUSSEE__WWIIDDEEBBAANNDD__RREECCEEIIVVEERR
+              The  driver  supports  learning mode using LLIIRRCC__SSEETT__WWIIDDEEBBAANNDD__RREE‐‐
+              CCEEIIVVEERR.
+
+       LLIIRRCC__CCAANN__SSEENNDD__PPUULLSSEE
+              The   driver   supports   sending   using   LLIIRRCC__MMOODDEE__PPUULLSSEE   or
+              LLIIRRCC__MMOODDEE__SSCCAANNCCOODDEE
+
+BBUUGGSS
+       Using  these  devices  requires  the  kernel source header file _l_i_r_c_._h.
+       This file is not available before Linux 4.6.  Users  of  older  kernels
+       could use the file bundled in ⟨http://www.lirc.org⟩.
+
+SSEEEE AALLSSOO
+       iirr--ccttll(1), lliirrccdd(8), bbppff(2)
+
+       ⟨https://www.kernel.org/doc/html/latest/userspace-api/media/rc/
+       lirc-dev.html⟩
+
+Linux man‐pages (unreleased)      2025‐09‐21                           _l_i_r_c(4)

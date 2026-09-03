@@ -1,0 +1,945 @@
+_c_p_u_s_e_t(7)              Miscellaneous Information Manual              _c_p_u_s_e_t(7)
+
+NNAAMMEE
+       cpuset - confine processes to processor and memory node subsets
+
+DDEESSCCRRIIPPTTIIOONN
+       The  cpuset  filesystem  is a pseudo‐filesystem interface to the kernel
+       cpuset mechanism, which is used to control the processor placement  and
+       memory placement of processes.  It is commonly mounted at _/_d_e_v_/_c_p_u_s_e_t.
+
+       On systems with kernels compiled with built in support for cpusets, all
+       processes are attached to a cpuset, and cpusets are always present.  If
+       a  system supports cpusets, then it will have the entry nnooddeevv ccppuusseett in
+       the file _/_p_r_o_c_/_f_i_l_e_s_y_s_t_e_m_s.  By mounting the cpuset filesystem (see the
+       EEXXAAMMPPLLEESS section below), the administrator can configure the cpusets on
+       a system to control the processor and memory placement of processes  on
+       that  system.   By  default, if the cpuset configuration on a system is
+       not modified or if the cpuset filesystem is not even mounted, then  the
+       cpuset  mechanism, though present, has no effect on the system’s behav‐
+       ior.
+
+       A cpuset defines a list of CPUs and memory nodes.
+
+       The CPUs of a system include all the logical processing units on  which
+       a  process can execute, including, if present, multiple processor cores
+       within a package and Hyper‐Threads within  a  processor  core.   Memory
+       nodes  include all distinct banks of main memory; small and SMP systems
+       typically have just one memory node that contains all the system’s main
+       memory, while NUMA (non‐uniform memory access)  systems  have  multiple
+       memory nodes.
+
+       Cpusets  are  represented  as  directories  in  a  hierarchical pseudo‐
+       filesystem, where the top directory in the hierarchy (_/_d_e_v_/_c_p_u_s_e_t) rep‐
+       resents the entire system (all online CPUs and memory  nodes)  and  any
+       cpuset that is the child (descendant) of another parent cpuset contains
+       a  subset  of that parent’s CPUs and memory nodes.  The directories and
+       files representing cpusets have normal filesystem permissions.
+
+       Every process in the system belongs to exactly one cpuset.   A  process
+       is confined to run only on the CPUs in the cpuset it belongs to, and to
+       allocate  memory  only  on  the  memory  nodes  in that cpuset.  When a
+       process ffoorrkk(2)s, the child process is placed in the same cpuset as its
+       parent.  With sufficient privilege, a process may  be  moved  from  one
+       cpuset  to another and the allowed CPUs and memory nodes of an existing
+       cpuset may be changed.
+
+       When the system begins booting, a single cpuset  is  defined  that  in‐
+       cludes  all  CPUs and memory nodes on the system, and all processes are
+       in that cpuset.  During the boot process, or later during normal system
+       operation, other cpusets may be created, as subdirectories of this  top
+       cpuset,  under  the  control of the system administrator, and processes
+       may be placed in these other cpusets.
+
+       Cpusets are integrated with the sscchheedd__sseettaaffffiinniittyy(2) scheduling  affin‐
+       ity  mechanism  and  the mmbbiinndd(2) and sseett__mmeemmppoolliiccyy(2) memory‐placement
+       mechanisms in the kernel.  Neither of these mechanisms  let  a  process
+       make  use of a CPU or memory node that is not allowed by that process’s
+       cpuset.  If changes to a process’s cpuset placement conflict with these
+       other mechanisms, then cpuset placement is enforced even  if  it  means
+       overriding  these other mechanisms.  The kernel accomplishes this over‐
+       riding by silently restricting the CPUs and memory nodes  requested  by
+       these  other  mechanisms  to  those  allowed  by the invoking process’s
+       cpuset.  This can result in these other calls returning  an  error,  if
+       for  example,  such  a  call ends up requesting an empty set of CPUs or
+       memory  nodes,  after  that  request  is  restricted  to  the  invoking
+       process’s cpuset.
+
+       Typically,  a cpuset is used to manage the CPU and memory‐node confine‐
+       ment for a set of cooperating processes, such as a batch scheduler job,
+       and these other mechanisms are used to manage the placement of individ‐
+       ual processes or memory regions within that set or job.
+
+FFIILLEESS
+       Each directory below _/_d_e_v_/_c_p_u_s_e_t represents a  cpuset  and  contains  a
+       fixed set of pseudo‐files describing the state of that cpuset.
+
+       New  cpusets are created using the mmkkddiirr(2) system call or the mmkkddiirr(1)
+       command.  The properties of a cpuset, such as its flags,  allowed  CPUs
+       and  memory  nodes, and attached processes, are queried and modified by
+       reading or writing to the appropriate file in that cpuset’s  directory,
+       as listed below.
+
+       The  pseudo‐files  in  each  cpuset directory are automatically created
+       when the cpuset is created, as a result of the mmkkddiirr(2) invocation.  It
+       is not possible to directly add or remove these pseudo‐files.
+
+       A cpuset directory that contains no child cpuset directories,  and  has
+       no  attached  processes, can be removed using rrmmddiirr(2) or rrmmddiirr(1).  It
+       is not necessary, or possible, to remove the  pseudo‐files  inside  the
+       directory before removing it.
+
+       The pseudo‐files in each cpuset directory are small text files that may
+       be  read  and written using traditional shell utilities such as ccaatt(1),
+       and eecchhoo(1), or from a program by using file I/O library  functions  or
+       system calls, such as ooppeenn(2), rreeaadd(2), wwrriittee(2), and cclloossee(2).
+
+       The  pseudo‐files in a cpuset directory represent internal kernel state
+       and do not have any persistent image on disk.  Each of these per‐cpuset
+       files is listed and described below.
+
+       _t_a_s_k_s  List of the process IDs (PIDs) of the processes in that  cpuset.
+              The list is formatted as a series of ASCII decimal numbers, each
+              followed  by a newline.  A process may be added to a cpuset (au‐
+              tomatically removing it from the  cpuset  that  previously  con‐
+              tained  it) by writing its PID to that cpuset’s _t_a_s_k_s file (with
+              or without a trailing newline).
+
+              WWaarrnniinngg:: only one PID may be written to  the  _t_a_s_k_s  file  at  a
+              time.   If  a string is written that contains more than one PID,
+              only the first one will be used.
+
+       _n_o_t_i_f_y___o_n___r_e_l_e_a_s_e
+              Flag (0 or 1).  If set (1), that  cpuset  will  receive  special
+              handling  after  it  is  released,  that is, after all processes
+              cease using it (i.e., terminate or  are  moved  to  a  different
+              cpuset) and all child cpuset directories have been removed.  See
+              the NNoottiiffyy OOnn RReelleeaassee section, below.
+
+       _c_p_u_s_e_t_._c_p_u_s
+              List  of  the physical numbers of the CPUs on which processes in
+              that cpuset are allowed to execute.  See LLiisstt FFoorrmmaatt below for a
+              description of the format of _c_p_u_s.
+
+              The CPUs allowed to a cpuset may be changed  by  writing  a  new
+              list to its _c_p_u_s file.
+
+       _c_p_u_s_e_t_._c_p_u___e_x_c_l_u_s_i_v_e
+              Flag  (0 or 1).  If set (1), the cpuset has exclusive use of its
+              CPUs (no sibling or cousin cpuset may  overlap  CPUs).   By  de‐
+              fault,  this  is  off (0).  Newly created cpusets also initially
+              default this to off (0).
+
+              Two cpusets are _s_i_b_l_i_n_g cpusets if they share  the  same  parent
+              cpuset  in  the  _/_d_e_v_/_c_p_u_s_e_t  hierarchy.  Two cpusets are _c_o_u_s_i_n
+              cpusets if neither is the ancestor of the other.  Regardless  of
+              the  _c_p_u___e_x_c_l_u_s_i_v_e setting, if one cpuset is the ancestor of an‐
+              other, and if both of these cpusets  have  nonempty  _c_p_u_s,  then
+              their  _c_p_u_s must overlap, because the _c_p_u_s of any cpuset are al‐
+              ways a subset of the _c_p_u_s of its parent cpuset.
+
+       _c_p_u_s_e_t_._m_e_m_s
+              List of memory nodes on which processes in this cpuset  are  al‐
+              lowed  to allocate memory.  See LLiisstt FFoorrmmaatt below for a descrip‐
+              tion of the format of _m_e_m_s.
+
+       _c_p_u_s_e_t_._m_e_m___e_x_c_l_u_s_i_v_e
+              Flag (0 or 1).  If set (1), the cpuset has exclusive use of  its
+              memory  nodes  (no  sibling or cousin may overlap).  Also if set
+              (1), the cpuset is a HHaarrddwwaallll cpuset (see below).   By  default,
+              this  is  off (0).  Newly created cpusets also initially default
+              this to off (0).
+
+              Regardless of the _m_e_m___e_x_c_l_u_s_i_v_e setting, if one  cpuset  is  the
+              ancestor  of  another, then their memory nodes must overlap, be‐
+              cause the memory nodes of any cpuset are always a subset of  the
+              memory nodes of that cpuset’s parent cpuset.
+
+       _c_p_u_s_e_t_._m_e_m___h_a_r_d_w_a_l_l (since Linux 2.6.26)
+              Flag (0 or 1).  If set (1), the cpuset is a HHaarrddwwaallll cpuset (see
+              below).  Unlike mmeemm__eexxcclluussiivvee, there is no constraint on whether
+              cpusets  marked  mmeemm__hhaarrddwwaallll  may have overlapping memory nodes
+              with sibling or cousin cpusets.  By default, this  is  off  (0).
+              Newly created cpusets also initially default this to off (0).
+
+       _c_p_u_s_e_t_._m_e_m_o_r_y___m_i_g_r_a_t_e (since Linux 2.6.16)
+              Flag  (0  or  1).  If set (1), then memory migration is enabled.
+              By default, this is off (0).  See the MMeemmoorryy MMiiggrraattiioonn  section,
+              below.
+
+       _c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e (since Linux 2.6.16)
+              A  measure  of  how  much  memory pressure the processes in this
+              cpuset are causing.  See the  MMeemmoorryy  PPrreessssuurree  section,  below.
+              Unless _m_e_m_o_r_y___p_r_e_s_s_u_r_e___e_n_a_b_l_e_d is enabled, always has value zero
+              (0).  This file is read‐only.  See the WWAARRNNIINNGGSS section, below.
+
+       _c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e___e_n_a_b_l_e_d (since Linux 2.6.16)
+              Flag  (0  or  1).  This file is present only in the root cpuset,
+              normally _/_d_e_v_/_c_p_u_s_e_t.  If set (1), the _m_e_m_o_r_y___p_r_e_s_s_u_r_e  calcula‐
+              tions  are  enabled  for all cpusets in the system.  By default,
+              this is off (0).  See the MMeemmoorryy PPrreessssuurree section, below.
+
+       _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___p_a_g_e (since Linux 2.6.17)
+              Flag (0 or 1).  If set (1),  pages  in  the  kernel  page  cache
+              (filesystem buffers) are uniformly spread across the cpuset.  By
+              default,  this  is off (0) in the top cpuset, and inherited from
+              the parent cpuset in newly  created  cpusets.   See  the  MMeemmoorryy
+              SSpprreeaadd section, below.
+
+       _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___s_l_a_b (since Linux 2.6.17)
+              Flag  (0 or 1).  If set (1), the kernel slab caches for file I/O
+              (directory and inode structures) are uniformly spread across the
+              cpuset.  By default, this is off (0) in the top cpuset, and  in‐
+              herited  from  the  parent cpuset in newly created cpusets.  See
+              the MMeemmoorryy SSpprreeaadd section, below.
+
+       _c_p_u_s_e_t_._s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e (since Linux 2.6.24)
+              Flag (0 or 1).  If set (1, the default) the kernel will automat‐
+              ically load balance processes in that cpuset  over  the  allowed
+              CPUs in that cpuset.  If cleared (0), the kernel will avoid load
+              balancing  processes  in  this  cpuset, _u_n_l_e_s_s some other cpuset
+              with overlapping CPUs has its _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e flag set.   See
+              SScchheedduulleerr LLooaadd BBaallaanncciinngg, below, for further details.
+
+       _c_p_u_s_e_t_._s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l (since Linux 2.6.26)
+              Integer,  between  -1 and a small positive value.  The _s_c_h_e_d___r_e_‐
+              _l_a_x___d_o_m_a_i_n___l_e_v_e_l controls the width of the range  of  CPUs  over
+              which  the  kernel  scheduler  performs immediate rebalancing of
+              runnable tasks across CPUs.  If _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e is  disabled,
+              then the setting of _s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l does not matter, as
+              no  such  load  balancing is done.  If _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e is en‐
+              abled,  then,  the  higher  the  value  of  the  _s_c_h_e_d___r_e_l_a_x___d_o_‐
+              _m_a_i_n___l_e_v_e_l,  the  wider  the  range of CPUs over which immediate
+              load balancing is attempted.  See SScchheedduulleerr RReellaaxx DDoommaaiinn  LLeevveell,
+              below, for further details.
+
+       In   addition  to  the  above  pseudo‐files  in  each  directory  below
+       _/_d_e_v_/_c_p_u_s_e_t, each process has  a  pseudo‐file,  _/_p_r_o_c_/pid_/_c_p_u_s_e_t,  that
+       displays  the  path  of  the process’s cpuset directory relative to the
+       root of the cpuset filesystem.
+
+       Also the _/_p_r_o_c_/pid_/_s_t_a_t_u_s file for each process has four  added  lines,
+       displaying  the  process’s _C_p_u_s___a_l_l_o_w_e_d (on which CPUs it may be sched‐
+       uled) and _M_e_m_s___a_l_l_o_w_e_d (on which memory nodes it may obtain memory), in
+       the two formats MMaasskk FFoorrmmaatt and LLiisstt FFoorrmmaatt (see below) as shown in the
+       following example:
+
+           Cpus_allowed:   ffffffff,ffffffff,ffffffff,ffffffff
+           Cpus_allowed_list:     0-127
+           Mems_allowed:   ffffffff,ffffffff
+           Mems_allowed_list:     0-63
+
+       The "allowed" fields were added in  Linux  2.6.24;  the  "allowed_list"
+       fields were added in Linux 2.6.26.
+
+EEXXTTEENNDDEEDD CCAAPPAABBIILLIITTIIEESS
+       In  addition to controlling which _c_p_u_s and _m_e_m_s a process is allowed to
+       use, cpusets provide the following extended capabilities.
+
+   EExxcclluussiivvee ccppuusseettss
+       If a cpuset is marked _c_p_u___e_x_c_l_u_s_i_v_e or _m_e_m___e_x_c_l_u_s_i_v_e, no other  cpuset,
+       other  than  a direct ancestor or descendant, may share any of the same
+       CPUs or memory nodes.
+
+       A cpuset that is _m_e_m___e_x_c_l_u_s_i_v_e restricts kernel allocations for  buffer
+       cache pages and other internal kernel data pages commonly shared by the
+       kernel  across  multiple  users.  All cpusets, whether _m_e_m___e_x_c_l_u_s_i_v_e or
+       not, restrict allocations of memory for user space.  This enables  con‐
+       figuring  a  system  so  that several independent jobs can share common
+       kernel data, while isolating each job’s  user  allocation  in  its  own
+       cpuset.  To do this, construct a large _m_e_m___e_x_c_l_u_s_i_v_e cpuset to hold all
+       the jobs, and construct child, non‐_m_e_m___e_x_c_l_u_s_i_v_e cpusets for each indi‐
+       vidual  job.   Only  a  small amount of kernel memory, such as requests
+       from interrupt handlers, is allowed to be placed on memory  nodes  out‐
+       side even a _m_e_m___e_x_c_l_u_s_i_v_e cpuset.
+
+   HHaarrddwwaallll
+       A  cpuset  that  has  _m_e_m___e_x_c_l_u_s_i_v_e  or  _m_e_m___h_a_r_d_w_a_l_l set is a _h_a_r_d_w_a_l_l
+       cpuset.  A _h_a_r_d_w_a_l_l  cpuset  restricts  kernel  allocations  for  page,
+       buffer,  and  other  data commonly shared by the kernel across multiple
+       users.  All cpusets, whether _h_a_r_d_w_a_l_l or not, restrict  allocations  of
+       memory for user space.
+
+       This  enables configuring a system so that several independent jobs can
+       share common kernel data, such as  filesystem  pages,  while  isolating
+       each  job’s user allocation in its own cpuset.  To do this, construct a
+       large _h_a_r_d_w_a_l_l cpuset to hold all the jobs, and construct child cpusets
+       for each individual job which are not _h_a_r_d_w_a_l_l cpusets.
+
+       Only a small amount of kernel memory, such as requests  from  interrupt
+       handlers, is allowed to be taken outside even a _h_a_r_d_w_a_l_l cpuset.
+
+   NNoottiiffyy oonn rreelleeaassee
+       If the _n_o_t_i_f_y___o_n___r_e_l_e_a_s_e flag is enabled (1) in a cpuset, then whenever
+       the  last process in the cpuset leaves (exits or attaches to some other
+       cpuset) and the last child cpuset of that cpuset is removed, the kernel
+       will run the command _/_s_b_i_n_/_c_p_u_s_e_t___r_e_l_e_a_s_e___a_g_e_n_t, supplying the pathname
+       (relative to the mount point of the cpuset filesystem) of the abandoned
+       cpuset.  This enables automatic removal of abandoned cpusets.
+
+       The default value of _n_o_t_i_f_y___o_n___r_e_l_e_a_s_e in the  root  cpuset  at  system
+       boot  is  disabled (0).  The default value of other cpusets at creation
+       is the current value of their parent’s _n_o_t_i_f_y___o_n___r_e_l_e_a_s_e setting.
+
+       The  command  _/_s_b_i_n_/_c_p_u_s_e_t___r_e_l_e_a_s_e___a_g_e_n_t  is  invoked,  with  the  name
+       (_/_d_e_v_/_c_p_u_s_e_t relative path) of the to‐be‐released cpuset in _a_r_g_v_[_1_].
+
+       The  usual contents of the command _/_s_b_i_n_/_c_p_u_s_e_t___r_e_l_e_a_s_e___a_g_e_n_t is simply
+       the shell script:
+
+           #!/bin/sh
+           rmdir /dev/cpuset/$1
+
+       As with other flag values below, this flag can be changed by writing an
+       ASCII number 0 or 1 (with optional trailing newline) into the file,  to
+       clear or set the flag, respectively.
+
+   MMeemmoorryy pprreessssuurree
+       The  _m_e_m_o_r_y___p_r_e_s_s_u_r_e  of  a cpuset provides a simple per‐cpuset running
+       average of the rate that the processes in a cpuset  are  attempting  to
+       free  up in‐use memory on the nodes of the cpuset to satisfy additional
+       memory requests.
+
+       This enables batch managers that are monitoring jobs running  in  dedi‐
+       cated  cpusets to efficiently detect what level of memory pressure that
+       job is causing.
+
+       This is useful both on tightly managed systems running a  wide  mix  of
+       submitted jobs, which may choose to terminate or reprioritize jobs that
+       are  trying to use more memory than allowed on the nodes assigned them,
+       and with tightly coupled, long‐running, massively  parallel  scientific
+       computing jobs that will dramatically fail to meet required performance
+       goals if they start to use more memory than allowed to them.
+
+       This  mechanism provides a very economical way for the batch manager to
+       monitor a cpuset for signs of memory pressure.  It’s up  to  the  batch
+       manager  or other user code to decide what action to take if it detects
+       signs of memory pressure.
+
+       Unless memory pressure calculation is enabled by  setting  the  pseudo‐
+       file _/_d_e_v_/_c_p_u_s_e_t_/_c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e___e_n_a_b_l_e_d, it is not computed for
+       any  cpuset,  and reads from any _m_e_m_o_r_y___p_r_e_s_s_u_r_e always return zero, as
+       represented by the ASCII string "0\n".  See the WWAARRNNIINNGGSS  section,  be‐
+       low.
+
+       A per‐cpuset, running average is employed for the following reasons:
+
+       •  Because this meter is per‐cpuset rather than per‐process or per vir‐
+          tual  memory  region,  the  system load imposed by a batch scheduler
+          monitoring this metric is sharply reduced on large systems,  because
+          a scan of the tasklist can be avoided on each set of queries.
+
+       •  Because  this meter is a running average rather than an accumulating
+          counter, a batch scheduler can detect memory pressure with a  single
+          read,  instead of having to read and accumulate results for a period
+          of time.
+
+       •  Because this meter is per‐cpuset rather than per‐process, the  batch
+          scheduler  can  obtain  the  key  information—memory  pressure  in a
+          cpuset—with a single read, rather than having to query  and  accumu‐
+          late results over all the (dynamically changing) set of processes in
+          the cpuset.
+
+       The _m_e_m_o_r_y___p_r_e_s_s_u_r_e of a cpuset is calculated using a per‐cpuset simple
+       digital  filter  that is kept within the kernel.  For each cpuset, this
+       filter tracks the recent rate  at  which  processes  attached  to  that
+       cpuset enter the kernel direct reclaim code.
+
+       The  kernel  direct  reclaim  code is entered whenever a process has to
+       satisfy a memory page request by first finding some other page  to  re‐
+       purpose,  due  to  lack  of  any  readily available already free pages.
+       Dirty filesystem pages are repurposed by first writing  them  to  disk.
+       Unmodified  filesystem  buffer  pages are repurposed by simply dropping
+       them, though if that page is needed again, it will have  to  be  reread
+       from disk.
+
+       The _c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e file provides an integer number representing
+       the  recent (half‐life of 10 seconds) rate of entries to the direct re‐
+       claim code caused by any process in the cpuset, in  units  of  reclaims
+       attempted per second, times 1000.
+
+   MMeemmoorryy sspprreeaadd
+       There are two Boolean flag files per cpuset that control where the ker‐
+       nel  allocates  pages  for the filesystem buffers and related in‐kernel
+       data  structures.   They  are  called   _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___p_a_g_e   and
+       _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___s_l_a_b.
+
+       If  the  per‐cpuset Boolean flag file _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___p_a_g_e is set,
+       then the kernel will spread the filesystem buffers (page cache)  evenly
+       over all the nodes that the faulting process is allowed to use, instead
+       of  preferring to put those pages on the node where the process is run‐
+       ning.
+
+       If the per‐cpuset Boolean flag file _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___s_l_a_b  is  set,
+       then  the  kernel will spread some filesystem‐related slab caches, such
+       as those for inodes and directory entries, evenly over  all  the  nodes
+       that  the  faulting process is allowed to use, instead of preferring to
+       put those pages on the node where the process is running.
+
+       The setting of these flags  does  not  affect  the  data  segment  (see
+       bbrrkk(2)) or stack segment pages of a process.
+
+       By  default,  both  kinds  of  memory  spreading are off and the kernel
+       prefers to allocate memory pages on the node local  to  where  the  re‐
+       questing  process  is  running.   If  that  node  is not allowed by the
+       process’s NUMA memory policy or cpuset configuration or  if  there  are
+       insufficient  free memory pages on that node, then the kernel looks for
+       the nearest node that is allowed and has sufficient free memory.
+
+       When new cpusets are created, they inherit the memory  spread  settings
+       of their parent.
+
+       Setting  memory  spreading  causes allocations for the affected page or
+       slab caches to ignore the process’s NUMA memory policy  and  be  spread
+       instead.   However,  the  effect  of  these changes in memory placement
+       caused by cpuset‐specified memory spreading is hidden from the mmbbiinndd(2)
+       or sseett__mmeemmppoolliiccyy(2) calls.  These two NUMA memory policy  calls  always
+       appear  to  behave as if no cpuset‐specified memory spreading is in ef‐
+       fect, even if it is.  If cpuset memory spreading is subsequently turned
+       off, the NUMA memory policy most recently specified by these  calls  is
+       automatically reapplied.
+
+       Both   _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___p_a_g_e   and   _c_p_u_s_e_t_._m_e_m_o_r_y___s_p_r_e_a_d___s_l_a_b  are
+       Boolean flag files.  By default, they contain  "0",  meaning  that  the
+       feature is off for that cpuset.  If a "1" is written to that file, that
+       turns the named feature on.
+
+       Cpuset‐specified  memory  spreading  behaves similarly to what is known
+       (in other contexts) as round‐robin or interleave memory placement.
+
+       Cpuset‐specified memory spreading can provide  substantial  performance
+       improvements for jobs that:
+
+       •  need  to  place  thread‐local data on memory nodes close to the CPUs
+          which are running the threads that most frequently access that data;
+          but also
+
+       •  need to access large filesystem data sets that  must  to  be  spread
+          across the several nodes in the job’s cpuset in order to fit.
+
+       Without  this  policy,  the  memory  allocation across the nodes in the
+       job’s cpuset can become very uneven, especially  for  jobs  that  might
+       have just a single thread initializing or reading in the data set.
+
+   MMeemmoorryy mmiiggrraattiioonn
+       Normally,  under  the  default  setting (disabled) of _c_p_u_s_e_t_._m_e_m_o_r_y___m_i_‐
+       _g_r_a_t_e, once a page is allocated (given a physical page of main memory),
+       then that page stays on whatever node it was allocated, so long  as  it
+       remains  allocated,  even  if the cpuset’s memory‐placement policy _m_e_m_s
+       subsequently changes.
+
+       When memory migration is enabled in a cpuset, if the  _m_e_m_s  setting  of
+       the  cpuset  is  changed, then any memory page in use by any process in
+       the cpuset that is on a memory node that is no longer allowed  will  be
+       migrated to a memory node that is allowed.
+
+       Furthermore,  if  a  process is moved into a cpuset with _m_e_m_o_r_y___m_i_g_r_a_t_e
+       enabled, any memory pages it uses that were on memory nodes allowed  in
+       its  previous cpuset, but which are not allowed in its new cpuset, will
+       be migrated to a memory node allowed in the new cpuset.
+
+       The relative placement of a migrated page within  the  cpuset  is  pre‐
+       served  during these migration operations if possible.  For example, if
+       the page was on the second valid node of the  prior  cpuset,  then  the
+       page will be placed on the second valid node of the new cpuset, if pos‐
+       sible.
+
+   SScchheedduulleerr llooaadd bbaallaanncciinngg
+       The kernel scheduler automatically load balances processes.  If one CPU
+       is  underutilized,  the  kernel  will  look for processes on other more
+       overloaded CPUs and move those  processes  to  the  underutilized  CPU,
+       within  the  constraints  of  such  placement mechanisms as cpusets and
+       sscchheedd__sseettaaffffiinniittyy(2).
+
+       The algorithmic cost of load balancing and its  impact  on  key  shared
+       kernel  data  structures  such  as the process list increases more than
+       linearly with the number of CPUs being balanced.  For example, it costs
+       more to load balance across one large set of CPUs than it does to  bal‐
+       ance  across  two  smaller  sets  of CPUs, each of half the size of the
+       larger set.  (The precise relationship between the number of CPUs being
+       balanced and the cost of load balancing depends on  implementation  de‐
+       tails  of the kernel process scheduler, which is subject to change over
+       time, as improved kernel scheduler algorithms are implemented.)
+
+       The per‐cpuset flag _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e provides a mechanism to suppress
+       this automatic scheduler load balancing in cases where it is not needed
+       and suppressing it would have worthwhile performance benefits.
+
+       By default, load balancing is done across all CPUs, except those marked
+       isolated using the kernel boot time "isolcpus=" argument.  (See  SScchheedd‐‐
+       uulleerr RReellaaxx DDoommaaiinn LLeevveell, below, to change this default.)
+
+       This  default  load balancing across all CPUs is not well suited to the
+       following two situations:
+
+       •  On large systems, load balancing across many CPUs is expensive.   If
+          the  system  is  managed  using cpusets to place independent jobs on
+          separate sets of CPUs, full load balancing is unnecessary.
+
+       •  Systems supporting real‐time on some CPUs need  to  minimize  system
+          overhead on those CPUs, including avoiding process load balancing if
+          that is not needed.
+
+       When  the  per‐cpuset  flag  _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e is enabled (the default
+       setting), it requests load  balancing  across  all  the  CPUs  in  that
+       cpuset’s  allowed CPUs, ensuring that load balancing can move a process
+       (not otherwise pinned, as by sscchheedd__sseettaaffffiinniittyy(2)) from any CPU in that
+       cpuset to any other.
+
+       When the per‐cpuset  flag  _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e  is  disabled,  then  the
+       scheduler will avoid load balancing across the CPUs in that cpuset, _e_x_‐
+       _c_e_p_t  in  so  far  as  is necessary because some overlapping cpuset has
+       _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e enabled.
+
+       So, for example, if the top cpuset has the flag _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e  en‐
+       abled,  then  the  scheduler will load balance across all CPUs, and the
+       setting of the _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e flag in other cpusets has no  effect,
+       as we’re already fully load balancing.
+
+       Therefore  in  the  above  two  situations, the flag _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e
+       should be disabled in the top cpuset, and only  some  of  the  smaller,
+       child cpusets would have this flag enabled.
+
+       When doing this, you don’t usually want to leave any unpinned processes
+       in  the  top  cpuset  that might use nontrivial amounts of CPU, as such
+       processes may be artificially constrained to some subset of  CPUs,  de‐
+       pending  on the particulars of this flag setting in descendant cpusets.
+       Even if such a process could use spare CPU cycles in some  other  CPUs,
+       the kernel scheduler might not consider the possibility of load balanc‐
+       ing that process to the underused CPU.
+
+       Of course, processes pinned to a particular CPU can be left in a cpuset
+       that  disables  _s_c_h_e_d___l_o_a_d___b_a_l_a_n_c_e as those processes aren’t going any‐
+       where else anyway.
+
+   SScchheedduulleerr rreellaaxx ddoommaaiinn lleevveell
+       The kernel scheduler performs immediate load balancing whenever  a  CPU
+       becomes  free  or  another  task becomes runnable.  This load balancing
+       works to ensure that as many CPUs as  possible  are  usefully  employed
+       running  tasks.   The  kernel also performs periodic load balancing off
+       the software clock described in  ttiimmee(7).   The  setting  of  _s_c_h_e_d___r_e_‐
+       _l_a_x___d_o_m_a_i_n___l_e_v_e_l  applies only to immediate load balancing.  Regardless
+       of the _s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l setting, periodic load balancing is at‐
+       tempted over all CPUs (unless disabled by turning  off  _s_c_h_e_d___l_o_a_d___b_a_l_‐
+       _a_n_c_e.)   In any case, of course, tasks will be scheduled to run only on
+       CPUs allowed by their cpuset, as modified by sscchheedd__sseettaaffffiinniittyy(2)  sys‐
+       tem calls.
+
+       On  small  systems,  such as those with just a few CPUs, immediate load
+       balancing is useful to improve system  interactivity  and  to  minimize
+       wasteful  idle  CPU cycles.  But on large systems, attempting immediate
+       load balancing across a large number of CPUs can be more costly than it
+       is worth, depending on the particular  performance  characteristics  of
+       the job mix and the hardware.
+
+       The  exact  meaning  of  the  small  integer  values of _s_c_h_e_d___r_e_l_a_x___d_o_‐
+       _m_a_i_n___l_e_v_e_l will depend on internal implementation details of the kernel
+       scheduler code and on the non‐uniform  architecture  of  the  hardware.
+       Both of these will evolve over time and vary by system architecture and
+       kernel version.
+
+       As  of  this  writing,  when  this  capability  was introduced in Linux
+       2.6.26, on  certain  popular  architectures,  the  positive  values  of
+       _s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l have the following meanings.
+
+       11      Perform immediate load balancing across Hyper‐Thread siblings on
+              the same core.
+       22      Perform  immediate load balancing across other cores in the same
+              package.
+       33      Perform immediate load balancing across other CPUs on  the  same
+              node or blade.
+       44      Perform  immediate load balancing across over several (implemen‐
+              tation detail) nodes [On NUMA systems].
+       55      Perform immediate load balancing across over all CPUs in  system
+              [On NUMA systems].
+
+       The  _s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l value of zero (0) always means don’t per‐
+       form immediate load balancing, hence that load balancing is  done  only
+       periodically,  not  immediately when a CPU becomes available or another
+       task becomes runnable.
+
+       The _s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l value of minus one (-1) always  means  use
+       the  system default value.  The system default value can vary by archi‐
+       tecture and kernel version.  This system default value can  be  changed
+       by kernel boot‐time "relax_domain_level=" argument.
+
+       In  the  case  of  multiple  overlapping cpusets which have conflicting
+       _s_c_h_e_d___r_e_l_a_x___d_o_m_a_i_n___l_e_v_e_l values, then the highest such value applies to
+       all CPUs in any of the overlapping cpusets.  In such cases, --11  is  the
+       lowest  value,  overridden by any other value, and 00 is the next lowest
+       value.
+
+FFOORRMMAATTSS
+       The following formats are used to represent sets  of  CPUs  and  memory
+       nodes.
+
+   MMaasskk ffoorrmmaatt
+       The  Mask  Format is used to represent CPU and memory‐node bit masks in
+       the _/_p_r_o_c_/pid_/_s_t_a_t_u_s file.
+
+       This format displays each 32‐bit word in hexadecimal (using ASCII char‐
+       acters "0" ‐ "9" and "a" ‐ "f"); words are filled with  leading  zeros,
+       if required.  For masks longer than one word, a comma separator is used
+       between  words.  Words are displayed in big‐endian order, which has the
+       most significant bit first.  The hex digits within a word are  also  in
+       big‐endian order.
+
+       The  number  of  32‐bit words displayed is the minimum number needed to
+       display all bits of the bit mask, based on the size of the bit mask.
+
+       Examples of the MMaasskk FFoorrmmaatt:
+
+           00000001                        # just bit 0 set
+           40000000,00000000,00000000      # just bit 94 set
+           00000001,00000000,00000000      # just bit 64 set
+           000000ff,00000000               # bits 32-39 set
+           00000000,000e3862               # 1,5,6,11-13,17-19 set
+
+       A mask with bits 0, 1, 2, 4, 8, 16, 32, and 64 set displays as:
+
+           00000001,00000001,00010117
+
+       The first "1" is for bit 64, the second for bit 32, the third  for  bit
+       16,  the fourth for bit 8, the fifth for bit 4, and the "7" is for bits
+       2, 1, and 0.
+
+   LLiisstt ffoorrmmaatt
+       The List Format for _c_p_u_s and _m_e_m_s is a comma‐separated list of  CPU  or
+       memory‐node numbers and ranges of numbers, in ASCII decimal.
+
+       Examples of the LLiisstt FFoorrmmaatt:
+
+           0-4,9           # bits 0, 1, 2, 3, 4, and 9 set
+           0-2,7,12-14     # bits 0, 1, 2, 7, 12, 13, and 14 set
+
+RRUULLEESS
+       The following rules apply to each cpuset:
+
+       •  Its  CPUs  and memory nodes must be a (possibly equal) subset of its
+          parent’s.
+
+       •  It can be marked _c_p_u___e_x_c_l_u_s_i_v_e only if its parent is.
+
+       •  It can be marked _m_e_m___e_x_c_l_u_s_i_v_e only if its parent is.
+
+       •  If it is _c_p_u___e_x_c_l_u_s_i_v_e, its CPUs may not overlap any sibling.
+
+       •  If it is _m_e_m___e_x_c_l_u_s_i_v_e, its memory nodes may not  overlap  any  sib‐
+          ling.
+
+PPEERRMMIISSSSIIOONNSS
+       The  permissions  of  a cpuset are determined by the permissions of the
+       directories and pseudo‐files in the cpuset filesystem, normally mounted
+       at _/_d_e_v_/_c_p_u_s_e_t.
+
+       For instance, a process can put itself in some other cpuset  (than  its
+       current  one) if it can write the _t_a_s_k_s file for that cpuset.  This re‐
+       quires execute permission on the  encompassing  directories  and  write
+       permission on the _t_a_s_k_s file.
+
+       An  additional  constraint  is  applied to requests to place some other
+       process in a cpuset.  One process may not attach another  to  a  cpuset
+       unless  it  would  have  permission  to send that process a signal (see
+       kkiillll(2)).
+
+       A process may create a child cpuset if it can access and write the par‐
+       ent cpuset directory.  It can modify the CPUs  or  memory  nodes  in  a
+       cpuset if it can access that cpuset’s directory (execute permissions on
+       the each of the parent directories) and write the corresponding _c_p_u_s or
+       _m_e_m_s file.
+
+       There is one minor difference between the manner in which these permis‐
+       sions are evaluated and the manner in which normal filesystem operation
+       permissions  are  evaluated.   The kernel interprets relative pathnames
+       starting at a process’s current working directory.  Even if one is  op‐
+       erating  on  a cpuset file, relative pathnames are interpreted relative
+       to the  process’s  current  working  directory,  not  relative  to  the
+       process’s  current cpuset.  The only ways that cpuset paths relative to
+       a process’s current cpuset can be used are if either the process’s cur‐
+       rent working directory is its cpuset (it first did a ccdd or cchhddiirr(2)  to
+       its cpuset directory beneath _/_d_e_v_/_c_p_u_s_e_t, which is a bit unusual) or if
+       some  user  code converts the relative cpuset path to a full filesystem
+       path.
+
+       In theory, this means that user code should specify cpusets  using  ab‐
+       solute  pathnames, which requires knowing the mount point of the cpuset
+       filesystem (usually, but not necessarily, _/_d_e_v_/_c_p_u_s_e_t).   In  practice,
+       all user level code that this author is aware of simply assumes that if
+       the  cpuset  filesystem  is mounted, then it is mounted at _/_d_e_v_/_c_p_u_s_e_t.
+       Furthermore, it is common practice for carefully written user  code  to
+       verify  the  presence  of the pseudo‐file _/_d_e_v_/_c_p_u_s_e_t_/_t_a_s_k_s in order to
+       verify that the cpuset pseudo‐filesystem is currently mounted.
+
+WWAARRNNIINNGGSS
+   EEnnaabblliinngg mmeemmoorryy__pprreessssuurree
+       By default, the per‐cpuset file _c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e always  contains
+       zero (0).  Unless this feature is enabled by writing "1" to the pseudo‐
+       file  _/_d_e_v_/_c_p_u_s_e_t_/_c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e___e_n_a_b_l_e_d,  the  kernel does not
+       compute per‐cpuset _m_e_m_o_r_y___p_r_e_s_s_u_r_e.
+
+   UUssiinngg tthhee eecchhoo ccoommmmaanndd
+       When using the eecchhoo command at the shell prompt to change the values of
+       cpuset files, beware that the built‐in eecchhoo command in some shells does
+       not display an error message if the wwrriittee(2) system  call  fails.   For
+       example, if the command:
+
+           echo 19 > cpuset.mems
+
+       failed because memory node 19 was not allowed (perhaps the current sys‐
+       tem  does  not  have a memory node 19), then the eecchhoo command might not
+       display any error.  It is better to use the //bbiinn//eecchhoo external  command
+       to  change  cpuset file settings, as this command will display wwrriittee(2)
+       errors, as in the example:
+
+           /bin/echo 19 > cpuset.mems
+           /bin/echo: write error: Invalid argument
+
+EEXXCCEEPPTTIIOONNSS
+   MMeemmoorryy ppllaacceemmeenntt
+       Not all allocations of system memory are constrained  by  cpusets,  for
+       the following reasons.
+
+       If  hot‐plug functionality is used to remove all the CPUs that are cur‐
+       rently assigned to a cpuset, then the kernel will automatically  update
+       the  _c_p_u_s___a_l_l_o_w_e_d  of  all processes attached to CPUs in that cpuset to
+       allow all CPUs.  When memory hot‐plug functionality for removing memory
+       nodes is available, a similar exception is expected to apply  there  as
+       well.   In  general,  the  kernel  prefers to violate cpuset placement,
+       rather than starving a process that has had all  its  allowed  CPUs  or
+       memory  nodes  taken  offline.  User code should reconfigure cpusets to
+       refer only to online CPUs and memory nodes when using hot‐plug  to  add
+       or remove such resources.
+
+       A  few  kernel‐critical,  internal  memory‐allocation  requests, marked
+       GFP_ATOMIC, must be satisfied immediately.  The kernel  may  drop  some
+       request or malfunction if one of these allocations fail.  If such a re‐
+       quest  cannot be satisfied within the current process’s cpuset, then we
+       relax the cpuset, and look for memory anywhere we can  find  it.   It’s
+       better to violate the cpuset than stress the kernel.
+
+       Allocations  of  memory requested by kernel drivers while processing an
+       interrupt lack any relevant process context, and are  not  confined  by
+       cpusets.
+
+   RReennaammiinngg ccppuusseettss
+       You  can  use the rreennaammee(2) system call to rename cpusets.  Only simple
+       renaming is supported; that is, changing the name of a cpuset directory
+       is permitted, but moving a directory into a different directory is  not
+       permitted.
+
+EERRRROORRSS
+       The  Linux  kernel  implementation of cpusets sets _e_r_r_n_o to specify the
+       reason for a failed system call affecting cpusets.
+
+       The possible _e_r_r_n_o settings and their meaning  when  set  on  a  failed
+       cpuset call are as listed below.
+
+       EE22BBIIGG  Attempted  a  wwrriittee(2)  on  a  special cpuset file with a length
+              larger than some kernel‐determined upper limit on the length  of
+              such writes.
+
+       EEAACCCCEESS Attempted  to  wwrriittee(2)  the  process ID (PID) of a process to a
+              cpuset _t_a_s_k_s  file  when  one  lacks  permission  to  move  that
+              process.
+
+       EEAACCCCEESS Attempted  to  add,  using  wwrriittee(2),  a CPU or memory node to a
+              cpuset, when that CPU or memory node was not already in its par‐
+              ent.
+
+       EEAACCCCEESS Attempted  to  set,  using  wwrriittee(2),  _c_p_u_s_e_t_._c_p_u___e_x_c_l_u_s_i_v_e   or
+              _c_p_u_s_e_t_._m_e_m___e_x_c_l_u_s_i_v_e  on  a  cpuset  whose parent lacks the same
+              setting.
+
+       EEAACCCCEESS Attempted to wwrriittee(2) a _c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e file.
+
+       EEAACCCCEESS Attempted to create a file in a cpuset directory.
+
+       EEBBUUSSYY  Attempted to remove, using  rrmmddiirr(2),  a  cpuset  with  attached
+              processes.
+
+       EEBBUUSSYY  Attempted  to  remove,  using  rrmmddiirr(2),  a  cpuset  with  child
+              cpusets.
+
+       EEBBUUSSYY  Attempted to remove a CPU or memory node from a cpuset  that  is
+              also in a child of that cpuset.
+
+       EEEEXXIISSTT Attempted  to  create, using mmkkddiirr(2), a cpuset that already ex‐
+              ists.
+
+       EEEEXXIISSTT Attempted to rreennaammee(2) a cpuset to a name that already exists.
+
+       EEFFAAUULLTT Attempted to rreeaadd(2) or wwrriittee(2) a cpuset file  using  a  buffer
+              that is outside the writing processes accessible address space.
+
+       EEIINNVVAALL Attempted  to  change  a  cpuset,  using wwrriittee(2), in a way that
+              would violate a _c_p_u___e_x_c_l_u_s_i_v_e or _m_e_m___e_x_c_l_u_s_i_v_e attribute of that
+              cpuset or any of its siblings.
+
+       EEIINNVVAALL Attempted to wwrriittee(2) an empty _c_p_u_s_e_t_._c_p_u_s or  _c_p_u_s_e_t_._m_e_m_s  list
+              to a cpuset which has attached processes or child cpusets.
+
+       EEIINNVVAALL Attempted  to  wwrriittee(2)  a _c_p_u_s_e_t_._c_p_u_s or _c_p_u_s_e_t_._m_e_m_s list which
+              included a range with the second number smaller than  the  first
+              number.
+
+       EEIINNVVAALL Attempted  to  wwrriittee(2)  a _c_p_u_s_e_t_._c_p_u_s or _c_p_u_s_e_t_._m_e_m_s list which
+              included an invalid character in the string.
+
+       EEIINNVVAALL Attempted to wwrriittee(2) a list to a _c_p_u_s_e_t_._c_p_u_s file that did  not
+              include any online CPUs.
+
+       EEIINNVVAALL Attempted  to wwrriittee(2) a list to a _c_p_u_s_e_t_._m_e_m_s file that did not
+              include any online memory nodes.
+
+       EEIINNVVAALL Attempted to wwrriittee(2) a list to a _c_p_u_s_e_t_._m_e_m_s file that included
+              a node that held no memory.
+
+       EEIIOO    Attempted to wwrriittee(2) a string to a cpuset _t_a_s_k_s file that  does
+              not begin with an ASCII decimal integer.
+
+       EEIIOO    Attempted to rreennaammee(2) a cpuset into a different directory.
+
+       EENNAAMMEETTOOOOLLOONNGG
+              Attempted  to  rreeaadd(2) a _/_p_r_o_c_/pid_/_c_p_u_s_e_t file for a cpuset path
+              that is longer than the kernel page size.
+
+       EENNAAMMEETTOOOOLLOONNGG
+              Attempted to create, using mmkkddiirr(2), a cpuset whose base  direc‐
+              tory name is longer than 255 characters.
+
+       EENNAAMMEETTOOOOLLOONNGG
+              Attempted  to  create, using mmkkddiirr(2), a cpuset whose full path‐
+              name, including the mount point (typically "/dev/cpuset/")  pre‐
+              fix, is longer than 4095 characters.
+
+       EENNOODDEEVV The  cpuset was removed by another process at the same time as a
+              wwrriittee(2) was attempted on one of the pseudo‐files in the  cpuset
+              directory.
+
+       EENNOOEENNTT Attempted to create, using mmkkddiirr(2), a cpuset in a parent cpuset
+              that doesn’t exist.
+
+       EENNOOEENNTT Attempted to aacccceessss(2) or ooppeenn(2) a nonexistent file in a cpuset
+              directory.
+
+       EENNOOMMEEMM Insufficient memory is available within the kernel; can occur on
+              a  variety  of  system  calls affecting cpusets, but only if the
+              system is extremely short of memory.
+
+       EENNOOSSPPCC Attempted to wwrriittee(2) the process ID (PID) of  a  process  to  a
+              cpuset  _t_a_s_k_s  file  when the cpuset had an empty _c_p_u_s_e_t_._c_p_u_s or
+              empty _c_p_u_s_e_t_._m_e_m_s setting.
+
+       EENNOOSSPPCC Attempted to wwrriittee(2) an empty _c_p_u_s_e_t_._c_p_u_s or  _c_p_u_s_e_t_._m_e_m_s  set‐
+              ting to a cpuset that has tasks attached.
+
+       EENNOOTTDDIIRR
+              Attempted to rreennaammee(2) a nonexistent cpuset.
+
+       EEPPEERRMM  Attempted to remove a file from a cpuset directory.
+
+       EERRAANNGGEE Specified  a _c_p_u_s_e_t_._c_p_u_s or _c_p_u_s_e_t_._m_e_m_s list to the kernel which
+              included a number too large for the kernel to  set  in  its  bit
+              masks.
+
+       EESSRRCCHH  Attempted  to  wwrriittee(2)  the  process  ID (PID) of a nonexistent
+              process to a cpuset _t_a_s_k_s file.
+
+VVEERRSSIIOONNSS
+       Cpusets appeared in Linux 2.6.12.
+
+NNOOTTEESS
+       Despite its name, the _p_i_d parameter is actually a thread ID,  and  each
+       thread  in a threaded group can be attached to a different cpuset.  The
+       value returned from a call to ggeettttiidd(2) can be passed in  the  argument
+       _p_i_d.
+
+BBUUGGSS
+       _c_p_u_s_e_t_._m_e_m_o_r_y___p_r_e_s_s_u_r_e  cpuset  files  can  be opened for writing, cre‐
+       ation, or truncation, but then the wwrriittee(2) fails  with  _e_r_r_n_o  set  to
+       EEAACCCCEESS,  and the creation and truncation options on ooppeenn(2) have no ef‐
+       fect.
+
+EEXXAAMMPPLLEESS
+       The following examples demonstrate querying and setting cpuset  options
+       using shell commands.
+
+   CCrreeaattiinngg aanndd aattttaacchhiinngg ttoo aa ccppuusseett..
+       To  create a new cpuset and attach the current command shell to it, the
+       steps are:
+
+       (1)  mkdir /dev/cpuset (if not already done)
+       (2)  mount -t cpuset none /dev/cpuset (if not already done)
+       (3)  Create the new cpuset using mmkkddiirr(1).
+       (4)  Assign CPUs and memory nodes to the new cpuset.
+       (5)  Attach the shell to the new cpuset.
+
+       For example, the following sequence of commands will set  up  a  cpuset
+       named  "Charlie",  containing just CPUs 2 and 3, and memory node 1, and
+       then attach the current shell to that cpuset.
+
+           $ mmkkddiirr //ddeevv//ccppuusseett
+           $ mmoouunntt --tt ccppuusseett ccppuusseett //ddeevv//ccppuusseett
+           $ ccdd //ddeevv//ccppuusseett
+           $ mmkkddiirr CChhaarrlliiee
+           $ ccdd CChhaarrlliiee
+           $ //bbiinn//eecchhoo 22--33 >> ccppuusseett..ccppuuss
+           $ //bbiinn//eecchhoo 11 >> ccppuusseett..mmeemmss
+           $ //bbiinn//eecchhoo $$$$ >> ttaasskkss
+           # The current shell is now running in cpuset Charlie
+           # The next line should display '/Charlie'
+           $ ccaatt //pprroocc//sseellff//ccppuusseett
+
+   MMiiggrraattiinngg aa jjoobb ttoo ddiiffffeerreenntt mmeemmoorryy nnooddeess..
+       To migrate a job (the set of processes attached to a cpuset) to differ‐
+       ent CPUs and memory nodes in the system, including  moving  the  memory
+       pages currently allocated to that job, perform the following steps.
+
+       (1)  Let’s  say  we  want to move the job in cpuset _a_l_p_h_a (CPUs 4–7 and
+            memory nodes 2–3) to a new cpuset  _b_e_t_a  (CPUs  16–19  and  memory
+            nodes 8–9).
+       (2)  First create the new cpuset _b_e_t_a.
+       (3)  Then allow CPUs 16–19 and memory nodes 8–9 in _b_e_t_a.
+       (4)  Then enable _m_e_m_o_r_y___m_i_g_r_a_t_i_o_n in _b_e_t_a.
+       (5)  Then move each process from _a_l_p_h_a to _b_e_t_a.
+
+       The following sequence of commands accomplishes this.
+
+           $ ccdd //ddeevv//ccppuusseett
+           $ mmkkddiirr bbeettaa
+           $ ccdd bbeettaa
+           $ //bbiinn//eecchhoo 1166--1199 >> ccppuusseett..ccppuuss
+           $ //bbiinn//eecchhoo 88--99 >> ccppuusseett..mmeemmss
+           $ //bbiinn//eecchhoo 11 >> ccppuusseett..mmeemmoorryy__mmiiggrraattee
+           $ wwhhiillee rreeaadd ii;; ddoo //bbiinn//eecchhoo $$ii;; ddoonnee << ....//aallpphhaa//ttaasskkss >> ttaasskkss
+
+       The  above  should  move any processes in _a_l_p_h_a to _b_e_t_a, and any memory
+       held by these processes on memory nodes 2–3 to memory  nodes  8–9,  re‐
+       spectively.
+
+       Notice that the last step of the above sequence did not do:
+
+           $ ccpp ....//aallpphhaa//ttaasskkss ttaasskkss
+
+       The  _w_h_i_l_e loop, rather than the seemingly easier use of the ccpp(1) com‐
+       mand, was necessary because only one process PID at a time may be writ‐
+       ten to the _t_a_s_k_s file.
+
+       The same effect (writing one PID at a time) as the _w_h_i_l_e  loop  can  be
+       accomplished  more  efficiently, in fewer keystrokes and in syntax that
+       works on any shell, but alas more  obscurely,  by  using  the  --uu  (un‐
+       buffered) option of sseedd(1):
+
+           $ sseedd --uunn pp << ....//aallpphhaa//ttaasskkss >> ttaasskkss
+
+SSEEEE AALLSSOO
+       ttaasskksseett(1),   ggeett__mmeemmppoolliiccyy(2),  ggeettccppuu(2),  mmbbiinndd(2),  sscchheedd__ggeettaaffffiinn‐‐
+       iittyy(2), sscchheedd__sseettaaffffiinniittyy(2), sscchheedd__sseettsscchheedduulleerr(2),  sseett__mmeemmppoolliiccyy(2),
+       CCPPUU__SSEETT(3),  pprroocc(5),  ccggrroouuppss(7),  nnuummaa(7), sscchheedd(7), mmiiggrraatteeppaaggeess(8),
+       nnuummaaccttll(8)
+
+       _D_o_c_u_m_e_n_t_a_t_i_o_n_/_a_d_m_i_n_-_g_u_i_d_e_/_c_g_r_o_u_p_-_v_1_/_c_p_u_s_e_t_s_._r_s_t  in  the  Linux  kernel
+       source  tree (or _D_o_c_u_m_e_n_t_a_t_i_o_n_/_c_g_r_o_u_p_-_v_1_/_c_p_u_s_e_t_s_._t_x_t before Linux 4.18,
+       and _D_o_c_u_m_e_n_t_a_t_i_o_n_/_c_p_u_s_e_t_s_._t_x_t before Linux 2.6.29)
+
+Linux man‐pages (unreleased)      2025‐09‐21                         _c_p_u_s_e_t(7)

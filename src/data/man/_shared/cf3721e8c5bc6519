@@ -1,0 +1,253 @@
+DUMPON(8)                 BSD System Manager's Manual                DUMPON(8)
+
+NNAAMMEE
+     dduummppoonn — specify a device for crash dumps
+
+SSYYNNOOPPSSIISS
+     dduummppoonn [--ii _i_n_d_e_x] [--rr] [--vv] [--CC _c_i_p_h_e_r] [--kk _p_u_b_k_e_y] [--ZZ] [--zz] _d_e_v_i_c_e
+     dduummppoonn [--ii _i_n_d_e_x] [--rr] [--vv] [--CC _c_i_p_h_e_r] [--kk _p_u_b_k_e_y] [--ZZ] [--zz]
+            [--gg _g_a_t_e_w_a_y] --ss _s_e_r_v_e_r --cc _c_l_i_e_n_t _i_f_a_c_e
+     dduummppoonn [--vv] ooffff
+     dduummppoonn [--vv] --ll
+
+DDEESSCCRRIIPPTTIIOONN
+     The dduummppoonn utility is used to configure where the kernel can save a crash
+     dump in the case of a panic.
+
+     System administrators should typically configure dduummppoonn in a persistent
+     fashion using the rc.conf(5) variables _d_u_m_p_d_e_v and _d_u_m_p_o_n___f_l_a_g_s.  For
+     more information on this usage, see rc.conf(5).
+
+     Starting in FreeBSD 13.0, dduummppoonn can configure a series of fallback dump
+     devices.  For example, an administrator may prefer netdump(4) by default,
+     but if the netdump(4) service cannot be reached or some other failure oc‐
+     curs, they might choose a local disk dump as a second choice option.
+
+   GGeenneerraall ooppttiioonnss
+     --ii _i_n_d_e_x   Insert the specified dump configuration into the prioritized
+                fallback dump device list at the specified index, starting at
+                zero.
+
+                If --ii is not specified, the configured dump device is appended
+                to the prioritized list.
+
+     --rr         Remove the specified dump device configuration or configura‐
+                tions from the fallback dump device list rather than inserting
+                or appending it.  In contrast, “dduummppoonn off” removes all con‐
+                figured devices.  Conflicts with --ii.
+
+     --kk _p_u_b_k_e_y  Configure encrypted kernel dumps.
+
+                A random, one-time symmetric key is automatically generated
+                for bulk kernel dump encryption every time dduummppoonn is used.
+                The provided _p_u_b_k_e_y is used to encrypt a copy of the symmetric
+                key.  The encrypted dump contents consist of a standard dump
+                header, the pubkey-encrypted symmetric key contents, and the
+                symmetric key encrypted core dump contents.
+
+                As a result, only someone with the corresponding private key
+                can decrypt the symmetric key.  The symmetric key is necessary
+                to decrypt the kernel core.  The goal of the mechanism is to
+                provide confidentiality.
+
+                The _p_u_b_k_e_y file should be a PEM-formatted RSA key of at least
+                2048 bits.
+
+     --CC _c_i_p_h_e_r  Select the symmetric algorithm used for encrypted kernel crash
+                dump.  The default is “chacha20” but “aes256-cbc” is also
+                available.  (AES256-CBC mode does not work in conjunction with
+                compression.)
+
+     --ll         List the currently configured dump device(s), or /dev/null if
+                no devices are configured.
+
+     --vv         Enable verbose mode.
+
+     --ZZ         Enable compression (Zstandard).
+
+     --zz         Enable compression (gzip).  Only one compression method may be
+                enabled at a time, so --zz is incompatible with --ZZ.
+
+                Zstandard provides superior compression ratio and performance.
+
+   NNeettdduummpp
+     dduummppoonn may also configure the kernel to dump to a remote netdumpd(8)
+     server.  (The netdumpd(8) server is available in ports.)  netdump(4)
+     eliminates the need to reserve space for crash dumps.  It is especially
+     useful in diskless environments.  When dduummppoonn is used to configure net‐
+     dump, the _d_e_v_i_c_e (or _i_f_a_c_e) parameter should specify a network interface
+     (e.g., _i_g_b_1).  The specified NIC must be up (online) to configure net‐
+     dump.
+
+     netdump(4) specific options include:
+
+     --cc _c_l_i_e_n_t   The local IP address of the netdump(4) client.
+
+     --gg _g_a_t_e_w_a_y  The first-hop router between _c_l_i_e_n_t and _s_e_r_v_e_r.  If the --gg
+                 option is not specified and the system has a default route,
+                 the default router is used as the netdump(4) gateway.  If the
+                 --gg option is not specified and the system does not have a de‐
+                 fault route, _s_e_r_v_e_r is assumed to be on the same link as
+                 _c_l_i_e_n_t.
+
+     --ss _s_e_r_v_e_r   The IP address of the netdumpd(8) server.
+
+     All of these options can be specified in the rc.conf(5) variable
+     _d_u_m_p_o_n___f_l_a_g_s.
+
+   MMiinniidduummppss
+     The default type of kernel crash dump is the mini crash dump.  Mini crash
+     dumps hold only memory pages in use by the kernel.  Alternatively, full
+     memory dumps can be enabled by setting the _d_e_b_u_g_._m_i_n_i_d_u_m_p sysctl(8) vari‐
+     able to 0.
+
+   FFuullll dduummppss
+     For systems using full memory dumps, the size of the specified dump de‐
+     vice must be at least the size of physical memory.  Even though an addi‐
+     tional 64 kB header is added to the dump, the BIOS for a platform typi‐
+     cally holds back some memory, so it is not usually necessary to size the
+     dump device larger than the actual amount of RAM available in the ma‐
+     chine.  Also, when using full memory dumps, the dduummppoonn utility will
+     refuse to enable a dump device which is smaller than the total amount of
+     physical memory as reported by the _h_w_._p_h_y_s_m_e_m sysctl(8) variable.
+
+IIMMPPLLEEMMEENNTTAATTIIOONN NNOOTTEESS
+     Because the file system layer is already dead by the time a crash dump is
+     taken, it is not possible to send crash dumps directly to a file.
+
+     The loader(8) variable _d_u_m_p_d_e_v may be used to enable early kernel core
+     dumps for system panics which occur before userspace starts.
+
+EEXXAAMMPPLLEESS
+     In order to generate an RSA private key, a user can use the genrsa(1)
+     tool:
+
+           # openssl genrsa -out private.pem 4096
+
+     A public key can be extracted from the private key using the rsa(1) tool:
+
+           # openssl rsa -in private.pem -out public.pem -pubout
+
+     Once the RSA keys are created in a safe place, the public key may be
+     moved to the untrusted netdump client machine.  Now _p_u_b_l_i_c_._p_e_m can be
+     used by dduummppoonn to configure encrypted kernel crash dumps:
+
+           # dumpon -k public.pem /dev/ada0s1b
+
+     It is recommended to test if the kernel saves encrypted crash dumps using
+     the current configuration.  The easiest way to do that is to cause a ker‐
+     nel panic using the ddb(4) debugger:
+
+           # sysctl debug.kdb.panic=1
+
+     In the debugger the following commands should be typed to write a core
+     dump and reboot:
+
+           db> dump
+           db> reset
+
+     After reboot savecore(8) should be able to save the core dump in the
+     “dumpdir” directory, which is _/_v_a_r_/_c_r_a_s_h by default:
+
+           # savecore /dev/ada0s1b
+
+     Three files should be created in the core directory: _i_n_f_o_._#, _k_e_y_._# and
+     _v_m_c_o_r_e___e_n_c_r_y_p_t_e_d_._# (where “#” is the number of the last core dump saved
+     by savecore(8)).  The _v_m_c_o_r_e___e_n_c_r_y_p_t_e_d_._# can be decrypted using the
+     decryptcore(8) utility:
+
+           # decryptcore -p private.pem -k key.# -e vmcore_encrypted.# -c
+           vmcore.#
+
+     or shorter:
+
+           # decryptcore -p private.pem -n #
+
+     The _v_m_c_o_r_e_._# can be now examined using kgdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b):
+
+           # kgdb /boot/kernel/kernel vmcore.#
+
+     or shorter:
+
+           # kgdb -n #
+
+     The core was decrypted properly if kgdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) does not
+     print any errors.  Note that the live kernel might be at a different path
+     which can be examined by looking at the _k_e_r_n_._b_o_o_t_f_i_l_e sysctl(8).
+
+     The dduummppoonn rc(8) script runs early during boot, typically before network‐
+     ing is configured.  This makes it unsuitable for configuring netdump(4)
+     when the client address is dynamic.  To configure netdump(4) when
+     dhclient(8) binds to a server, dhclient-script(8) can be used to run
+     dumpon(8).  For example, to automatically configure netdump(4) on the vt‐
+     net0 interface, add the following to _/_e_t_c_/_d_h_c_l_i_e_n_t_-_e_x_i_t_-_h_o_o_k_s.
+
+     case $reason in
+     BOUND|REBIND|REBOOT|RENEW)
+             if [ "$interface" != vtnet0 ] || [ -n "$old_ip_address" -a \
+                  "$old_ip_address" = "$new_ip_address" ]; then
+                     break
+             fi
+             if [ -n "$new_routers" ]; then
+                     # Take the first router in the list.
+                     gateway_flag="-g ${new_routers%% *}"
+             fi
+             # Configure as the highest-priority dump device.
+             dumpon -i 0 -c $new_ip_address -s $server $gateway_flag vtnet0
+             ;;
+     esac
+
+     Be sure to fill in the server IP address and change the interface name if
+     needed.
+
+SSEEEE AALLSSOO
+     gzip(1), kgdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b), zstd(1), ddb(4), netdump(4),
+     fstab(5), rc.conf(5), config(8), decryptcore(8), init(8), loader(8),
+     rc(8), savecore(8), swapon(8), panic(9)
+
+HHIISSTTOORRYY
+     The dduummppoonn utility appeared in FreeBSD 2.0.5.
+
+     Support for encrypted kernel core dumps and netdump was added in
+     FreeBSD 12.0.
+
+AAUUTTHHOORRSS
+     The dduummppoonn manual page was written by Mark Johnston <_m_a_r_k_j_@_F_r_e_e_B_S_D_._o_r_g>,
+     Conrad Meyer <_c_e_m_@_F_r_e_e_B_S_D_._o_r_g>,
+     Konrad Witaszczyk <_d_e_f_@_F_r_e_e_B_S_D_._o_r_g>, and countless others.
+
+CCAAVVEEAATTSS
+     To configure encrypted kernel core dumps, the running kernel must have
+     been compiled with the EKCD option.
+
+     Netdump does not automatically update the configured _g_a_t_e_w_a_y if routing
+     topology changes.
+
+     The size of a compressed dump or a minidump is not a fixed function of
+     RAM size.  Therefore, when at least one of these options is enabled, the
+     dduummppoonn utility cannot verify that the _d_e_v_i_c_e has sufficient space for a
+     dump.  dduummppoonn is also unable to verify that a configured netdumpd(8)
+     server has sufficient space for a dump.
+
+     --ZZ requires a kernel compiled with the ZSTDIO kernel option.  Similarly,
+     --zz requires the GZIO option.
+
+BBUUGGSS
+     Netdump only supports IPv4 at this time.
+
+SSEECCUURRIITTYY CCOONNSSIIDDEERRAATTIIOONNSS
+     The current encrypted kernel core dump scheme does not provide integrity
+     nor authentication.  That is, the recipient of an encrypted kernel core
+     dump cannot know if they received an intact core dump, nor can they ver‐
+     ify the provenance of the dump.
+
+     RSA keys smaller than 1024 bits are practical to factor and therefore
+     weak.  Even 1024 bit keys may not be large enough to ensure privacy for
+     many years, so NIST recommends a minimum of 2048 bit RSA keys.  As a
+     seatbelt, dduummppoonn prevents users from configuring encrypted kernel dumps
+     with extremely weak RSA keys.  If you do not care for cryptographic pri‐
+     vacy guarantees, just use dduummppoonn without specifying a --kk _p_u_b_k_e_y option.
+
+     This process is sandboxed using capsicum(4).
+
+BSD                             April 23, 2020                             BSD

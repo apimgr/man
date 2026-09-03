@@ -1,0 +1,142 @@
+_s_y_s_t_e_m(3)                  Library Functions Manual                  _s_y_s_t_e_m(3)
+
+NNAAMMEE
+       system - execute a shell command
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssttddlliibb..hh>>
+
+       iinntt ssyysstteemm((ccoonnsstt cchhaarr **_c_o_m_m_a_n_d));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The ssyysstteemm() library function behaves as if it used ffoorrkk(2) to create a
+       child  process that executed the shell command specified in _c_o_m_m_a_n_d us‐
+       ing eexxeeccll(3) as follows:
+
+           execl("/bin/sh", "sh", "-c", command, (char *) NULL);
+
+       ssyysstteemm() returns after the command has been completed.
+
+       During execution of the command, SSIIGGCCHHLLDD will be  blocked,  and  SSIIGGIINNTT
+       and  SSIIGGQQUUIITT  will  be  ignored,  in  the  process that calls ssyysstteemm().
+       (These signals will be handled according to their defaults  inside  the
+       child process that executes _c_o_m_m_a_n_d.)
+
+       If _c_o_m_m_a_n_d is NULL, then ssyysstteemm() returns a status indicating whether a
+       shell is available on the system.
+
+RREETTUURRNN VVAALLUUEE
+       The return value of ssyysstteemm() is one of the following:
+
+       •  If _c_o_m_m_a_n_d is NULL, then a nonzero value if a shell is available, or
+          0 if no shell is available.
+
+       •  If  a child process could not be created, or its status could not be
+          retrieved, the return value is -1 and _e_r_r_n_o is set to  indicate  the
+          error.
+
+       •  If  a shell could not be executed in the child process, then the re‐
+          turn value is as  though  the  child  shell  terminated  by  calling
+          __eexxiitt(2) with the status 127.
+
+       •  If  all  system calls succeed, then the return value is the termina‐
+          tion status of the child shell used to execute _c_o_m_m_a_n_d.  (The termi‐
+          nation status of a shell is the termination status of the last  com‐
+          mand it executes.)
+
+       In  the last two cases, the return value is a "wait status" that can be
+       examined using the macros described in wwaaiittppiidd(2).  (i.e., WWIIFFEEXXIITTEEDD(),
+       WWEEXXIITTSSTTAATTUUSS(), and so on).
+
+       ssyysstteemm() does not affect the wait status of any other children.
+
+EERRRROORRSS
+       ssyysstteemm() can fail with any of the same errors as ffoorrkk(2).
+
+AATTTTRRIIBBUUTTEESS
+       For an explanation of the terms  used  in  this  section,  see  aattttrriibb‐‐
+       uutteess(7).  allbox; lbx lb lb l l l.  Interface Attribute Value T{
+       ssyysstteemm() T}   Thread safety  MT‐Safe
+
+SSTTAANNDDAARRDDSS
+       C11, POSIX.1‐2008.
+
+HHIISSTTOORRYY
+       POSIX.1‐2001, C89.
+
+NNOOTTEESS
+       ssyysstteemm() provides simplicity and convenience: it handles all of the
+       details of calling ffoorrkk(2), eexxeeccll(3), and wwaaiittppiidd(2), as well as the
+       necessary manipulations of signals; in addition, the shell performs the
+       usual substitutions and I/O redirections for _c_o_m_m_a_n_d.  The main cost of
+       ssyysstteemm() is inefficiency: additional system calls are required to
+       create the process that runs the shell and to execute the shell.
+
+       If the __XXOOPPEENN__SSOOUURRCCEE feature test macro is defined (before including
+       _a_n_y header files), then the macros described in wwaaiittppiidd(2)
+       (WWEEXXIITTSSTTAATTUUSS(), etc.) are made available when including _<_s_t_d_l_i_b_._h_>.
+
+       As mentioned, ssyysstteemm() ignores SSIIGGIINNTT and SSIIGGQQUUIITT.  This may make
+       programs that call it from a loop uninterruptible, unless they take
+       care themselves to check the exit status of the child.  For example:
+
+           while (something) {
+               int ret = system("foo");
+
+               if (WIFSIGNALED(ret) &&
+                   (WTERMSIG(ret) == SIGINT || WTERMSIG(ret) == SIGQUIT))
+                       break;
+           }
+
+       According to POSIX.1, it is unspecified whether handlers registered
+       using pptthhrreeaadd__aattffoorrkk(3) are called during the execution of ssyysstteemm().
+       In the glibc implementation, such handlers are not called.
+
+       Before glibc 2.1.3, the check for the availability of _/_b_i_n_/_s_h was not
+       actually performed if _c_o_m_m_a_n_d was NULL; instead it was always assumed
+       to be available, and ssyysstteemm() always returned 1 in this case.  Since
+       glibc 2.1.3, this check is performed because, even though POSIX.1‐2001
+       requires a conforming implementation to provide a shell, that shell may
+       not be available or executable if the calling program has previously
+       called cchhrroooott(2) (which is not specified by POSIX.1‐2001).
+
+       It is possible for the shell command to terminate with a status of 127,
+       which yields a ssyysstteemm() return value that is indistinguishable from the
+       case where a shell could not be executed in the child process.
+
+   CCaavveeaattss
+       Do not use ssyysstteemm() from a privileged program (a set‐user‐ID or set‐
+       group‐ID program, or a program with capabilities) because strange
+       values for some environment variables might be used to subvert system
+       integrity.  For example, PPAATTHH could be manipulated so that an arbitrary
+       program is executed with privilege.  Use the eexxeecc(3) family of
+       functions instead, but not eexxeeccllpp(3) or eexxeeccvvpp(3) (which also use the
+       PPAATTHH environment variable to search for an executable).
+
+       ssyysstteemm() will not, in fact, work properly from programs with set‐user‐
+       ID or set‐group‐ID privileges on systems on which _/_b_i_n_/_s_h is bash
+       version 2: as a security measure, bash 2 drops privileges on startup.
+       (Debian uses a different shell, ddaasshh(1), which does not do this when
+       invoked as sshh.)
+
+       Any user input that is employed as part of _c_o_m_m_a_n_d should be _c_a_r_e_f_u_l_l_y
+       sanitized, to ensure that unexpected shell commands or command options
+       are not executed.  Such risks are especially grave when using ssyysstteemm()
+       from a privileged program.
+
+BBUUGGSS
+       If the command name starts with a hyphen, sshh(1) interprets the command
+       name as an option, and the behavior is undefined.  (See the --cc option
+       to sshh(1).)  To work around this problem, prepend the command with a
+       space as in the following call:
+
+               system(" -unfortunate-command-name");
+
+SSEEEE AALLSSOO
+       sshh(1), eexxeeccvvee(2), ffoorrkk(2), ssiiggaaccttiioonn(2), ssiiggpprrooccmmaasskk(2), wwaaiitt(2),
+       eexxeecc(3), ssiiggnnaall(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                         _s_y_s_t_e_m(3)

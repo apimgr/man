@@ -1,0 +1,153 @@
+_c_g_r_o_u_p___n_a_m_e_s_p_a_c_e_s(7)   Miscellaneous Information Manual   _c_g_r_o_u_p___n_a_m_e_s_p_a_c_e_s(7)
+
+NNAAMMEE
+       cgroup_namespaces - overview of Linux cgroup namespaces
+
+DDEESSCCRRIIPPTTIIOONN
+       For an overview of namespaces, see nnaammeessppaacceess(7).
+
+       Cgroup  namespaces  virtualize  the  view  of  a process’s cgroups (see
+       ccggrroouuppss(7)) as seen via _/_p_r_o_c_/pid_/_c_g_r_o_u_p and _/_p_r_o_c_/pid_/_m_o_u_n_t_i_n_f_o.
+
+       Each cgroup namespace has its  own  set  of  cgroup  root  directories.
+       These  root  directories are the base points for the relative locations
+       displayed in the corresponding records in  the  _/_p_r_o_c_/pid_/_c_g_r_o_u_p  file.
+       When  a  process  creates  a new cgroup namespace using cclloonnee(2) or uunn‐‐
+       sshhaarree(2) with the CCLLOONNEE__NNEEWWCCGGRROOUUPP flag, its current cgroups directories
+       become the cgroup root directories of the new namespace.  (This applies
+       both for the cgroups version 1 hierarchies and the  cgroups  version  2
+       unified hierarchy.)
+
+       When  reading  the  cgroup  memberships  of  a  "target"  process  from
+       _/_p_r_o_c_/pid_/_c_g_r_o_u_p, the pathname shown in the third field of each  record
+       will be relative to the reading process’s root directory for the corre‐
+       sponding  cgroup  hierarchy.   If  the  cgroup  directory of the target
+       process lies outside the root directory of the reading process’s cgroup
+       namespace, then the pathname will show _._._/ entries  for  each  ancestor
+       level in the cgroup hierarchy.
+
+       The  following  shell session demonstrates the effect of creating a new
+       cgroup namespace.
+
+       First, (as superuser) in a shell in the initial  cgroup  namespace,  we
+       create  a child cgroup in the _f_r_e_e_z_e_r hierarchy, and place a process in
+       that cgroup that we will use as part of the demonstration below:
+
+           # mmkkddiirr --pp //ssyyss//ffss//ccggrroouupp//ffrreeeezzeerr//ssuubb22;
+           # sslleeeepp 1100000000 &&    # Create a process that lives for a while
+           [1] 20124
+           # eecchhoo 2200112244 >> //ssyyss//ffss//ccggrroouupp//ffrreeeezzeerr//ssuubb22//ccggrroouupp..pprrooccss;
+
+       We then create another child cgroup in the _f_r_e_e_z_e_r  hierarchy  and  put
+       the shell into that cgroup:
+
+           # mmkkddiirr --pp //ssyyss//ffss//ccggrroouupp//ffrreeeezzeerr//ssuubb;
+           # eecchhoo $$$$;                      # Show PID of this shell
+           30655
+           # eecchhoo 3300665555 >> //ssyyss//ffss//ccggrroouupp//ffrreeeezzeerr//ssuubb//ccggrroouupp..pprrooccss;
+           # ccaatt //pprroocc//sseellff//ccggrroouupp || ggrreepp ffrreeeezzeerr;
+           7:freezer:/sub
+
+       Next,  we use uunnsshhaarree(1) to create a process running a new shell in new
+       cgroup and mount namespaces:
+
+           # PPSS11==’’sshh22## ’’ uunnsshhaarree --CCmm bbaasshh;
+
+       From  the  new  shell  started  by  uunnsshhaarree(1),  we  then  inspect  the
+       _/_p_r_o_c_/pid_/_c_g_r_o_u_p  files of, respectively, the new shell, a process that
+       is in the initial cgroup namespace (_i_n_i_t, with PID 1), and the  process
+       in the sibling cgroup (_s_u_b_2):
+
+           sh2# ccaatt //pprroocc//sseellff//ccggrroouupp || ggrreepp ffrreeeezzeerr;
+           7:freezer:/
+           sh2# ccaatt //pprroocc//11//ccggrroouupp || ggrreepp ffrreeeezzeerr;
+           7:freezer:/..
+           sh2# ccaatt //pprroocc//2200112244//ccggrroouupp || ggrreepp ffrreeeezzeerr;
+           7:freezer:/../sub2
+
+       From  the  output  of the first command, we see that the freezer cgroup
+       membership of the new shell (which is in the same cgroup as the initial
+       shell) is shown defined relative to the freezer cgroup  root  directory
+       that  was  established  when the new cgroup namespace was created.  (In
+       absolute terms, the new shell is in the _/_s_u_b freezer  cgroup,  and  the
+       root  directory of the freezer cgroup hierarchy in the new cgroup name‐
+       space is also _/_s_u_b.  Thus, the new shell’s cgroup  membership  is  dis‐
+       played as '/'.)
+
+       However,  when  we  look  in  _/_p_r_o_c_/_s_e_l_f_/_m_o_u_n_t_i_n_f_o we see the following
+       anomaly:
+
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ffrreeeezzeerr;
+           155 145 0:32 /.. /sys/fs/cgroup/freezer ...
+
+       The fourth field of this line (_/_._.)  should show the directory  in  the
+       cgroup filesystem which forms the root of this mount.  Since by the de‐
+       finition of cgroup namespaces, the process’s current freezer cgroup di‐
+       rectory  became its root freezer cgroup directory, we should see '/' in
+       this field.  The problem here is that we are seeing a mount  entry  for
+       the  cgroup  filesystem  corresponding  to the initial cgroup namespace
+       (whose cgroup filesystem is indeed rooted at the  parent  directory  of
+       _s_u_b).  To fix this problem, we must remount the freezer cgroup filesys‐
+       tem  from the new shell (i.e., perform the mount from a process that is
+       in the new cgroup namespace), after which we see the expected results:
+
+           sh2# mmoouunntt ----mmaakkee--rrssllaavvee //;     # Don't propagate mount events
+                                          # to other namespaces
+           sh2# uummoouunntt //ssyyss//ffss//ccggrroouupp//ffrreeeezzeerr;
+           sh2# mmoouunntt --tt ccggrroouupp --oo ffrreeeezzeerr ffrreeeezzeerr //ssyyss//ffss//ccggrroouupp//ffrreeeezzeerr;
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ffrreeeezzeerr;
+           155 145 0:32 / /sys/fs/cgroup/freezer rw,relatime ...
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+NNOOTTEESS
+       Use of cgroup namespaces requires a kernel that is configured with  the
+       CCOONNFFIIGG__CCGGRROOUUPPSS option.
+
+       The  virtualization  provided  by  cgroup namespaces serves a number of
+       purposes:
+
+       •  It prevents information leaks whereby cgroup directory paths outside
+          of a container would otherwise be visible to processes in  the  con‐
+          tainer.   Such leakages could, for example, reveal information about
+          the container framework to containerized applications.
+
+       •  It eases tasks such as container migration.  The virtualization pro‐
+          vided by cgroup namespaces allows containers  to  be  isolated  from
+          knowledge of the pathnames of ancestor cgroups.  Without such isola‐
+          tion,  the  full  cgroup pathnames (displayed in _/_p_r_o_c_/_s_e_l_f_/_c_g_r_o_u_p_s)
+          would need to be replicated on the target system  when  migrating  a
+          container;  those  pathnames  would  also need to be unique, so that
+          they don’t conflict with other pathnames on the target system.
+
+       •  It allows better confinement of containerized processes, because  it
+          is  possible  to  mount the container’s cgroup filesystems such that
+          the container processes can’t gain access to ancestor cgroup  direc‐
+          tories.  Consider, for example, the following scenario:
+
+          •  We have a cgroup directory, _/_c_g_/_1, that is owned by user ID 9000.
+
+          •  We  have  a process, _X, also owned by user ID 9000, that is name‐
+             spaced under the cgroup _/_c_g_/_1_/_2 (i.e., _X  was  placed  in  a  new
+             cgroup  namespace via cclloonnee(2) or uunnsshhaarree(2) with the CCLLOONNEE__NNEEWWCC‐‐
+             GGRROOUUPP flag).
+
+          In the absence of cgroup namespacing, because the  cgroup  directory
+          _/_c_g_/_1  is  owned  (and  writable)  by UID 9000 and process _X is also
+          owned by user ID 9000, process _X would be able to  modify  the  con‐
+          tents  of  cgroups  files (i.e., change cgroup settings) not only in
+          _/_c_g_/_1_/_2 but also in the  ancestor  cgroup  directory  _/_c_g_/_1.   Name‐
+          spacing process _X under the cgroup directory _/_c_g_/_1_/_2, in combination
+          with  suitable  mount operations for the cgroup filesystem (as shown
+          above), prevents it modifying files in _/_c_g_/_1, since it  cannot  even
+          see the contents of that directory (or of further removed cgroup an‐
+          cestor  directories).   Combined with correct enforcement of hierar‐
+          chical limits, this prevents process _X from escaping the limits  im‐
+          posed by ancestor cgroups.
+
+SSEEEE AALLSSOO
+       uunnsshhaarree(1),  cclloonnee(2),  sseettnnss(2), uunnsshhaarree(2), pprroocc(5), ccggrroouuppss(7), ccrree‐‐
+       ddeennttiiaallss(7), nnaammeessppaacceess(7), uusseerr__nnaammeessppaacceess(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21              _c_g_r_o_u_p___n_a_m_e_s_p_a_c_e_s(7)

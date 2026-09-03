@@ -1,0 +1,128 @@
+NG_PPTPGRE(4)            BSD Kernel Interfaces Manual            NG_PPTPGRE(4)
+
+NNAAMMEE
+     nngg__ppppttppggrree — PPTP GRE protocol netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__ppppttppggrree..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppppttppggrree node type performs Generic Routing Encapsulation (GRE) over
+     IP for the PPTP protocol as specified by RFC 2637.  This involves packet
+     encapsulation, sequencing, acknowledgement, and an adaptive timeout slid‐
+     ing window mechanism.  This node type does not handle any of the TCP con‐
+     trol protocol or call negotiation defined by PPTP.
+
+     This node type expects to receive complete IP packets, including the IP
+     header, on the “lower” hook, but it transmits outgoing frames without any
+     IP header.  The typical use for this node type would be to connect the
+     “upper” hook to one of the link hooks of a ng_ppp(4) node, and the
+     “lower” hook to the “inet/raw/gre” hook of a ng_ksocket(4) node.
+
+HHOOOOKKSS
+     This node type supports the following hooks:
+
+     _s_e_s_s_i_o_n___h_h_h_h  Session 0xhhhh data packets to the upper protocol layers
+
+     _u_p_p_e_r         Same as session_hhhh, but for single session with config‐
+                   urable cid (legacy)
+
+     _l_o_w_e_r         Connection to the lower protocol layers
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_PPTPGRE_SET_CONFIG (sseettccoonnffiigg)
+          This command resets and configures hook for a session.  If corre‐
+          sponding session_hhhh hook is not connected, upper hook will be con‐
+          figured.  This command takes a _s_t_r_u_c_t _n_g___p_p_t_p_g_r_e___c_o_n_f as an argu‐
+          ment:
+
+          /* Configuration for a session */
+          struct ng_pptpgre_conf {
+              u_char      enabled;          /* enables traffic flow */
+              u_char      enableDelayedAck; /* enables delayed acks */
+              u_char      enableAlwaysAck;  /* always include ack with data */
+              u_char      enableWindowing;  /* enable windowing algorithm */
+              uint16_t    cid;              /* my call id */
+              uint16_t    peerCid;          /* peer call id */
+              uint16_t    recvWin;          /* peer recv window size */
+              uint16_t    peerPpd;          /* peer packet processing delay
+                                               (in 1/10 of a second) */
+          };
+
+          The _e_n_a_b_l_e_d field enables traffic flow through the node.  The
+          _e_n_a_b_l_e_D_e_l_a_y_e_d_A_c_k field enables delayed acknowledgement (maximum 250
+          milliseconds), which is a useful optimization and should generally
+          be turned on.  _e_n_a_b_l_e_A_l_w_a_y_s_A_c_k field enables sending acknowledge‐
+          ments with every data packet, which is probably helpful as well.
+
+          _e_n_a_b_l_e_W_i_n_d_o_w_i_n_g enables the PPTP packet windowing mechanism speci‐
+          fied by the protocol.  Disabling this will cause the node to violate
+          the protocol, possibly confusing other PPTP peers, but often results
+          in better performance.  The windowing mechanism is a design error in
+          the PPTP protocol; L2TP, the successor to PPTP, removes it.
+
+          The remaining fields are as supplied by the PPTP virtual call setup
+          process.
+
+     NGM_PPTPGRE_GET_CONFIG (ggeettccoonnffiigg)
+          Takes two byte argument as cid and returns the current configuration
+          as a _s_t_r_u_c_t _n_g___p_p_t_p_g_r_e___c_o_n_f.
+
+     NGM_PPTPGRE_GET_STATS (ggeettssttaattss)
+          This command returns a _s_t_r_u_c_t _n_g___p_p_t_p_g_r_e___s_t_a_t_s containing various
+          node statistics.
+
+     NGM_PPTPGRE_CLR_STATS (ccllrrssttaattss)
+          This command resets the node statistics.
+
+     NGM_PPTPGRE_GETCLR_STATS (ggeettccllrrssttaattss)
+          This command atomically gets and resets the node statistics, return‐
+          ing a _s_t_r_u_c_t _n_g___p_p_t_p_g_r_e___s_t_a_t_s.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when both hooks have been disconnected.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     A set of sysctl(8) variables controls ability of this node to deal with
+     some amount of packet reorder that sometimes happens in transit.  Packet
+     reorder results in packet drops (unless the order is restored) as PPP
+     protocol can not deliver reordered data.  These variables are shown below
+     together with their default value and meaning:
+
+     _n_e_t_._g_r_a_p_h_._p_p_t_p_g_r_e_._r_e_o_r_d_e_r___m_a_x_: _1
+             Defines maximum length of node's private reorder queue used to
+             keep data waiting for late packets.  Zero value disables reorder‐
+             ing.  Default value allows the node to restore the order for two
+             packets swapped in transit.  Greater values allow the node to de‐
+             liver packets being late after more packets in sequence at cost
+             of increased kernel memory usage.
+
+     _n_e_t_._g_r_a_p_h_._p_p_t_p_g_r_e_._r_e_o_r_d_e_r___t_i_m_e_o_u_t_: _1
+             Defines time value in miliseconds used to wait for late packets.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_ksocket(4), ng_ppp(4), ngctl(8), sysctl(8)
+
+     K. Hamzeh, G. Pall, W. Verthein, J. Taarud, W. Little, and G. Zorn,
+     _P_o_i_n_t_-_t_o_-_P_o_i_n_t _T_u_n_n_e_l_i_n_g _P_r_o_t_o_c_o_l _(_P_P_T_P_), RFC 2637.
+
+     S. Hanks, T. Li, D. Farinacci, and P. Traina, _G_e_n_e_r_i_c _R_o_u_t_i_n_g
+     _E_n_c_a_p_s_u_l_a_t_i_o_n _o_v_e_r _I_P_v_4 _n_e_t_w_o_r_k_s, RFC 1702.
+
+HHIISSTTOORRYY
+     The nngg__ppppttppggrree node type was implemented in FreeBSD 4.0.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     The node should not expect incoming GRE packets to have an IP header.
+     This behavior is inherited from the (converse) behavior of raw IP sock‐
+     ets.  An intermediate node that strips IP headers in one direction should
+     be used instead.
+
+BSD                            November 4, 2018                            BSD

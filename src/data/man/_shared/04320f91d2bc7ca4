@@ -1,0 +1,211 @@
+NG_SOURCE(4)             BSD Kernel Interfaces Manual             NG_SOURCE(4)
+
+NNAAMMEE
+     nngg__ssoouurrccee — netgraph node for traffic generation
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__ssoouurrccee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssoouurrccee node acts as a source of packets according to the parameters
+     set up using control messages and input packets.  The nngg__ssoouurrccee node type
+     is used primarily for testing and benchmarking.
+
+HHOOOOKKSS
+     The ssoouurrccee node has two hooks: _i_n_p_u_t and _o_u_t_p_u_t.  The _o_u_t_p_u_t hook must
+     remain connected, its disconnection will shutdown the node.
+
+OOPPEERRAATTIIOONN
+     The operation of the node is as follows.  Packets received on the _i_n_p_u_t
+     hook are queued internally.  When _o_u_t_p_u_t hook is connected, nngg__ssoouurrccee
+     node assumes that its neighbour node is of ng_ether(4) node type.  The
+     neighbour is queried for its interface name.  The nngg__ssoouurrccee node then
+     uses queue of the interface for its evil purposes.  The nngg__ssoouurrccee node
+     also disables _a_u_t_o_s_r_c option on neighbour ng_ether(4) node.  If interface
+     name cannot be obtained automatically, it should be configured explicitly
+     with the NGM_SOURCE_SETIFACE control message, and _a_u_t_o_s_r_c should be
+     turned off on ng_ether(4) node manually.
+
+     If the node is connected to a netgraph network, which does not terminate
+     in a real ng_ether(4) interface, limit the packet injection rate explic‐
+     itly with the _N_G_M___S_O_U_R_C_E___S_E_T_P_P_S control message.
+
+     Upon receipt of a NGM_SOURCE_START control message the node starts send‐
+     ing the previously queued packets out the _o_u_t_p_u_t hook on every clock tick
+     as fast as the connected interface will take them.  While active, on ev‐
+     ery clock tick the node checks the available space in the interface queue
+     and sends that many packets out its _o_u_t_p_u_t hook.  Once the number of
+     packets indicated in the start message has been sent, or upon receipt of
+     a NGM_SOURCE_STOP message, the node stops sending data.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages as well as the fol‐
+     lowing, which must be sent with the NGM_SOURCE_COOKIE attached.
+
+     NGM_SOURCE_GET_STATS (ggeettssttaattss)
+          Returns a structure containing the following fields:
+
+          _o_u_t_O_c_t_e_t_s    The number of octets/bytes sent out the _o_u_t_p_u_t hook.
+
+          _o_u_t_F_r_a_m_e_s    The number of frames/packets sent out the _o_u_t_p_u_t hook.
+
+          _q_u_e_u_e_O_c_t_e_t_s  The number of octets queued from the _i_n_p_u_t hook.
+
+          _q_u_e_u_e_F_r_a_m_e_s  The number of frames queued from the _i_n_p_u_t hook.
+
+          _s_t_a_r_t_T_i_m_e    The time the last start message was received.
+
+          _e_n_d_T_i_m_e      The time the last end message was received or the out‐
+                       put packet count was reached.
+
+          _e_l_a_p_s_e_d_T_i_m_e  Either _e_n_d_T_i_m_e - _s_t_a_r_t_T_i_m_e or current time - _s_t_a_r_t_T_i_m_e.
+
+     NGM_SOURCE_CLR_STATS (ccllrrssttaattss)
+          Clears and resets the statistics returned by ggeettssttaattss (except
+          _q_u_e_u_e_O_c_t_e_t_s and _q_u_e_u_e_F_r_a_m_e_s).
+
+     NGM_SOURCE_GETCLR_STATS (ggeettccllrrssttaattss)
+          As ggeettssttaattss but clears the statistics at the same time.
+
+     NGM_SOURCE_START (ssttaarrtt)
+          This message requires a single _u_i_n_t_6_4___t parameter which is the num‐
+          ber of packets to send before stopping.  Node starts sending the
+          queued packets out the _o_u_t_p_u_t hook.  The _o_u_t_p_u_t hook must be con‐
+          nected and node must have interface configured.
+
+     NGM_SOURCE_STOP (ssttoopp)
+          Stops the node if it is active.
+
+     NGM_SOURCE_CLR_DATA (ccllrrddaattaa)
+          Clears the packets queued from the _i_n_p_u_t hook.
+
+     NGM_SOURCE_SETIFACE (sseettiiffaaccee)
+          This message requires the name of the interface to be configured as
+          an argument.
+
+     NGM_SOURCE_SETPPS (sseettppppss)
+          This message requires a single _u_i_n_t_3_2___t parameter which puts upper
+          limit on the amount of packets sent per second.
+
+     NGM_SOURCE_SET_TIMESTAMP (sseettttiimmeessttaammpp)
+          This message specifies that a timestamp (in the format of a _s_t_r_u_c_t
+          _t_i_m_e_v_a_l) should be inserted in the transmitted packets.  This mes‐
+          sage requires a structure containing the following fields:
+
+          _o_f_f_s_e_t  The offset from the beginning of the packet at which the
+                  timestamp is to be inserted.
+
+          _f_l_a_g_s   Set to 1 to enable the timestamp.
+
+     NGM_SOURCE_GET_TIMESTAMP (ggeettttiimmeessttaammpp)
+          Returns the current timestamp settings in the form of the structure
+          described above.
+
+     NGM_SOURCE_SET_COUNTER (sseettccoouunntteerr)
+          This message specifies that a counter should be embedded in trans‐
+          mitted packets.  Up to four counters may be independently config‐
+          ured.  This message requires a structure containing the following
+          fields:
+
+          _o_f_f_s_e_t     The offset from the beginning of the packet at which the
+                     counter is to be inserted.
+
+          _f_l_a_g_s      Set to 1 to enable the counter.
+
+          _w_i_d_t_h      The byte width of the counter.  It may be 1, 2, or 4.
+
+          _n_e_x_t___v_a_l   The value for the next insertion of the counter.
+
+          _m_i_n___v_a_l    The minimum value to be used by the counter.
+
+          _m_a_x___v_a_l    The maximum value to be used by the counter.
+
+          _i_n_c_r_e_m_e_n_t  The value to be added to the counter after each inser‐
+                     tion.  It may be negative.
+
+          _i_n_d_e_x      The counter to be configured, from 0 to 3.
+
+     NGM_SOURCE_GET_COUNTER (ggeettccoouunntteerr)
+          This message requires a single _u_i_n_t_8___t parameter which specifies the
+          counter to query.  Returns the current counter settings in the form
+          of the structure described above.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, when
+     all hooks have been disconnected, or when the _o_u_t_p_u_t hook has been dis‐
+     connected.
+
+EEXXAAMMPPLLEESS
+     Attach the node to an ng_ether(4) node for an interface.  If nngg__eetthheerr is
+     not already loaded you will need to do so.  For example, these commands
+     load the nngg__eetthheerr module and attach the _o_u_t_p_u_t hook of a new ssoouurrccee node
+     to _o_r_p_h_a_n_s hook of the bge0: nngg__eetthheerr node.
+
+           kldload ng_ether
+           ngctl mkpeer bge0: source orphans output
+
+     At this point the new node can be referred to as “bge0:orphans”.  The
+     node can be given its own name like this:
+
+           ngctl name bge0:orphans src0
+
+     After which it can be referred to as “src0:”.
+
+     Once created, packets can be sent to the node as raw binary data.  Each
+     packet must be delivered in a separate netgraph message.
+
+     The following example uses a short Perl script to convert the hex repre‐
+     sentation of an ICMP packet to binary and deliver it to the ssoouurrccee node's
+     _i_n_p_u_t hook via nghook(8):
+
+           perl -pe 's/(..)[ \t\n]*/chr(hex($1))/ge' <<EOF | nghook src0: input
+           ff ff ff ff ff ff 00 00 00 00 00 00 08 00 45 00
+           00 54 cb 13 00 00 40 01 b9 87 c0 a8 2b 65 0a 00
+           00 01 08 00 f8 d0 c9 76 00 00 45 37 01 73 00 01
+           04 0a 08 09 0a 0b 0c 0d 0e 0f 10 11 12 13 14 15
+           16 17 18 19 1a 1b 1c 1d 1e 1f 20 21 22 23 24 25
+           26 27 28 29 2a 2b 2c 2d 2e 2f 30 31 32 33 34 35
+           36 37
+           EOF
+
+     To check that the node has queued these packets you can get the node sta‐
+     tistics:
+
+           ngctl msg bge0:orphans getstats
+           Args:   { queueOctets=64 queueFrames=1 }
+
+     Send as many packets as required out the _o_u_t_p_u_t hook:
+
+           ngctl msg bge0:orphans start 16
+
+     Either wait for them to be sent (periodically fetching stats if desired)
+     or send the stop message:
+
+           ngctl msg bge0:orphans stop
+
+     Check the statistics (here we use ggeettccllrrssttaattss to also clear the statis‐
+     tics):
+
+           ngctl msg bge0:orphans getclrstats
+           Args:   { outOctets=1024 outFrames=16 queueOctets=64 queueFrames=1
+           startTime={ tv_sec=1035305880 tv_usec=758036 } endTime={ tv_sec=1035305880
+           tv_usec=759041 } elapsedTime={ tv_usec=1005 } }
+
+     The times are from _s_t_r_u_c_t _t_i_m_e_v_a_ls, the _t_v___s_e_c field is seconds since the
+     Epoch and can be converted into a date string via TCL's [clock format] or
+     via the date(1) command:
+
+           date -r 1035305880
+           Tue Oct 22 12:58:00 EDT 2002
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_echo(4), ng_hole(4), ng_tee(4), ngctl(8), nghook(8)
+
+HHIISSTTOORRYY
+     The nngg__ssoouurrccee node type was implemented in FreeBSD 4.8.
+
+AAUUTTHHOORRSS
+     Dave Chapeskie
+
+BSD                            January 18, 2021                            BSD

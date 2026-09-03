@@ -1,0 +1,174 @@
+ARP(4)                   BSD Kernel Interfaces Manual                   ARP(4)
+
+NNAAMMEE
+     aarrpp — Address Resolution Protocol
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee eetthheerr
+
+DDEESSCCRRIIPPTTIIOONN
+     The Address Resolution Protocol (ARP) is used to dynamically map between
+     Protocol Addresses (such as IP addresses) and Local Network Addresses
+     (such as Ethernet addresses).  This implementation maps IP addresses to
+     Ethernet addresses.  It is used by all the Ethernet interface drivers.
+
+     ARP caches Internet-Ethernet address mappings.  When an interface re‐
+     quests a mapping for an address not in the cache, ARP queues the message
+     which requires the mapping and broadcasts a message on the associated
+     network requesting the address mapping.  If a response is provided, the
+     new mapping is cached and any pending message is transmitted.  ARP will
+     queue at most _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t_._m_a_x_h_o_l_d packets while waiting for a re‐
+     sponse to a mapping request; only the most recently ``transmitted'' pack‐
+     ets are kept.  If the target host does not respond after several re‐
+     quests, the host is considered to be down allowing an error to be re‐
+     turned to transmission attempts.  Further demand for this mapping causes
+     ARP request retransmissions, that are ratelimited to one packet per sec‐
+     ond.  The error is EHOSTDOWN for a non-responding destination host, and
+     EHOSTUNREACH for a non-responding router.
+
+     The ARP cache is stored in per-interface link-level table.
+
+     ARP entries may be added, deleted or changed with the arp(8) utility.
+     Manually-added entries may be temporary or permanent, and may be
+     “published”, in which case the system will respond to ARP requests for
+     that host as if it were the target of the request.
+
+     In the past, ARP was used to negotiate the use of a trailer encapsula‐
+     tion.  This is no longer supported.
+
+     ARP watches passively for hosts impersonating the local host (i.e., a
+     host which responds to an ARP mapping request for the local host's ad‐
+     dress).
+
+     Proxy ARP is a feature whereby the local host will respond to requests
+     for addresses other than itself, with its own address.  Normally, proxy
+     ARP in FreeBSD is set up on a host-by-host basis using the arp(8) util‐
+     ity, by adding an entry for each host inside a given subnet for which
+     proxying of ARP requests is desired.  However, the “proxy all” feature
+     causes the local host to act as a proxy for _a_l_l hosts reachable through
+     some other network interface, different from the one the request came in
+     from.  It may be enabled by setting the sysctl(8) MIB variable
+     _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t_._p_r_o_x_y_a_l_l to 1.
+
+MMIIBB VVaarriiaabblleess
+     The ARP protocol implements a number of configurable variables in
+     _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t branch of the sysctl(3) MIB.
+
+     _a_l_l_o_w___m_u_l_t_i_c_a_s_t           Install ARP entries with the multicast bit set
+                               in the hardware address.  Installing such en‐
+                               tries is an RFC 1812 violation, but some pro‐
+                               prietary load balancing techniques require
+                               routers to do so.  Turned off by default.
+
+     _g_a_r_p___r_e_x_m_i_t___c_o_u_n_t         Retransmit gratuitous ARP (GARP) packets when
+                               an IPv4 address is added to an interface.  A
+                               GARP is always transmitted when an IPv4 address
+                               is added to an interface.  A non-zero value
+                               causes the GARP packet to be retransmitted the
+                               stated number of times.  The interval between
+                               retransmissions is doubled each time, so the
+                               retransmission intervals are: {1, 2, 4, 8, 16,
+                               ...} (seconds).  The default value of zero
+                               means only the initial GARP is sent; no addi‐
+                               tional GARP packets are retransmitted.  The
+                               maximum value is sixteen.
+
+                               The default behavior of a single GARP packet is
+                               usually sufficient.  However, a single GARP
+                               might be dropped or lost in some circumstances.
+                               This is particularly harmful when a shared ad‐
+                               dress is passed between cluster nodes.  Neigh‐
+                               bors on the network link might then work with a
+                               stale ARP cache and send packets destined for
+                               that address to the node that previously owned
+                               the address, which might not respond.
+
+     _l_o_g___a_r_p___m_o_v_e_m_e_n_t_s         Log movements of IP addresses from one hardware
+                               address to another.  See _D_I_A_G_N_O_S_T_I_C_S below.
+                               Turned on by default.
+
+     _l_o_g___a_r_p___p_e_r_m_a_n_e_n_t___m_o_d_i_f_y  Log attempts by a remote host to modify a per‐
+                               manent ARP entry.  See _D_I_A_G_N_O_S_T_I_C_S below.
+                               Turned on by default.
+
+     _l_o_g___a_r_p___w_r_o_n_g___i_f_a_c_e       Log attempts to insert an ARP entry on an in‐
+                               terface when the IP network to which the ad‐
+                               dress belongs is connected to another inter‐
+                               face.  See _D_I_A_G_N_O_S_T_I_C_S below.  Turned on by de‐
+                               fault.
+
+     _m_a_x___l_o_g___p_e_r___s_e_c_o_n_d        Limit the number of remotely triggered logging
+                               events to a configured value per second.  De‐
+                               fault is 1 log message per second.
+
+     _m_a_x___a_g_e                   How long an ARP entry is held in the cache un‐
+                               til it needs to be refreshed.  Default is 1200
+                               seconds.
+
+     _m_a_x_h_o_l_d                   How many packets to hold in the per-entry out‐
+                               put queue while the entry is being resolved.
+                               Default is 16 packets.
+
+     _m_a_x_t_r_i_e_s                  Number of retransmits before a host is consid‐
+                               ered down and an error is returned.  Default is
+                               5 tries.
+
+     _p_r_o_x_y_a_l_l                  Enables ARP proxying.  Turned off by default.
+
+     _w_a_i_t                      Lifetime of an incomplete ARP entry.  Default
+                               is 20 seconds.
+
+DDIIAAGGNNOOSSTTIICCSS
+     aarrpp:: %%xx::%%xx::%%xx::%%xx::%%xx::%%xx iiss uussiinngg mmyy IIPP aaddddrreessss %%dd..%%dd..%%dd..%%dd oonn %%ss!!  ARP has
+     discovered another host on the local network which responds to mapping
+     requests for its own Internet address with a different Ethernet address,
+     generally indicating that two hosts are attempting to use the same Inter‐
+     net address.
+
+     aarrpp:: lliinnkk aaddddrreessss iiss bbrrooaaddccaasstt ffoorr IIPP aaddddrreessss %%dd..%%dd..%%dd..%%dd!!  ARP requested
+     information for a host, and received an answer indicating that the host's
+     ethernet address is the ethernet broadcast address.  This indicates a
+     misconfigured or broken device.
+
+     aarrpp:: %%dd..%%dd..%%dd..%%dd mmoovveedd ffrroomm %%xx::%%xx::%%xx::%%xx::%%xx::%%xx ttoo %%xx::%%xx::%%xx::%%xx::%%xx::%%xx oonn %%ss
+     ARP had a cached value for the ethernet address of the referenced host,
+     but received a reply indicating that the host is at a new address.  This
+     can happen normally when host hardware addresses change, or when a mobile
+     node arrives or leaves the local subnet.  It can also indicate a problem
+     with proxy ARP.  This message can only be issued if the sysctl
+     _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t_._l_o_g___a_r_p___m_o_v_e_m_e_n_t_s is set to 1, which is the system's
+     default behaviour.
+
+     aarrpprreessoollvvee:: ccaann''tt aallllooccaattee lllliinnffoo ffoorr %%dd..%%dd..%%dd..%%dd  The route for the ref‐
+     erenced host points to a device upon which ARP is required, but ARP was
+     unable to allocate a routing table entry in which to store the host's MAC
+     address.  This usually points to a misconfigured routing table.  It can
+     also occur if the kernel cannot allocate memory.
+
+     aarrpp:: %%dd..%%dd..%%dd..%%dd iiss oonn iiff00 bbuutt ggoott rreeppllyy ffrroomm %%xx::%%xx::%%xx::%%xx::%%xx::%%xx oonn iiff11
+     Physical connections exist to the same logical IP network on both if0 and
+     if1.  It can also occur if an entry already exists in the ARP cache for
+     the IP address above, and the cable has been disconnected from if0, then
+     reconnected to if1.  This message can only be issued if the sysctl
+     _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t_._l_o_g___a_r_p___w_r_o_n_g___i_f_a_c_e is set to 1, which is the sys‐
+     tem's default behaviour.
+
+     aarrpp:: %%xx::%%xx::%%xx::%%xx::%%xx::%%xx aatttteemmppttss ttoo mmooddiiffyy ppeerrmmaanneenntt eennttrryy ffoorr %%dd..%%dd..%%dd..%%dd
+     oonn %%ss  ARP has received an ARP reply that attempts to overwrite a perma‐
+     nent entry in the local ARP table.  This error will only be logged if the
+     sysctl _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t_._l_o_g___a_r_p___p_e_r_m_a_n_e_n_t___m_o_d_i_f_y is set to 1, which is
+     the system's default behaviour.
+
+     aarrpp:: %%xx::%%xx::%%xx::%%xx::%%xx::%%xx iiss mmuullttiiccaasstt  Kernel refused to install an entry
+     with multicast hardware address.  If you really want such addresses being
+     installed, set the sysctl _n_e_t_._l_i_n_k_._e_t_h_e_r_._i_n_e_t_._a_l_l_o_w___m_u_l_t_i_c_a_s_t to a posi‐
+     tive value.
+
+SSEEEE AALLSSOO
+     inet(4), route(4), arp(8), ifconfig(8), route(8), sysctl(8)
+
+     Plummer, D., “RFC826”, _A_n _E_t_h_e_r_n_e_t _A_d_d_r_e_s_s _R_e_s_o_l_u_t_i_o_n _P_r_o_t_o_c_o_l.
+
+     Leffler, S.J.  and Karels, M.J., “RFC893”, _T_r_a_i_l_e_r _E_n_c_a_p_s_u_l_a_t_i_o_n_s.
+
+BSD                             October 7, 2016                            BSD

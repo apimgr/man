@@ -1,0 +1,112 @@
+The  driver  allows  a  PC  parallel printer port to be used as a
+point‐to‐point network interface between two similarly configured
+systems.  Data is transferred 4 bits at a time, using the printer
+status lines for input: hence there is no requirement for special
+bidirectional hardware and  any  standard  AT‐compatible  printer
+port  with  working  interrupts  may  be  used.   During the boot
+process, for each device which is attached and has  an  interrupt
+capability,  a  corresponding  device is attached.  The device is
+configured using using the options for a  point‐to‐point  network
+interface:  Configuring a device with causes the corresponding to
+be reserved for PLIP until the network  interface  is  configured
+The communication protocol is selected by the flag: (default) Use
+mode  (LPIP).  This is the simpler of the two modes and therefore
+slightly  more  efficient.   Use  Crynwr/Linux  compatible   mode
+(CLPIP).   This  mode has a simulated Ethernet packet header, and
+is easier to interface to other types of equipment.   The  inter‐
+face  MTU  defaults  to  1500, but may be set to any value.  Both
+ends of the link must be configured with the same MTU.   See  for
+details  on configuring network interfaces.  The cable connecting
+the  two   parallel   ports   should   be   wired   as   follows:
+        Pin     Pin     Description         2       15      Data0
+‐>      ERROR*              3       13      Data1     ‐>     SLCT
+        4       12      Data2 ‐> PE         5       10      Data3
+‐>      ACK*              6       11      Data4      ‐>      BUSY
+        15      2       ERROR*              ‐>              Data0
+        13      3       SLCT                ‐>              Data1
+        12      4       PE                  ‐>              Data2
+        10      5       ACK*                ‐>              Data3
+        11      6       BUSY                ‐>              Data4
+        18‐25   18‐25   Ground Cables with this wiring are widely
+available as cables, and are often colored yellow.   The  connec‐
+tions  are symmetric, and provide 5 lines in each direction (four
+data plus one handshake).  The two modes use the same wiring, but
+make a different choice of which line to use as  handshake.   The
+signal lines are used as follows: Data out, bit 0.  Data out, bit
+1.   Data out, bit 2.  Handshake out.  Data out, bit 3.  Data in,
+bit 0.  Data in, bit 1.  Data in, bit 2.  Data in, bit 3.   Hand‐
+shake  in.   When idle, all data lines are at zero.  Each byte is
+signaled in four steps:  sender writes  the  4  most  significant
+bits and raises the handshake line; receiver reads the 4 bits and
+raises  its  handshake  to acknowledge; sender places the 4 least
+significant bits on the data lines and lowers the handshake;  re‐
+ceiver  reads the data and lowers its handshake.  The packet for‐
+mat has a two‐byte header,  comprising  the  fixed  values  0x08,
+0x00,  immediately followed by the IP header and data.  The start
+of a packet is indicated by simply signaling the  first  byte  of
+the  header.  The end of the packet is indicated by inverting the
+data lines (i.e. writing the ones‐complement of the previous nib‐
+ble to be transmitted) without changing the state  of  the  hand‐
+shake.  Note that the end‐of‐packet marker assumes that the hand‐
+shake signal and the data‐out bits can be written in a single in‐
+struction  ‐  otherwise  certain  byte  values in the packet data
+would falsely be interpreted as end‐of‐packet.   This  is  not  a
+problem  for  the  PC printer port, but requires care when imple‐
+menting this protocol on other equipment.  The signal  lines  are
+used  as  follows:  Data out, bit 0.  Data out, bit 1.  Data out,
+bit 2.  Data out, bit 3.  Handshake out.  Data in, bit  0.   Data
+in, bit 1.  Data in, bit 2.  Data in, bit 3.  Handshake in.  When
+idle,  all data lines are at zero.  Each byte is signaled in four
+steps:  sender writes the 4 least significant bits and raises the
+handshake line; receiver reads the 4 bits and  raises  its  hand‐
+shake  to  acknowledge; sender places the 4 most significant bits
+on the data lines and lowers the handshake;  receiver  reads  the
+data  and  lowers its handshake.  [Note that this is the opposite
+nibble order to LPIP mode].  Packet format is: Length (least sig‐
+nificant byte) Length (most significant byte) 12  bytes  of  sup‐
+posed  MAC addresses (ignored by FreeBSD).  Fixed byte 0x08 Fixed
+byte 0x00 <IP datagram> Checksum byte.  The length  includes  the
+14  header  bytes,  but  not  the length bytes themselves nor the
+checksum byte.  The checksum is a simple arithmetic  sum  of  all
+the bytes (again, including the header but not checksum or length
+bytes).  calculates outgoing checksums, but does not validate in‐
+coming  ones.   The start of packet has to be signaled specially,
+since the line chosen for handshake‐in cannot be used to generate
+an interrupt.  The sender writes  the  value  0x08  to  the  data
+lines,  and  waits for the receiver to respond by writing 0x01 to
+its data lines.  The sender then starts signaling the first  byte
+of  the  packet (the length byte).  End of packet is deduced from
+the packet length and is not  signaled  specially  (although  the
+data  lines  are restored to the zero, idle state to avoid spuri‐
+ously indicating the start of the next packet).  The  driver  was
+implemented for in and imported into Crynwr packet drivers imple‐
+mented  PLIP for Linux also has a PLIP driver.  The protocols are
+know as LPIP and CLPIP (Crynwr/Linux) in  the  documentation  and
+code  of this port.  LPIP originally appeared in This manual page
+is based on the manual page.  The information  has  been  updated
+for  the  port by Gary Thorpe.  Busy‐waiting loops are used while
+handshaking bytes (and worse still when waiting for the receiving
+system to respond to an interrupt for the  start  of  a  packet).
+Hence  a fast system talking to a slow one will consume excessive
+amounts of CPU.  This is unavoidable in the case  of  CLPIP  mode
+due  to  the choice of handshake lines; it could theoretically be
+improved in the case of LPIP mode.  Regardless of the speed  dif‐
+ference  between  hosts, PLIP is CPU‐intensive and its made worse
+by having to send nibbles (4 bits) at a time.   Polling  timeouts
+are  controlled  by  counting loop iterations rather than timers,
+and so are dependent on CPU speed.  This is  somewhat  stabilized
+by the need to perform (slow) ISA bus cycles to actually read the
+port.  In the implementation, the idle state was not properly be‐
+ing  restored on errors or when finishing transmitting/receiving.
+This implementation attempts to fix this problem which would  re‐
+sult  in  an  unresponsive interface that could no longer be used
+(the port bits get stuck in a state and nothing can progress)  by
+zeroing  the  data register when necessary.  For unknown reasons,
+the more complex protocol (CLPIP)  yields  higher  data  transfer
+rates  during testing so far.  This could possibly be because the
+other side can reliably detect when the host is  transmitting  in
+this implementation of CLPIP (this may not necessarily be true in
+Linux  or  packet drivers).  CLPIP gets about 70 KB/sec (the best
+expected is about 75 KB/sec) and LPIP get about 55 KB/sec.   This
+is  despite  LPIP being able to send more packets over the inter‐
+face (tested with compared to CLPIP.

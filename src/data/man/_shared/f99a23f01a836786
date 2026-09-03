@@ -1,0 +1,280 @@
+PSP(4)                   BSD Kernel Interfaces Manual                   PSP(4)
+
+NNAAMMEE
+     ppsspp — AMD Platform Security Processor
+
+SSYYNNOOPPSSIISS
+     ppsspp** aatt ccccpp??
+
+DDEESSCCRRIIPPTTIIOONN
+     The ppsspp driver provides an interface to the AMD Platform Security Proces‐
+     sor.  The interface can be accessed through the ioctl(2) interface ex‐
+     posed by _/_d_e_v_/_p_s_p.
+
+     vmd(8) uses ppsspp to configure and launch SEV-enabled guests.
+
+IIOOCCTTLL IINNTTEERRFFAACCEE
+     The ioctl(2) command codes below are defined in <_d_e_v_/_i_c_/_p_s_p_v_a_r_._h>.
+
+     PSP_IOC_GET_PSTATUS _s_t_r_u_c_t _p_s_p___p_l_a_t_f_o_r_m___s_t_a_t_u_s _*_p_s_p_s_t
+             Collect the current status of the platform.
+
+             struct psp_platform_status {
+                     /* Output parameters from PSP_CMD_PLATFORMSTATUS */
+                     uint8_t                 api_major;
+                     uint8_t                 api_minor;
+                     uint8_t                 state;
+                     uint8_t                 owner;
+                     uint32_t                cfges_build;
+                     uint32_t                guest_count;
+             } __packed;
+
+             _a_p_i___m_a_j_o_r and _a_p_i___m_i_n_o_r indicate the PSP firmware version.
+
+             The current platform state is indicated by _s_t_a_t_e.  The following
+             values are defined:
+             PSP_PSTATE_UNINIT   The platform is uninitialized.
+             PSP_PSTATE_INIT     The platform is initialized but not managing
+                                 any guests.
+             PSP_PSTATE_WORKING  The platform is initialized and currently
+                                 managing guests.
+
+             _o_w_n_e_r indicates whether the platform is self-owned or externally
+             owned.
+
+             Bit 0 of _c_f_g_s___b_u_i_l_d indicates whether SEV-ES is configured on the
+             platform or not.  Bits 31:24 indicate the firmware build ID.
+
+             _g_u_e_s_t___c_o_u_n_t indicates the number of valid guests currently main‐
+             tained by the firmware.
+
+     PSP_IOC_DF_FLUSH
+             This command flushes all write buffers of the CPU's data fabric.
+             It must be invoked after deactivating one or more guests with
+             PSP_IOC_DEACTIVATE.
+
+     PSP_IOC_DECOMMISSION _s_t_r_u_c_t _p_s_p___d_e_c_o_m_m_i_s_s_i_o_n _*_p_s_p_d_e_c
+             Deletes all guest context of the guest identified by _h_a_n_d_l_e.
+
+             struct psp_decommission {
+                     /* Input parameter for PSP_CMD_DECOMMISSION */
+                     uint32_t                handle;
+             } __packed;
+
+     PSP_IOC_GET_GSTATUS
+             Retrieves status information about an SEV-enabled guest identi‐
+             fied by _h_a_n_d_l_e.
+
+             struct psp_guest_status {
+                     /* Input parameter for PSP_CMD_GUESTSTATUS */
+                     uint32_t                handle;
+
+                     /* Output parameters from PSP_CMD_GUESTSTATUS */
+                     uint32_t                policy;
+                     uint32_t                asid;
+                     uint8_t                 state;
+             } __packed;
+
+             _p_o_l_i_c_y indicates the policy used for this guest.  _a_s_i_d indicates
+             the guest's address space identifier (ASID).
+
+             The state of the guest is indicated by _s_t_a_t_e.  The following val‐
+             ues are defined:
+             PSP_GSTATE_UNINIT   The guest is uninitialized.
+             PSP_GSTATE_LUPDATE  The guest is currently being launched and
+                                 plaintext data is imported.
+             PSP_GSTATE_LSECRET  The guest is currently being launched and ci‐
+                                 phertext data is imported.
+             PSP_GSTATE_RUNNING  The guest is fully launched.
+             PSP_GSTATE_SUPDATE  The guest is migrated to another machine.
+             PSP_GSTATE_RUPDATE  The guest is migrated from another machine.
+             PSP_GSTATE_SENT     Thee guest has bin migrated to another ma‐
+                                 chine.
+
+     PSP_IOC_LAUNCH_START
+             This command encrypts a guest's memory.
+
+             struct psp_launch_start {
+                     /* Input/Output parameter for PSP_CMD_LAUNCH_START */
+                     uint32_t                handle;
+
+                     /* Input parameters for PSP_CMD_LAUNCH_START */
+                     uint32_t                policy;
+
+                     /* The following input parameters are not used yet */
+                     uint64_t                dh_cert_paddr;
+                     uint32_t                dh_cert_len;
+                     uint32_t                reserved;
+                     uint64_t                session_paddr;
+                     uint32_t                session_len;
+             } __packed;
+
+             If _h_a_n_d_l_e is zero, a new key is created.  A unique handle is as‐
+             signed to the guest and returned in _h_a_n_d_l_e.
+
+             _p_o_l_i_c_y specifies the policy used for that guest.
+
+             _d_h___c_e_r_t___p_a_d_d_r, _d_h___c_e_r_t _l_e_n, _s_e_s_s_i_o_n___p_a_d_d_r and _s_e_s_s_i_o_n___l_e_n are
+             currently not used.
+
+     PSP_IOC_LAUNCH_UPDATE_DATA
+             This command encrypts data of the guest identified by _h_a_n_d_l_e.
+
+             struct psp_launch_update_data {
+                     /* Input parameters for PSP_CMD_LAUNCH_UPDATE_DATA */
+                     uint32_t                handle;
+                     uint32_t                reserved;
+                     uint64_t                paddr;
+                     uint32_t                length;
+             } __packed;
+
+             _p_a_d_d_r and _l_e_n_g_t_h specify the address and length of the data to be
+             encrypted.  Both values must be a multiple of 16 bytes.
+
+     PSP_IOC_LAUNCH_MEASURE
+             This commands generates a measurement of the guest's memory.  The
+             guest is identified by _h_a_n_d_l_e.
+
+             struct psp_measure {
+                     /* Output buffer for PSP_CMD_LAUNCH_MEASURE */
+                     uint8_t                 measure[32];
+                     uint8_t                 measure_nonce[16];
+             } __packed;
+
+             struct psp_launch_measure {
+                     /* Input parameters for PSP_CMD_LAUNCH_MEASURE */
+                     uint32_t                handle;
+                     uint32_t                reserved;
+                     uint64_t                measure_paddr;
+
+                     /* Input/output parameter for PSP_CMD_LAUNCH_MEASURE */
+                     uint32_t                measure_len;
+                     uint32_t                padding;
+
+                     /* Output buffer from PSP_CMD_LAUNCH_MEASURE */
+                     struct psp_measure      psp_measure;    /* 64bit aligned */
+             #define measure         psp_measure.measure
+             #define measure_nonce   psp_measure.measure_nonce
+             } __packed;
+
+             _m_e_a_s_u_r_e___p_a_d_d_r is currently not used and _m_e_a_s_u_r_e___l_e_n must always
+             be sizeof(struct psp_measure).
+
+             _p_s_p___m_e_a_s_u_r_e contains the buffers _m_e_a_s_u_r_e and _m_e_a_s_u_r_e___n_o_n_c_e.
+             These contain the measurement and nonce generated by the PSP.
+
+     PSP_IOC_LAUNCH_FINISH
+             This command finalizes the launch of the guest identified by
+             _h_a_n_d_l_e.
+
+             struct psp_launch_finish {
+                     /* Input parameter for PSP_CMD_LAUNCH_FINISH */
+                     uint32_t                handle;
+             } __packed;
+
+     PSP_IOC_ATTESTATION
+             This command generates an attestation report signed by the PSP
+             with a platform specific key.
+
+             struct psp_report {
+                     /* Output buffer for PSP_CMD_ATTESTATION */
+                     uint8_t                 report_nonce[16];
+                     uint8_t                 report_launch_digest[32];
+                     uint32_t                report_policy;
+                     uint32_t                report_sig_usage;
+                     uint32_t                report_sig_algo;
+                     uint32_t                reserved2;
+                     uint8_t                 report_sig1[144];
+             } __packed;
+
+             struct psp_attestation {
+                     /* Input parameters for PSP_CMD_ATTESTATION */
+                     uint32_t                handle;
+                     uint32_t                reserved;
+                     uint64_t                attest_paddr;
+                     uint8_t                 attest_nonce[16];
+
+                     /* Input/output parameter from PSP_CMD_ATTESTATION */
+                     uint32_t                attest_len;
+                     uint32_t                padding;
+
+                     /* Output parameter from PSP_CMD_ATTESTATION */
+                     struct psp_report       psp_report;     /* 64bit aligned */
+             #define report_nonce            psp_report.report_nonce
+             #define report_launch_digest    psp_report.report_launch_digest
+             #define report_policy           psp_report.report_policy
+             #define report_sig_usage        psp_report.report_sig_usage;
+             #define report_report_sig_alg   psp_report.report_sig_algo;
+             #define report_report_sig1      psp_report.report_sig1;
+             } __packed;
+
+             _h_a_n_d_l_e identifies the guest.  _a_t_t_e_s_t___p_a_d_d_r is currently not used.
+             _a_t_t_e_s_t___n_o_n_c_e is the nonce returned by a previous
+             PSP_IOC_LAUNCH_MEASURE command.  _a_t_t_e_s_t___l_e_n must always be
+             sizeof(struct psp_report).
+
+             The attestation report is returned in _p_s_p___r_e_p_o_r_t.  The format of
+             the report is defined by struct psp_report.
+
+     PSP_IOC_ACTIVATE
+             This commands associates the context of the guest identified by
+             _h_a_n_d_l_e with the address space identifier provided in _a_s_i_d.
+
+             struct psp_activate {
+                     /* Input parameters for PSP_CMD_ACTIVATE */
+                     uint32_t                handle;
+                     uint32_t                asid;
+             } __packed;
+
+     PSP_IOC_DEACTIVATE
+             This command dissociates the context of the guest identified by
+             _h_a_n_d_l_e from its current the address space identifier.
+
+             struct psp_deactivate {
+                     /* Input parameter for PSP_CMD_DEACTIVATE */
+                     uint32_t                handle;
+             } __packed;
+
+     PSP_IOC_SNP_GET_PSTATUS
+             This command returns the state of a SEV-SNP enabled platform.
+
+             struct psp_snp_platform_status {
+                     uint8_t                 api_major;
+                     uint8_t                 api_minor;
+                     uint8_t                 state;
+                     uint8_t                 is_rmp_init;
+                     uint32_t                build;
+                     uint32_t                features;
+                     uint32_t                guest_count;
+                     uint64_t                current_tcb;
+                     uint64_t                reported_tcb;
+             } __packed;
+
+     PSP_IOC_GUEST_SHUTDOWN
+             This command shuts down a guest identified by _h_a_n_d_l_e.
+
+             struct psp_guest_shutdown {
+                     /* Input parameter for PSP_CMD_GUEST_SHUTDOWN */
+                     uint32_t                handle;
+             } __packed;
+
+             The command combines PSP_IOC_DEACTIVATE and PSP_IOC_DECOMMISSION
+             in a single ioctl(2) call.
+
+FFIILLEESS
+     /dev/psp
+
+SSEEEE AALLSSOO
+     ioctl(2), ccp(4), vmd(8)
+
+     _S_e_c_u_r_e _E_n_c_r_y_p_t_e_d _V_i_r_t_u_a_l_i_z_a_t_i_o_n _A_P_I, Publication #55766.
+
+     _S_E_V _S_e_c_u_r_e _N_e_s_t_e_d _P_a_g_i_n_g _F_i_r_m_w_a_r_e _A_B_I _S_p_e_c_i_f_i_c_a_t_i_o_n, Publication #56860.
+
+HHIISSTTOORRYY
+     The ppsspp device driver first appeared in OpenBSD 7.6.
+
+AAUUTTHHOORRSS
+     The ppsspp driver was written by Hans-Joerg Hoexer <_h_s_h_o_e_x_e_r_@_g_e_n_u_a_._d_e>.
+
+BSD                           September 17, 2024                           BSD

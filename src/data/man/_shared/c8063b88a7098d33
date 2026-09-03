@@ -1,0 +1,473 @@
+IP6(4)                   BSD Kernel Interfaces Manual                   IP6(4)
+
+NNAAMMEE
+     iipp66 — Internet Protocol version 6 (IPv6) network layer
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+
+     _i_n_t
+     ssoocckkeett(_A_F___I_N_E_T_6, _S_O_C_K___R_A_W, _p_r_o_t_o);
+
+DDEESSCCRRIIPPTTIIOONN
+     The IPv6 network layer is used by the IPv6 protocol family for transport‐
+     ing data.  IPv6 packets contain an IPv6 header that is not provided as
+     part of the payload contents when passed to an application.  IPv6 header
+     options affect the behavior of this protocol and may be used by high-
+     level protocols (such as the tcp(4) and udp(4) protocols) as well as di‐
+     rectly by “raw sockets”, which process IPv6 messages at a lower-level and
+     may be useful for developing new protocols and special-purpose applica‐
+     tions.
+
+   HHeeaaddeerr
+     All IPv6 packets begin with an IPv6 header.  When data received by the
+     kernel are passed to the application, this header is not included in buf‐
+     fer, even when raw sockets are being used.  Likewise, when data are sent
+     to the kernel for transmit from the application, the buffer is not exam‐
+     ined for an IPv6 header: the kernel always constructs the header.  To di‐
+     rectly access IPv6 headers from received packets and specify them as part
+     of the buffer passed to the kernel, link-level access (bpf(4), for
+     example) must instead be utilized.
+
+     The header has the following definition:
+
+           struct ip6_hdr {
+                union {
+                     struct ip6_hdrctl {
+                          u_int32_t ip6_un1_flow;  /* 20 bits of flow ID */
+                          u_int16_t ip6_un1_plen;  /* payload length */
+                          u_int8_t  ip6_un1_nxt;   /* next header */
+                          u_int8_t  ip6_un1_hlim;  /* hop limit */
+                     } ip6_un1;
+                     u_int8_t ip6_un2_vfc;   /* version and class */
+                } ip6_ctlun;
+                struct in6_addr ip6_src;   /* source address */
+                struct in6_addr ip6_dst;   /* destination address */
+           } __packed;
+
+           #define ip6_vfc         ip6_ctlun.ip6_un2_vfc
+           #define ip6_flow        ip6_ctlun.ip6_un1.ip6_un1_flow
+           #define ip6_plen        ip6_ctlun.ip6_un1.ip6_un1_plen
+           #define ip6_nxt         ip6_ctlun.ip6_un1.ip6_un1_nxt
+           #define ip6_hlim        ip6_ctlun.ip6_un1.ip6_un1_hlim
+           #define ip6_hops        ip6_ctlun.ip6_un1.ip6_un1_hlim
+
+     All fields are in network-byte order.  Any options specified (see _O_p_t_i_o_n_s
+     below) must also be specified in network-byte order.
+
+     _i_p_6___f_l_o_w specifies the flow ID.  _i_p_6___p_l_e_n specifies the payload length.
+     _i_p_6___n_x_t specifies the type of the next header.  _i_p_6___h_l_i_m specifies the
+     hop limit.
+
+     The top 4 bits of _i_p_6___v_f_c specify the class and the bottom 4 bits specify
+     the version.
+
+     _i_p_6___s_r_c and _i_p_6___d_s_t specify the source and destination addresses.
+
+     The IPv6 header may be followed by any number of extension headers that
+     start with the following generic definition:
+
+           struct ip6_ext {
+                u_int8_t ip6e_nxt;
+                u_int8_t ip6e_len;
+           } __packed;
+
+   OOppttiioonnss
+     IPv6 allows header options on packets to manipulate the behavior of the
+     protocol.  These options and other control requests are accessed with the
+     getsockopt(2) and setsockopt(2) system calls at level IPPROTO_IPV6 and by
+     using ancillary data in recvmsg(2) and sendmsg(2).  They can be used to
+     access most of the fields in the IPv6 header and extension headers.
+
+     The following socket options are supported:
+
+     IPV6_UNICAST_HOPS _i_n_t _*
+             Get or set the default hop limit header field for outgoing uni‐
+             cast datagrams sent on this socket.  A value of -1 resets to the
+             default value.
+
+     IPV6_MINHOPCOUNT _i_n_t _*
+             Get or set the minimum hop limit header field for incoming pack‐
+             ets received on TCP and UDP sockets.  This can be used to imple‐
+             ment the _G_e_n_e_r_a_l_i_z_e_d _T_T_L _S_e_c_u_r_i_t_y _M_e_c_h_a_n_i_s_m _(_G_T_S_M_) according to
+             RFC 5082.
+
+     IPV6_MULTICAST_IF _u___i_n_t _*
+             Get or set the interface from which multicast packets will be
+             sent.  For hosts with multiple interfaces, each multicast trans‐
+             mission is sent from the primary network interface.  The inter‐
+             face is specified as its index as provided by if_nametoindex(3).
+             A value of zero specifies the default interface.
+
+     IPV6_MULTICAST_HOPS _i_n_t _*
+             Get or set the default hop limit header field for outgoing multi‐
+             cast datagrams sent on this socket.  This option controls the
+             scope of multicast datagram transmissions.
+
+             Datagrams with a hop limit of 1 are not forwarded beyond the lo‐
+             cal network.  Multicast datagrams with a hop limit of zero will
+             not be transmitted on any network but may be delivered locally if
+             the sending host belongs to the destination group and if multi‐
+             cast loopback (see below) has not been disabled on the sending
+             socket.  Multicast datagrams with a hop limit greater than 1 may
+             be forwarded to the other networks if a multicast router (such as
+             mrouted(8)) is attached to the local network.
+
+     IPV6_MULTICAST_LOOP _u___i_n_t _*
+             Get or set the status of whether multicast datagrams will be
+             looped back for local delivery when a multicast datagram is sent
+             to a group to which the sending host belongs.
+
+             This option improves performance for applications that may have
+             no more than one instance on a single host (such as a router dae‐
+             mon) by eliminating the overhead of receiving their own transmis‐
+             sions.  It should generally not be used by applications for which
+             there may be more than one instance on a single host (such as a
+             conferencing program) or for which the sender does not belong to
+             the destination group (such as a time-querying program).
+
+             A multicast datagram sent with an initial hop limit greater than
+             1 may be delivered to the sending host on a different interface
+             from that on which it was sent if the host belongs to the desti‐
+             nation group on that other interface.  The multicast loopback
+             control option has no effect on such delivery.
+
+     IPV6_JOIN_GROUP _s_t_r_u_c_t _i_p_v_6___m_r_e_q _*
+             Join a multicast group.  A host must become a member of a multi‐
+             cast group before it can receive datagrams sent to the group.
+
+             struct ipv6_mreq {
+                     struct in6_addr ipv6mr_multiaddr;
+                     unsigned int    ipv6mr_interface;
+             };
+
+             _i_p_v_6_m_r___i_n_t_e_r_f_a_c_e may be set to zeroes to choose the default mul‐
+             ticast interface or to the index of a particular multicast-capa‐
+             ble interface if the host is multihomed.  Membership is associ‐
+             ated with a single interface; programs running on multihomed
+             hosts may need to join the same group on more than one interface.
+
+             If the multicast address is unspecified (i.e., all zeroes), mes‐
+             sages from all multicast addresses will be accepted by this
+             group.  Note that setting to this value requires superuser privi‐
+             leges.
+
+     IPV6_LEAVE_GROUP _s_t_r_u_c_t _i_p_v_6___m_r_e_q _*
+             Drop membership from the associated multicast group.  Memberships
+             are automatically dropped when the socket is closed or when the
+             process exits.
+
+     IPV6_PORTRANGE _i_n_t _*
+             Get or set the allocation policy of ephemeral ports for when the
+             kernel automatically binds a local address to this socket.  The
+             following values are available:
+
+             IPV6_PORTRANGE_DEFAULT  Use the regular range of non-reserved
+                                     ports (varies, see sysctl(8)).
+             IPV6_PORTRANGE_HIGH     Use a high range (varies, see sysctl(8)).
+             IPV6_PORTRANGE_LOW      Use a low, reserved range (600-1023).
+
+     IPV6_RECVPKTINFO _i_n_t _*
+             Get or set whether additional information about subsequent pack‐
+             ets will be provided as ancillary data along with the payload in
+             subsequent recvmsg(2) calls.  The information is stored in the
+             following structure in the ancillary data returned:
+
+             struct in6_pktinfo {
+                     struct in6_addr ipi6_addr;    /* src/dst IPv6 address */
+                     unsigned int    ipi6_ifindex; /* send/recv if index */
+             };
+
+             Turning this option on will result in this socket getting cmsg
+             data of type IPV6_PKTINFO.
+
+     IPV6_RECVHOPLIMIT _i_n_t _*
+             Get or set whether the hop limit header field from subsequent
+             packets will be provided as ancillary data along with the payload
+             in subsequent recvmsg(2) calls.  The value is stored as an _i_n_t in
+             the ancillary data returned.  Turning this option on will result
+             in this socket getting cmsg data of type IPV6_HOPLIMIT.
+
+     IPV6_RECVHOPOPTS _i_n_t _*
+             Get or set whether the hop-by-hop options from subsequent packets
+             will be provided as ancillary data along with the payload in sub‐
+             sequent recvmsg(2) calls.  The option is stored in the following
+             structure in the ancillary data returned:
+
+             struct ip6_hbh {
+                     u_int8_t ip6h_nxt;      /* next header */
+                     u_int8_t ip6h_len;      /* length in units of 8 octets */
+             /* followed by options */
+             } __packed;
+
+             The iinneett66__oopptt__iinniitt() routine and family of routines may be used
+             to manipulate this data.
+
+             This option requires superuser privileges.  Turning this option
+             on will result in this socket getting cmsg data of type
+             IPV6_HOPOPTS.
+
+     IPV6_RECVDSTOPTS _i_n_t _*
+             Get or set whether the destination options from subsequent pack‐
+             ets will be provided as ancillary data along with the payload in
+             subsequent recvmsg(2) calls.  The option is stored in the follow‐
+             ing structure in the ancillary data returned:
+
+             struct ip6_dest {
+                     u_int8_t ip6d_nxt;      /* next header */
+                     u_int8_t ip6d_len;      /* length in units of 8 octets */
+             /* followed by options */
+             } __packed;
+
+             The iinneett66__oopptt__iinniitt() routine and family of routines may be used
+             to manipulate this data.
+
+             This option requires superuser privileges.  Turning this option
+             on will result in this socket getting cmsg data of type
+             IPV6_DSTOPTS.
+
+     IPV6_TCLASS _i_n_t _*
+             Get or set the value of the traffic class field used for outgoing
+             datagrams on this socket.  The value must be between -1 and 255.
+             A value of -1 resets to the default value.
+
+     IPV6_RECVTCLASS _i_n_t _*
+             Get or set the status of whether the traffic class header field
+             will be provided as ancillary data along with the payload in sub‐
+             sequent recvmsg(2) calls.  The header field is stored as a single
+             value of type _i_n_t.
+
+     IPV6_RECVRTHDR _i_n_t _*
+             Get or set whether the routing header from subsequent packets
+             will be provided as ancillary data along with the payload in sub‐
+             sequent recvmsg(2) calls.  The header is stored in the following
+             structure in the ancillary data returned:
+
+             struct ip6_rthdr {
+                     u_int8_t ip6r_nxt;      /* next header */
+                     u_int8_t ip6r_len;      /* length in units of 8 octets */
+                     u_int8_t ip6r_type;     /* routing type */
+                     u_int8_t ip6r_segleft;  /* segments left */
+             /* followed by routing-type-specific data */
+             } __packed;
+
+             The iinneett66__rrtthh__ssppaaccee() routine and family of routines may be used
+             to manipulate this data.
+
+             This option requires superuser privileges.  Turning this option
+             on will result in this socket getting cmsg data of type
+             IPV6_RTHDR.
+
+     IPV6_CHECKSUM _i_n_t _*
+             Get or set the byte offset into a packet where the 16-bit check‐
+             sum is located.  When set, this byte offset is where incoming
+             packets will be expected to have checksums of their data stored
+             and where outgoing packets will have checksums of their data com‐
+             puted and stored by the kernel.  A value of -1 specifies that no
+             checksums will be checked on incoming packets and that no check‐
+             sums will be computed or stored on outgoing packets.  The offset
+             of the checksum for ICMPv6 sockets cannot be relocated or turned
+             off.
+
+     IPV6_V6ONLY _i_n_t _*
+             Get or set whether only IPv6 connections can be made to this
+             socket.  For wildcard sockets, this can restrict connections to
+             IPv6 only.  With OpenBSD IPv6 sockets are always IPv6-only, so
+             the socket option is read-only (not modifiable).
+
+     IPV6_USE_MIN_MTU _i_n_t _*
+             Get or set whether the minimal IPv6 maximum transmission unit
+             (MTU) size will be used to avoid fragmentation from occurring for
+             subsequent outgoing datagrams.
+
+     IPV6_AUTH_LEVEL _i_n_t _*
+             Get or set the ipsec(4) authentication level.
+
+     IPV6_ESP_TRANS_LEVEL _i_n_t _*
+             Get or set the ESP transport level.
+
+     IPV6_ESP_NETWORK_LEVEL _i_n_t _*
+             Get or set the ESP encapsulation level.
+
+     IPV6_IPCOMP_LEVEL _i_n_t _*
+             Get or set the ipcomp(4) level.
+
+     IPV6_RECVDSTPORT _i_n_t _*
+             Get or set the status of whether the destination port for a UDP
+             datagram will be provided as ancillary data along with the pay‐
+             load in subsequent recvmsg(2) calls.  The information is stored
+             as a single value of type _u___i_n_t_1_6___t in network byte order.
+
+             Turning this option on will result in this socket getting cmsg
+             data of type IPV6_RECVDSTPORT.
+
+     The IPV6_RECVPKTINFO, IPV6_RECVHOPLIMIT, IPV6_RECVHOPOPTS,
+     IPV6_RECVDSTOPTS, and IPV6_RTHDR options will return ancillary data along
+     with payload contents in subsequent recvmsg(2) calls with _c_m_s_g___l_e_v_e_l set
+     to IPPROTO_IPV6 and _c_m_s_g___t_y_p_e set to respective option name value (e.g.,
+     IPV6_HOPLIMIT).  These options may also be used directly as ancillary
+     _c_m_s_g___t_y_p_e values in sendmsg(2) to set options on the packet being trans‐
+     mitted by the call.  The _c_m_s_g___l_e_v_e_l value must be IPPROTO_IPV6.  For
+     these options, the ancillary data object value format is the same as the
+     value returned as explained for each when received with recvmsg(2).
+
+     Note that using sendmsg(2) to specify options on particular packets works
+     only on UDP and raw sockets.  To manipulate header options for packets on
+     TCP sockets, only the socket options may be used.
+
+     In some cases, there are multiple APIs defined for manipulating an IPv6
+     header field.  A good example is the outgoing interface for multicast
+     datagrams, which can be set by the IPV6_MULTICAST_IF socket option,
+     through the IPV6_RECVPKTINFO option, and through the _s_i_n_6___s_c_o_p_e___i_d field
+     of the socket address passed to the sendto(2) system call.
+
+     Resolving these conflicts is implementation dependent.  This implementa‐
+     tion determines the value in the following way: options specified by us‐
+     ing ancillary data (i.e., sendmsg(2)) are considered first, options spec‐
+     ified by using the individual, basic, and direct socket options (e.g.,
+     IPV6_UNICAST_HOPS) are considered second, and options specified in the
+     socket address supplied to sendto(2) are the last choice.
+
+   MMuullttiiccaassttiinngg
+     IPv6 multicasting is supported only on AF_INET6 sockets of type
+     SOCK_DGRAM and SOCK_RAW, and only on networks where the interface driver
+     supports multicasting.  Socket options (see above) that manipulate mem‐
+     bership of multicast groups and other multicast options include
+     IPV6_MULTICAST_IF, IPV6_MULTICAST_HOPS, IPV6_MULTICAST_LOOP,
+     IPV6_LEAVE_GROUP, and IPV6_JOIN_GROUP.
+
+   RRaaww SSoocckkeettss
+     Raw IPv6 sockets are connectionless and are normally used with the
+     sendto(2) and recvfrom(2) calls, although the connect(2) call may be used
+     to fix the destination address for future outgoing packets so that
+     send(2) may instead be used and the bind(2) call may be used to fix the
+     source address for future outgoing packets instead of having the kernel
+     choose a source address.
+
+     By using connect(2) or bind(2), raw socket input is constrained to only
+     packets with their source address matching the socket destination address
+     if connect(2) was used and to packets with their destination address
+     matching the socket source address if bind(2) was used.
+
+     If the _p_r_o_t_o argument to socket(2) is zero, the default protocol
+     (IPPROTO_RAW) is used for outgoing packets.  For incoming packets, proto‐
+     cols recognized by kernel are nnoott passed to the application socket (e.g.,
+     tcp(4) and udp(4)) except for some ICMPv6 messages.  The ICMPv6 messages
+     not passed to raw sockets include echo, timestamp, and address mask re‐
+     quests.  If _p_r_o_t_o is non-zero, only packets with this protocol will be
+     passed to the socket.
+
+     IPv6 fragments are also not passed to application sockets until they have
+     been reassembled.  If reception of all packets is desired, link-level ac‐
+     cess (such as bpf(4)) must be used instead.
+
+     Outgoing packets automatically have an IPv6 header prepended to them
+     (based on the destination address and the protocol number the socket was
+     created with).  Incoming packets are received by an application without
+     the IPv6 header or any extension headers.
+
+     Outgoing packets will be fragmented automatically by the kernel if they
+     are too large.  Incoming packets will be reassembled before being sent to
+     the raw socket, so packet fragments or fragment headers will never be
+     seen on a raw socket.
+
+EEXXAAMMPPLLEESS
+     The following determines the hop limit on the next packet received:
+
+     struct iovec iov[2];
+     u_char buf[BUFSIZ];
+     struct cmsghdr *cm;
+     struct msghdr m;
+     int found, optval;
+     u_char data[2048];
+
+     /* Create socket. */
+
+     (void)memset(&m, 0, sizeof(m));
+     (void)memset(&iov, 0, sizeof(iov));
+
+     iov[0].iov_base = data;         /* buffer for packet payload */
+     iov[0].iov_len = sizeof(data);  /* expected packet length */
+
+     m.msg_name = &from;             /* sockaddr_in6 of peer */
+     m.msg_namelen = sizeof(from);
+     m.msg_iov = iov;
+     m.msg_iovlen = 1;
+     m.msg_control = (caddr_t)buf;   /* buffer for control messages */
+     m.msg_controllen = sizeof(buf);
+
+     /*
+      * Enable the hop limit value from received packets to be
+      * returned along with the payload.
+      */
+     optval = 1;
+     if (setsockopt(s, IPPROTO_IPV6, IPV6_RECVHOPLIMIT, &optval,
+         sizeof(optval)) == -1)
+             err(1, "setsockopt");
+
+     found = 0;
+     while (!found) {
+             if (recvmsg(s, &m, 0) == -1)
+                     err(1, "recvmsg");
+             for (cm = CMSG_FIRSTHDR(&m); cm != NULL;
+                  cm = CMSG_NXTHDR(&m, cm)) {
+                     if (cm->cmsg_level == IPPROTO_IPV6 &&
+                         cm->cmsg_type == IPV6_HOPLIMIT &&
+                         cm->cmsg_len == CMSG_LEN(sizeof(int))) {
+                             found = 1;
+                             (void)printf("hop limit: %d\n",
+                                 *(int *)CMSG_DATA(cm));
+                             break;
+                     }
+             }
+     }
+
+DDIIAAGGNNOOSSTTIICCSS
+     A socket operation may fail with one of the following errors returned:
+
+     [EISCONN]        when trying to establish a connection on a socket which
+                      already has one or when trying to send a datagram with
+                      the destination address specified and the socket is al‐
+                      ready connected.
+
+     [ENOTCONN]       when trying to send a datagram, but no destination ad‐
+                      dress is specified, and the socket hasn't been con‐
+                      nected.
+
+     [ENOBUFS]        when the system runs out of memory for an internal data
+                      structure.
+
+     [EADDRNOTAVAIL]  when an attempt is made to create a socket with a net‐
+                      work address for which no network interface exists.
+
+     [EACCES]         when an attempt is made to create a raw IPv6 socket by a
+                      non-privileged process.
+
+     The following errors specific to IPv6 may occur when setting or getting
+     header options:
+
+     [EINVAL]         An unknown socket option name was given.
+
+     [EINVAL]         An ancillary data object was improperly formed.
+
+SSEEEE AALLSSOO
+     getsockopt(2), recv(2), send(2), setsockopt(2), socket(2),
+     if_nametoindex(3), bpf(4), icmp6(4), inet6(4), netintro(4), tcp(4),
+     udp(4)
+
+SSTTAANNDDAARRDDSS
+     S. Deering and R. Hinden, _I_n_t_e_r_n_e_t _P_r_o_t_o_c_o_l_, _V_e_r_s_i_o_n _6 _(_I_P_v_6_)
+     _S_p_e_c_i_f_i_c_a_t_i_o_n, RFC 2460, December 1998.
+
+     R. Gilligan, S. Thomson, J. Bound, J. McCann, and W. Stevens, _B_a_s_i_c
+     _S_o_c_k_e_t _I_n_t_e_r_f_a_c_e _E_x_t_e_n_s_i_o_n_s _f_o_r _I_P_v_6, RFC 3493, February 2003.
+
+     W. Stevens, M. Thomas, E. Nordmark, and T. Jinmei, _A_d_v_a_n_c_e_d _S_o_c_k_e_t_s
+     _A_p_p_l_i_c_a_t_i_o_n _P_r_o_g_r_a_m _I_n_t_e_r_f_a_c_e _(_A_P_I_) _f_o_r _I_P_v_6, RFC 3542, May 2003.
+
+     The IPV6_PORTRANGE socket option and the conflict resolution rule are not
+     defined in the RFCs and should be considered implementation dependent.
+
+BSD                              June 28, 2016                             BSD

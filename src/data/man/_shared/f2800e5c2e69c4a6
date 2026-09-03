@@ -1,0 +1,164 @@
+NG_MACFILTER(4)          BSD Kernel Interfaces Manual          NG_MACFILTER(4)
+
+NNAAMMEE
+     nngg__mmaaccffiilltteerr — packet filtering netgraph node using ethernet MAC ad‐
+     dresses
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__mmaaccffiilltteerr..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmaaccffiilltteerr allows routing ethernet packets over different hooks based
+     on the sender MAC address.
+
+     This processing is done when traffic flows from the “ether” hook through
+     mmaaccffiilltteerr to one of the outgoing hooks.  Outbound hooks can be added to
+     and remove from mmaaccffiilltteerr and arbitrarily named.  By default one hook
+     called “default” is present and used for all packets which have no MAC
+     address in the MAC table.  By adding MAC addresses to the MAC table traf‐
+     fic coming from this host can be directed out other hooks.  mmaaccffiilltteerr
+     keeps track of packets and bytes from and to this MAC address in the MAC
+     table.
+
+     Packets are not altered in any way.  If hooks are not connected, packets
+     are dropped.
+
+HHOOOOKKSS
+     This node type by default has an ether hook, to be connected to the lower
+     hook of the NIC, and a default hook where packets are sent if the MAC ad‐
+     ddress is not found in the table.  mmaaccffiilltteerr supports up to
+     NG_MACFILTER_UPPER_NUM hooks to be connected to the NIC's upper hook.
+     Other nodes can be inserted to provide additional processing.  All out‐
+     bound can be combined back into one by using ng_one2many.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_MACFILTER_RESET (rreesseett)
+          Resets the MAC table in the node.
+
+     NGM_MACFILTER_DIRECT (ddiirreecctt)
+          Takes the following argument struct:
+
+                struct ngm_macfilter_direct {
+                    u_char      ether[ETHER_ADDR_LEN];          /* MAC address */
+                    u_char      hookname[NG_HOOKSIZ];           /* Upper hook name*/
+                };
+          The given ethernet MAC address will be forwarded out the named hook.
+
+     NGM_MACFILTER_DIRECT_HOOKID (ddiirreeccttii)
+          Takes the following argument struct:
+
+                struct ngm_macfilter_direct_hookid {
+                    u_char      ether[ETHER_ADDR_LEN];          /* MAC address */
+                    u_int16_t   hookid;                         /* Upper hook hookid */
+                };
+          The given ethernet MAC address will be forwarded out the hook at id
+          hookid.
+
+     NGM_MACFILTER_GET_MACS (ggeettmmaaccss)
+          Returns the list of MAC addresses in the node in the following
+          structure:
+
+                struct ngm_macfilter_mac {
+                    u_char      ether[ETHER_ADDR_LEN];          /* MAC address */
+                    u_int16_t   hookid;                         /* Upper hook hookid */
+                    u_int64_t   packets_in;                     /* packets in from downstream */
+                    u_int64_t   bytes_in;                       /* bytes in from upstream */
+                    u_int64_t   packets_out;                    /* packets out towards downstream */
+                    u_int64_t   bytes_out;                      /* bytes out towards downstream */
+                };
+                struct ngm_macfilter_macs {
+                    u_int32_t   n;                              /* Number of entries in macs */
+                    struct ngm_macfilter_mac macs[];            /* Macs table */
+                };
+
+     NGM_MACFILTER_GETCLR_MACS (ggeettccllrrmmaaccss)
+          Same as above, but will also atomically clear the packets_in,
+          bytes_in, packets_out, and bytes_out fields in the table.
+
+     NGM_MACFILTER_CLR_STATS (ccllrrmmaaccss)
+          Will clear the per MAC address packet and byte counters.
+
+     NGM_MACFILTER_GET_HOOKS (ggeetthhooookkss)
+          Will return a list of hooks and their hookids in an array of the
+          following struct's:
+
+                struct ngm_macfilter_hook {
+                    u_char      hookname[NG_HOOKSIZ];           /* Upper hook name*/
+                    u_int16_t   hookid;                         /* Upper hook hookid */
+                    u_int32_t   maccnt;                         /* Number of mac addresses associated with hook */
+                };
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message or
+     when all have been disconnected.
+
+EEXXAAMMPPLLEESS
+     The following netgraph configuration will apply ipfw(8) tag 42 to each
+     packet that is routed over the “accepted” hook.  The graph looks like the
+     following:
+
+               /------<one>-[combiner]-<many1>--------\
+           <upper>               |                    <out>
+             /                <many0>                    \
+           [em0]                 |                    [tagger]
+             \               <default>                   /
+           <lower>               |                     <in>
+               \----<ether>-[macfilter]-<accepted>-----/
+
+     Commands:
+
+             ngctl mkpeer em0: macfilter lower ether
+             ngctl name em0:lower macfilter
+
+             # Funnel both streams back into ether:upper
+             ngctl mkpeer em0: one2many upper one
+             ngctl name em0:upper recombiner
+             # Connect macfilter:default to recombiner:many0
+             ngctl connect macfilter: recombiner: default many0
+             # Connect macfilter:accepted to tagger:in
+             ngctl mkpeer macfilter: tag accepted in
+             ngctl name macfilter:accepted tagger
+             # Connect tagger:out to recombiner:many1
+             ngctl connect tagger: recombiner: out many1
+
+             # Mark tag all traffic through tagger in -> out with an ipfw tag 42
+             ngctl msg tagger: sethookin '{ thisHook="in" ifNotMatch="out" }'
+             ngctl msg tagger: sethookout '{ thisHook="out" tag_cookie=1148380143 tag_id=42 }'
+
+             # Pass traffic from ether:upper / combiner:one via combiner:many0 on to
+             # macfilter:default and on to ether:lower.
+             ngctl msg recombiner: setconfig '{ xmitAlg=3 failAlg=1 enabledLinks=[ 1 1 ] }'
+
+     _N_o_t_e: The tag_cookie 1148380143 was retrieved from MTAG_IPFW in
+     _/_u_s_r_/_i_n_c_l_u_d_e_/_n_e_t_i_n_e_t_/_i_p___v_a_r_._h.
+
+     The following command can be used to add a MAC address to be output via
+     macfilter:accepted:
+
+             ngctl msg macfilter: direct '{ hookname="known" ether=08:00:27:92:eb:aa }'
+
+     The following command can be used to retrieve the packet and byte coun‐
+     ters :
+
+             ngctl msg macfilter: getmacs
+
+     It will return the contents of the MAC table:
+
+             Rec'd response "getmacs" (4) from "[54]:":
+             Args: { n=1 macs=[ { ether=08:00:27:92:eb:aa hookid=1 packets_in=3571 bytes_in=592631 packets_out=3437 bytes_out=777142 } ] }
+
+SSEEEE AALLSSOO
+     divert(4), ipfw(4), netgraph(4), ng_ether(4), ng_one2many(4), ng_tag(4),
+     ngctl(8)
+
+AAUUTTHHOORRSS
+     The original version of this code was written by Pekka Nikander, and sub‐
+     sequently modified heavily by Nick Hibma <_n___h_i_b_m_a_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     None known.
+
+BSD                            December 10, 2018                           BSD

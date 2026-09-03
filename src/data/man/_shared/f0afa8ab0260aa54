@@ -1,0 +1,120 @@
+HASTD(8)                  BSD System Manager's Manual                 HASTD(8)
+
+NNAAMMEE
+     hhaassttdd — Highly Available Storage daemon
+
+SSYYNNOOPPSSIISS
+     hhaassttdd [--ddFFhh] [--cc _c_o_n_f_i_g] [--PP _p_i_d_f_i_l_e]
+
+DDEESSCCRRIIPPTTIIOONN
+     The hhaassttdd daemon is responsible for managing highly available GEOM
+     providers.
+
+     hhaassttdd allows the transparent storage of data on two physically separated
+     machines connected over a TCP/IP network.  Only one machine (cluster
+     node) can actively use storage provided by hhaassttdd.  This machine is called
+     primary.  The hhaassttdd daemon operates on block level, which makes it trans‐
+     parent to file systems and applications.
+
+     There is one main hhaassttdd daemon which starts new worker process as soon as
+     a role for the given resource is changed to primary or as soon as a role
+     for the given resource is changed to secondary and remote (primary) node
+     will successfully connect to it.  Every worker process gets a new process
+     title (see setproctitle(3)), which describes its role and resource it
+     controls.  The exact format is:
+
+           hastd: <resource name> (<role>)
+
+     If (and only if) hhaassttdd operates in primary role for the given resource, a
+     corresponding _/_d_e_v_/_h_a_s_t_/_<_n_a_m_e_> disk-like device (GEOM provider) is cre‐
+     ated.  File systems and applications can use this provider to send I/O
+     requests to.  Every write, delete and flush operation (BIO_WRITE,
+     BIO_DELETE, BIO_FLUSH) is sent to the local component and replicated on
+     the remote (secondary) node if it is available.  Read operations
+     (BIO_READ) are handled locally unless an I/O error occurs or the local
+     version of the data is not up-to-date yet (synchronization is in
+     progress).
+
+     The hhaassttdd daemon uses the GEOM Gate class to receive I/O requests from
+     the in-kernel GEOM infrastructure.  The ggeeoomm__ggaattee..kkoo module is loaded au‐
+     tomatically if the kernel was not compiled with the following option:
+
+           ooppttiioonnss GGEEOOMM__GGAATTEE
+
+     The connection between two hhaassttdd daemons is always initiated from the one
+     running as primary to the one running as secondary.  When the primary
+     hhaassttdd is unable to connect or the connection fails, it will try to re-es‐
+     tablish the connection every few seconds.  Once the connection is estab‐
+     lished, the primary hhaassttdd will synchronize every extent that was modified
+     during connection outage to the secondary hhaassttdd.
+
+     It is possible that in the case of a connection outage between the nodes
+     the hhaassttdd primary role for the given resource will be configured on both
+     nodes.  This in turn leads to incompatible data modifications.  Such a
+     condition is called a split-brain and cannot be automatically resolved by
+     the hhaassttdd daemon as this will lead most likely to data corruption or loss
+     of important changes.  Even though it cannot be fixed by hhaassttdd itself, it
+     will be detected and a further connection between independently modified
+     nodes will not be possible.  Once this situation is manually resolved by
+     an administrator, the resource on one of the nodes can be initialized
+     (erasing local data), which makes a connection to the remote node possi‐
+     ble again.  Connection of the freshly initialized component will trigger
+     full resource synchronization.
+
+     A hhaassttdd daemon never picks its role automatically.  The role has to be
+     configured with the hastctl(8) control utility by additional software
+     like uuccaarrpp or hheeaarrttbbeeaatt that can reliably manage role separation and
+     switch secondary node to primary role in case of the primary's failure.
+
+     The hhaassttdd daemon can be started with the following command line argu‐
+     ments:
+
+     --cc _c_o_n_f_i_g   Specify alternative location of the configuration file.  The
+                 default location is _/_e_t_c_/_h_a_s_t_._c_o_n_f.
+
+     --dd          Print or log debugging information.  This option can be spec‐
+                 ified multiple times to raise the verbosity level.
+
+     --FF          Start the hhaassttdd daemon in the foreground.  By default hhaassttdd
+                 starts in the background.
+
+     --hh          Print the hhaassttdd usage message.
+
+     --PP _p_i_d_f_i_l_e  Specify alternative location of a file where main process PID
+                 will be stored.  The default location is _/_v_a_r_/_r_u_n_/_h_a_s_t_d_._p_i_d.
+
+FFIILLEESS
+     /etc/hast.conf      The configuration file for hhaassttdd and hastctl(8).
+     /var/run/hastctl    Control socket used by the hastctl(8) control utility
+                         to communicate with hhaassttdd.
+     /var/run/hastd.pid  The default location of the hhaassttdd PID file.
+
+EEXXIITT SSTTAATTUUSS
+     Exit status is 0 on success, or one of the values described in
+     sysexits(3) on failure.
+
+EEXXAAMMPPLLEESS
+     Launch hhaassttdd on both nodes.  Set role for resource sshhaarreedd to primary on
+     nnooddeeAA and to secondary on nnooddeeBB.  Create file system on _/_d_e_v_/_h_a_s_t_/_s_h_a_r_e_d
+     provider and mount it.
+
+           nodeB# hastd
+           nodeB# hastctl role secondary shared
+
+           nodeA# hastd
+           nodeA# hastctl role primary shared
+           nodeA# newfs -U /dev/hast/shared
+           nodeA# mount -o noatime /dev/hast/shared /shared
+
+SSEEEE AALLSSOO
+     sysexits(3), geom(4), hast.conf(5), ggatec(8), ggated(8), ggatel(8),
+     hastctl(8), mount(8), newfs(8), g_bio(9)
+
+HHIISSTTOORRYY
+     The hhaassttdd utility appeared in FreeBSD 8.1.
+
+AAUUTTHHOORRSS
+     The hhaassttdd was developed by Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g> under
+     sponsorship of the FreeBSD Foundation.
+
+BSD                            December 21, 2019                           BSD

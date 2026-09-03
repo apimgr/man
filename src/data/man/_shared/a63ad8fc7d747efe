@@ -1,0 +1,142 @@
+_P_R_O_P_E_R_T_Y(7)                         OpenSSL                        _P_R_O_P_E_R_T_Y(7)
+
+NNAAMMEE
+       property - Properties, a selection mechanism for algorithm
+       implementations
+
+DDEESSCCRRIIPPTTIIOONN
+       As of OpenSSL 3.0, a new method has been introduced to decide which of
+       multiple implementations of an algorithm will be used.  The method is
+       centered around the concept of properties.  Each implementation defines
+       a number of properties and when an algorithm is being selected, filters
+       based on these properties can be used to choose the most appropriate
+       implementation of the algorithm.
+
+       Properties are like variables, they are referenced by name and have a
+       value assigned.
+
+   PPrrooppeerrttyy NNaammeess
+       Property names fall into two categories: those reserved by the OpenSSL
+       project and user defined names.  A _r_e_s_e_r_v_e_d property name consists of a
+       single C-style identifier (except for leading underscores not being
+       permitted), which begins with a letter and can be followed by any
+       number of letters, numbers and underscores.  Property names are case‐
+       insensitive, but OpenSSL will only use lowercase letters.
+
+       A _u_s_e_r _d_e_f_i_n_e_d property name is similar, but it mmuusstt consist of two or
+       more C-style identifiers, separated by periods.  The last identifier in
+       the name can be considered the ’true’ property name, which is prefixed
+       by some sort of ’namespace’.  Providers for example could include their
+       name in the prefix and use property names like
+
+         <provider_name>.<property_name>
+         <provider_name>.<algorithm_name>.<property_name>
+
+   PPrrooppeerrttiieess
+       A _p_r_o_p_e_r_t_y is a _n_a_m_e_=_v_a_l_u_e pair.  A _p_r_o_p_e_r_t_y _d_e_f_i_n_i_t_i_o_n is a sequence
+       of comma separated properties.  There can be any number of properties
+       in a definition, however each name must be unique.  For example: ""
+       defines an empty property definition (i.e., no restriction);
+       "my.foo=bar" defines a property named _m_y_._f_o_o which has a string value
+       _b_a_r and "iteration.count=3" defines a property named _i_t_e_r_a_t_i_o_n_._c_o_u_n_t
+       which has a numeric value of _3.  The full syntax for property
+       definitions appears below.
+
+   IImmpplleemmeennttaattiioonnss
+       Each implementation of an algorithm can define any number of
+       properties.  For example, the default provider defines the property
+       _p_r_o_v_i_d_e_r_=_d_e_f_a_u_l_t for all of its algorithms.  Likewise, OpenSSL’s FIPS
+       provider defines _p_r_o_v_i_d_e_r_=_f_i_p_s and the legacy provider defines
+       _p_r_o_v_i_d_e_r_=_l_e_g_a_c_y for all of their algorithms.
+
+   QQuueerriieess
+       A _p_r_o_p_e_r_t_y _q_u_e_r_y _c_l_a_u_s_e is a single conditional test.  For example,
+       "fips=yes", "provider!=default" or "?iteration.count=3".  The first two
+       represent mandatory clauses, such clauses mmuusstt match for any algorithm
+       to even be under consideration.  The third clause represents an
+       optional clause.  Matching such clauses is not a requirement, but any
+       additional optional match counts in favor of the algorithm.  More
+       details about that in the LLooookkuuppss section.  A _p_r_o_p_e_r_t_y _q_u_e_r_y is a
+       sequence of comma separated property query clauses.  It is an error if
+       a property name appears in more than one query clause.  The full syntax
+       for property queries appears below, but the available syntactic
+       features are:
+
+       •   == is an infix operator providing an equality test.
+
+       •   !!== is an infix operator providing an inequality test.
+
+       •   ??  is  a  prefix  operator  that means that the following clause is
+           optional but preferred.
+
+       •   -- is a prefix operator that means any global query clause involving
+           the following property name should be ignored.
+
+       •   ""......"" is a quoted string.  The quotes are not included in the  body
+           of the string.
+
+       •   ’’......’’  is a quoted string.  The quotes are not included in the body
+           of the string.
+
+   LLooookkuuppss
+       When an algorithm is looked up, a property query is used  to  determine
+       the  best  matching  algorithm.   All  mandatory  query clauses mmuusstt be
+       present and the implementation that additionally has the largest number
+       of matching optional query clauses will be used.  If there is more than
+       one such optimal candidate, the result  will  be  chosen  from  amongst
+       those  in  an  indeterminate  way.  Ordering of optional clauses is not
+       significant.
+
+   SShhoorrttccuutt
+       In order to permit a more concise  expression  of  boolean  properties,
+       there  is  one short cut: a property name alone (e.g. "my.property") is
+       exactly  equivalent  to  "my.property=yes"  in  both  definitions   and
+       queries.
+
+   GGlloobbaall aanndd LLooccaall
+       Two  levels  of property query are supported.  A context based property
+       query that applies to all fetch operations and a local property  query.
+       Where both the context and local queries include a clause with the same
+       name, the local clause overrides the context clause.
+
+       It  is  possible  for  a local property query to remove a clause in the
+       context property query by preceding the property name with a ’-’.   For
+       example,  a  context  property  query  that  contains  "fips=yes" would
+       normally result in implementations that have "fips=yes".
+
+       However, if the setting of the "fips" property  is  irrelevant  to  the
+       operations  being  performed,  the local property query can include the
+       clause "-fips".  Note that the  local  property  query  could  not  use
+       "fips=no"   because   that  would  disallow  any  implementations  with
+       "fips=yes" rather than not caring about the setting.
+
+SSYYNNTTAAXX
+       The lexical syntax in EBNF is given by:
+
+        Definition     ::= PropertyName ( '=' Value )?
+                               ( ',' PropertyName ( '=' Value )? )*
+        Query          ::= PropertyQuery ( ',' PropertyQuery )*
+        PropertyQuery  ::= '-' PropertyName
+                         | '?'? ( PropertyName (( '=' | '!=' ) Value)?)
+        Value          ::= NumberLiteral | StringLiteral
+        StringLiteral  ::= QuotedString | UnquotedString
+        QuotedString   ::= '"' [ˆ"]* '"' | "'" [ˆ']* "'"
+        UnquotedString ::= [A-Za-z] [ˆ{space},]+
+        NumberLiteral  ::= '0' ( [0-7]* | 'x' [0-9A-Fa-f]+ ) | '-'? [1-9] [0-9]+
+        PropertyName   ::= [A-Za-z] [A-Za-z0-9_]* ( '.' [A-Za-z] [A-Za-z0-9_]* )*
+
+       The    flavour    of    EBNF    being    used    is     defined     by:
+       <https://www.w3.org/TR/2010/REC-xquery-20101214/#EBNFNotation>.
+
+HHIISSTTOORRYY
+       Properties were added in OpenSSL 3.0
+
+CCOOPPYYRRIIGGHHTT
+       Copyright 2019-2023 The OpenSSL Project Authors. All Rights Reserved.
+
+       Licensed under the Apache License 2.0 (the "License").  You may not use
+       this file except in compliance with the License.  You can obtain a copy
+       in    the   file   LICENSE   in   the   source   distribution   or   at
+       <https://www.openssl.org/source/license.html>.
+
+3.0.12                            2023‐05‐07                       _P_R_O_P_E_R_T_Y(7)

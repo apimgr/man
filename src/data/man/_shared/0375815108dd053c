@@ -1,0 +1,169 @@
+RTENTRY(9)               BSD Kernel Developer's Manual              RTENTRY(9)
+
+NNAAMMEE
+     rrtteennttrryy — structure of an entry in the kernel routing table
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+     ##iinncclluuddee <<nneett//rroouuttee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The kernel provides a common mechanism by which all protocols can store
+     and retrieve entries from a central table of routes.  Parts of this mech‐
+     anism are also used to interact with user-level processes by means of a
+     socket in the route(4) pseudo-protocol family.  The <_n_e_t_/_r_o_u_t_e_._h> header
+     file defines the structures and manifest constants used in this facility.
+
+     The basic structure of a route is defined by _s_t_r_u_c_t _r_t_e_n_t_r_y, which in‐
+     cludes the following fields:
+
+           _s_t_r_u_c_t _r_a_d_i_x___n_o_d_e _r_t___n_o_d_e_s_[_2_];
+                   Glue used by the radix-tree routines.  These members also
+                   include in their substructure the key (i.e., destination
+                   address) and mask used when the route was created.  The
+                   rrtt__kkeeyy(_r_t) and rrtt__mmaasskk(_r_t) macros can be used to extract
+                   this information (in the form of a _s_t_r_u_c_t _s_o_c_k_a_d_d_r _*) given
+                   a _s_t_r_u_c_t _r_t_e_n_t_r_y _*.
+
+           _s_t_r_u_c_t _s_o_c_k_a_d_d_r _*_r_t___g_a_t_e_w_a_y;
+                   The “target” of the route, which can either represent a
+                   destination in its own right (some protocols will put a
+                   link-layer address here), or some intermediate stop on the
+                   way to that destination (if the RTF_GATEWAY flag is set).
+
+           _i_n_t _r_t___f_l_a_g_s;
+                   See below.  If the RTF_UP flag is not present, the rrttffrreeee()
+                   function will delete the route from the radix tree when the
+                   last reference drops.
+
+           _i_n_t _r_t___r_e_f_c_n_t;
+                   Route entries are reference-counted; this field indicates
+                   the number of external (to the radix tree) references.
+
+           _s_t_r_u_c_t _i_f_n_e_t _*_r_t___i_f_p;
+
+           _s_t_r_u_c_t _i_f_a_d_d_r _*_r_t___i_f_a;
+                   These two fields represent the “answer”, as it were, to the
+                   question posed by a route lookup; that is, they name the
+                   interface and interface address to be used in sending a
+                   packet to the destination or set of destinations which this
+                   route represents.
+
+           _u___l_o_n_g _r_t___m_t_u;
+                   See description of rmx_mtu below.
+
+           _u___l_o_n_g _r_t___w_e_i_g_h_t;
+                   See description of rmx_weight below.
+
+           _u___l_o_n_g _r_t___e_x_p_i_r_e;
+                   See description of rmx_expire below.
+
+           _c_o_u_n_t_e_r_6_4___t _r_t___p_k_s_e_n_t;
+                   See description of rmx_pksent below.
+
+           _s_t_r_u_c_t _r_t_e_n_t_r_y _*_r_t___g_w_r_o_u_t_e;
+                   This member is a reference to a route whose destination is
+                   _r_t___g_a_t_e_w_a_y.  It is only used for RTF_GATEWAY routes.
+
+           _s_t_r_u_c_t _m_t_x _r_t___m_t_x;
+                   Mutex to lock this routing entry.
+
+     The following flag bits are defined:
+           RTF_UP         The route is not deleted.
+           RTF_GATEWAY    The route points to an intermediate destination and
+                          not the ultimate recipient; the _r_t___g_a_t_e_w_a_y and
+                          _r_t___g_w_r_o_u_t_e fields name that destination.
+           RTF_HOST       This is a host route.
+           RTF_REJECT     The destination is presently unreachable.  This
+                          should result in an EHOSTUNREACH error from output
+                          routines.
+           RTF_DYNAMIC    This route was created dynamically by rrttrreeddiirreecctt().
+           RTF_MODIFIED   This route was modified by rrttrreeddiirreecctt().
+           RTF_DONE       Used only in the route(4) protocol, indicating that
+                          the request was executed.
+           RTF_XRESOLVE   When this route is returned as a result of a lookup,
+                          send a report on the route(4) interface requesting
+                          that an external process perform resolution for this
+                          route.
+           RTF_STATIC     Indicates that this route was manually added by
+                          means of the route(8) command.
+           RTF_BLACKHOLE  Requests that output sent via this route be dis‐
+                          carded.
+           RTF_PROTO1
+           RTF_PROTO2
+           RTF_PROTO3     Protocol-specific.
+           RTF_PINNED     Indicates that this route is immutable to a routing
+                          protocol.
+           RTF_LOCAL      Indicates that the destination of this route is an
+                          address configured as belonging to this system.
+           RTF_BROADCAST  Indicates that the destination is a broadcast ad‐
+                          dress.
+           RTF_MULTICAST  Indicates that the destination is a multicast ad‐
+                          dress.
+
+     Several metrics are supplied in _s_t_r_u_c_t _r_t___m_e_t_r_i_c_s passed with routing
+     control messages via route(4) API.  Currently only _r_m_x___m_t_u, _r_m_x___e_x_p_i_r_e,
+     and _r_m_x___p_k_s_e_n_t metrics are supplied.  All others are ignored.
+
+     The following metrics are defined by _s_t_r_u_c_t _r_t___m_e_t_r_i_c_s:
+
+           _u___l_o_n_g _r_m_x___l_o_c_k_s;
+                   Flag bits indicating which metrics the kernel is not per‐
+                   mitted to dynamically modify.
+
+           _u___l_o_n_g _r_m_x___m_t_u;
+                   MTU for this path.
+
+           _u___l_o_n_g _r_m_x___h_o_p_c_o_u_n_t;
+                   Number of intermediate systems on the path to this destina‐
+                   tion.
+
+           _u___l_o_n_g _r_m_x___e_x_p_i_r_e;
+                   The time (a la time(3)) at which this route should expire,
+                   or zero if it should never expire.  It is the responsibil‐
+                   ity of individual protocol suites to ensure that routes are
+                   actually deleted once they expire.
+
+           _u___l_o_n_g _r_m_x___r_e_c_v_p_i_p_e;
+                   Nominally, the bandwidth-delay product for the path _f_r_o_m
+                   the destination _t_o this system.  In practice, this value is
+                   used to set the size of the receive buffer (and thus the
+                   window in sliding-window protocols like TCP).
+
+           _u___l_o_n_g _r_m_x___s_e_n_d_p_i_p_e;
+                   As before, but in the opposite direction.
+
+           _u___l_o_n_g _r_m_x___s_s_t_h_r_e_s_h;
+                   The slow-start threshold used in TCP congestion-avoidance.
+
+           _u___l_o_n_g _r_m_x___r_t_t;
+                   The round-trip time to this destination, in units of
+                   RMX_RTTUNIT per second.
+
+           _u___l_o_n_g _r_m_x___r_t_t_v_a_r;
+                   The average deviation of the round-trip time to this desti‐
+                   nation, in units of RMX_RTTUNIT per second.
+
+           _u___l_o_n_g _r_m_x___p_k_s_e_n_t;
+                   A count of packets successfully sent via this route.
+
+           _u___l_o_n_g _r_m_x___f_i_l_l_e_r_[_4_];
+                   Empty space available for protocol-specific information.
+
+SSEEEE AALLSSOO
+     route(4), route(8)
+
+HHIISSTTOORRYY
+     The _r_t_e_n_t_r_y structure first appeared in 4.2BSD.  The radix-tree represen‐
+     tation of the routing table and the _r_t___m_e_t_r_i_c_s structure first appeared
+     in 4.3BSD-Reno.
+
+AAUUTTHHOORRSS
+     This manual page was written by Garrett Wollman.
+
+BBUUGGSS
+     There are a number of historical relics remaining in this interface.  The
+     _r_t___g_a_t_e_w_a_y and _r_m_x___f_i_l_l_e_r fields could be named better.
+
+BSD                              March 5, 2014                             BSD

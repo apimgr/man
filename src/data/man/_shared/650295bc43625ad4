@@ -1,0 +1,156 @@
+G_GEOM(9)                BSD Kernel Developer's Manual               G_GEOM(9)
+
+NNAAMMEE
+     gg__nneeww__ggeeoommff, gg__ddeessttrrooyy__ggeeoomm — geom management
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ggeeoomm//ggeeoomm..hh>>
+
+     _s_t_r_u_c_t _g___g_e_o_m _*
+     gg__nneeww__ggeeoommff(_s_t_r_u_c_t _g___c_l_a_s_s _*_m_p, _c_o_n_s_t _c_h_a_r _*_f_m_t, _._._.);
+
+     _v_o_i_d
+     gg__ddeessttrrooyy__ggeeoomm(_s_t_r_u_c_t _g___g_e_o_m _*_g_p);
+
+DDEESSCCRRIIPPTTIIOONN
+     The geom (do not confuse “geom” with “GEOM”) is an instance of a GEOM
+     class.  For example: in a typical i386 FreeBSD system, there will be one
+     geom of class MBR for each disk.  The geom's name is not really impor‐
+     tant, it is only used in the XML dump and for debugging purposes.  There
+     can be many geoms with the same name.
+
+     The gg__nneeww__ggeeoommff() function creates a new geom, which will be an instance
+     of the class _m_p.  The geom's name is created in a printf(3)-like way from
+     the rest of the arguments.
+
+     The gg__ddeessttrrooyy__ggeeoomm() function destroys the given geom immediately and
+     cancels all related pending events.
+
+     The _g___g_e_o_m structure contains fields that should be set by the caller af‐
+     ter geom creation, but before creating any providers or consumers related
+     to this geom (not all are required):
+
+           _g___s_t_a_r_t___t _* _s_t_a_r_t
+                   Pointer to a function used for I/O processing.
+
+           _g___s_p_o_i_l_e_d___t _* _s_p_o_i_l_e_d
+                   Pointer to a function used for consumers spoiling.
+
+           _g___d_u_m_p_c_o_n_f___t _* _d_u_m_p_c_o_n_f
+                   Pointer to a function used for configuration in XML format
+                   dumping.
+
+           _g___a_c_c_e_s_s___t _* _a_c_c_e_s_s
+                   Pointer to a function used for access control.
+
+           _g___o_r_p_h_a_n___t _* _o_r_p_h_a_n
+                   Pointer to a function used to inform about orphaned con‐
+                   sumer.
+
+           _g___i_o_c_t_l___t _* _i_o_c_t_l
+                   Pointer to a function used for handling ioctl requests.
+
+           _v_o_i_d _* _s_o_f_t_c
+                   Field for private use.
+
+RREESSTTRRIICCTTIIOONNSS//CCOONNDDIITTIIOONNSS
+     If you intend to use providers in this geom you must set field _s_t_a_r_t of
+     your geom.
+
+     If you are planning to use consumers in your geom you must set fields
+     _o_r_p_h_a_n and _a_c_c_e_s_s for it.
+
+     gg__nneeww__ggeeoommff():
+
+           Class _m_p must be valid (registered in GEOM).
+
+           The topology lock has to be held.
+
+     gg__ddeessttrrooyy__ggeeoomm():
+
+           The geom cannot possess any providers.
+
+           The geom cannot possess any consumers.
+
+           The topology lock has to be held.
+
+RREETTUURRNN VVAALLUUEESS
+     The gg__nneeww__ggeeoommff() function returns a pointer to the newly created geom.
+
+EEXXAAMMPPLLEESS
+     Create an example geom.
+
+           static void
+           g_example_start(struct bio *bp)
+           {
+
+                   [...]
+           }
+
+           static void
+           g_example_orphan(struct g_consumer *cp)
+           {
+
+                   g_topology_assert();
+
+                   [...]
+           }
+
+           static void
+           g_example_spoiled(struct g_consumer *cp)
+           {
+
+                   g_topology_assert();
+
+                   [...]
+           }
+
+           static int
+           g_example_access(struct g_provider *pp, int dr, int dw, int de)
+           {
+
+                   [...]
+           }
+
+           static struct g_geom *
+           create_example_geom(struct g_class *myclass)
+           {
+                   struct g_geom *gp;
+
+                   g_topology_lock();
+                   gp = g_new_geomf(myclass, "example_geom");
+                   g_topology_unlock();
+                   gp->start = g_example_start;
+                   gp->orphan = g_example_orphan;
+                   gp->spoiled = g_example_spoiled;
+                   gp->access = g_example_access;
+                   gp->softc = NULL;
+
+                   return (gp);
+           }
+
+           static int
+           destroy_example_geom(struct g_geom *gp)
+           {
+
+                   g_topology_lock();
+                   if (!LIST_EMPTY(&gp->provider) ||
+                       !LIST_EMPTY(&gp->consumer)) {
+                           g_topology_unlock();
+                           return (EBUSY);
+                   }
+                   g_destroy_geom(gp);
+                   g_topology_unlock();
+
+                   return (0);
+           }
+
+SSEEEE AALLSSOO
+     geom(4), DECLARE_GEOM_CLASS(9), g_access(9), g_attach(9), g_bio(9),
+     g_consumer(9), g_data(9), g_event(9), g_provider(9),
+     g_provider_by_name(9), g_wither_geom(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             April 24, 2016                             BSD

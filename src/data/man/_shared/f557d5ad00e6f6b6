@@ -1,0 +1,743 @@
+Pamtris User Manual(1)      General Commands Manual     Pamtris User Manual(1)
+
+
+
+NNAAMMEE
+       pamtris  - triangle rasterizer featuring perspective-correct interpola‐
+       tion of generic vertex attributes and depth buffering
+
+
+SSYYNNOOPPSSIISS
+       ppaammttrriiss
+
+       --wwiiddtthh==_w_i_d_t_h
+
+       --hheeiigghhtt==_h_e_i_g_h_t
+
+       { --nnuumm__aattttrriibbss==_a_t_t_r_i_b_u_t_e_s___p_e_r___v_e_r_t_e_x [ --ttuupplleettyyppee==_t_u_p_l_e_t_y_p_e ] | --rrggbb  |
+       --ggrraayyssccaallee }
+
+       [ --mmaaxxvvaall==_m_a_x_v_a_l ]
+
+       All  options  can  be abbreviated to their shortest unique prefix.  You
+       may use two hyphens instead of one to designate an option.  You may use
+       either  white  space  or  an equals sign between an option name and its
+       value.
+
+
+DDEESSCCRRIIPPTTIIOONN
+       This program is part of NNeettppbbmm(1).
+
+       ppaammttrriiss can be used to draw a great variety of 2D and  3D  graphics  by
+       composing  arbitrarily complex pictures out of separate triangles, tri‐
+       angle strips and triangle fans. The program reads instructions  written
+       in a simple command script notation from Standard Input and outputs its
+       results as a (potentially multi-image) PAM stream on Standard Output.
+
+       For example, the following input
+
+
+             mode fan
+             attribs 0 128 0
+             vertex 0 0 1
+             attribs 0 0 128
+             vertex 200 0 1
+             attribs 50 20 103
+             vertex 190 61 1
+             attribs 100 40 78
+             vertex 161 117 1
+             attribs 150 60 53
+             vertex 117 161 1
+             attribs 200 80 28
+             vertex 61 190 1
+             attribs 250 100 3
+             vertex 0 200 1
+             print
+
+
+
+
+       produces this:
+
+       EExxaammppllee ppaammttrriiss oouuttppuutt ffoorr FFAANN mmooddee
+
+
+       The input file gives triangle data by setting the  appropriate  drawing
+       mode,  if necessary, and then providing a list of vertices. Each vertex
+       is also associated with a list of up to 20 "attributes," which are  in‐
+       teger  values  between  0 and a given maxval. In the most common usage,
+       you use ppaammttrriiss to draw a visual image  and  a  vertex  has  three  at‐
+       tributes,  which  are  an RGB specification of a color.  Such attribute
+       lists may be provided on a per-vertex basis.
+
+       Prior to effectively writing a PAM image to  Standard  Output,  ppaammttrriiss
+       first rasterizes it onto an internal frame buffer, which consists of an
+       "image buffer" and a "depth buffer." The image buffer consists of a se‐
+       quence  of  _h_e_i_g_h_t rows containing a sequence of _w_i_d_t_h tuples. There is
+       one sample for each vertex attribute in every  tuple  plus  an  opacity
+       (alpha)  sample. Each tuple in the image buffer is also associated with
+       an integer depth in the depth buffer, which determines  whether  subse‐
+       quent drawing operations affect that particular tuple or not. This pro‐
+       vides a way of depth-sorting graphical objects which  is  adequate  for
+       many purposes in 2D and 3D computer graphics. One prominent shortcoming
+       of such an approach to depth-sorting, however, is that it does not  au‐
+       tomatically  work  with  objects which are intended to appear "translu‐
+       cent," therefore requiring more  elaborate  strategies  to  incorporate
+       said objects into pictures generated using this technique.
+
+       The  opacity  sample  is the last sample of the tuple.  ppaammttrriiss manipu‐
+       lates opacity internally and for any tuple it is always either 0 or the
+       maxval.   The program does not provide the user direct control over the
+       alpha image plane.
+
+       ppaammttrriiss rasterizes triangles by approximating their visible area  as  a
+       collection  of  tuples at particular positions in the frame buffer, and
+       to each sample of every such tuple it assigns a value which is  a  per‐
+       spective-correct  interpolation between the values of the corresponding
+       attribute for each vertex of the triangle. Whenever a tuple within  the
+       area  of the frame buffer is produced, it is written to the correspond‐
+       ing position in the frame buffer if and only if it passes a depth test.
+       This  test  works  as  follows: the depth value of every incoming tuple
+       (which is itself an interpolation between the Z-coordinates of the ver‐
+       tices  of  the corresponding triangle) is compared against the value in
+       the corresponding position in the depth buffer. If the depth  value  of
+       the  incoming  tuple  equals or is smaller than the depth value already
+       present in said position in the depth buffer, the following happens.
+
+
+
+       •      Every sample _i, where 0 &#8804; _i < _n_u_m___a_t_t_r_i_b_s, of the tuple in
+              the  corresponding  position in the image buffer is set to equal
+              the value of the respective sample of the  incoming  tuple;  and
+              the alpha sample (the last one) is updated to the _m_a_x_v_a_l;
+
+
+       •      The  depth value in the corresponding position in the depth buf‐
+              fer is updated to a depth value directly proportional to that of
+              the incoming tuple.
+
+
+       Otherwise,  that particular tuple effects no change at all in the frame
+       buffer.
+
+       The frame buffer is initially set so that all samples in every tuple of
+       the image buffer contain the value 0, and all entries in the depth buf‐
+       fer contain the maximum permitted depth value.
+
+       The attributes' values, and therefore the samples in the output PAM im‐
+       ages,  have  no  fixed  interpretation ascribed to them (except for the
+       last image plane, which is deliberately  supposed  to  represent  tuple
+       opacity  information);  one  may  ascribe any suitable meaning to them,
+       such as that of colors, texture coordinates, surface normals, light in‐
+       teraction  characteristics,  texture  influence coefficients for multi-
+       texturing, etc.
+
+
+
+EEXXAAMMPPLLEESS
+   FFaann MMooddee
+       The following command generates the image from the fan mode example  at
+       the  top  of  the  DESCRIPTION  ⟨#description⟩    section.  If the file
+       ffaann..ttrriiss contains that code, you could process it with:
+
+
+           $ pamtris -height=200 -width=200 -rgb <fan.tris >fan.pam
+
+
+
+
+   SSttrriipp MMooddee
+       The following is an example of strip mode:
+
+
+             mode strip
+             attribs 255 0 0   # red
+             vertex   0 200 1
+             vertex  50   0 1
+             attribs 0 0 0     # black
+             vertex 100 200 1
+             attribs 0 205 205 # cyan
+             vertex 150 0 1
+             attribs 0 0 255   # blue
+             vertex 200 200 1
+             vertex 250   0 1
+             print
+
+
+
+       Save the above code in a  file  named  ssttrriipp..ttrriiss  (for  instance)  and
+       process it with:
+
+
+           $ pamtris -height=200 -width=200 -rgb <strip.tris >strip.pam
+
+
+
+       to yield:
+
+       EExxaammppllee ppaammttrriiss oouuttppuutt ffoorr SSTTRRIIPP mmooddee
+
+
+   TTrriiaannggllee MMooddee
+       The following is an example of triangle mode:
+
+
+             # yellow square
+             mode strip
+             attrib 155 155 0
+             vertex 50  50 100
+             vertex 50 200 100
+             vertex 200 50 100
+             vertex 200 200 100
+
+             # blue triangle
+             mode triangles
+             attrib 0 205 205
+             vertex 20 125 70
+             attrib 0 0 140
+             vertex 230  70 120 # Change "120" and see what happens
+             vertex 230 180 120 #
+             print
+
+
+
+       Save  the  above  code  in  a file named ppiieerrccee..ttrriiss (for instance) and
+       process it with:
+
+
+           $ pamtris -height=200 -width=200 -rgb <pierce.tris >pierce.pam
+
+
+
+       to yield:
+
+       EExxaammppllee ppaammttrriiss oouuttppuutt ffoorr TTRRIIAANNGGLLEESS mmooddee
+
+
+
+   MMeettaa--pprrooggrraammmmiinngg
+       The ppaammttrriiss command language is much too rudimentary  to  be  used  di‐
+       rectly for any serious drawing; you will probably want to use a general
+       purpose programming language to generate a  temporary  ppaammttrriiss  command
+       file.
+
+       For  example, the ddrraaww__ppoollyyggoonn procedure in the C program below outputs
+       ppaammttrriiss instructions to draw a regular polygon. It does this by  gener‐
+       ating  a  number of vveerrtteexx instructions tracing around the perimeter of
+       the corresponding circumscribed circle. (Note: The PAM  image  produced
+       by piping the output of the below program into ppaammttrriiss was subsequently
+       downscaled   through   ppaammssccaallee --lliinneeaarr --xxssccaallee 00..2255 --yyssccaallee 00..2255    to
+       achieve an anti-aliased ⟨#antialias⟩  effect.)
+
+       RReegguullaarr PPoollyyggoonnss
+
+       /* ----------------------- *
+        * width       = 512       *
+        * height      = 512       *
+        * num_attribs = 3         *
+        * tupletype   = RGB_ALPHA *
+        * ----------------------- */
+
+       #include <math.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+
+       #define PI 3.14159265358979323844
+
+       void draw_polygon
+       (int const center_x, int const center_y, int const radius, int const sides)
+       {
+           printf("mode fan\n"
+                  "vertex %d %d 0\n", center_x, center_y);
+
+           for(int i = 0; i <= sides; i++)
+           {
+               int const x = round(center_x + radius * cos(i*2.0*PI / sides));
+               int const y = round(center_y - radius * sin(i*2.0*PI / sides));
+
+               printf("vertex %d %d 0\n", x, y);
+           }
+       }
+
+       int main(void)
+       {
+           puts("attribs 0 185 80");       /* color: green   */
+           draw_polygon(300, 210, 150, 5); /* draws pentagon */
+
+           puts("attribs 255 15 240");     /* color: magenta */
+           draw_polygon(150, 320, 100, 7); /* draws heptagon */
+
+           puts("!");
+       }
+
+
+
+OOPPTTIIOONNSS
+       In  addition  to  the options common to all programs based on libnetpbm
+       (most notably --qquuiieett, see
+        Common Options ⟨index.html#commonoptions⟩ ),  ppaammttrriiss  recognizes  the
+       following command line options:
+
+       <dl compact="compact">
+
+       --wwiiddtthh==_w_i_d_t_h
+              Sets  the  width of the internal frame buffer and, by extension,
+              of the output PAM images, given in number of columns. This  must
+              be an integer in the closed range [1, 8192].
+
+              This option is mandatory.
+
+
+       --hheeiigghhtt==_h_e_i_g_h_t
+              This  is  the height of the internal frame buffer and, by exten‐
+              sion, of the output PAM images, given in number  of  rows.  This
+              must be an integer in the closed range [1, 8192].
+
+              This option is mandatory.
+
+
+       --nnuumm__aattttrriibbss==_a_t_t_r_i_b_u_t_e_s___p_e_r___v_e_r_t_e_x
+              This  is  the  number of attributes per vertex. The depth of the
+              output PAM images equals this value plus one (to accomodate  the
+              alpha  plane).  The  argument  must  be an integer in the closed
+              range [1, 20].
+
+              The input instruction stream may override this with a rreesseett com‐
+              mand.
+
+              You   must  specify  exactly  one  of  --nnuumm__aattttrriibbss,  --rrggbb,  and
+              --ggrraayyssccaallee.
+
+
+
+       --ttuupplleettyyppee==_t_u_p_l_e_t_y_p_e
+              This is the tuple type for the output PAM images.  The  argument
+              is a string which may be no longer than 255 characters.
+
+              The input instruction stream may override this with a rreesseett com‐
+              mand.
+
+              The default is a null string.
+
+              This  option  cannot  be  specified  together  with    --rrggbb   or
+              --ggrraayyssccaallee.
+
+
+
+
+       --rrggbb   This is a convenience option which simply serves as an alias for
+              --nnuumm__aattttrriibbss==3 --ttuupplleettyyppee==RGB_ALPHA. In other words, this option
+              is  a  quick way to specify that you are going to use ppaammttrriiss to
+              draw RGB(_ALPHA) color images directly, and the three vertex at‐
+              tributes are the red, green and blue levels of the color associ‐
+              ated with the vertex, in that order.
+
+              The input instruction stream may override this with a rreesseett com‐
+              mand.
+
+              You   must  specify  exactly  one  of  --nnuumm__aattttrriibbss,  --rrggbb,  and
+              --ggrraayyssccaallee.
+
+              This option was new in Netpbm 10.85 (December 2018).
+
+
+       --ggrraayyssccaallee
+              Another convenience option, similar to --rrggbb; except this one  is
+              an  alias for --nnuumm__aattttrriibbss==1 --ttuupplleettyyppee==GGRRAAYYSSCCAALLEE__AALLPPHHAA. The one
+              vertex attribute is the gray level associated with the vertex.
+
+              The input instruction stream may override this with a rreesseett com‐
+              mand.
+
+              You   must  specify  exactly  one  of  --nnuumm__aattttrriibbss,  --rrggbb,  and
+              --ggrraayyssccaallee.
+
+              This option was new in Netpbm 10.85 (December 2018).
+
+
+       --mmaaxxvvaall==_m_a_x_v_a_l
+              Sets the maxval of the output PAM images, which is also the max‐
+              imum  permitted value for each vertex attribute. This must be an
+              integer in the closed range [1, 65535].
+
+              The default value is 255.
+
+              The input instruction stream may override this with a rreesseett com‐
+              mand.
+
+
+
+
+IINNSSTTRRUUCCTTIIOONN CCOODDEE
+       The  input  for  ppaammttrriiss  consists  of a stream of text lines read from
+       Standard Input.
+
+       Empty lines or lines that  contain  only  white  space  characters  are
+       called blank lines and are ignored.
+
+       When a ## occurs anywhere in a line, ppaammttrriiss ignores it along with every
+       character after it. In other words, everything from the ## until the end
+       of the line receives the same treatment as white space.
+
+       Lines  which  are  not blank must contain a sequence of strings, called
+       tokens, separated by white space.  The first such token must be one  of
+       the  commands  recognized by ppaammttrriiss, and all further tokens are inter‐
+       preted as the arguments for that command, if it takes any. When an  in‐
+       sufficient  number  of arguments is provided for a command, the line is
+       considered invalid and is given the same treatment as a blank line. The
+       same  happens  when an out of range argument or one of a kind different
+       of what is expected is given (for example, when you give  a  string  of
+       letters  where  a numerical value is expected), or when an unrecognized
+       command/argument is found. When a number of arguments greater than that
+       required  for a particular command is provided, only the portion of the
+       line up to the last required argument is considered and any further to‐
+       kens are ignored.
+
+       ppaammttrriiss  is  case-insensitive.  That is, mmooddee, MMOODDEE, mmOODDee, etc. are all
+       treated the same way.
+
+       The commands recognized by ppaammttrriiss are:
+
+
+       mmooddee
+
+       aattttrriibbss
+
+       vveerrtteexx
+
+       pprriinntt
+
+       cclleeaarr
+
+       rreesseett
+
+       qquuiitt
+
+
+       You may use a minimum unique abbreviation of a command name.   You  may
+       use  an  exclamation mark (!!) in place of the pprriinntt command name and an
+       asterisk (**) in place of cclleeaarr.
+
+       The functions of the commands are as follows.
+
+
+
+       mmooddee { triangles | strip | fan }
+
+              This makes ppaammttrriiss enter a new drawing mode. The argument  is  a
+              word  which  specifies  the mode to change to. Instead of a full
+              argument name, it is permissible to provide a minimum unique ab‐
+              breviation, which has the same effect. The drawing mode will re‐
+              main the same until the next mmooddee command is given.
+
+              This command also resets  the  current  vertex  list,  which  is
+              (re)initialized to an empty state after the command is executed.
+              One may add new vertices to this list through successive invoca‐
+              tions  of  the  vveerrtteexx  command  (see below). You do not have to
+              worry about providing "too many" vertices, since the vertex list
+              is  virtualized:  ppaammttrriiss maintains only the state pertaining to
+              three vertices at any one time. The current vertex list is  ini‐
+              tially empty.
+
+              It is permissible to give ppaammttrriiss a mmooddee command which instructs
+              it to enter a drawing mode it is currently already in. One might
+              use  this  approach  to  reset  the  current vertex list without
+              changing the current drawing mode.
+
+              Regardless of the current drawing mode, the program  immediately
+              rasterizes  a  new triangle into the frame buffer as soon as you
+              provide the necessary vertices for it through the current vertex
+              list.  (If  you reset the vertex list before giving all the ver‐
+              tices necessary to draw a new triangle, the program  effectively
+              discards  from the list any vertices that might have been pushed
+              into the vertex list up to that point without using them to draw
+              any new triangles.)
+
+              In  the  following descriptions of each drawing mode, triangles'
+              and vertices' indices (ordinal numbers) are 0-based.
+
+              The ttrriiaanngglleess argument instructs ppaammttrriiss to  enter  the  "TRIAN‐
+              GLES"  drawing  mode.  While  in this mode, a series of separate
+              triangles is constructed. Every three vertices pushed  into  the
+              current  vertex  list  specify  a  new triangle.  Formally, this
+              means that every _N_t_h triangle  is  specified  by  vertices  3*_N,
+              3*_N + 1,  and  3*_N + 2.  This is the default initial mode and is
+              therefore not required to be set explicitly before  drawing  any
+              triangles.
+
+              The  ssttrriipp argument instructs ppaammttrriiss to enter the "STRIP" draw‐
+              ing mode.  While in this mode, ppaammttrriiss  constructs  a  "triangle
+              strip."  That  is, the first three vertices pushed into the cur‐
+              rent vertex list specify the first triangle, and every new  ver‐
+              tex pushed after that specifies, together with the previous two,
+              the next triangle. Formally, this means that every _Nth  triangle
+              is specified by vertices _N, _N + 1, and _N + 2.
+
+              The  ffaann  argument  instructs ppaammttrriiss to enter the "FAN" drawing
+              mode.  While in this mode, a so-called "triangle  fan"  is  con‐
+              structed.   That  is,  the  first three vertices pushed into the
+              current vertex list specify the first triangle,  and  every  new
+              vertex  pushed  after that specifies, together with the previous
+              vertex and the first one,  the  next  triangle.  Formally,  this
+              means that every _Nth triangle is specified by vertices _0, _N + 1,
+              and _N + 2.
+
+
+
+
+       aattttrriibbss _a_<_s_u_b_>_0 _a_<_s_u_b_>_1
+              _a_<_s_u_b_>_2 ... _a_<_s_u_b_>_n_u_m___a_t_t_r_i_b_s _- _1
+
+              This updates the current attribute  values  list.  This  command
+              takes as arguments a sequence of _n_u_m___a_t_t_r_i_b_s integers which rep‐
+              resent the values of the attributes to be  associated  with  the
+              next vertex. This sequence of values is the just mentioned "cur‐
+              rent attribute values list."
+
+              Each _i_t_h argument, where 0 &#8804; _i  <  _n_u_m___a_t_t_r_i_b_s,  indicates
+              the value to be assigned to the _ith attribute of the current at‐
+              tribute values list. All arguments must be integer values in the
+              closed  range  [0,  _m_a_x_v_a_l].  If a number of arguments less than
+              the current value of _n_u_m___a_t_t_r_i_b_s is given, the command  is  con‐
+              sidered invalid and is therefore ignored.
+
+              The  current  attribute  values list remains unchanged until the
+              next valid aattttrriibbss or rreesseett command is given. The  aattttrriibbss  com‐
+              mand allows one to change the values of each attribute individu‐
+              ally, while the rreesseett command is not specifically  designed  for
+              that  function, but it has the side effect of setting all values
+              in the current attribute values list to the _m_a_x_v_a_l (see below).
+
+              All values in the current attribute values  list  are  initially
+              set to the _m_a_x_v_a_l.
+
+              <dt id="cmd_vertex">vveerrtteexx _x _y _z [_w]
+
+              Adds  a new vertex to the current vertex list (see the mmooddee com‐
+              mand above), assigning the values of the arguments  to  its  re‐
+              spective  coordinates,  and  the values in the current attribute
+              values list (see the aattttrriibbss command above)  to  the  respective
+              entries in the attribute list associated with the vertex.
+
+              _x,  _y  and _z must be integer values in the closed range [-32767,
+              32767].  _x and _y represent, respectively, the column and row  of
+              the  tuple which corresponds to the location of the vertex. Such
+              values may correspond to tuples outside the limits of the  frame
+              buffer.  The  origin of the coordinate system is at the top-left
+              tuple of the frame buffer. The X-axis goes from left  to  right,
+              and  the Y-axis from top to bottom. A negative value for _x indi‐
+              cates a column that many tuples to the left of the leftmost col‐
+              umn of the frame buffer.  Likewise, a negative value for _y indi‐
+              cates a row that many tuples above  the  uppermost  row  of  the
+              frame buffer. Observe that those coordinates correspond directly
+              to a particular point in the coordinate system delineated above,
+              regardless  of  whether you are trying to draw an image which is
+              supposed to look as if viewed "in perspective" or  not;  ppaammttrriiss
+              does _n_o_t "warp" the coordinates you give in any way.  Therefore,
+              if you want to draw images in perspective, you must compute val‐
+              ues  for _x and _y already projected into ppaammttrriiss' coordinate sys‐
+              tem yourself, using an external perspective  projection  method,
+              prior to giving them to the program.
+
+              The  _z  parameter  represents  the   Z-coordinate of the vertex,
+              which is used to compute depth values for tuples within the  ar‐
+              eas  of  rasterized triangles. Intuitively, smaller values for _z
+              mean "closer to the viewer," and larger ones mean "farther  away
+              from the viewer" (but remember: as said above, the _x and _y coor‐
+              dinates are not warped in any way, which implies that  they  are
+              not  affected by _z; neither by the next parameter, for that mat‐
+              ter).
+
+              Optionally, you may provide a _w  parameter  which  represents  a
+              "perspective  correction  factor"  used  to properly interpolate
+              vertex attributes across the area of the corresponding triangle.
+              This  must be an integer value in the closed range [1, 1048575].
+              If you don't provide a value for it, the default value of  1  is
+              used  (hence,  if you want to nullify the effects of perspective
+              correction on a triangle so the output samples are  computed  as
+              if just linearly interpolated, simply do not provide a value for
+              _w for any vertex of the triangle). If, however,  you  intend  to
+              draw 3D geometry in perspective, you must provide an appropriate
+              value for this parameter, otherwise the output images might look
+              very wrong.  _w was new in Netpbm 10.85 (December 2018).
+
+              Consider the
+               typical  model ⟨https://en.wikipedia.org/wiki/Viewing_frustum⟩
+              of the so-called "viewing frustum" used to project  vertices  in
+              3D  "world  space"  onto a planar "image space." If we adopt the
+              convention that a "z-plane" means  any  plane  parallel  to  the
+              view-plane  (a.k.a. picture plane, a.k.a. near plane), the value
+              of _w for a vertex should then be the (smallest/euclidean/orthog‐
+              onal)  distance in pixels between the projection reference point
+              (PRP, or "eye") and the z-plane containing the vertex.  One  way
+              to  compute  this value amounts to simply taking the dot product
+              between the 3D vector rr and the 3D unit vector nn, where rr is the
+              vector  which  goes from the projection reference point (PRP, or
+              "eye") to the vertex, and nn is a view-plane normal (VPN) of unit
+              length  which  points away from the PRP. In other words, this is
+              equal to the length of the orthogonal projection  of  rr  on  the
+              line "determined" by nn.
+
+              (Note:  For  any  two  3D  vectors aa and bb, with respective real
+              scalar  components  a<sub>x,  a<sub>y,  a<sub>z   and   b<sub>x,
+              b<sub>y,  b<sub>z,  the  dot  product  between aa and bb is simply
+              a<sub>x*b<sub>x + a<sub>y*b<sub>y + a<sub>z*b<sub>z.)
+
+
+
+       pprriinntt
+
+              This writes a PAM image to Standard Output  whose  raster  is  a
+              copy  of the current contents of the image buffer. The values of
+              the WIDTH and HEIGHT fields  are  the  same  as  the  width  and
+              height,  respectively,  of the frame buffer, which were given on
+              the command line during program invocation. The MAXVAL field  is
+              equal  to  the  current  maxval; the DEPTH field is equal to the
+              current value of _n_u_m___a_t_t_r_i_b_s + 1;  and  the  TUPLTYPE  field  is
+              equal to the current tupletype.
+
+              This command has no effect upon the current drawing state. E. g.
+              it does not modify the current drawing mode, the current  vertex
+              list, etc.
+
+              One may issue an arbitrary number of pprriinntt commands at different
+              positions in the input instruction sequence to produce a  multi-
+              image PAM stream.
+
+
+       cclleeaarr [ image | depth ]
+
+              Clears  the frame buffer. That is, all samples in the image buf‐
+              fer are once again set to 0, and all entries in the depth buffer
+              are once again set to the maximum permitted depth value.
+
+              Optionally, one may provide an argument to only clear either the
+              image buffer or the depth buffer individually, while leaving the
+              other  intact. With the iimmaaggee argument, only the image buffer is
+              cleared; with the ddeepptthh  argument,  only  the  depth  buffer  is
+              cleared. Instead of full argument names, one may provide a mini‐
+              mum unique abbreviation, which has the same effect.  The  single
+              character zz is also accepted as an alias for ddeepptthh.
+
+              Like the pprriinntt command, this command has no effect upon the cur‐
+              rent drawing state either.
+
+
+
+       rreesseett _m_a_x_v_a_l _n_u_m___a_t_t_r_i_b_s [_t_u_p_l_e_t_y_p_e]
+
+              This updates the current maxval and  number  of  attributes  per
+              vertex  (num_attribs),  resetting the <u>image</u> buffer with a
+              new maxval and number of samples per tuple while at it. The  pa‐
+              rameter  _m_a_x_v_a_l  must  be  an  integer  in  the closed range [1,
+              65535], and _n_u_m___a_t_t_r_i_b_s must be an integer in the  closed  range
+              [1, 20].
+
+              Optionally,  after the second argument, one may provide a string
+              to be assigned to the current _t_u_p_l_e_t_y_p_e. The  string  goes  from
+              the first character after the second argument which is not white
+              space and continues until (and including) the last character be‐
+              fore the end of the line which is not white space.  If a new tu‐
+              pletype is not provided, or the provided string is  longer  than
+              255  characters, the empty string is assigned to the current _t_u_‐
+              _p_l_e_t_y_p_e.
+
+              The side effects of running this command are
+
+
+
+       •
+
+              The new image buffer is completely cleared once the  command  is
+              executed.
+
+
+       •
+
+              All  values  in the current attribute values list are set to the
+              new maxval.
+
+
+       •
+
+              The current vertex list is reset.
+
+
+
+              However, it does not touch the depth buffer: it is left the same
+              way  as  it  was found before the command. Also the drawing mode
+              remains the same (e. g. if ppaammttrriiss was in FAN mode, it will con‐
+              tinue in that same mode, etc.).
+
+              If  this  command  is  given with an invalid value for _m_a_x_v_a_l or
+              _n_u_m___a_t_t_r_i_b_s, it is ignored and therefore none of the above  side
+              effects  apply, nor do the current maxval, num_attribs or tuple‐
+              type change at all.
+
+              It is permissible to give a value  for  _m_a_x_v_a_l  and  _n_u_m___a_t_t_r_i_b_s
+              equal  to  the current maxval and num_attribs, respectively, al‐
+              though the above side effects will  still  apply  even  in  such
+              cases.
+
+              Since  this command deals with memory allocation, it may fail to
+              execute successfully. If that happens, no lines of input will be
+              read  anymore and ppaammttrriiss will be terminated as if the qquuiitt com‐
+              mand was given.
+
+       qquuiitt
+
+              This terminates ppaammttrriiss. It will not read any more lines of  in‐
+              put after this command.
+
+
+
+
+
+TTIIPPSS
+   TTeexxttuurriinngg
+       It  is  possible  to apply so-called "textures" to images produced with
+       ppaammttrriiss by using a pair of vertex attributes  as  texture  coordinates,
+       then using ppaammcchhaannnneell(1) to select the appropriate channels in the out‐
+       put image(s), and finally processing the result  through  ppaammllooookkuupp(1),
+       providing  the  desired  texture  file as a "lookup table."  If you are
+       drawing pictures in perspective, make sure to provide  adequate  values
+       for the _w parameter to your vertex commands ( see above ⟨#cmd_vertex⟩ )
+       so that the resulting samples in the images  produced  by  ppaammttrriiss  are
+       perspective-correct.  You  might  want  to consider using ppnnmmttiillee(1) to
+       make textures which are inteded to be "repeated" along triangle meshes.
+
+        The animated GIF below is an example of what can be achieved using the
+       technique    described    above    (Earth    texture    from   nasa.gov
+       ⟨https://visibleearth.nasa.gov/view.php?id=73580⟩ ).
+
+       RRoottaattiinngg EEaarrtthh
+
+
+   AAnnttii--aalliiaasseedd eeddggeess
+       ppaammttrriiss performs no anti-aliasing on triangle edges  by  itself.   How‐
+       ever,  it  is  possible to obtain anti-aliased images through a "super-
+       sampling" approach: draw your image(s) at a size larger  than  the  de‐
+       sired  final size, and then, when all postprocessing is done, downscale
+       the final image(s) to the desired size. Drawing images with  twice  the
+       desired  width  and  height, then downscaling them to the intended size
+       while disregarding gamma (i.e. what ppaammssccaallee --lliinneeaarr does)  often  pro‐
+       duces  good  enough  results;  but the larger the ratio _"_s_i_z_e _o_f _o_r_i_g_i_‐
+       _n_a_l _i_m_a_g_e_" _/ _"_s_i_z_e _o_f _d_o_w_n_s_c_a_l_e_d  _i_m_a_g_e_" , the better  the  quality  of
+       the anti-aliasing effect.
+
+
+SSEEEE AALLSSOO
+       ppaammppiicckk(1)  ppaammcchhaannnneell(1)  ppaammssttaacckk(1)  ppaammllooookkuupp(1)  ppaammaarriitthh(1)  ppaamm‐‐
+       ssccaallee(1) ppaammddeepptthh(1) ppaammeexxeecc(1) ppaamm(1)
+
+
+HHIISSTTOORRYY
+       ppaammttrriiss was new in Netpbm 10.84 (September 2018).
+
+DDOOCCUUMMEENNTT SSOOUURRCCEE
+       This manual page was generated by the Netpbm tool 'makeman'  from  HTML
+       source.  The master documentation is at
+
+              hhttttpp::////nneettppbbmm..ssoouurrcceeffoorrggee..nneett//ddoocc//ppaammttrriiss..hhttmmll
+
+netpbm documentation             15 April 2021          Pamtris User Manual(1)

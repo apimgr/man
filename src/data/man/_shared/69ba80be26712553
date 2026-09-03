@@ -1,0 +1,671 @@
+_L_D_A_P___T_A_B_L_E(5)                 File Formats Manual                _L_D_A_P___T_A_B_L_E(5)
+
+NNAAMMEE
+       ldap_table - Postfix LDAP client configuration
+
+SSYYNNOOPPSSIISS
+       ppoossttmmaapp --qq ""_s_t_r_i_n_g"" llddaapp:://eettcc//ppoossttffiixx//_f_i_l_e_n_a_m_e
+
+       ppoossttmmaapp --qq -- llddaapp:://eettcc//ppoossttffiixx//_f_i_l_e_n_a_m_e <<_i_n_p_u_t_f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+       The  Postfix  mail system uses optional tables for address rewriting or
+       mail routing. These tables are usually in ddbbmm or ddbb format.
+
+       Alternatively, lookup tables can be specified as LDAP databases.
+
+       In order to use LDAP lookups, define an LDAP source as a  lookup  table
+       in main.cf, for example:
+
+           alias_maps = ldap:/etc/postfix/ldap-aliases.cf
+
+       The  file /etc/postfix/ldap-aliases.cf has the same format as the Post‐
+       fix main.cf file, and can specify the parameters  described  below.  An
+       example is given at the end of this manual.
+
+       This  configuration  method  is  available with Postfix version 2.1 and
+       later.  See the section "OBSOLETE MAIN.CF PARAMETERS" below  for  older
+       Postfix versions.
+
+       For  details  about  LDAP  SSL and STARTTLS, see the section on SSL and
+       STARTTLS below.
+
+LLIISSTT MMEEMMBBEERRSSHHIIPP
+       When using LDAP to store lists  such  as  $mynetworks,  $mydestination,
+       $relay_domains,  $local_recipient_maps, etc., it is important to under‐
+       stand that the table must store each list member as a separate key. The
+       table lookup verifies the *existence* of the key.  See  "Postfix  lists
+       versus tables" in the DATABASE_README document for a discussion.
+
+       Do  NOT create tables that return the full list of domains in $mydesti‐
+       nation or $relay_domains etc., or IP addresses in $mynetworks.
+
+       DO create tables with each matching item as a key and with an arbitrary
+       value. With LDAP databases it is not uncommon to return the key itself.
+
+       For example, NEVER do this in a map defining $mydestination:
+
+           query_filter = domain=*
+           result_attribute = domain
+
+       Do this instead:
+
+           query_filter = domain=%s
+           result_attribute = domain
+
+GGEENNEERRAALL LLDDAAPP PPAARRAAMMEETTEERRSS
+       In the text below, default values  are  given  in  parentheses.   Note:
+       don’t  use  quotes  in these variables; at least, not until the Postfix
+       configuration routines understand how to deal with quoted strings.
+
+       sseerrvveerr__hhoosstt ((ddeeffaauulltt:: llooccaallhhoosstt))
+              The name of the host running the LDAP server, e.g.
+
+                  server_host = ldap.example.com
+
+              Depending on the LDAP client library you’re using, it should  be
+              possible to specify multiple servers here, with the library try‐
+              ing  them  in order should the first one fail. It should also be
+              possible to give each server in the list a different port (over‐
+              riding sseerrvveerr__ppoorrtt below), by naming them like
+
+                  server_host = ldap.example.com:1444
+
+              With OpenLDAP, a (list of) LDAP URLs can be used to specify both
+              the hostname(s) and the port(s):
+
+                  server_host = ldap://ldap.example.com:1444
+                              ldap://ldap2.example.com:1444
+
+              All LDAP URLs accepted by the OpenLDAP  library  are  supported,
+              including  connections  over  UNIX  domain sockets, and LDAP SSL
+              (the last one provided that OpenLDAP was compiled  with  support
+              for SSL):
+
+                  server_host = ldapi://%2Fsome%2Fpath
+                              ldaps://ldap.example.com:636
+
+       sseerrvveerr__ppoorrtt ((ddeeffaauulltt:: 338899))
+              The port the LDAP server listens on, e.g.
+
+                  server_port = 778
+
+       ttiimmeeoouutt ((ddeeffaauulltt:: 1100 sseeccoonnddss))
+              The number of seconds a search can take before timing out, e.g.
+
+                  timeout = 5
+
+       sseeaarrcchh__bbaassee ((NNoo ddeeffaauulltt;; yyoouu mmuusstt ccoonnffiigguurree tthhiiss))
+              The RFC2253 base DN at which to conduct the search, e.g.
+
+                  search_base = dc=your, dc=com
+
+              With Postfix 2.2 and later this parameter supports the following
+              ’%’ expansions:
+
+              %%%%     This is replaced by a literal ’%’ character.
+
+              %%ss     This  is  replaced by the input key.  RFC 2253 quoting is
+                     used to make sure that the input key does not  add  unex‐
+                     pected metacharacters.
+
+              %%uu     When the input key is an address of the form user@domain,
+                     %%uu is replaced by the (RFC 2253) quoted local part of the
+                     address.   Otherwise, %%uu is replaced by the entire search
+                     string.  If the localpart is empty, the  search  is  sup‐
+                     pressed and returns no results.
+
+              %%dd     When the input key is an address of the form user@domain,
+                     %%dd  is  replaced  by the (RFC 2253) quoted domain part of
+                     the address.  Otherwise, the search is suppressed and re‐
+                     turns no results.
+
+              %%[[SSUUDD]] For the sseeaarrcchh__bbaassee parameter, the upper-case equivalents
+                     of the  above  expansions  behave  identically  to  their
+                     lower-case  counter-parts. With the rreessuulltt__ffoorrmmaatt parame‐
+                     ter (previously called rreessuulltt__ffiilltteerr see the OTHER  OBSO‐
+                     LETE FEATURES section and below), they expand to the cor‐
+                     responding components of input key rather than the result
+                     value.
+
+              %%[[11--99]] The  patterns  %1,  %2, ... %9 are replaced by the corre‐
+                     sponding most significant component of  the  input  key’s
+                     domain.  If  the input key is _u_s_e_r_@_m_a_i_l_._e_x_a_m_p_l_e_._c_o_m, then
+                     %1 is ccoomm, %2 is eexxaammppllee and %3 is mmaaiill. If the input key
+                     is unqualified or does not have enough domain  components
+                     to satisfy all the specified patterns, the search is sup‐
+                     pressed and returns no results.
+
+       qquueerryy__ffiilltteerr ((ddeeffaauulltt:: mmaaiillaacccceeppttiinnggggeenneerraalliidd==%%ss))
+              The  RFC2254  filter used to search the directory, where %%ss is a
+              substitute for the address Postfix is trying to resolve, e.g.
+
+                  query_filter = (&(mail=%s)(paid_up=true))
+
+              This parameter supports the following ’%’ expansions:
+
+              %%%%     This is replaced by a literal ’%’ character. (Postfix 2.2
+                     and later).
+
+              %%ss     This is replaced by the input key.  RFC 2254  quoting  is
+                     used  to  make sure that the input key does not add unex‐
+                     pected metacharacters.
+
+              %%uu     When the input key is an address of the form user@domain,
+                     %%uu is replaced by the (RFC 2254) quoted local part of the
+                     address.  Otherwise, %%uu is replaced by the entire  search
+                     string.   If  the  localpart is empty, the search is sup‐
+                     pressed and returns no results.
+
+              %%dd     When the input key is an address of the form user@domain,
+                     %%dd is replaced by the (RFC 2254) quoted  domain  part  of
+                     the address.  Otherwise, the search is suppressed and re‐
+                     turns no results.
+
+              %%[[SSUUDD]] The upper-case equivalents of the above expansions behave
+                     in   the  qquueerryy__ffiilltteerr  parameter  identically  to  their
+                     lower-case counter-parts. With the rreessuulltt__ffoorrmmaatt  parame‐
+                     ter  (previously called rreessuulltt__ffiilltteerr see the OTHER OBSO‐
+                     LETE FEATURES section and below), they expand to the cor‐
+                     responding components of input key rather than the result
+                     value.
+
+                     The above %S, %U and %D  expansions  are  available  with
+                     Postfix 2.2 and later.
+
+              %%[[11--99]] The  patterns  %1,  %2, ... %9 are replaced by the corre‐
+                     sponding most significant component of  the  input  key’s
+                     domain.  If  the input key is _u_s_e_r_@_m_a_i_l_._e_x_a_m_p_l_e_._c_o_m, then
+                     %1 is ccoomm, %2 is eexxaammppllee and %3 is mmaaiill. If the input key
+                     is unqualified or does not have enough domain  components
+                     to satisfy all the specified patterns, the search is sup‐
+                     pressed and returns no results.
+
+                     The above %1, ..., %9 expansions are available with Post‐
+                     fix 2.2 and later.
+
+              The  "domain" parameter described below limits the input keys to
+              addresses in matching domains. When the  "domain"  parameter  is
+              non-empty,  LDAP  queries for unqualified addresses or addresses
+              in non-matching domains are suppressed and return no results.
+
+              NOTE: DO NOT put quotes around the qquueerryy__ffiilltteerr parameter.
+
+       rreessuulltt__ffoorrmmaatt ((ddeeffaauulltt:: %%ss)
+              Called rreessuulltt__ffiilltteerr in Postfix releases prior to  2.2.   Format
+              template applied to result attributes. Most commonly used to ap‐
+              pend  (or  prepend)  text to the result. This parameter supports
+              the following ’%’ expansions:
+
+              %%%%     This is replaced by a literal ’%’ character. (Postfix 2.2
+                     and later).
+
+              %%ss     This is replaced by the value of  the  result  attribute.
+                     When result is empty it is skipped.
+
+              %%uu     When the result attribute value is an address of the form
+                     user@domain,  %%uu is replaced by the local part of the ad‐
+                     dress. When the result  has  an  empty  localpart  it  is
+                     skipped.
+
+              %%dd     When  a  result attribute value is an address of the form
+                     user@domain, %%dd is replaced by the domain part of the at‐
+                     tribute value. When  the  result  is  unqualified  it  is
+                     skipped.
+
+              %%[[SSUUDD11--99]]
+                     The  upper-case  and decimal digit expansions interpolate
+                     the parts of the input key rather than the result.  Their
+                     behavior  is  identical to that described with qquueerryy__ffiill‐‐
+                     tteerr, and in fact because the input key is  known  in  ad‐
+                     vance,  lookups whose key does not contain all the infor‐
+                     mation specified in the result  template  are  suppressed
+                     and return no results.
+
+                     The  above  %S,  %U,  %D  and  %1, ..., %9 expansions are
+                     available with Postfix 2.2 and later.
+
+              For example, using "result_format = smtp:[%s]" allows one to use
+              a mailHost attribute as the basis of a transport(5) table. After
+              applying the result format, multiple values are concatenated  as
+              comma  separated strings. The expansion_limit and size_limit pa‐
+              rameters explained below allow one to  restrict  the  number  of
+              values  in  the result, which is especially useful for maps that
+              should return a single value.
+
+              The default value %%ss specifies that each attribute value  should
+              be used as is.
+
+              This  parameter  was  called  rreessuulltt__ffiilltteerr  in Postfix releases
+              prior to 2.2. If no "result_format" is specified, the  value  of
+              "result_filter" will be used instead before resorting to the de‐
+              fault  value. This provides compatibility with old configuration
+              files.
+
+              NOTE: DO NOT put quotes around the result format!
+
+       ddoommaaiinn ((ddeeffaauulltt:: nnoo ddoommaaiinn lliisstt))
+              This is a list of domain names, paths to files, or  "type:table"
+              databases. When specified, only fully qualified search keys with
+              a  *non-empty*  localpart and a matching domain are eligible for
+              lookup:  ’user’  lookups,  bare  domain  lookups  and  "@domain"
+              lookups  are  not  performed.  This can significantly reduce the
+              query load on the LDAP server.
+
+                  domain = postfix.org, hash:/etc/postfix/searchdomains
+
+              It is best not to use LDAP to store  the  domains  eligible  for
+              LDAP lookups.
+
+              NOTE: DO NOT define this parameter for local(8) aliases.
+
+              This feature is available in Postfix 1.0 and later.
+
+       rreessuulltt__aattttrriibbuuttee ((ddeeffaauulltt:: mmaaiillddrroopp))
+              The  attribute(s)  Postfix  will read from any directory entries
+              returned by the lookup, to be resolved to an email address.
+
+                  result_attribute = mailbox, maildrop
+
+              Don’t rely on the default value ("maildrop"). Set the result_at‐
+              tribute explicitly in all ldap table configuration  files.  This
+              is particularly relevant when no result_attribute is applicable,
+              e.g.  cases  in  which leaf_result_attribute and/or terminal_re‐
+              sult_attribute are used instead. The default value  is  harmless
+              if  "maildrop"  is  also listed as a leaf or terminal result at‐
+              tribute, but it is best to not leave this to chance.
+
+       ssppeecciiaall__rreessuulltt__aattttrriibbuuttee ((ddeeffaauulltt:: eemmppttyy))
+              The attribute(s) of directory entries that can  contain  DNs  or
+              RFC 2255 LDAP URLs. If found, a recursive search is performed to
+              retrieve  the entry referenced by the DN, or the entries matched
+              by the URL query.
+
+                  special_result_attribute = memberdn
+
+              DN recursion retrieves the same result_attributes  as  the  main
+              query, including the special attributes for further recursion.
+
+              URL processing retrieves only those attributes that are included
+              in  both  the URL definition and as result attributes (ordinary,
+              special, leaf or terminal) in the Postfix table definition.   If
+              the  URL  lists  any  of  the table’s special result attributes,
+              these are retrieved and used recursively. A URL  that  does  not
+              specify  any  attribute selection, is equivalent (RFC 2255) to a
+              URL that selects all attributes, in which case the selected  at‐
+              tributes  will be the full set of result attributes in the Post‐
+              fix table.
+
+              If an LDAP URL attribute-descriptor or the corresponding Postfix
+              LDAP table  result  attribute  (but  not  both)  uses  RFC  2255
+              sub-type  options  ("attr;option"), the attribute requested from
+              the LDAP server will include the sub-type option. In  all  other
+              cases,  the URL attribute and the table attribute must match ex‐
+              actly. Attributes with options in both the URL and  the  Postfix
+              table  are  requested  only when the options are identical. LDAP
+              attribute-descriptor options are very  rarely  used,  most  LDAP
+              users will not need to concern themselves with this level of nu‐
+              anced detail.
+
+       tteerrmmiinnaall__rreessuulltt__aattttrriibbuuttee ((ddeeffaauulltt:: eemmppttyy))
+              When one or more terminal result attributes are found in an LDAP
+              entry, all other result attributes are ignored and only the ter‐
+              minal  result  attributes are returned. This is useful for dele‐
+              gating expansion of group members to a particular host, by using
+              an optional "maildrop" attribute on selected groups to route the
+              group to a specific host, where the group is expanded,  possibly
+              via mailing-list manager or other special processing.
+
+                  result_attribute =
+                  terminal_result_attribute = maildrop
+
+              When  using  terminal  and/or  leaf  result  attributes, the re‐
+              sult_attribute is best set to an empty  value  when  it  is  not
+              used, or else explicitly set to the desired value, even if it is
+              the default value "maildrop".
+
+              This feature is available with Postfix 2.4 or later.
+
+       lleeaaff__rreessuulltt__aattttrriibbuuttee ((ddeeffaauulltt:: eemmppttyy))
+              When  one  or  more  special  result  attributes  are found in a
+              non-terminal (see above) LDAP entry, leaf result attributes  are
+              excluded  from  the expansion of that entry. This is useful when
+              expanding groups and the desired mail  address  attribute(s)  of
+              the  member  objects  obtained  via DN or URI recursion are also
+              present in the group object. To only return the attribute values
+              from the leaf objects and not the containing group, add the  at‐
+              tribute  to  the  leaf_result_attribute  list,  and  not the re‐
+              sult_attribute list, which is always expanded. Note, the default
+              value of "result_attribute" is not empty, you may want to set it
+              explicitly empty when using  "leaf_result_attribute"  to  expand
+              the  group to a list of member DN addresses. If groups have both
+              member DN references AND attributes that  hold  multiple  string
+              valued  rfc822  addresses, then the string attributes go in "re‐
+              sult_attribute".  The attributes that represent  the  email  ad‐
+              dresses  of  objects  referenced  via  a  DN (or LDAP URI) go in
+              "leaf_result_attribute".
+
+                  result_attribute = memberaddr
+                  special_result_attribute = memberdn
+                  terminal_result_attribute = maildrop
+                  leaf_result_attribute = mail
+
+              When using terminal  and/or  leaf  result  attributes,  the  re‐
+              sult_attribute  is  best  set  to  an empty value when it is not
+              used, or else explicitly set to the desired value, even if it is
+              the default value "maildrop".
+
+              This feature is available with Postfix 2.4 or later.
+
+       ssccooppee ((ddeeffaauulltt:: ssuubb))
+              The LDAP search scope: ssuubb, bbaassee, or oonnee.  These translate  into
+              LDAP_SCOPE_SUBTREE, LDAP_SCOPE_BASE, and LDAP_SCOPE_ONELEVEL.
+
+       bbiinndd ((ddeeffaauulltt:: yyeess))
+              Whether  or how to bind to the LDAP server. Newer LDAP implemen‐
+              tations don’t require clients to bind, which saves  time.  Exam‐
+              ple:
+
+                  # Don’t bind
+                  bind = no
+                  # Use SIMPLE bind
+                  bind = yes
+                  # Use SASL bind
+                  bind = sasl
+
+              Postfix  versions  prior  to  2.8 only support "bind = no" which
+              means don’t bind, and "bind = yes" which means do a SIMPLE bind.
+              Postfix 2.8 and later also supports "bind = SASL" when  compiled
+              with LDAP SASL support as described in LDAP_README, it also adds
+              the  synonyms  "bind = none" and "bind = simple" for "bind = no"
+              and "bind = yes" respectively. See the SASL  section  below  for
+              additional parameters available with "bind = sasl".
+
+              If  you  do need to bind, you might consider configuring Postfix
+              to connect to the local machine on a port that’s an  SSL  tunnel
+              to  your  LDAP server. If your LDAP server doesn’t natively sup‐
+              port SSL, put a tunnel (wrapper, proxy,  whatever  you  want  to
+              call  it)  on  that system too. This should prevent the password
+              from traversing the network in the clear.
+
+       bbiinndd__ddnn ((ddeeffaauulltt:: eemmppttyy))
+              If you do have to bind, do it with this distinguished name.  Ex‐
+              ample:
+
+                  bind_dn = uid=postfix, dc=your, dc=com
+              With  "bind  = sasl" (see above) the DN may be optional for some
+              SASL mechanisms, don’t specify a DN if not needed.
+
+       bbiinndd__ppww ((ddeeffaauulltt:: eemmppttyy))
+              The password for the distinguished name above. If  you  have  to
+              use  this,  you probably want to make the map configuration file
+              readable only by the  Postfix  user.  When  using  the  obsolete
+              ldap:ldapsource  syntax,  with  map parameters in main.cf, it is
+              not possible to securely store the bind password.  This  is  be‐
+              cause main.cf needs to be world readable to allow local accounts
+              to submit mail via the sendmail command. Example:
+
+                  bind_pw = postfixpw
+              With  "bind = sasl" (see above) the password may be optional for
+              some SASL mechanisms, don’t specify a password if not needed.
+
+       ccaacchhee ((IIGGNNOORREEDD wwiitthh aa wwaarrnniinngg))
+
+       ccaacchhee__eexxppiirryy ((IIGGNNOORREEDD wwiitthh aa wwaarrnniinngg))
+
+       ccaacchhee__ssiizzee ((IIGGNNOORREEDD wwiitthh aa wwaarrnniinngg))
+              The above parameters are NO LONGER SUPPORTED by Postfix.   Cache
+              support has been dropped from OpenLDAP as of release 2.1.13.
+
+       rreeccuurrssiioonn__lliimmiitt ((ddeeffaauulltt:: 11000000))
+              A  limit  on  the nesting depth of DN and URL special result at‐
+              tribute evaluation. The limit must be a non-zero  positive  num‐
+              ber.
+
+       eexxppaannssiioonn__lliimmiitt ((ddeeffaauulltt:: 00))
+              A  limit  on  the total number of result elements returned (as a
+              comma separated list) by a lookup against the map.  A setting of
+              zero disables the limit. Lookups fail with a temporary error  if
+              the  limit  is  exceeded.   Setting  the limit to 1 ensures that
+              lookups do not return multiple values.
+
+       ssiizzee__lliimmiitt ((ddeeffaauulltt:: $$eexxppaannssiioonn__lliimmiitt))
+              A limit on the number of LDAP entries  returned  by  any  single
+              LDAP search performed as part of the lookup. A setting of 0 dis‐
+              ables  the  limit.   Expansion of DN and URL references involves
+              nested LDAP queries, each of which is  separately  subjected  to
+              this limit.
+
+              Note:  even a single LDAP entry can generate multiple lookup re‐
+              sults, via multiple result attributes and/or multi-valued result
+              attributes. This limit caps the per search resource  utilization
+              on the LDAP server, not the final multiplicity of the lookup re‐
+              sult. It is analogous to the "-z" option of "ldapsearch".
+
+       ddeerreeffeerreennccee ((ddeeffaauulltt:: 00))
+              When to dereference LDAP aliases. (Note that this has nothing do
+              with  Postfix aliases.) The permitted values are those legal for
+              the OpenLDAP/UM LDAP implementations:
+
+              0      never
+
+              1      when searching
+
+              2      when locating the base object for the search
+
+              3      always
+
+              See ldap.h or the ldap_open(3) or ldapsearch(1)  man  pages  for
+              more  information.  And if you’re using an LDAP package that has
+              other possible values, please bring it to the attention  of  the
+              postfix-users@postfix.org mailing list.
+
+       cchhaassee__rreeffeerrrraallss ((ddeeffaauulltt:: 00))
+              Sets  (or  clears)  LDAP_OPT_REFERRALS  (requires LDAP version 3
+              support).
+
+       vveerrssiioonn ((ddeeffaauulltt:: 22))
+              Specifies the LDAP protocol version to use.
+
+       ddeebbuugglleevveell ((ddeeffaauulltt:: 00))
+              What level to set for debugging in the OpenLDAP libraries.
+
+LLDDAAPP SSAASSLL PPAARRAAMMEETTEERRSS
+       If you’re using the OpenLDAP  libraries  compiled  with  SASL  support,
+       Postfix  2.8  and  later  built  with LDAP SASL support as described in
+       LDAP_README can authenticate to LDAP servers via SASL.
+
+       This enables authentication to the LDAP  server  via  mechanisms  other
+       than  a  simple  password.  The  added flexibility has a cost: it is no
+       longer practical to set an explicit timeout on the duration of an  LDAP
+       bind  operation.  Under  adverse  conditions, whether a SASL bind times
+       out, or if it does, the duration of the timeout is  determined  by  the
+       LDAP and SASL libraries.
+
+       It  is best to use tables that use SASL binds via proxymap(8), this way
+       the requesting process can time-out the  proxymap  request.  This  also
+       lets  you  tailer the process environment by overriding the proxymap(8)
+       import_environment setting in master.cf(5).  Special  environment  set‐
+       tings may be needed to configure GSSAPI credential caches or other SASL
+       mechanism  specific  options.  The  GSSAPI  credentials  used  for LDAP
+       lookups may need to be different than say those used  for  the  Postfix
+       SMTP client to authenticate to remote servers.
+
+       Using  SASL  mechanisms  requires  LDAP protocol version 3, the default
+       protocol version is 2 for backwards compatibility. You must  set  "ver‐
+       sion = 3" in addition to "bind = sasl".
+
+       The following parameters are relevant to using LDAP with SASL
+
+       ssaassll__mmeecchhss ((ddeeffaauulltt:: eemmppttyy))
+              Space separated list of SASL mechanism(s) to try.
+
+       ssaassll__rreeaallmm ((ddeeffaauulltt:: eemmppttyy))
+              SASL Realm to use, if applicable.
+
+       ssaassll__aauutthhzz__iidd ((ddeeffaauulltt:: eemmppttyy))
+              The SASL authorization identity to assert, if applicable.
+
+       ssaassll__mmiinnssssff ((ddeeffaauulltt:: 00))
+              The  minimum required sasl security factor required to establish
+              a connection.
+
+LLDDAAPP SSSSLL AANNDD SSTTAARRTTTTLLSS PPAARRAAMMEETTEERRSS
+       If you’re using the OpenLDAP libraries compiled with SSL support, Post‐
+       fix can connect to LDAP SSL servers and can issue the STARTTLS command.
+
+       LDAP SSL service can be requested by  using  a  LDAP  SSL  URL  in  the
+       server_host parameter:
+
+           server_host = ldaps://ldap.example.com:636
+
+       STARTTLS can be turned on with the start_tls parameter:
+
+           start_tls = yes
+
+       Both forms require LDAP protocol version 3, which has to be set explic‐
+       itly with:
+
+           version = 3
+
+       If  any  of the Postfix programs querying the map is configured in mas‐
+       ter.cf to run chrooted, all the certificates and keys involved have  to
+       be  copied  to the chroot jail. Of course, the private keys should only
+       be readable by the user "postfix".
+
+       The following parameters are relevant to LDAP SSL and STARTTLS:
+
+       ssttaarrtt__ttllss ((ddeeffaauulltt:: nnoo))
+              Whether or not to issue STARTTLS upon connection to the  server.
+              Don’t set this with LDAP SSL (the SSL session is setup automati‐
+              cally when the TCP connection is opened).
+
+       ttllss__ccaa__cceerrtt__ddiirr ((NNoo ddeeffaauulltt;; sseett eeiitthheerr tthhiiss oorr ttllss__ccaa__cceerrtt__ffiillee))
+              Directory  containing  X509 Certification Authority certificates
+              in PEM format which are  to  be  recognized  by  the  client  in
+              SSL/TLS  connections. The files each contain one CA certificate.
+              The files are looked up by the CA subject name hash value, which
+              must hence be available. If more than one  CA  certificate  with
+              the  same name hash value exist, the extension must be different
+              (e.g. 9d66eef0.0, 9d66eef0.1 etc). The search  is  performed  in
+              the  ordering of the extension number, regardless of other prop‐
+              erties of the certificates. Use the c_rehash utility  (from  the
+              OpenSSL distribution) to create the necessary links.
+
+       ttllss__ccaa__cceerrtt__ffiillee ((NNoo ddeeffaauulltt;; sseett eeiitthheerr tthhiiss oorr ttllss__ccaa__cceerrtt__ddiirr))
+              File containing the X509 Certification Authority certificates in
+              PEM  format  which are to be recognized by the client in SSL/TLS
+              connections. This setting takes precedence over tls_ca_cert_dir.
+
+       ttllss__cceerrtt ((NNoo ddeeffaauulltt;; yyoouu mmuusstt sseett tthhiiss))
+              File containing client’s X509 certificate  to  be  used  by  the
+              client in SSL/ TLS connections.
+
+       ttllss__kkeeyy ((NNoo ddeeffaauulltt;; yyoouu mmuusstt sseett tthhiiss))
+              File  containing  the  private  key  corresponding  to the above
+              tls_cert.
+
+       ttllss__rreeqquuiirree__cceerrtt ((ddeeffaauulltt:: nnoo))
+              Whether or not to request server’s X509  certificate  and  check
+              its  validity  when  establishing SSL/TLS connections.  The sup‐
+              ported values are nnoo and yyeess.
+
+              With nnoo, the server certificate trust chain is not checked,  but
+              with  OpenLDAP  prior to 2.1.13, the name in the server certifi‐
+              cate must still match the LDAP server name. With OpenLDAP  2.0.0
+              to 2.0.11 the server name is not necessarily what you specified,
+              rather  it is determined (by reverse lookup) from the IP address
+              of the LDAP server connection. With OpenLDAP  prior  to  2.0.13,
+              subjectAlternativeName extensions in the LDAP server certificate
+              are  ignored: the server name must match the subject CommonName.
+              The nnoo setting corresponds to the nneevveerr value of TTLLSS__RREEQQCCEERRTT  in
+              LDAP client configuration files.
+
+              Don’t  use TLS with OpenLDAP 2.0.x (and especially with x <= 11)
+              if you can avoid it.
+
+              With yyeess, the server certificate must be issued by a trusted CA,
+              and not be expired. The LDAP server name must match one  of  the
+              name(s) found in the certificate (see above for OpenLDAP library
+              version  dependent behavior). The yyeess setting corresponds to the
+              ddeemmaanndd value of TTLLSS__RREEQQCCEERRTT in LDAP client configuration files.
+
+              The "try" and "allow" values of TTLLSS__RREEQQCCEERRTT have no  equivalents
+              here.  They are not available with OpenLDAP 2.0, and in any case
+              have questionable security properties. Either you want TLS veri‐
+              fied LDAP connections, or you don’t.
+
+              The yyeess value only works correctly with Postfix 2.5  and  later,
+              or with OpenLDAP 2.0. Earlier Postfix releases or later OpenLDAP
+              releases don’t work together with this setting. Support for LDAP
+              over TLS was added to Postfix based on the OpenLDAP 2.0 API.
+
+       ttllss__rraannddoomm__ffiillee ((NNoo ddeeffaauulltt))
+              Path of a file to obtain random bits from when /dev/[u]random is
+              not available, to be used by the client in SSL/TLS connections.
+
+       ttllss__cciipphheerr__ssuuiittee ((NNoo ddeeffaauulltt))
+              Cipher suite to use in SSL/TLS negotiations.
+
+EEXXAAMMPPLLEE
+       Here’s a basic example for using LDAP to look up local(8) aliases.  As‐
+       sume that in main.cf, you have:
+
+           alias_maps = hash:/etc/aliases,
+                   ldap:/etc/postfix/ldap-aliases.cf
+
+       and in ldap:/etc/postfix/ldap-aliases.cf you have:
+
+           server_host = ldap.example.com
+           search_base = dc=example, dc=com
+
+       Upon  receiving mail for a local address "ldapuser" that isn’t found in
+       the /etc/aliases database, Postfix will search the LDAP server  listen‐
+       ing  at port 389 on ldap.example.com.  It will bind anonymously, search
+       for any directory entries  whose  mailacceptinggeneralid  attribute  is
+       "ldapuser",  read the "maildrop" attributes of those found, and build a
+       list of their maildrops, which will be treated as RFC822  addresses  to
+       which the message will be delivered.
+
+OOBBSSOOLLEETTEE MMAAIINN..CCFF PPAARRAAMMEETTEERRSS
+       For  backwards compatibility with Postfix version 2.0 and earlier, LDAP
+       parameters can also be defined in main.cf.  Specify as  LDAP  source  a
+       name  that  doesn’t  begin  with a slash or a dot.  The LDAP parameters
+       will then be accessible as the name you’ve given the source in its def‐
+       inition, an underscore, and the name of the parameter.  For example, if
+       the map is specified as "ldap:_l_d_a_p_s_o_u_r_c_e", the "server_host"  parameter
+       below would be defined in main.cf as "_l_d_a_p_s_o_u_r_c_e_server_host".
+
+       Note: with this form, the passwords for the LDAP sources are written in
+       main.cf,  which is normally world-readable.  Support for this form will
+       be removed in a future Postfix version.
+
+OOTTHHEERR OOBBSSOOLLEETTEE FFEEAATTUURREESS
+       rreessuulltt__ffiilltteerr ((NNoo ddeeffaauulltt))
+              For backwards compatibility with the pre 2.2 LDAP  clients,  rree‐‐
+              ssuulltt__ffiilltteerr  can  for now be used instead of rreessuulltt__ffoorrmmaatt, when
+              the latter parameter is not also set.  The new name  better  re‐
+              flects  the function of the parameter. This compatibility inter‐
+              face may be removed in a future release.
+
+SSEEEE AALLSSOO
+       postmap(1), Postfix lookup table manager
+       postconf(5), configuration parameters
+       mysql_table(5), MySQL lookup tables
+       pgsql_table(5), PostgreSQL lookup tables
+
+RREEAADDMMEE FFIILLEESS
+       Use "ppoossttccoonnff rreeaaddmmee__ddiirreeccttoorryy" or "ppoossttccoonnff hhttmmll__ddiirreeccttoorryy" to  locate
+       this information.
+       DATABASE_README, Postfix lookup table overview
+       LDAP_README, Postfix LDAP client guide
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+AAUUTTHHOORR((SS))
+       Carsten  Hoeger, Hery Rakotoarisoa, John Hensley, Keith Stevenson, LaM‐
+       ont Jones, Liviu Daia, Manuel Guesdon, Mike Mattice, Prabhat  K  Singh,
+       Sami Haahtinen, Samuel Tardieu, Victor Duchovni, and many others.
+
+                                                                 _L_D_A_P___T_A_B_L_E(5)

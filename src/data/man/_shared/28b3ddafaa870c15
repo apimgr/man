@@ -1,0 +1,1110 @@
+ncurses(3X)                      Library calls                     ncurses(3X)
+
+
+
+NNAAMMEE
+       nnccuurrsseess - character-cell terminal interface with optimized output
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ccuurrsseess..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+       The  “new  curses” library offers the programmer a terminal-independent
+       means of reading keyboard and mouse input and  updating  character-cell
+       terminals  with  output  optimized to minimize screen updates.  _n_c_u_r_s_e_s
+       replaces the _c_u_r_s_e_s libraries from System V Release 4 Unix (“SVr4”) and
+       4.4BSD  Unix, the development of which ceased in the 1990s.  This docu‐
+       ment describes _n_c_u_r_s_e_s version 6.5 (patch 20240427).
+
+       _n_c_u_r_s_e_s permits control of the terminal screen's contents;  abstraction
+       and  subdivision thereof with _w_i_n_d_o_w_s and _p_a_d_s; the reading of terminal
+       input; control of terminal input and output options; environment  query
+       routines;  color  manipulation;  the  definition  and use of _s_o_f_t _l_a_b_e_l
+       keys; _t_e_r_m_i_n_f_o capability access; a  _t_e_r_m_c_a_p  compatibility  interface;
+       and  an  abstraction  of the system's API for manipulating the terminal
+       (such as _t_e_r_m_i_o_s(3)).
+
+       _n_c_u_r_s_e_s implements the standard interface described  by  X/Open  Curses
+       Issue 7.   In  many  behavioral  details  not  standardized  by X/Open,
+       _n_c_u_r_s_e_s emulates the _c_u_r_s_e_s library of SVr4 and provides numerous  use‐
+       ful extensions.
+
+       _n_c_u_r_s_e_s  man  pages employ several sections to clarify matters of usage
+       and interoperability with other _c_u_r_s_e_s implementations.
+
+       •   “NOTES” describes issues and caveats  of  which  any  user  of  the
+           _n_c_u_r_s_e_s  API should be aware, such as limitations on the size of an
+           underlying integral type or  the  availability  of  a  preprocessor
+           macro  exclusive  of  a function definition (which prevents its ad‐
+           dress from being taken).  This section also  describes  implementa‐
+           tion  details  that will be significant to the programmer but which
+           are not standardized.
+
+       •   “EXTENSIONS” presents _n_c_u_r_s_e_s innovations beyond the X/Open  Curses
+           standard  and/or  the  SVr4 _c_u_r_s_e_s implementation.  They are termed
+           _e_x_t_e_n_s_i_o_n_s to indicate that they cannot be  implemented  solely  by
+           using the library API, but require access to the library's internal
+           state.
+
+       •   “PORTABILITY” discusses matters (beyond the exercise of extensions)
+           that should be considered when writing to a _c_u_r_s_e_s standard, or for
+           multiple implementations.
+
+       •   “HISTORY” examines points of detail in _n_c_u_r_s_e_s and other _c_u_r_s_e_s im‐
+           plementations  over  the decades of their development, particularly
+           where precedent or inertia have frustrated better design (and, in a
+           few cases, where such inertia has been overcome).
+
+       A _c_u_r_s_e_s application must be linked with the library; use the --llnnccuurrsseess
+       option to your compiler or linker.  A debugging version of the  library
+       may  be available; if so, link with it using --llnnccuurrsseess__gg.  (Your system
+       integrator may have installed these libraries such that you can use the
+       options  --llccuurrsseess and --llccuurrsseess__gg, respectively.)  The _n_c_u_r_s_e_s___g library
+       generates trace logs (in a file called _t_r_a_c_e in the current  directory)
+       that  describe _n_c_u_r_s_e_s actions.  See section “ALTERNATE CONFIGURATIONS”
+       below.
+
+   AApppplliiccaattiioonn SSttrruuccttuurree
+       A  _c_u_r_s_e_s  application  uses  information  from  the   system   locale;
+       _s_e_t_l_o_c_a_l_e(3) prepares it for _c_u_r_s_e_s library calls.
+
+           setlocale(LC_ALL, "");
+
+       If the locale is not thus initialized, the library assumes that charac‐
+       ters are printable as in ISO 8859-1, to work with certain  legacy  pro‐
+       grams.   You should initialize the locale; do not expect consistent be‐
+       havior from the library when the locale has not been set up.
+
+       iinniittssccrr(3X) or nneewwtteerrmm(3X) must be called to initialize  _c_u_r_s_e_s  before
+       use of any functions that deal with windows and screens.
+
+       To  get  character-at-a-time  input  without  echoing—most interactive,
+       screen-oriented programs want this—use the following sequence.
+
+           initscr(); cbreak(); noecho();
+
+       Most applications perform further setup as follows.
+
+           intrflush(stdscr, FALSE);
+           keypad(stdscr, TRUE);
+
+       A _c_u_r_s_e_s program then often enters an event loop of  some  sort.   Call
+       eennddwwiinn(3X) before exiting.
+
+   OOvveerrvviieeww
+       A  _c_u_r_s_e_s  library abstracts the terminal screen by representing all or
+       part of it as a _W_I_N_D_O_W data structure.  A _w_i_n_d_o_w is a rectangular  grid
+       of  character  cells,  addressed  by row and column coordinates (_y, _x),
+       with the upper left corner as (0, 0).  A window called ssttddssccrr, the same
+       size  as  the terminal screen, is always available.  Create others with
+       nneewwwwiinn(3X).
+
+       A _c_u_r_s_e_s library does not manage overlapping windows (but  see  below).
+       You  can either use ssttddssccrr to manage one screen-filling window, or tile
+       the screen into non-overlapping windows and  not  use  ssttddssccrr  at  all.
+       Mixing  the  two  approaches will result in unpredictable and undesired
+       effects.
+
+       Functions permit manipulation of a window and  the  _c_u_r_s_o_r  identifying
+       the  cell  within  it  at  which  the next output operation will occur.
+       Among those, the most basic are mmoovvee(3X) and aaddddcchh(3X): these place the
+       cursor and write a character to ssttddssccrr, respectively.
+
+       Frequent changes to the terminal screen can cause unpleasant flicker or
+       inefficient use of the communication channel to the device, so the  li‐
+       brary does not generally update it automatically.  Therefore, after us‐
+       ing _c_u_r_s_e_s functions to accumulate a set of desired updates  that  make
+       sense to present together, call rreeffrreesshh(3X) to tell the library to make
+       the user's screen look like ssttddssccrr.  The library _o_p_t_i_m_i_z_e_s  its  output
+       by  computing  a minimal number of operations to mutate the screen from
+       its state at the previous refresh to the new one.  Effective  optimiza‐
+       tion  demands  accurate information about the terminal device: the man‐
+       agement of such information is the province of the tteerrmmiinnffoo(3X) API,  a
+       feature of every standard _c_u_r_s_e_s implementation.
+
+       Special windows called _p_a_d_s may also be manipulated.  These are windows
+       that are not constrained to the size of the terminal screen  and  whose
+       contents need not be completely displayed.  See ccuurrss__ppaadd(3X).
+
+       In  addition  to drawing characters on the screen, rendering attributes
+       and colors may be supported, causing the characters to show up in  such
+       modes  as  underlined,  in reverse video, or in color on terminals that
+       support such display enhancements.  See ccuurrss__aattttrr(3X).
+
+       _c_u_r_s_e_s predefines constants for a small set of  forms-drawing  graphics
+       corresponding  to  the  DEC Alternate Character Set (ACS), a feature of
+       VT100 and other terminals.  See wwaaddddcchh(3X).
+
+       _c_u_r_s_e_s is implemented using the  operating  system's  terminal  driver;
+       keystroke  events are received not as scan codes but as byte sequences.
+       Graphical keycaps (alphanumeric and punctuation keys,  and  the  space)
+       appear  as-is.   Everything else, including the tab, enter/return, key‐
+       pad, arrow, and function keys, appears as  a  control  character  or  a
+       multibyte  _e_s_c_a_p_e  _s_e_q_u_e_n_c_e_.   _c_u_r_s_e_s  translates these into unique _k_e_y
+       _c_o_d_e_s_.  See ggeettcchh(3X).
+
+       _n_c_u_r_s_e_s provides reimplementations of the SVr4 ppaanneell(3X), ffoorrmm(3X), and
+       mmeennuu(3X) libraries to ease construction of user interfaces with _c_u_r_s_e_s.
+
+   IInniittiiaalliizzaattiioonn
+       The  selection  of an appropriate value of _T_E_R_M in the process environ‐
+       ment is essential to correct _c_u_r_s_e_s and _t_e_r_m_i_n_f_o library operation.   A
+       well-configured  system  selects  a  correct  _T_E_R_M value automatically;
+       ttsseett(1) may assist with troubleshooting exotic situations.
+
+       If you change the terminal type, export the _T_E_R_M  environment  variable
+       in the shell, then run ttsseett(1) or the “ttppuutt iinniitt” command.  See subsec‐
+       tion “Tabs and Initialization” of tteerrmmiinnffoo(5).
+
+       If the environment variables _L_I_N_E_S and  _C_O_L_U_M_N_S  are  set,  or  if  the
+       _c_u_r_s_e_s  program  is executing in a graphical windowing environment, the
+       information obtained thence overrides that obtained  by  _t_e_r_m_i_n_f_o.   An
+       _n_c_u_r_s_e_s extension supports resizable terminals; see wwrreessiizzee(3X).
+
+       If  the  environment  variable  _T_E_R_M_I_N_F_O  is  defined, a _c_u_r_s_e_s program
+       checks first for a terminal type description in the location it identi‐
+       fies.  _T_E_R_M_I_N_F_O is useful for developing experimental type descriptions
+       or when write permission to _/_u_s_r_/_s_h_a_r_e_/_m_i_s_c_/_t_e_r_m_i_n_f_o is not available.
+
+       See section “ENVIRONMENT” below.
+
+   NNaammiinngg CCoonnvveennttiioonnss
+       _c_u_r_s_e_s offers many functions in variant forms using a  regular  set  of
+       alternatives  to the name of an elemental one.  Those prefixed with “w”
+       require a _W_I_N_D_O_W pointer argument; those with a “mv” prefix first  per‐
+       form  cursor  movement  using wwmmoovvee(3X); a “mvw” prefix indicates both.
+       The “w” function is typically the elemental one; the  removal  of  this
+       prefix usually indicates operation on ssttddssccrr.
+
+       Four functions prefixed with “p” require a pad argument.
+
+       In  function  synopses,  _n_c_u_r_s_e_s man pages apply the following names to
+       parameters.
+
+       center; Li L.  bf   _b_o_o_l (TTRRUUEE or FFAALLSSEE)  c    a  _c_h_a_r  or  _i_n_t  ch   a
+       _c_h_t_y_p_e wc   a _w_c_h_a_r___t or _w_i_n_t___t wch  a _c_c_h_a_r___t win  pointer to a _W_I_N_D_O_W
+       pad  pointer to a _W_I_N_D_O_W that is a pad
+
+   WWiiddee aanndd NNoonn--wwiiddee CChhaarraacctteerr CCoonnffiigguurraattiioonnss
+       This manual page describes functions that appear in  any  configuration
+       of  the library.  There are two common configurations; see section “AL‐
+       TERNATE CONFIGURATIONS” below.
+
+       _n_c_u_r_s_e_s   is the library in its “non-wide” configuration, handling only
+                 eight-bit  characters.   It  stores a character combined with
+                 attributes in a _c_h_t_y_p_e datum, which is often an alias of _i_n_t.
+
+                 Attributes alone (with no  corresponding  character)  can  be
+                 stored  in  variables  of  _c_h_t_y_p_e  or _a_t_t_r___t type.  In either
+                 case, they are represented as an integral bit mask.
+
+                 Each cell of a _W_I_N_D_O_W is stored as a _c_h_t_y_p_e.
+
+       _n_c_u_r_s_e_s_w  is the library in its  “wide”  configuration,  which  handles
+                 character encodings requiring a larger data type than _c_h_a_r (a
+                 byte-sized type) can represent.  It adds about one third more
+                 calls  using additional data types that can store such _m_u_l_t_i_‐
+                 _b_y_t_e characters.
+
+                 _c_c_h_a_r___t  corresponds to the non-wide configuration's  _c_h_t_y_p_e.
+                          It  always  a structure type, because it stores more
+                          data than fit into a standard scalar type.  A  char‐
+                          acter  code  may not be representable as a _c_h_a_r, and
+                          moreover more than one character may occupy  a  cell
+                          (as  with  accent marks and other diacritics).  Each
+                          character is of type _w_c_h_a_r___t;  a  complex  character
+                          contains one spacing character and zero or more non-
+                          spacing  characters  (see  below).   Attributes  and
+                          color  data  are  stored  in  separate fields of the
+                          structure, not combined as in _c_h_t_y_p_e.
+
+                 Each cell of a _W_I_N_D_O_W is stored as a _c_c_h_a_r___t.
+
+                 sseettcccchhaarr(3X) and  ggeettcccchhaarr(3X)  store  and  retrieve  _c_c_h_a_r___t
+                 data.   The  wide  library API of _n_c_u_r_s_e_s depends on two data
+                 types standardized by ISO C95.
+
+                 _w_c_h_a_r___t  stores a wide character.  Like _c_h_t_y_p_e, it may be  an
+                          alias  of _i_n_t.  Depending on the character encoding,
+                          a wide character may be _s_p_a_c_i_n_g, meaning that it oc‐
+                          cupies  a character cell by itself and typically ac‐
+                          companies cursor advancement, or _n_o_n_-_s_p_a_c_i_n_g,  mean‐
+                          ing  that  it  occupies  the  same cell as a spacing
+                          character, is often regarded as a “modifier” of  the
+                          base  glyph  with  which  it combines, and typically
+                          does not advance the cursor.
+
+                 _w_i_n_t___t   can store a _w_c_h_a_r___t or  the  constant  WWEEOOFF,  analo‐
+                          gously to the _i_n_t-sized character manipulation func‐
+                          tions of ISO C and its constant EEOOFF.
+
+                 The wide library provides additional functions  that  comple‐
+                 ment  those in the non-wide library where the size of the un‐
+                 derlying character type is significant.  A  somewhat  regular
+                 naming  convention relates many of the wide variants to their
+                 non-wide counterparts; where a non-wide  function  name  con‐
+                 tains  “ch”  or “str”, prefix it with “_w” to obtain the wide
+                 counterpart.  For example, wwaaddddcchh becomes wwaadddd__wwcchh.   (Excep‐
+                 tions  that  add only “w” comprise aaddddwwssttrr, iinnwwssttrr, and their
+                 variants.)
+
+                 This convention is inapplicable  to  some  non-wide  function
+                 names, so other transformations are used for the wide config‐
+                 uration: the window background management function “bkgd” be‐
+                 comes “bkgrnd”; the window border-drawing and -clearing func‐
+                 tions are suffixed with “_set”; and character  attribute  ma‐
+                 nipulation functions like “attron” become “attr_on”.
+
+   FFuunnccttiioonn NNaammee IInnddeexx
+       The following table lists the _c_u_r_s_e_s functions provided in the non-wide
+       and wide APIs and the  corresponding  man  pages  that  describe  them.
+       Those  flagged  with  “*”  are  _n_c_u_r_s_e_s-specific,  neither described by
+       X/Open Curses nor present in SVr4.
+
+       center   tab(/);   l   l   .    _cc_uu_rr_ss_ee_ss   Function   Name/Man   Page   _
+       COLOR_PAIR/ccuurrss__ccoolloorr(3X)                    PAIR_NUMBER/ccuurrss__ccoolloorr(3X)
+       add_wch/ccuurrss__aadddd__wwcchh(3X)    add_wchnstr/ccuurrss__aadddd__wwcchhssttrr(3X)    add_wch‐
+       str/ccuurrss__aadddd__wwcchhssttrr(3X)    addch/ccuurrss__aaddddcchh(3X)   addchnstr/ccuurrss__aaddddcchh‐‐
+       ssttrr(3X)   addchstr/ccuurrss__aaddddcchhssttrr(3X)   addnstr/ccuurrss__aaddddssttrr(3X)   addnw‐
+       str/ccuurrss__aaddddwwssttrr(3X)   addstr/ccuurrss__aaddddssttrr(3X)  addwstr/ccuurrss__aaddddwwssttrr(3X)
+       alloc_pair/nneeww__ppaaiirr(3X)*      assume_default_colors/ddeeffaauulltt__ccoolloorrss(3X)*
+       attr_get/ccuurrss__aattttrr(3X)   attr_off/ccuurrss__aattttrr(3X)   attr_on/ccuurrss__aattttrr(3X)
+       attr_set/ccuurrss__aattttrr(3X) attroff/ccuurrss__aattttrr(3X)  attron/ccuurrss__aattttrr(3X)  at‐
+       trset/ccuurrss__aattttrr(3X)    baudrate/ccuurrss__tteerrmmaattttrrss(3X)   beep/ccuurrss__bbeeeepp(3X)
+       bkgd/ccuurrss__bbkkggdd(3X) bkgdset/ccuurrss__bbkkggdd(3X) bkgrnd/ccuurrss__bbkkggrrnndd(3X) bkgrnd‐
+       set/ccuurrss__bbkkggrrnndd(3X)     border/ccuurrss__bboorrddeerr(3X)     border_set/ccuurrss__bboorr‐‐
+       ddeerr__sseett(3X)       box/ccuurrss__bboorrddeerr(3X)       box_set/ccuurrss__bboorrddeerr__sseett(3X)
+       can_change_color/ccuurrss__ccoolloorr(3X)                  cbreak/ccuurrss__iinnooppttss(3X)
+       chgat/ccuurrss__aattttrr(3X) clear/ccuurrss__cclleeaarr(3X) clearok/ccuurrss__oouuttooppttss(3X)  clr‐
+       tobot/ccuurrss__cclleeaarr(3X)         clrtoeol/ccuurrss__cclleeaarr(3X)         color_con‐
+       tent/ccuurrss__ccoolloorr(3X)  color_set/ccuurrss__aattttrr(3X)   copywin/ccuurrss__oovveerrllaayy(3X)
+       curs_set/ccuurrss__kkeerrnneell(3X)    curses_trace/ccuurrss__ttrraaccee(3X)*    curses_ver‐
+       sion/ccuurrss__eexxtteenndd(3X)*                     def_prog_mode/ccuurrss__kkeerrnneell(3X)
+       def_shell_mode/ccuurrss__kkeerrnneell(3X)               define_key/ddeeffiinnee__kkeeyy(3X)*
+       del_curterm/ccuurrss__tteerrmmiinnffoo(3X)                delay_output/ccuurrss__uuttiill(3X)
+       delch/ccuurrss__ddeellcchh(3X)                         deleteln/ccuurrss__ddeelleetteellnn(3X)
+       delscreen/ccuurrss__iinniittssccrr(3X)   delwin/ccuurrss__wwiinnddooww(3X)    derwin/ccuurrss__wwiinn‐‐
+       ddooww(3X)  doupdate/ccuurrss__rreeffrreesshh(3X) dupwin/ccuurrss__wwiinnddooww(3X) echo/ccuurrss__iinn‐‐
+       ooppttss(3X)   echo_wchar/ccuurrss__aadddd__wwcchh(3X)   echochar/ccuurrss__aaddddcchh(3X)   end‐
+       win/ccuurrss__iinniittssccrr(3X)  erase/ccuurrss__cclleeaarr(3X) erasechar/ccuurrss__tteerrmmaattttrrss(3X)
+       erasewchar/ccuurrss__tteerrmmaattttrrss(3X) exit_curses/ccuurrss__mmeemmlleeaakkss(3X)*  exit_ter‐
+       minfo/ccuurrss__mmeemmlleeaakkss(3X)*   extended_color_content/ccuurrss__ccoolloorr(3X)*   ex‐
+       tended_pair_content/ccuurrss__ccoolloorr(3X)*    extended_slk_color/ccuurrss__ssllkk(3X)*
+       filter/ccuurrss__uuttiill(3X) find_pair/nneeww__ppaaiirr(3X)* flash/ccuurrss__bbeeeepp(3X) flush‐
+       inp/ccuurrss__uuttiill(3X)          free_pair/nneeww__ppaaiirr(3X)*           get_escde‐
+       lay/ccuurrss__tthhrreeaaddss(3X)*                          get_wch/ccuurrss__ggeett__wwcchh(3X)
+       get_wstr/ccuurrss__ggeett__wwssttrr(3X)         getattrs/ccuurrss__aattttrr(3X)          get‐
+       begx/ccuurrss__lleeggaaccyy(3X)*  getbegy/ccuurrss__lleeggaaccyy(3X)* getbegyx/ccuurrss__ggeettyyxx(3X)
+       getbkgd/ccuurrss__bbkkggdd(3X)   getbkgrnd/ccuurrss__bbkkggrrnndd(3X)   getcchar/ccuurrss__ggeettcc‐‐
+       cchhaarr(3X)          getch/ccuurrss__ggeettcchh(3X)         getcurx/ccuurrss__lleeggaaccyy(3X)*
+       getcury/ccuurrss__lleeggaaccyy(3X)*         getmaxx/ccuurrss__lleeggaaccyy(3X)*          get‐
+       maxy/ccuurrss__lleeggaaccyy(3X)*  getmaxyx/ccuurrss__ggeettyyxx(3X) getmouse/ccuurrss__mmoouussee(3X)*
+       getn_wstr/ccuurrss__ggeett__wwssttrr(3X)        getnstr/ccuurrss__ggeettssttrr(3X)         get‐
+       parx/ccuurrss__lleeggaaccyy(3X)*  getpary/ccuurrss__lleeggaaccyy(3X)* getparyx/ccuurrss__ggeettyyxx(3X)
+       getstr/ccuurrss__ggeettssttrr(3X)   getsyx/ccuurrss__kkeerrnneell(3X)    getwin/ccuurrss__uuttiill(3X)
+       getyx/ccuurrss__ggeettyyxx(3X)         halfdelay/ccuurrss__iinnooppttss(3X)         has_col‐
+       ors/ccuurrss__ccoolloorr(3X) has_ic/ccuurrss__tteerrmmaattttrrss(3X)  has_il/ccuurrss__tteerrmmaattttrrss(3X)
+       has_key/ccuurrss__ggeettcchh(3X)* has_mouse/ccuurrss__mmoouussee(3X)* hline/ccuurrss__bboorrddeerr(3X)
+       hline_set/ccuurrss__bboorrddeerr__sseett(3X)  idcok/ccuurrss__oouuttooppttss(3X)   idlok/ccuurrss__oouutt‐‐
+       ooppttss(3X)   immedok/ccuurrss__oouuttooppttss(3X)   in_wch/ccuurrss__iinn__wwcchh(3X)   in_wchn‐
+       str/ccuurrss__iinn__wwcchhssttrr(3X) in_wchstr/ccuurrss__iinn__wwcchhssttrr(3X)  inch/ccuurrss__iinncchh(3X)
+       inchnstr/ccuurrss__iinncchhssttrr(3X)                      inchstr/ccuurrss__iinncchhssttrr(3X)
+       init_color/ccuurrss__ccoolloorr(3X) init_extended_color/ccuurrss__ccoolloorr(3X)*  init_ex‐
+       tended_pair/ccuurrss__ccoolloorr(3X)*                    init_pair/ccuurrss__ccoolloorr(3X)
+       initscr/ccuurrss__iinniittssccrr(3X) innstr/ccuurrss__iinnssttrr(3X)  innwstr/ccuurrss__iinnwwssttrr(3X)
+       ins_nwstr/ccuurrss__iinnss__wwssttrr(3X)                    ins_wch/ccuurrss__iinnss__wwcchh(3X)
+       ins_wstr/ccuurrss__iinnss__wwssttrr(3X)          insch/ccuurrss__iinnsscchh(3X)           ins‐
+       delln/ccuurrss__ddeelleetteellnn(3X)   insertln/ccuurrss__ddeelleetteellnn(3X)   insnstr/ccuurrss__iinn‐‐
+       ssssttrr(3X) insstr/ccuurrss__iinnssssttrr(3X) instr/ccuurrss__iinnssttrr(3X) intrflush/ccuurrss__iinn‐‐
+       ooppttss(3X)        inwstr/ccuurrss__iinnwwssttrr(3X)       is_cbreak/ccuurrss__iinnooppttss(3X)*
+       is_cleared/ccuurrss__ooppaaqquuee(3X)*       is_echo/ccuurrss__iinnooppttss(3X)*       is_id‐
+       cok/ccuurrss__ooppaaqquuee(3X)*         is_idlok/ccuurrss__ooppaaqquuee(3X)*         is_imme‐
+       dok/ccuurrss__ooppaaqquuee(3X)*                         is_keypad/ccuurrss__ooppaaqquuee(3X)*
+       is_leaveok/ccuurrss__ooppaaqquuee(3X)*               is_linetouched/ccuurrss__ttoouucchh(3X)
+       is_nl/ccuurrss__iinnooppttss(3X)*      is_nodelay/ccuurrss__ooppaaqquuee(3X)*      is_notime‐
+       out/ccuurrss__ooppaaqquuee(3X)*   is_pad/ccuurrss__ooppaaqquuee(3X)*  is_raw/ccuurrss__iinnooppttss(3X)*
+       is_scrollok/ccuurrss__ooppaaqquuee(3X)*     is_subwin/ccuurrss__ooppaaqquuee(3X)*     is_syn‐
+       cok/ccuurrss__ooppaaqquuee(3X)*       is_term_resized/rreessiizzeetteerrmm(3X)*      is_win‐
+       touched/ccuurrss__ttoouucchh(3X)  isendwin/ccuurrss__iinniittssccrr(3X)   key_defined/kkeeyy__ddee‐‐
+       ffiinneedd(3X)*     key_name/ccuurrss__uuttiill(3X)    keybound/kkeeyybboouunndd(3X)*    key‐
+       name/ccuurrss__uuttiill(3X)       keyok/kkeeyyookk(3X)*        keypad/ccuurrss__iinnooppttss(3X)
+       killchar/ccuurrss__tteerrmmaattttrrss(3X)                killwchar/ccuurrss__tteerrmmaattttrrss(3X)
+       leaveok/ccuurrss__oouuttooppttss(3X)                    longname/ccuurrss__tteerrmmaattttrrss(3X)
+       mcprint/ccuurrss__pprriinntt(3X)*                            meta/ccuurrss__iinnooppttss(3X)
+       mouse_trafo/ccuurrss__mmoouussee(3X)*    mouseinterval/ccuurrss__mmoouussee(3X)*     mouse‐
+       mask/ccuurrss__mmoouussee(3X)*    move/ccuurrss__mmoovvee(3X)   mvadd_wch/ccuurrss__aadddd__wwcchh(3X)
+       mvadd_wchnstr/ccuurrss__aadddd__wwcchhssttrr(3X)      mvadd_wchstr/ccuurrss__aadddd__wwcchhssttrr(3X)
+       mvaddch/ccuurrss__aaddddcchh(3X)      mvaddchnstr/ccuurrss__aaddddcchhssttrr(3X)      mvaddch‐
+       str/ccuurrss__aaddddcchhssttrr(3X)  mvaddnstr/ccuurrss__aaddddssttrr(3X)  mvaddnwstr/ccuurrss__aaddddww‐‐
+       ssttrr(3X)   mvaddstr/ccuurrss__aaddddssttrr(3X)   mvaddwstr/ccuurrss__aaddddwwssttrr(3X)   mvch‐
+       gat/ccuurrss__aattttrr(3X) mvcur/ccuurrss__tteerrmmiinnffoo(3X) mvdelch/ccuurrss__ddeellcchh(3X) mvder‐
+       win/ccuurrss__wwiinnddooww(3X)                          mvget_wch/ccuurrss__ggeett__wwcchh(3X)
+       mvget_wstr/ccuurrss__ggeett__wwssttrr(3X)                     mvgetch/ccuurrss__ggeettcchh(3X)
+       mvgetn_wstr/ccuurrss__ggeett__wwssttrr(3X)      mvgetnstr/ccuurrss__ggeettssttrr(3X)     mvget‐
+       str/ccuurrss__ggeettssttrr(3X)    mvhline/ccuurrss__bboorrddeerr(3X)    mvhline_set/ccuurrss__bboorr‐‐
+       ddeerr__sseett(3X)   mvin_wch/ccuurrss__iinn__wwcchh(3X)  mvin_wchnstr/ccuurrss__iinn__wwcchhssttrr(3X)
+       mvin_wchstr/ccuurrss__iinn__wwcchhssttrr(3X)      mvinch/ccuurrss__iinncchh(3X)       mvinchn‐
+       str/ccuurrss__iinncchhssttrr(3X) mvinchstr/ccuurrss__iinncchhssttrr(3X) mvinnstr/ccuurrss__iinnssttrr(3X)
+       mvinnwstr/ccuurrss__iinnwwssttrr(3X)                 mvins_nwstr/ccuurrss__iinnss__wwssttrr(3X)
+       mvins_wch/ccuurrss__iinnss__wwcchh(3X)      mvins_wstr/ccuurrss__iinnss__wwssttrr(3X)      mvin‐
+       sch/ccuurrss__iinnsscchh(3X)  mvinsnstr/ccuurrss__iinnssssttrr(3X)  mvinsstr/ccuurrss__iinnssssttrr(3X)
+       mvinstr/ccuurrss__iinnssttrr(3X)                         mvinwstr/ccuurrss__iinnwwssttrr(3X)
+       mvprintw/ccuurrss__pprriinnttww(3X) mvscanw/ccuurrss__ssccaannww(3X) mvvline/ccuurrss__bboorrddeerr(3X)
+       mvvline_set/ccuurrss__bboorrddeerr__sseett(3X)             mvwadd_wch/ccuurrss__aadddd__wwcchh(3X)
+       mvwadd_wchnstr/ccuurrss__aadddd__wwcchhssttrr(3X)    mvwadd_wchstr/ccuurrss__aadddd__wwcchhssttrr(3X)
+       mvwaddch/ccuurrss__aaddddcchh(3X)     mvwaddchnstr/ccuurrss__aaddddcchhssttrr(3X)    mvwaddch‐
+       str/ccuurrss__aaddddcchhssttrr(3X) mvwaddnstr/ccuurrss__aaddddssttrr(3X) mvwaddnwstr/ccuurrss__aaddddww‐‐
+       ssttrr(3X)  mvwaddstr/ccuurrss__aaddddssttrr(3X)  mvwaddwstr/ccuurrss__aaddddwwssttrr(3X)  mvwch‐
+       gat/ccuurrss__aattttrr(3X)  mvwdelch/ccuurrss__ddeellcchh(3X)  mvwget_wch/ccuurrss__ggeett__wwcchh(3X)
+       mvwget_wstr/ccuurrss__ggeett__wwssttrr(3X)                   mvwgetch/ccuurrss__ggeettcchh(3X)
+       mvwgetn_wstr/ccuurrss__ggeett__wwssttrr(3X)    mvwgetnstr/ccuurrss__ggeettssttrr(3X)    mvwget‐
+       str/ccuurrss__ggeettssttrr(3X)   mvwhline/ccuurrss__bboorrddeerr(3X)   mvwhline_set/ccuurrss__bboorr‐‐
+       ddeerr__sseett(3X) mvwin/ccuurrss__wwiinnddooww(3X) mvwin_wch/ccuurrss__iinn__wwcchh(3X) mvwin_wchn‐
+       str/ccuurrss__iinn__wwcchhssttrr(3X)                  mvwin_wchstr/ccuurrss__iinn__wwcchhssttrr(3X)
+       mvwinch/ccuurrss__iinncchh(3X)       mvwinchnstr/ccuurrss__iinncchhssttrr(3X)       mvwinch‐
+       str/ccuurrss__iinncchhssttrr(3X)    mvwinnstr/ccuurrss__iinnssttrr(3X)   mvwinnwstr/ccuurrss__iinnww‐‐
+       ssttrr(3X)   mvwins_nwstr/ccuurrss__iinnss__wwssttrr(3X)    mvwins_wch/ccuurrss__iinnss__wwcchh(3X)
+       mvwins_wstr/ccuurrss__iinnss__wwssttrr(3X)       mvwinsch/ccuurrss__iinnsscchh(3X)      mvwin‐
+       snstr/ccuurrss__iinnssssttrr(3X) mvwinsstr/ccuurrss__iinnssssttrr(3X) mvwinstr/ccuurrss__iinnssttrr(3X)
+       mvwinwstr/ccuurrss__iinnwwssttrr(3X)        mvwprintw/ccuurrss__pprriinnttww(3X)        mvws‐
+       canw/ccuurrss__ssccaannww(3X)   mvwvline/ccuurrss__bboorrddeerr(3X)   mvwvline_set/ccuurrss__bboorr‐‐
+       ddeerr__sseett(3X)          napms/ccuurrss__kkeerrnneell(3X)          newpad/ccuurrss__ppaadd(3X)
+       newterm/ccuurrss__iinniittssccrr(3X)   newwin/ccuurrss__wwiinnddooww(3X)    nl/ccuurrss__iinnooppttss(3X)
+       nocbreak/ccuurrss__iinnooppttss(3X) nodelay/ccuurrss__iinnooppttss(3X) noecho/ccuurrss__iinnooppttss(3X)
+       nofilter/ccuurrss__uuttiill(3X)* nonl/ccuurrss__iinnooppttss(3X)  noqiflush/ccuurrss__iinnooppttss(3X)
+       noraw/ccuurrss__iinnooppttss(3X)    notimeout/ccuurrss__iinnooppttss(3X)   overlay/ccuurrss__oovveerr‐‐
+       llaayy(3X)  overwrite/ccuurrss__oovveerrllaayy(3X)   pair_content/ccuurrss__ccoolloorr(3X)   pe‐
+       cho_wchar/ccuurrss__ppaadd(3X) pechochar/ccuurrss__ppaadd(3X) pnoutrefresh/ccuurrss__ppaadd(3X)
+       prefresh/ccuurrss__ppaadd(3X)   printw/ccuurrss__pprriinnttww(3X)   putp/ccuurrss__tteerrmmiinnffoo(3X)
+       putwin/ccuurrss__uuttiill(3X)  qiflush/ccuurrss__iinnooppttss(3X)  raw/ccuurrss__iinnooppttss(3X)  re‐
+       drawwin/ccuurrss__rreeffrreesshh(3X)          refresh/ccuurrss__rreeffrreesshh(3X)          re‐
+       set_color_pairs/ccuurrss__ccoolloorr(3X)*   reset_prog_mode/ccuurrss__kkeerrnneell(3X)   re‐
+       set_shell_mode/ccuurrss__kkeerrnneell(3X) resetty/ccuurrss__kkeerrnneell(3X)  resize_term/rree‐‐
+       ssiizzeetteerrmm(3X)*  resizeterm/rreessiizzeetteerrmm(3X)* restartterm/ccuurrss__tteerrmmiinnffoo(3X)
+       ripoffline/ccuurrss__kkeerrnneell(3X) savetty/ccuurrss__kkeerrnneell(3X) scanw/ccuurrss__ssccaannww(3X)
+       scr_dump/ccuurrss__ssccrr__dduummpp(3X)      scr_init/ccuurrss__ssccrr__dduummpp(3X)      scr_re‐
+       store/ccuurrss__ssccrr__dduummpp(3X) scr_set/ccuurrss__ssccrr__dduummpp(3X)  scrl/ccuurrss__ssccrroollll(3X)
+       scroll/ccuurrss__ssccrroollll(3X)  scrollok/ccuurrss__oouuttooppttss(3X) set_curterm/ccuurrss__tteerr‐‐
+       mmiinnffoo(3X) set_escdelay/ccuurrss__tthhrreeaaddss(3X)*  set_tabsize/ccuurrss__tthhrreeaaddss(3X)*
+       set_term/ccuurrss__iinniittssccrr(3X)       setcchar/ccuurrss__ggeettcccchhaarr(3X)      setscr‐
+       reg/ccuurrss__oouuttooppttss(3X) setsyx/ccuurrss__kkeerrnneell(3X) setupterm/ccuurrss__tteerrmmiinnffoo(3X)
+       slk_attr/ccuurrss__ssllkk(3X)*                        slk_attr_off/ccuurrss__ssllkk(3X)
+       slk_attr_on/ccuurrss__ssllkk(3X)       slk_attr_set/ccuurrss__ssllkk(3X)        slk_at‐
+       troff/ccuurrss__ssllkk(3X)   slk_attron/ccuurrss__ssllkk(3X)   slk_attrset/ccuurrss__ssllkk(3X)
+       slk_clear/ccuurrss__ssllkk(3X)   slk_color/ccuurrss__ssllkk(3X)   slk_init/ccuurrss__ssllkk(3X)
+       slk_label/ccuurrss__ssllkk(3X)       slk_noutrefresh/ccuurrss__ssllkk(3X)       slk_re‐
+       fresh/ccuurrss__ssllkk(3X)    slk_restore/ccuurrss__ssllkk(3X)     slk_set/ccuurrss__ssllkk(3X)
+       slk_touch/ccuurrss__ssllkk(3X)   slk_wset/ccuurrss__ssllkk(3X)   standend/ccuurrss__aattttrr(3X)
+       standout/ccuurrss__aattttrr(3X)  start_color/ccuurrss__ccoolloorr(3X)  subpad/ccuurrss__ppaadd(3X)
+       subwin/ccuurrss__wwiinnddooww(3X)  syncok/ccuurrss__wwiinnddooww(3X)  term_attrs/ccuurrss__tteerrmmaatt‐‐
+       ttrrss(3X) termattrs/ccuurrss__tteerrmmaattttrrss(3X)  termname/ccuurrss__tteerrmmaattttrrss(3X)  tge‐
+       tent/ccuurrss__tteerrmmccaapp(3X)    tgetflag/ccuurrss__tteerrmmccaapp(3X)   tgetnum/ccuurrss__tteerrmm‐‐
+       ccaapp(3X)    tgetstr/ccuurrss__tteerrmmccaapp(3X)    tgoto/ccuurrss__tteerrmmccaapp(3X)    tiget‐
+       flag/ccuurrss__tteerrmmiinnffoo(3X)   tigetnum/ccuurrss__tteerrmmiinnffoo(3X)  tigetstr/ccuurrss__tteerr‐‐
+       mmiinnffoo(3X)       timeout/ccuurrss__iinnooppttss(3X)        tiparm/ccuurrss__tteerrmmiinnffoo(3X)
+       tiparm_s/ccuurrss__tteerrmmiinnffoo(3X)*      tiscan_s/ccuurrss__tteerrmmiinnffoo(3X)*     touch‐
+       line/ccuurrss__ttoouucchh(3X)   touchwin/ccuurrss__ttoouucchh(3X)   tparm/ccuurrss__tteerrmmiinnffoo(3X)
+       tputs/ccuurrss__tteerrmmccaapp(3X)   tputs/ccuurrss__tteerrmmiinnffoo(3X)  trace/ccuurrss__ttrraaccee(3X)*
+       typeahead/ccuurrss__iinnooppttss(3X)                          unctrl/ccuurrss__uuttiill(3X)
+       unget_wch/ccuurrss__ggeett__wwcchh(3X)         ungetch/ccuurrss__ggeettcchh(3X)        unget‐
+       mouse/ccuurrss__mmoouussee(3X)* untouchwin/ccuurrss__ttoouucchh(3X)  use_default_colors/ddee‐‐
+       ffaauulltt__ccoolloorrss(3X)*   use_env/ccuurrss__uuttiill(3X)   use_extended_names/ccuurrss__eexx‐‐
+       tteenndd(3X)*                          use_legacy_coding/lleeggaaccyy__ccooddiinngg(3X)*
+       use_screen/ccuurrss__tthhrreeaaddss(3X)*     use_tioctl/ccuurrss__uuttiill(3X)*     use_win‐
+       dow/ccuurrss__tthhrreeaaddss(3X)*   vid_attr/ccuurrss__tteerrmmiinnffoo(3X)   vid_puts/ccuurrss__tteerr‐‐
+       mmiinnffoo(3X)      vidattr/ccuurrss__tteerrmmiinnffoo(3X)      vidputs/ccuurrss__tteerrmmiinnffoo(3X)
+       vline/ccuurrss__bboorrddeerr(3X)                     vline_set/ccuurrss__bboorrddeerr__sseett(3X)
+       vw_printw/ccuurrss__pprriinnttww(3X)          vw_scanw/ccuurrss__ssccaannww(3X)          vw‐
+       printw/ccuurrss__pprriinnttww(3X) vwscanw/ccuurrss__ssccaannww(3X) wadd_wch/ccuurrss__aadddd__wwcchh(3X)
+       wadd_wchnstr/ccuurrss__aadddd__wwcchhssttrr(3X)  wadd_wchstr/ccuurrss__aadddd__wwcchhssttrr(3X)  wad‐
+       dch/ccuurrss__aaddddcchh(3X)  waddchnstr/ccuurrss__aaddddcchhssttrr(3X)  waddchstr/ccuurrss__aaddddcchh‐‐
+       ssttrr(3X)       waddnstr/ccuurrss__aaddddssttrr(3X)       waddnwstr/ccuurrss__aaddddwwssttrr(3X)
+       waddstr/ccuurrss__aaddddssttrr(3X)                       waddwstr/ccuurrss__aaddddwwssttrr(3X)
+       wattr_get/ccuurrss__aattttrr(3X)  wattr_off/ccuurrss__aattttrr(3X) wattr_on/ccuurrss__aattttrr(3X)
+       wattr_set/ccuurrss__aattttrr(3X)  wattroff/ccuurrss__aattttrr(3X)   wattron/ccuurrss__aattttrr(3X)
+       wattrset/ccuurrss__aattttrr(3X)    wbkgd/ccuurrss__bbkkggdd(3X)    wbkgdset/ccuurrss__bbkkggdd(3X)
+       wbkgrnd/ccuurrss__bbkkggrrnndd(3X)  wbkgrndset/ccuurrss__bbkkggrrnndd(3X)   wborder/ccuurrss__bboorr‐‐
+       ddeerr(3X)       wborder_set/ccuurrss__bboorrddeerr__sseett(3X)      wchgat/ccuurrss__aattttrr(3X)
+       wclear/ccuurrss__cclleeaarr(3X) wclrtobot/ccuurrss__cclleeaarr(3X) wclrtoeol/ccuurrss__cclleeaarr(3X)
+       wcolor_set/ccuurrss__aattttrr(3X)                     wcursyncup/ccuurrss__wwiinnddooww(3X)
+       wdelch/ccuurrss__ddeellcchh(3X)          wdeleteln/ccuurrss__ddeelleetteellnn(3X)          we‐
+       cho_wchar/ccuurrss__aadddd__wwcchh(3X)         wechochar/ccuurrss__aaddddcchh(3X)        wen‐
+       close/ccuurrss__mmoouussee(3X)*  werase/ccuurrss__cclleeaarr(3X)  wget_wch/ccuurrss__ggeett__wwcchh(3X)
+       wget_wstr/ccuurrss__ggeett__wwssttrr(3X)                  wgetbkgrnd/ccuurrss__bbkkggrrnndd(3X)
+       wgetch/ccuurrss__ggeettcchh(3X)                        wgetdelay/ccuurrss__ooppaaqquuee(3X)*
+       wgetn_wstr/ccuurrss__ggeett__wwssttrr(3X)      wgetnstr/ccuurrss__ggeettssttrr(3X)     wgetpar‐
+       ent/ccuurrss__ooppaaqquuee(3X)*   wgetscrreg/ccuurrss__ooppaaqquuee(3X)*    wgetstr/ccuurrss__ggeett‐‐
+       ssttrr(3X)      whline/ccuurrss__bboorrddeerr(3X)      whline_set/ccuurrss__bboorrddeerr__sseett(3X)
+       win_wch/ccuurrss__iinn__wwcchh(3X)     win_wchnstr/ccuurrss__iinn__wwcchhssttrr(3X)     win_wch‐
+       str/ccuurrss__iinn__wwcchhssttrr(3X)  winch/ccuurrss__iinncchh(3X)  winchnstr/ccuurrss__iinncchhssttrr(3X)
+       winchstr/ccuurrss__iinncchhssttrr(3X)   winnstr/ccuurrss__iinnssttrr(3X)   winnwstr/ccuurrss__iinnww‐‐
+       ssttrr(3X)      wins_nwstr/ccuurrss__iinnss__wwssttrr(3X)     wins_wch/ccuurrss__iinnss__wwcchh(3X)
+       wins_wstr/ccuurrss__iinnss__wwssttrr(3X)         winsch/ccuurrss__iinnsscchh(3X)         wins‐
+       delln/ccuurrss__ddeelleetteellnn(3X)  winsertln/ccuurrss__ddeelleetteellnn(3X)  winsnstr/ccuurrss__iinn‐‐
+       ssssttrr(3X) winsstr/ccuurrss__iinnssssttrr(3X) winstr/ccuurrss__iinnssttrr(3X) winwstr/ccuurrss__iinn‐‐
+       wwssttrr(3X)   wmouse_trafo/ccuurrss__mmoouussee(3X)*   wmove/ccuurrss__mmoovvee(3X)  wnoutre‐
+       fresh/ccuurrss__rreeffrreesshh(3X)    wprintw/ccuurrss__pprriinnttww(3X)    wredrawln/ccuurrss__rree‐‐
+       ffrreesshh(3X)     wrefresh/ccuurrss__rreeffrreesshh(3X)     wresize/wwrreessiizzee(3X)*    ws‐
+       canw/ccuurrss__ssccaannww(3X)  wscrl/ccuurrss__ssccrroollll(3X)  wsetscrreg/ccuurrss__oouuttooppttss(3X)
+       wstandend/ccuurrss__aattttrr(3X)   wstandout/ccuurrss__aattttrr(3X)   wsyncdown/ccuurrss__wwiinn‐‐
+       ddooww(3X)        wsyncup/ccuurrss__wwiinnddooww(3X)         wtimeout/ccuurrss__iinnooppttss(3X)
+       wtouchln/ccuurrss__ttoouucchh(3X)   wunctrl/ccuurrss__uuttiill(3X)  wvline/ccuurrss__bboorrddeerr(3X)
+       wvline_set/ccuurrss__bboorrddeerr__sseett(3X)
+
+       _n_c_u_r_s_e_s's _s_c_r_e_e_n_-_p_o_i_n_t_e_r _e_x_t_e_n_s_i_o_n  adds  additional  functions  corre‐
+       sponding  to  many  of  the  above,  each  with  an  “_sp”  suffix; see
+       ccuurrss__sspp__ffuunnccss(3X).
+
+       The availability of some extensions is  configurable  when  _n_c_u_r_s_e_s  is
+       compiled;  see sections “ALTERNATE CONFIGURATIONS” and “EXTENSIONS” be‐
+       low.
+
+RREETTUURRNN VVAALLUUEE
+       Unless otherwise noted, functions that return an integer return  OOKK  on
+       success and EERRRR on failure.  Functions that return pointers return NNUULLLL
+       on failure.  Typically, _n_c_u_r_s_e_s treats a null pointer passed as a func‐
+       tion  parameter  as a failure.  Functions prefixed with “mv” first per‐
+       form cursor movement and fail if the position (_y,  _x)  is  outside  the
+       window boundaries.
+
+EENNVVIIRROONNMMEENNTT
+       The  following  symbols from the process environment customize the run‐
+       time behavior of _n_c_u_r_s_e_s applications.  The library may  be  configured
+       to disregard the variables _T_E_R_M_I_N_F_O, _T_E_R_M_I_N_F_O___D_I_R_S, _T_E_R_M_P_A_T_H, and _H_O_M_E,
+       if the user is the superuser (root), or the application uses  _s_e_t_u_i_d(2)
+       or _s_e_t_g_i_d(2).
+
+   _B_A_U_D_R_A_T_E
+       The  debugging  library  checks  this variable when the application has
+       redirected output to a file.  Its integral value is used for  the  baud
+       rate.   If  that  value  is absent or invalid, _n_c_u_r_s_e_s uses 9600.  This
+       feature allows testers to construct repeatable  test  cases  that  take
+       into account optimization decisions that depend on baud rate.
+
+   _C_C ((ccoommmmaanndd cchhaarraacctteerr))
+       When  set,  the  ccoommmmaanndd__cchhaarraacctteerr  (ccmmddcchh)  capability value of loaded
+       _t_e_r_m_i_n_f_o entries changes to the value of this variable.  Very few _t_e_r_m_‐
+       _i_n_f_o entries provide this feature.
+
+       Because this name is also used in development environments to represent
+       the C compiler's name, _n_c_u_r_s_e_s ignores its value if it is not one char‐
+       acter in length.
+
+   _C_O_L_U_M_N_S
+       This  variable specifies the width of the screen in characters.  Appli‐
+       cations running in a windowing environment usually are able  to  obtain
+       the width of the window in which they are executing.  If _C_O_L_U_M_N_S is not
+       defined and the terminal's screen size is not available from the termi‐
+       nal driver, _n_c_u_r_s_e_s uses the size specified by the ccoolluummnnss (ccoollss) capa‐
+       bility of the terminal type's entry in the _t_e_r_m_i_n_f_o database, if any.
+
+       It is important that your application use the correct screen size.  Au‐
+       tomatic detection thereof is not always possible because an application
+       may be running on a host that does not honor NAWS  (Negotiations  About
+       Window  Size)  or as a different user ID than the owner of the terminal
+       device file.  Setting _C_O_L_U_M_N_S and/or _L_I_N_E_S overrides the library's  use
+       of the screen size obtained from the operating system.
+
+       The  _C_O_L_U_M_N_S  and _L_I_N_E_S variables may be specified independently.  This
+       property is useful to circumvent misfeatures of  legacy  terminal  type
+       descriptions; _x_t_e_r_m(1) descriptions specifying 65 lines were once noto‐
+       rious.  For best results, avoid specifying ccoollss  and  lliinneess  capability
+       codes in _t_e_r_m_i_n_f_o descriptions of terminal emulators.
+
+       uussee__eennvv(3X)  can  disable use of the process environment in determining
+       the screen size.  uussee__ttiiooccttll(3X) can update _C_O_L_U_M_N_S and _L_I_N_E_S to  match
+       the screen size obtained from system calls or the terminal database.
+
+   _E_S_C_D_E_L_A_Y
+       For  _c_u_r_s_e_s  to  distinguish  the ESC character resulting from a user's
+       press of the “Escape” key on the input device from one beginning an _e_s_‐
+       _c_a_p_e  _s_e_q_u_e_n_c_e  (as commonly produced by function keys), it waits after
+       receiving the escape character to see if further characters are  avail‐
+       able  on  the  input stream within a short interval.  A global variable
+       EESSCCDDEELLAAYY stores this interval in milliseconds.  The  default  value  of
+       1000 (one second) is adequate for most uses.  This environment variable
+       overrides it.
+
+       The most common instance where you may wish to change this value is  to
+       work with a remote host over a slow communication channel.  If the host
+       running a _c_u_r_s_e_s application does not receive the characters of an  es‐
+       cape  sequence  in  a  timely manner, the library can interpret them as
+       multiple key stroke events.
+
+       _x_t_e_r_m(1) mouse events are a form of escape sequence; therefore, if your
+       application  makes  heavy  use  of  multiple-clicking,  you may wish to
+       lengthen the default value because the delay applies to  the  composite
+       multi-click event as well as the individual clicks.
+
+       Portable  applications should not rely upon the presence of EESSCCDDEELLAAYY in
+       either form, but setting  the  environment  variable  rather  than  the
+       global variable does not create problems when compiling an application.
+
+       If kkeeyyppaadd(3X) is disabled for the _c_u_r_s_e_s window receiving input, a pro‐
+       gram must disambiguate escape sequences itself.
+
+   _H_O_M_E
+       _n_c_u_r_s_e_s may read and write auxiliary terminal descriptions in  _._t_e_r_m_c_a_p
+       and _._t_e_r_m_i_n_f_o files in the user's home directory.
+
+   _L_I_N_E_S
+       This counterpart to _C_O_L_U_M_N_S specifies the height of the screen in char‐
+       acters.  The corresponding _t_e_r_m_i_n_f_o capability and code is lliinneess.   See
+       the description of the _C_O_L_U_M_N_S variable above.
+
+   _M_O_U_S_E___B_U_T_T_O_N_S___1_2_3
+       (OS/2  EMX  port only) OS/2 numbers a three-button mouse inconsistently
+       with other platforms, such that 1 is the left button, 2 the right,  and
+       3  the  middle.   This  variable customizes the mouse button numbering.
+       Its value must be three digits 1-3 in any order.  By  default,  _n_c_u_r_s_e_s
+       assumes a numbering of “132”.
+
+   _N_C_U_R_S_E_S___A_S_S_U_M_E_D___C_O_L_O_R_S
+       If  set,  this variable overrides the _n_c_u_r_s_e_s library's compiled-in as‐
+       sumption that the terminal's default colors are  white  on  black;  see
+       ddeeffaauulltt__ccoolloorrss(3X).   Set  the  foreground  and background color values
+       with this environment variable by assigning it two integer values sepa‐
+       rated  by  a  comma, indicating foregound and background color numbers,
+       respectively.
+
+       For example, to tell _n_c_u_r_s_e_s not to assume anything about  the  colors,
+       use  a  value  of  “-1,-1”.   To make the default color scheme green on
+       black, use “2,0”.  _n_c_u_r_s_e_s accepts integral values from -1  up  to  the
+       value of the _t_e_r_m_i_n_f_o mmaaxx__ccoolloorrss (ccoolloorrss) capability.
+
+   _N_C_U_R_S_E_S___C_O_N_S_O_L_E_2
+       (MinGW  port  only) The _C_o_n_s_o_l_e_2 program defectively handles the Micro‐
+       soft Console API call _C_r_e_a_t_e_C_o_n_s_o_l_e_S_c_r_e_e_n_B_u_f_f_e_r.  Applications that use
+       it  will  hang.  However, it is possible to simulate the action of this
+       call by mapping coordinates, explicitly saving and restoring the origi‐
+       nal  screen  contents.   Setting the environment variable _N_C_G_D_B has the
+       same effect.
+
+   _N_C_U_R_S_E_S___G_P_M___T_E_R_M_S
+       (Linux only) When _n_c_u_r_s_e_s is configured to use the GPM interface,  this
+       variable  may  list  one  or more terminal names against which the _T_E_R_M
+       variable (see below) is matched.  An empty value disables the  GPM  in‐
+       terface,  using _n_c_u_r_s_e_s's built-in support for _x_t_e_r_m(1) mouse protocols
+       instead.  If the variable is absent, _n_c_u_r_s_e_s attempts to  open  GPM  if
+       _T_E_R_M contains “linux”.
+
+   _N_C_U_R_S_E_S___N_O___H_A_R_D___T_A_B_S
+       _n_c_u_r_s_e_s  may  use  tab  characters in cursor movement optimization.  In
+       some cases, your terminal driver may not  handle  them  properly.   Set
+       this environment variable to any value to disable the feature.  You can
+       also adjust your _s_t_t_y(1) settings to avoid the problem.
+
+   _N_C_U_R_S_E_S___N_O___M_A_G_I_C___C_O_O_K_I_E
+       Many terminals store video attributes as  a  property  of  a  character
+       cell, as _c_u_r_s_e_s does.  Historically, some recorded changes in video at‐
+       tributes as data that logically _o_c_c_u_p_i_e_s character cells  on  the  dis‐
+       play,  switching  attributes  on  or off, similarly to tags in a markup
+       language; these are termed “magic cookies”, and  must  be  subsequently
+       overprinted.  If the _t_e_r_m_i_n_f_o entry for your terminal type does not ad‐
+       equately describe its handling of magic cookies, set this  variable  to
+       any value to instruct _n_c_u_r_s_e_s to disable attributes entirely.
+
+   _N_C_U_R_S_E_S___N_O___P_A_D_D_I_N_G
+       Most  terminal  type descriptions in the _t_e_r_m_i_n_f_o database detail hard‐
+       ware devices.  Many people use _c_u_r_s_e_s-based  applications  in  terminal
+       emulator  programs that run in a windowing environment.  These programs
+       can duplicate all of the important features of a hardware terminal, but
+       often  lack  their  limitations.  Chief among these absent drawbacks is
+       the problem of data flow management; that is,  limiting  the  speed  of
+       communication  to  what  the  hardware could handle.  Unless a hardware
+       terminal is interfaced into a terminal concentrator  (which  does  flow
+       control),  an  application  must  manage flow control itself to prevent
+       overruns and data loss.
+
+       A solution that comes at no hardware cost  is  for  an  application  to
+       pause  after  directing a terminal to execute an operation that it per‐
+       forms slowly, such as clearing the display.   Many  terminal  type  de‐
+       scriptions, including that for the VT100, embed delay specifications in
+       capabilities.  You may wish to use these terminal descriptions  without
+       paying the performance penalty.  Set _N_C_U_R_S_E_S___N_O___P_A_D_D_I_N_G to any value to
+       disable all but mandatory padding.  Mandatory padding is used  by  such
+       terminal capabilities as ffllaasshh__ssccrreeeenn (ffllaasshh).
+
+   _N_C_U_R_S_E_S___N_O___S_E_T_B_U_F
+       (Obsolete)  Prior to internal changes developed in _n_c_u_r_s_e_s 5.9 (patches
+       20120825 through 20130126), the library used _s_e_t_b_u_f(3) to enable  fully
+       buffered  output  when initializing the terminal.  This was done, as in
+       SVr4 _c_u_r_s_e_s, to increase performance.  For testing  purposes,  both  of
+       _n_c_u_r_s_e_s  and  of  certain applications, this feature was made optional.
+       Setting this variable disabled output  buffering,  leaving  the  output
+       stream in the original (usually line-buffered) mode.
+
+       Nowadays,  _n_c_u_r_s_e_s performs its own buffering and does not require this
+       workaround; it does not modify the buffering  of  the  standard  output
+       stream.   This  approach makes signal handling, as for interrupts, more
+       robust.  A drawback  is  that  certain  unconventional  programs  mixed
+       _s_t_d_i_o(3)  calls  with _n_c_u_r_s_e_s calls and (usually) got the behavior they
+       expected.  This is no longer the case; _n_c_u_r_s_e_s does not  write  to  the
+       standard output file descriptor through a _s_t_d_i_o-buffered stream.
+
+       As  a  special case, low-level API calls such as ppuuttpp(3X) still use the
+       standard output stream.  High-level _c_u_r_s_e_s calls such as pprriinnttww(3X)  do
+       not.
+
+   _N_C_U_R_S_E_S___N_O___U_T_F_8___A_C_S
+       At  initialization,  _n_c_u_r_s_e_s inspects the _T_E_R_M environment variable for
+       special cases where VT100 forms-drawing characters (and the correspond‐
+       ing  alternate character set _t_e_r_m_i_n_f_o capabilities) are known to be un‐
+       supported by terminal types that otherwise claim  VT100  compatibility.
+       Specifically, when running in a UTF-8 locale, the Linux virtual console
+       device and the GNU _s_c_r_e_e_n(1) program ignore them.  Set this variable to
+       a  nonzero value to instruct _n_c_u_r_s_e_s that the terminal's ACS support is
+       broken; the library then outputs Unicode code points that correspond to
+       the  forms-drawing  characters.   Set  it to zero (or a non-integer) to
+       disable the special check for terminal type names matching  “linux”  or
+       “screen”, directing _n_c_u_r_s_e_s to assume that the ACS feature works if the
+       terminal type description advertises it.
+
+       As an alternative to use of this variable, _n_c_u_r_s_e_s checks  for  an  ex‐
+       tended  _t_e_r_m_i_n_f_o  numeric capability UU88 that can be compiled using “ttiicc
+       --xx”.  Examples follow.
+
+          # linux console, if patched to provide working
+          # VT100 shift-in/shift-out, with corresponding font.
+          linux-vt100|linux console with VT100 line-graphics,
+                  U8#0, use=linux,
+
+          # uxterm with vt100Graphics resource set to false
+          xterm-utf8|xterm relying on UTF-8 line-graphics,
+                  U8#1, use=xterm,
+
+       The two-character name “U8” was chosen to permit its use via  _n_c_u_r_s_e_s's
+       _t_e_r_m_c_a_p interface.
+
+   _N_C_U_R_S_E_S___T_R_A_C_E
+       At  initialization, _n_c_u_r_s_e_s (in its debugging configuration) checks for
+       this variable's presence.  If defined with an integral value,  the  li‐
+       brary calls ccuurrsseess__ttrraaccee(3X) with that value as the argument.
+
+   _T_E_R_M
+       The  _T_E_R_M variable denotes the terminal type.  Each is distinct, though
+       many are similar.  It is commonly set by terminal emulators to help ap‐
+       plications find a workable terminal description.  Some choose a popular
+       approximation such as “ansi”, “vt100”, or “xterm” rather than an  exact
+       fit  to their capabilities.  Not infrequently, an application will have
+       problems with that approach; for example, a key stroke may not  operate
+       correctly,  or  produce no effect but seeming garbage characters on the
+       screen.
+
+       Setting _T_E_R_M has no effect on hardware operation; it  affects  the  way
+       applications  communicate  with  the  terminal.  Likewise, as a general
+       rule (_x_t_e_r_m(1) being a rare exception), terminal emulators  that  allow
+       you to specify _T_E_R_M as a parameter or configuration value do not change
+       their behavior to match that setting.
+
+   _T_E_R_M_C_A_P
+       If _n_c_u_r_s_e_s is configured with _t_e_r_m_c_a_p support, it checks for a terminal
+       type  description  in  _t_e_r_m_c_a_p  format if one in _t_e_r_m_i_n_f_o format is not
+       available.  Setting this variable directs _n_c_u_r_s_e_s to ignore  the  usual
+       _t_e_r_m_c_a_p  database  location, _/_e_t_c_/_t_e_r_m_c_a_p; see _T_E_R_M_P_A_T_H below.  _T_E_R_M_C_A_P
+       should contain either a terminal description  (with  newlines  stripped
+       out),  or  a file name indicating where the information required by the
+       _T_E_R_M environment variable is stored.
+
+   _T_E_R_M_I_N_F_O
+       _n_c_u_r_s_e_s can be configured to read terminal type  description  databases
+       in  various locations using different formats.  This variable overrides
+       the default location.
+
+       •   Descriptions in _t_e_r_m_i_n_f_o format are normally stored in a  directory
+           tree  using subdirectories named by the common first letters of the
+           terminal types named therein.  This is the scheme used in System V.
+
+       •   If _n_c_u_r_s_e_s is configured to use hashed databases, then _T_E_R_M_I_N_F_O may
+           name  its  location,  such  as  _/_u_s_r_/_s_h_a_r_e_/_t_e_r_m_i_n_f_o_._d_b, rather than
+           _/_u_s_r_/_s_h_a_r_e_/_t_e_r_m_i_n_f_o_/.
+
+       The hashed database uses less disk space and is a  little  faster  than
+       the directory tree.  However, some applications assume the existence of
+       the directory tree, and read it directly rather than using the _t_e_r_m_i_n_f_o
+       API.
+
+       •   If  _n_c_u_r_s_e_s  is  configured with _t_e_r_m_c_a_p support, this variable may
+           contain the location of a _t_e_r_m_c_a_p file.
+
+       •   If the value of _T_E_R_M_I_N_F_O begins with “hex:” or “b64:”, _n_c_u_r_s_e_s uses
+           the remainder of the value as a compiled _t_e_r_m_i_n_f_o description.  You
+           might produce the base64 format using iinnffooccmmpp(1M).
+
+                  TERMINFO=$(infocmp -0 -Q2 -q)
+                  export TERMINFO
+
+           The compiled description is used only if it corresponds to the ter‐
+           minal type identified by _T_E_R_M.
+
+       Setting  _T_E_R_M_I_N_F_O  is  the  simplest,  but  not the only, way to direct
+       _n_c_u_r_s_e_s to a terminal database.  The search path is as follows.
+
+       •   the last terminal database to which the running _n_c_u_r_s_e_s application
+           wrote, if any
+
+       •   the location specified by the _T_E_R_M_I_N_F_O environment variable
+
+       •   _$_H_O_M_E_/_._t_e_r_m_i_n_f_o
+
+       •   locations listed in the _T_E_R_M_I_N_F_O___D_I_R_S environment variable
+
+       •   location(s) configured and compiled into _n_c_u_r_s_e_s
+
+          •   _@_T_E_R_M_I_N_F_O___D_I_R_S_@
+
+          •   _/_u_s_r_/_s_h_a_r_e_/_m_i_s_c_/_t_e_r_m_i_n_f_o
+
+   _T_E_R_M_I_N_F_O___D_I_R_S
+       This  variable  specifies  a  list of locations, akin to _P_A_T_H, in which
+       _n_c_u_r_s_e_s searches  for  the  terminal  type  descriptions  described  by
+       _T_E_R_M_I_N_F_O  above.   The  list  items are separated by colons on Unix and
+       semicolons on OS/2 EMX.  System V _t_e_r_m_i_n_f_o lacks a  corresponding  fea‐
+       ture; _T_E_R_M_I_N_F_O___D_I_R_S is an _n_c_u_r_s_e_s extension.
+
+   _T_E_R_M_P_A_T_H
+       If _T_E_R_M_C_A_P does not hold a terminal type description or file name, then
+       _n_c_u_r_s_e_s checks the contents of _T_E_R_M_P_A_T_H, a list of locations,  akin  to
+       _P_A_T_H, in which it searches for _t_e_r_m_c_a_p terminal type descriptions.  The
+       list items are separated by colons on Unix and semicolons on OS/2 EMX.
+
+       If both _T_E_R_M_C_A_P and _T_E_R_M_P_A_T_H are unset or invalid, _n_c_u_r_s_e_s searches for
+       the files _/_e_t_c_/_t_e_r_m_c_a_p, _/_u_s_r_/_s_h_a_r_e_/_m_i_s_c_/_t_e_r_m_c_a_p, and _$_H_O_M_E_/_._t_e_r_m_c_a_p, in
+       that order.
+
+AALLTTEERRNNAATTEE CCOONNFFIIGGUURRAATTIIOONNSS
+       Many different _n_c_u_r_s_e_s configurations are possible, determined  by  the
+       options  given  to the _c_o_n_f_i_g_u_r_e script when building the library.  Run
+       the script with the ----hheellpp option to peruse them all.   A  few  are  of
+       particular significance to the application developer employing _n_c_u_r_s_e_s.
+
+       ----ddiissaabbllee--oovveerrwwrriittee
+            The standard include for _n_c_u_r_s_e_s is as noted in SSYYNNOOPPSSIISS:
+
+                ##iinncclluuddee <<ccuurrsseess..hh>>
+
+            This  option  is  used to avoid filename conflicts when _n_c_u_r_s_e_s is
+            not the main implementation of curses of the computer.  If _n_c_u_r_s_e_s
+            is  installed disabling overwrite, it puts its headers in a subdi‐
+            rectory, e.g.,
+
+                ##iinncclluuddee <<nnccuurrsseess//ccuurrsseess..hh>>
+
+            It also omits a  symbolic  link  which  would  allow  you  to  use
+            --llccuurrsseess to build executables.
+
+       ----eennaabbllee--wwiiddeecc
+            The  configure  script  renames  the  library  and  (if the ----ddiiss‐‐
+            aabbllee--oovveerrwwrriittee option is used) puts the header files in a  differ‐
+            ent subdirectory.  All of the library names have a “w” appended to
+            them, i.e., instead of
+
+                --llnnccuurrsseess
+
+            you link with
+
+                --llnnccuurrsseessww
+
+            You must also enable the wide-character  features  in  the  header
+            file  when compiling for the wide-character library to use the ex‐
+            tended (wide-character) functions.  The symbol which enables these
+            features has changed since X/Open Curses, Issue 4:
+
+            •   Originally,  the  wide-character  feature  required the symbol
+                __XXOOPPEENN__SSOOUURRCCEE__EEXXTTEENNDDEEDD  but  that  was  only  valid  for  XPG4
+                (1996).
+
+            •   Later,  that was deemed conflicting with __XXOOPPEENN__SSOOUURRCCEE defined
+                to 500.
+
+            •   As of mid-2018, none of the features  in  this  implementation
+                require  a  __XXOOPPEENN__SSOOUURRCCEE  feature greater than 600.  However,
+                X/Open Curses, Issue 7 (2009) recommends defining it to 700.
+
+            •   Alternatively,  you  can  enable  the  feature   by   defining
+                NNCCUURRSSEESS__WWIIDDEECCHHAARR  with  the caveat that some other header file
+                than ccuurrsseess..hh may require a specific value  for  __XXOOPPEENN__SSOOUURRCCEE
+                (or a system-specific symbol).
+
+            The  _c_u_r_s_e_s_._h header file installed for the wide-character library
+            is designed to be compatible with the non-wide  library's  header.
+            Only  the  size  of the _W_I_N_D_O_W structure differs; few applications
+            require more than pointers to _W_I_N_D_O_Ws.
+
+            If the headers are installed allowing overwrite, the  wide-charac‐
+            ter  library's headers should be installed last, to allow applica‐
+            tions to be built using either library from the same set of  head‐
+            ers.
+
+       ----wwiitthh--pptthhrreeaadd
+            The  configure  script  renames  the  library.  All of the library
+            names have a “t” appended to them (before any “w” added  by  ----eenn‐‐
+            aabbllee--wwiiddeecc).
+
+            The global variables such as LLIINNEESS are replaced by macros to allow
+            read-only access.  At the same time, setter-functions are provided
+            to  set  these  values.   Some applications (very few) may require
+            changes to work with this convention.
+
+       ----wwiitthh--sshhaarreedd
+       ----wwiitthh--nnoorrmmaall
+       ----wwiitthh--ddeebbuugg
+       ----wwiitthh--pprrooffiillee
+            The shared and normal (static) library names differ by their  suf‐
+            fixes,  e.g.,  lliibbnnccuurrsseess..ssoo and lliibbnnccuurrsseess..aa.  The debug and pro‐
+            filing libraries add a “_g” and a “_p” to the root  names  respec‐
+            tively, e.g., lliibbnnccuurrsseess__gg..aa and lliibbnnccuurrsseess__pp..aa.
+
+       ----wwiitthh--tteerrmmlliibb
+            Low-level  functions  which do not depend upon whether the library
+            supports wide-characters, are provided in the tinfo library.
+
+            By doing this, it is possible to share the tinfo  library  between
+            wide/normal  configurations  as well as reduce the size of the li‐
+            brary when only low-level functions are needed.
+
+            Those functions are described in these pages:
+
+            •   ccuurrss__eexxtteenndd(3X) - miscellaneous _c_u_r_s_e_s extensions
+
+            •   ccuurrss__iinnooppttss(3X) - _c_u_r_s_e_s input options
+
+            •   ccuurrss__kkeerrnneell(3X) - low-level _c_u_r_s_e_s routines
+
+            •   ccuurrss__tteerrmmaattttrrss(3X) - _c_u_r_s_e_s environment query routines
+
+            •   ccuurrss__tteerrmmccaapp(3X) - _c_u_r_s_e_s emulation of _t_e_r_m_c_a_p
+
+            •   ccuurrss__tteerrmmiinnffoo(3X) - _c_u_r_s_e_s interface to _t_e_r_m_i_n_f_o database
+
+            •   ccuurrss__uuttiill(3X) - miscellaneous _c_u_r_s_e_s utility routines
+
+       ----wwiitthh--ttrraaccee
+            The ttrraaccee function normally resides in the debug library,  but  it
+            is sometimes useful to configure this in the shared library.  Con‐
+            figure scripts should check for the  function's  existence  rather
+            than assuming it is always in the debug library.
+
+FFIILLEESS
+       _/_u_s_r_/_s_h_a_r_e_/_t_a_b_s_e_t
+              tab stop initialization database
+
+       _/_u_s_r_/_s_h_a_r_e_/_m_i_s_c_/_t_e_r_m_i_n_f_o
+              compiled terminal capability database
+
+NNOOTTEESS
+       X/Open  Curses permits most functions it specifies to be made available
+       as macros as well.  _n_c_u_r_s_e_s does so
+
+       •   for functions that return values via their parameters,
+
+       •   to support obsolete features,
+
+       •   to reuse functions (for example, those that move the cursor  before
+           another operation), and
+
+       •   a few special cases.
+
+       If  the  standard output file descriptor of an _n_c_u_r_s_e_s program is redi‐
+       rected to something that is not a terminal device, the  library  writes
+       screen  updates to the standard error file descriptor.  This was an un‐
+       documented feature of SVr3 _c_u_r_s_e_s.
+
+       See subsection “Header Files” below regarding symbols exposed by inclu‐
+       sion of _c_u_r_s_e_s_._h.
+
+EEXXTTEENNSSIIOONNSS
+       _n_c_u_r_s_e_s  enables an application to capture mouse events on certain ter‐
+       minals, including _x_t_e_r_m(1); see ccuurrss__mmoouussee(3X).
+
+       _n_c_u_r_s_e_s provides a means of responding to window  resizing  events,  as
+       when  running in a GUI terminal emulator application such as _x_t_e_r_m; see
+       rreessiizzeetteerrmm(3X) and wwrreessiizzee(3X).
+
+       _n_c_u_r_s_e_s allows an application to query the terminal for the presence of
+       a wide variety of special keys; see hhaass__kkeeyy(3X).
+
+       _n_c_u_r_s_e_s extends the fixed set of function key capabilities specified by
+       X/Open Curses by allowing the application programmer  to  define  addi‐
+       tional  key  events  at  runtime;  see ddeeffiinnee__kkeeyy(3X), kkeeyy__ddeeffiinneedd(3X),
+       kkeeyybboouunndd(3X), and kkeeyyookk(3X).
+
+       _n_c_u_r_s_e_s  can  exploit  the  capabilities  of   terminals   implementing
+       ISO 6429/ECMA-48  SGR 39  and SGR 49 sequences, which allow an applica‐
+       tion to reset the terminal to its original  foreground  and  background
+       colors.   From  a  user's  perspective, the application is able to draw
+       colored text on a background whose color is set independently,  provid‐
+       ing better control over color contrasts.  See ddeeffaauulltt__ccoolloorrss(3X).
+
+       An  _n_c_u_r_s_e_s application can eschew knowledge of _W_I_N_D_O_W structure inter‐
+       nals, instead using accessor functions such as iiss__ssccrroollllookk(3X).
+
+       _n_c_u_r_s_e_s enables an  application  to  direct  application  output  to  a
+       printer attached to the terminal device; see ccuurrss__pprriinntt(3X).
+
+       _n_c_u_r_s_e_s  offers ssllkk__aattttrr(3X) as a counterpart of aattttrr__ggeett(3X) for soft-
+       label key lines, and eexxtteennddeedd__ssllkk__ccoolloorr(3X) as a form of  ssllkk__ccoolloorr(3X)
+       that  can  gather color information from them when many colors are sup‐
+       ported.
+
+       Some extensions are available only if _n_c_u_r_s_e_s permits  modification  of
+       uunnccttrrll(3X)'s  behavior; see uussee__lleeggaaccyy__ccooddiinngg(3X).  _n_c_u_r_s_e_s is compiled
+       to support them; section “ALTERNATE CONFIGURATIONS” describes how.
+
+       •   Rudimentary support for multi-threaded applications may  be  avail‐
+           able; see ccuurrss__tthhrreeaaddss(3X).
+
+       •   Functions  that  ease the management of multiple screens can be ex‐
+           posed; see ccuurrss__sspp__ffuunnccss(3X).
+
+       •   To aid applications to debug their memory usage, _n_c_u_r_s_e_s optionally
+           offers  functions  to  more aggressively free memory it dynamically
+           allocates itself; see ccuurrss__mmeemmlleeaakkss(3X).
+
+       •   The library facilitates auditing and troubleshooting of its  behav‐
+           ior; see ccuurrss__ttrraaccee(3X).
+
+       •   The compiler option --DDUUSSEE__GGEETTCCAAPP causes the library to fall back to
+           reading _/_e_t_c_/_t_e_r_m_c_a_p if the terminal setup code cannot find a _t_e_r_m_‐
+           _i_n_f_o  entry corresponding to _T_E_R_M.  Use of this feature is not rec‐
+           ommended, as it essentially includes an entire _t_e_r_m_c_a_p compiler  in
+           the _n_c_u_r_s_e_s startup code, at a cost in memory usage and application
+           launch latency.
+
+       _P_D_C_u_r_s_e_s and NetBSD _c_u_r_s_e_s incorporate some _n_c_u_r_s_e_s extensions.   Indi‐
+       vidual man pages indicate where this is the case.
+
+PPOORRTTAABBIILLIITTYY
+       X/Open Curses defines two levels of conformance, “base” and “enhanced”.
+       The latter includes several additional features, such as wide-character
+       and  color support.  _n_c_u_r_s_e_s intends base-level conformance with X/Open
+       Curses, and supports all features of  its  enhanced  level  except  the
+       uunnttiicc utility.
+
+       Differences  between  X/Open  Curses  and _n_c_u_r_s_e_s are documented in the
+       “PORTABILITY” sections of applicable man pages.
+
+   EErrrroorr CChheecckkiinngg
+       In many cases, X/Open Curses is vague about error conditions,  omitting
+       some of the SVr4 documentation.
+
+       Unlike  other  implementations, _n_c_u_r_s_e_s checks pointer parameters, such
+       as those to _W_I_N_D_O_W structures, to ensure that they are not null.   This
+       is  done primarily to guard against programmer error.  The standard in‐
+       terface does not provide a way for the library to tell  an  application
+       which  of  several  possible errors occurred.  Relying on this (or some
+       other) extension adversely affects the portability of  _c_u_r_s_e_s  applica‐
+       tions.
+
+   PPaaddddiinngg DDiiffffeerreenncceess
+       In  historical  _c_u_r_s_e_s implementations, delays embedded in the _t_e_r_m_i_n_f_o
+       capabilities ccaarrrriiaaggee__rreettuurrnn (ccrr),  ssccrroollll__ffoorrwwaarrdd  (iinndd),  ccuurrssoorr__lleefftt
+       (ccuubb11), ffoorrmm__ffeeeedd (ffff), and ttaabb (hhtt) activated corresponding delay bits
+       in the Unix terminal driver.  _n_c_u_r_s_e_s performs all padding  by  sending
+       NUL  bytes  to the device.  This method is slightly more expensive, but
+       narrows the interface to the Unix kernel significantly and  correspond‐
+       ingly increases the package's portability.
+
+   HHeeaaddeerr FFiilleess
+       The  header  file _c_u_r_s_e_s_._h itself includes the header files _s_t_d_i_o_._h and
+       _u_n_c_t_r_l_._h.
+
+       X/Open Curses has more to say,
+
+           The inclusion of _c_u_r_s_e_s_._h may make visible  all  symbols  from  the
+           headers _s_t_d_i_o_._h, _t_e_r_m_._h, _t_e_r_m_i_o_s_._h, and _w_c_h_a_r_._h.
+
+       but does not finish the story.  A more complete account follows.
+
+       •   Starting  with 4BSD _c_u_r_s_e_s (1980) all implementations have provided
+           a _c_u_r_s_e_s_._h file.
+
+           BSD _c_u_r_s_e_s code included _c_u_r_s_e_s_._h and  _u_n_c_t_r_l_._h  from  an  internal
+           header file _c_u_r_s_e_s_._e_x_t, where “ext” abbreviated “externs”.
+
+           The  implementations of _p_r_i_n_t_w and _s_c_a_n_w used undocumented internal
+           functions of the standard I/O library (___d_o_p_r_n_t  and  ___d_o_s_c_a_n),  but
+           nothing in _c_u_r_s_e_s_._h itself relied upon _s_t_d_i_o_._h.
+
+       •   SVr2  _c_u_r_s_e_s  added  _n_e_w_t_e_r_m, which relies upon _s_t_d_i_o_._h because its
+           function prototype employs the _F_I_L_E type.
+
+           SVr4 _c_u_r_s_e_s added _p_u_t_w_i_n and _g_e_t_w_i_n, which also use _s_t_d_i_o_._h.
+
+           X/Open Curses specifies all three of these functions.
+
+           SVr4 _c_u_r_s_e_s and X/Open Curses do not require the developer  to  in‐
+           clude  _s_t_d_i_o_._h before _c_u_r_s_e_s_._h.  Both document use of _c_u_r_s_e_s as re‐
+           quiring only _c_u_r_s_e_s_._h.
+
+           As a result, standard _c_u_r_s_e_s_._h always includes _s_t_d_i_o_._h.
+
+       •   X/Open Curses and SVr4 _c_u_r_s_e_s  are  inconsistent  with  respect  to
+           _u_n_c_t_r_l_._h.
+
+           As  noted in ccuurrss__uuttiill(3X), _n_c_u_r_s_e_s includes _u_n_c_t_r_l_._h from _c_u_r_s_e_s_._h
+           (as SVr4 does).
+
+       •   X/Open Curses's comments about _t_e_r_m_._h and _t_e_r_m_i_o_s_._h  may  refer  to
+           HP-UX and AIX.
+
+           HP-UX  _c_u_r_s_e_s includes _t_e_r_m_._h from _c_u_r_s_e_s_._h to declare _s_e_t_u_p_t_e_r_m in
+           _c_u_r_s_e_s_._h, but _n_c_u_r_s_e_s and Solaris _c_u_r_s_e_s do not.
+
+           AIX _c_u_r_s_e_s includes _t_e_r_m_._h and termios.h_.  Again, _n_c_u_r_s_e_s  and  So‐
+           laris _c_u_r_s_e_s do not.
+
+       •   X/Open  Curses  says that _c_u_r_s_e_s_._h mmaayy include _t_e_r_m_._h, but does not
+           require it to do so.
+
+           Some programs use functions declared in both _c_u_r_s_e_s_._h  and  _t_e_r_m_._h,
+           and  must  include  both header files in the same module.  Very old
+           versions of  AIX  _c_u_r_s_e_s  required  inclusion  of  _c_u_r_s_e_s_._h  before
+           _t_e_r_m_._h.
+
+           The  header  files supplied by _n_c_u_r_s_e_s include the standard library
+           headers required for its  declarations,  so  _n_c_u_r_s_e_s's  own  header
+           files  can  be  included  in  any  order.  But for portability, you
+           should include _c_u_r_s_e_s_._h before _t_e_r_m_._h.
+
+       •   X/Open Curses says “may make visible” because  including  a  header
+           file  does  not  necessarily  make visible all of the symbols in it
+           (consider ##iiffddeeff and similar).
+
+           For instance, _n_c_u_r_s_e_s's _c_u_r_s_e_s_._h mmaayy include _w_c_h_a_r_._h if the  proper
+           symbol  is defined, and if _n_c_u_r_s_e_s is configured for wide-character
+           support.  If _w_c_h_a_r_._h is included, its symbols mmaayy be  made  visible
+           depending on the value of the __XXOOPPEENN__SSOOUURRCCEE feature test macro.
+
+       •   X/Open Curses mandates an application's inclusion of one standard C
+           library header in a special case: _s_t_d_a_r_g_._h before _c_u_r_s_e_s_._h to  pro‐
+           totype  the  functions _v_w___p_r_i_n_t_w and _v_w___s_c_a_n_w (as well as the obso‐
+           lete _v_w_p_r_i_n_t_w and _v_w_s_c_a_n_w).  Each of these takes a  variadic  argu‐
+           ment list, a _v_a___l_i_s_t parameter, like that of _p_r_i_n_t_f(3).
+
+           SVr3  _c_u_r_s_e_s  introduced  the  two  obsolete  functions, and X/Open
+           Curses the others.  In between, SVr4 _c_u_r_s_e_s provided for the possi‐
+           bility  that  an  application  might  include  either  _v_a_r_a_r_g_s_._h or
+           _s_t_d_a_r_g_._h.  These represented  contrasting  approaches  to  handling
+           variadic  argument  lists.   The older interface, _v_a_r_a_r_g_s_._h, used a
+           pointer to _c_h_a_r for variadic functions' _v_a___l_i_s_t parameter.   Later,
+           the  list  acquired its own standard data type, _v_a___l_i_s_t, defined in
+           _s_t_d_a_r_g_._h, empowering the compiler to check the types of a  function
+           call's  actual  parameters  against the formal ones declared in its
+           prototype.
+
+           No conforming implementations of X/Open Curses require an  applica‐
+           tion  to  include _s_t_d_a_r_g_._h before _c_u_r_s_e_s_._h because they either have
+           allowed for a special type, or, like _n_c_u_r_s_e_s, they include _s_t_d_a_r_g_._h
+           themselves to provide a portable interface.
+
+AAUUTTHHOORRSS
+       Zeyd M. Ben-Halim, Eric S. Raymond, Thomas E. Dickey.  Based on _p_c_u_r_s_e_s
+       by Pavel Curtis.
+
+SSEEEE AALLSSOO
+       ccuurrss__vvaarriiaabblleess(3X), tteerrmmiinnffoo(5), uusseerr__ccaappss(5)
+
+
+
+ncurses 6.5                       2024-04-27                       ncurses(3X)

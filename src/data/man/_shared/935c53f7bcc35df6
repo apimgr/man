@@ -1,0 +1,171 @@
+sizeof(7)            BSD Miscellaneous Information Manual            sizeof(7)
+
+NNAAMMEE
+     ssiizzeeooff operator — yield the storage size of the given operand
+
+SSYYNNTTAAXX
+     ssiizzeeooff (_t_y_p_e)
+     ssiizzeeooff _e_x_p_r_e_s_s_i_o_n
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssiizzeeooff operator yields the size of its operand.  The ssiizzeeooff operator
+     cannot be applied to incomplete types and expressions with incomplete
+     types (e.g.  _v_o_i_d, or forward-defined _s_t_r_u_c_t _f_o_o _)_, and function types.
+
+     The size of primitive (non-derived) data types in C may differ across
+     hardware platforms and implementations.  They are defined by correspond‐
+     ing Application Binary Interface (ABI) specifications, see arch(7) for
+     details about ABI used by FreeBSD.  It may be necessary or useful for a
+     program to be able to determine the storage size of a data type or object
+     to account for the platform specifics.
+
+     The unary ssiizzeeooff operator yields the storage size of an expression or
+     data type in _c_h_a_r _s_i_z_e_d _u_n_i_t_s (C language bytes).  As a result,
+     ‘sizeof(char)’ is always guaranteed to be 1.  (The number of bits per
+     _c_h_a_r is given by the CHAR_BIT definition in the <_l_i_m_i_t_s_._h> header; many
+     systems also provide the "number of bits per byte" definition as NBBY in
+     the <_s_y_s_/_p_a_r_a_m_._h> header.)
+
+EEXXAAMMPPLLEESS
+     Different platforms may use different data models.  For example, systems
+     on which integers, longs, and pointers are using 32 bits (e.g., i386) are
+     referred to as using the "ILP32" data model, systems using 64 bit longs
+     and pointers (e.g., amd64 / x86_64) as the "LP64" data model.
+
+     The following examples illustrate the possible results of calling ssiizzeeooff
+     on an ILP32 vs. an LP64 system:
+
+     When applied to a simple variable or data type, ssiizzeeooff returns the stor‐
+     age size of the data type of the object:
+
+           OObbjjeecctt oorr ttyyppee         RReessuulltt ((IILLPP3322))    RReessuulltt ((LLPP6644))
+           sizeof(char)           1                 1
+           sizeof(int)            4                 4
+           sizeof(long)           4                 8
+           sizeof(float)          4                 4
+           sizeof(double)         8                 8
+           sizeof(char *)         4                 8
+
+     For initialized data or uninitialized arrays of a fixed size known at
+     compile time, ssiizzeeooff will return the correct storage size:
+
+           #define DATA "1234567890"
+           char buf1[] = "abc";
+           char buf2[1024];
+           char buf3[1024] = { 'a', 'b', 'c' };
+
+           OObbjjeecctt oorr ttyyppee         RReessuulltt
+           sizeof(DATA)           11
+           sizeof(buf1)           4
+           sizeof(buf2)           1024
+           sizeof(buf3)           1024
+
+     The examples above are the same for ILP32 and LP64 platforms, as they are
+     based on character units.
+
+     When applied to a struct or union, ssiizzeeooff returns the total number of
+     bytes in the object, including any internal or trailing padding used to
+     align the object in memory.  This result may thus be larger than if the
+     storage size of each individual member had been added:
+
+           struct s1 {
+                   char c;
+           };
+
+           struct s2 {
+                   char *s;
+                   int i;
+           };
+
+           struct s3 {
+                   char *s;
+                   int i;
+                   int j;
+           };
+
+           struct s4 {
+                   int i;
+                   uint64_t i64;
+           };
+
+           struct s5 {
+                   struct s1 a;
+                   struct s2 b;
+                   struct s3 c;
+                   struct s4 d;
+           };
+
+           OObbjjeecctt oorr ttyyppee         RReessuulltt ((IILLPP3322))    RReessuulltt ((LLPP6644))
+           sizeof(struct s1)      1                 1
+           sizeof(struct s2)      8                 16
+           sizeof(struct s3)      12                16
+           sizeof(struct s4)      12                16
+           sizeof(struct s5)      36                56
+
+     When applied to a struct containing a flexible array member, ssiizzeeooff re‐
+     turns the size of the struct _w_i_t_h_o_u_t the array, although again possibly
+     including any padding the compiler deemed appropriate:
+
+           struct flex {
+                   char c;
+                   long b;
+                   char array[];
+           }
+
+           OObbjjeecctt oorr ttyyppee         RReessuulltt ((IILLPP3322))    RReessuulltt ((LLPP6644))
+           sizeof(struct flex)    8                 16
+
+     One of the more common uses of the ssiizzeeooff operator is to determine the
+     correct amount of memory to allocate:
+
+           int *nums = calloc(512, sizeof(int));
+
+     The ssiizzeeooff operator can be used to calculate the number of elements in an
+     array by dividing the size of the array by the size of one of its ele‐
+     ments:
+
+           int nums[] = { 1, 2, 3, 4, 5 };
+           const int howmany = sizeof(nums) / sizeof(nums[0]);
+
+     Many systems provide this shortcut as the macro ntimes() via the
+     <_s_y_s_/_p_a_r_a_m_._h> header file.
+
+RREESSUULLTT
+     The result of the ssiizzeeooff operator is an unsigned integer type, defined in
+     the stddef.h header as a _s_i_z_e___t.
+
+NNOOTTEESS
+     It is a common mistake to apply ssiizzeeooff to a dynamically allocated array:
+
+           char *buf;
+           if ((buf = malloc(BUFSIZ)) == NULL) {
+                   perror("malloc");
+           }
+           /* Warning: wrong! */
+           (void)strncat(buf, input, sizeof(buf) - 1);
+
+     In that case, the operator will return the storage size of the pointer (
+     ‘sizeof(char *)’ ), not the allocated memory.
+
+     ssiizzeeooff determines the size of the result of the expression given, but
+     _d_o_e_s _n_o_t evaluate the expression:
+
+           int a = 42;
+           printf("%ld - %d\n", sizeof(a = 10), a); /* Result: "4 - 42" */
+
+     Since it is evaluated by the compiler and not the preprocessor, the
+     ssiizzeeooff operator cannot be used in a preprocessor expression.
+
+SSEEEE AALLSSOO
+     arch(7), operator(7)
+
+SSTTAANNDDAARRDDSS
+     The ssiizzeeooff operator conforms to ANSI X3.159-1989 (“ANSI C89”).
+
+     Handling of flexible array members in structures conforms to ISO/IEC
+     9899:1999 (“ISO C99”).
+
+AAUUTTHHOORRSS
+     This manual page was written by Jan Schaumann <_j_s_c_h_a_u_m_a_@_n_e_t_m_e_i_s_t_e_r_._o_r_g>.
+
+BSD                            December 12, 2022                           BSD

@@ -1,0 +1,132 @@
+IIC(4)                   BSD Kernel Interfaces Manual                   IIC(4)
+
+NNAAMMEE
+     iiiicc — I2C generic I/O device driver
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee iiiicc
+
+     ##iinncclluuddee <<ddeevv//iiiiccbbuuss//iiiicc..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The iiiicc device driver provides generic I/O to any iicbus(4) instance.  In
+     order to control I2C devices, use _/_d_e_v_/_i_i_c_? with the following ioctls:
+
+     I2CSTART     (_s_t_r_u_c_t _i_i_c_c_m_d) Sends the start condition to the slave spec‐
+                  ified by the _s_l_a_v_e element to the bus.  The _s_l_a_v_e element
+                  consists of a 7-bit address and a read/write bit (that is, a
+                  7-bit address << 1 | r/w).  A read operation is initiated
+                  when the read/write bit is set, or a write operation when it
+                  is cleared.  All other elements are ignored.  If successful,
+                  the file descriptor receives exclusive ownership of the un‐
+                  derlying iicbus instance.
+
+     I2CRPTSTART  (_s_t_r_u_c_t _i_i_c_c_m_d) Sends the repeated start condition to the
+                  slave specified by the _s_l_a_v_e element to the bus.  The slave
+                  address should be specified as in I2CSTART.  All other ele‐
+                  ments are ignored.  I2CSTART must have previously been is‐
+                  sued on the same file descriptor.
+
+     I2CSTOP      No argument is passed.  Sends the stop condition to the bus.
+                  If I2CSTART was previously issued on the file descriptor,
+                  the current transaction is terminated and exclusive owner‐
+                  ship of the underlying iicbus instance is released.  Other‐
+                  wise, no action is performed.
+
+     I2CRSTCARD   (_s_t_r_u_c_t _i_i_c_c_m_d) Resets the bus.  The argument is completely
+                  ignored.  This command does not require I2CSTART to have
+                  been previously issued on the file descriptor.  If it was
+                  previously issued, exclusive ownership of the underlying
+                  iicbus instance is released.
+
+     I2CWRITE     (_s_t_r_u_c_t _i_i_c_c_m_d) Writes data to the iicbus(4).  The bus must
+                  already be started by a previous I2CSTART on the file de‐
+                  scriptor.  The _s_l_a_v_e element is ignored.  The _c_o_u_n_t element
+                  is the number of bytes to write.  The _l_a_s_t element is a
+                  boolean flag.  It must be zero when additional read commands
+                  will follow, or non-zero if this is the last command.  The
+                  _b_u_f element is a pointer to the data to write to the bus.
+
+     I2CREAD      (_s_t_r_u_c_t _i_i_c_c_m_d) Reads data from the iicbus(4).  The bus must
+                  already be started by a previous I2CSTART on the file de‐
+                  scriptor.  The _s_l_a_v_e element is ignored.  The _c_o_u_n_t element
+                  is the number of bytes to read.  The _l_a_s_t element is a bool‐
+                  ean flag.  It must be zero when additional read commands
+                  will follow, or non-zero if this is the last command.  The
+                  _b_u_f element is a pointer to where to store the data read
+                  from the bus.  Short reads on the bus produce undefined re‐
+                  sults.
+
+     I2CRDWR      (_s_t_r_u_c_t _i_i_c___r_d_w_r___d_a_t_a) Generic read/write interface.  Allows
+                  for an arbitrary number of commands to be sent to an arbi‐
+                  trary number of devices on the bus.  Any previous transac‐
+                  tion started by I2CSTART must be terminated by I2CSTOP or
+                  I2CRSTCARD before I2CRDWR can be issued on the same file de‐
+                  scriptor.  A read transfer is specified if IIC_M_RD is set
+                  in _f_l_a_g_s.  Otherwise the transfer is a write transfer.  The
+                  _s_l_a_v_e element specifies the 7-bit address with the
+                  read/write bit for the transfer.  The read/write bit will be
+                  handled by the iicbus stack based on the specified transfer
+                  operation.  The _l_e_n element is the number of (_s_t_r_u_c_t
+                  _i_i_c___m_s_g) messages encoded on (_s_t_r_u_c_t _i_i_c___r_d_w_r___d_a_t_a).  The
+                  _b_u_f element is a buffer for that data.  This ioctl is in‐
+                  tended to be Linux compatible.
+
+     I2CSADDR     (_u_i_n_t_8___t) Associate the specified address with the file de‐
+                  scriptor for use by subsequent read(2) or write(2) calls.
+                  The argument is an 8-bit address (that is, a 7-bit address
+                  << 1).  The read/write bit in the least-significant position
+                  is ignored.  Any subsequent read or write operation will set
+                  or clear that bit as needed.
+
+     The following data structures are defined in <_d_e_v_/_i_i_c_b_u_s_/_i_i_c_._h> and ref‐
+     erenced above:
+
+           struct iiccmd {
+                   u_char slave;
+                   int count;
+                   int last;
+                   char *buf;
+           };
+
+           /* Designed to be compatible with linux's struct i2c_msg */
+           struct iic_msg
+           {
+                   uint16_t        slave;
+                   uint16_t        flags;
+           #define IIC_M_WR        0       /* Fake flag for write */
+           #define IIC_M_RD        0x0001  /* read vs write */
+           #define IIC_M_NOSTOP    0x0002  /* do not send a I2C stop after message */
+           #define IIC_M_NOSTART   0x0004  /* do not send a I2C start before message */
+                   uint16_t        len;    /* msg length */
+                   uint8_t *       buf;
+           };
+
+           struct iic_rdwr_data {
+                   struct iic_msg *msgs;
+                   uint32_t nmsgs;
+           };
+
+     It is also possible to use read(2) or write(2), in which case the I2C
+     start/stop handshake is managed by iicbus(4).  The address used for the
+     read/write operation is the one passed to the most recent I2CSTART
+     ioctl(2) or I2CSADDR ioctl(2) on the open _/_d_e_v_/_i_i_c_? file descriptor.
+     Closing the file descriptor clears any addressing state established by a
+     previous I2CSTART or I2CSADDR, stops any transaction established by a
+     not-yet-terminated I2CSTART, and releases iicbus ownership.  Because ad‐
+     dressing state is stored on a per-file-descriptor basis, it is permissi‐
+     ble for multiple file descriptors to be simultaneously open on the same
+     _/_d_e_v_/_i_i_c_? device.  Concurrent transactions on those descriptors are syn‐
+     chronized by the exclusive-ownership requests issued to the underlying
+     iicbus instance.
+
+SSEEEE AALLSSOO
+     ioctl(2), read(2), write(2), iicbus(4)
+
+HHIISSTTOORRYY
+     The iiiicc manual page first appeared in FreeBSD 3.0.
+
+AAUUTTHHOORRSS
+     This manual page was written by Nicolas Souchu and M. Warner Losh.
+
+BSD                              May 15, 2015                              BSD

@@ -1,0 +1,228 @@
+CH(4)                    BSD Kernel Interfaces Manual                    CH(4)
+
+NNAAMMEE
+     cchh — SCSI media-changer (juke box) driver
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee cchh
+
+DDEESSCCRRIIPPTTIIOONN
+     The cchh driver provides support for a _S_C_S_I media changer.  It allows many
+     slots of media to be multiplexed between a number of drives.  The changer
+     device may optionally be equipped with a bar code reader, which reads la‐
+     bel information attached to the media.
+
+     A SCSI adapter must also be separately configured into the system before
+     a SCSI changer can be configured.
+
+     As the SCSI adapter is probed during boot, the _S_C_S_I bus is scanned for
+     devices.  Any devices found which answer as 'Changer' type devices will
+     be 'attached' to the cchh driver.  In FreeBSD releases prior to 2.1, the
+     first found will be attached as _c_h_0 and the next, _c_h_1 etc.  Beginning in
+     2.1 it is possible to specify what ch unit a device should come on line
+     as; refer to scsi(4) for details on kernel configuration.
+
+KKEERRNNEELL CCOONNFFIIGGUURRAATTIIOONN
+     It is only necessary to explicitly configure one cchh device; data struc‐
+     tures are dynamically allocated as media changes are found on the SCSI
+     bus.
+
+IIOOCCTTLLSS
+     User mode programs communicate with the changer driver through a number
+     of ioctls which are described below.  Changer element addresses used in
+     the communication between the kernel and the changer device are mapped to
+     zero-based logical addresses.  Element types are specified as follows:
+
+     CHET_MT  Medium transport element (picker).
+
+     CHET_ST  Storage element (slot).
+
+     CHET_IE  Import/export element (portal).
+
+     CHET_DT  Data transfer element (drive).
+
+     The following ioctl(2) calls apply to the changer.  They are defined in
+     the header file <_s_y_s_/_c_h_i_o_._h>.
+
+     CHIOMOVE      (_s_t_r_u_c_t _c_h_a_n_g_e_r___m_o_v_e) Move a medium from one element to an‐
+                   other (MMOOVVEE MMEEDDIIUUMM) using the current picker.  The source
+                   and destination elements are specified in a changer_move
+                   structure, which includes at least the following fields:
+
+                         u_int cm_fromtype; /* element type to move from */
+                         u_int cm_fromunit; /* logical unit of from element */
+                         u_int cm_totype;   /* element type to move to */
+                         u_int cm_tounit;   /* logical unit of to element */
+                         u_int cm_flags;    /* misc. flags */
+                   If the CM_INVERT in the _c_m___f_l_a_g_s field is set, the medium
+                   changer is instructed to flip the medium while moving it.
+
+     CHIOEXCHANGE  (_s_t_r_u_c_t _c_h_a_n_g_e_r___e_x_c_h_a_n_g_e) Move the medium located in the
+                   source element to the first destination element, and move
+                   the medium that had been in the first destination element
+                   to the second destination element.  In case of a simple ex‐
+                   change, the source and second destination elements should
+                   be the same.  The current picker is used to perform the op‐
+                   eration.  The addresses of the affected elements is speci‐
+                   fied to the ioctl in a _c_h_a_n_g_e_r___e_x_c_h_a_n_g_e structure which in‐
+                   cludes at least the following fields:
+
+                         u_int ce_srctype;        /* element type of source */
+                         u_int ce_srcunit;        /* logical unit of source */
+                         u_int ce_fdsttype; /* element type of first destination */
+                         u_int ce_fdstunit; /* logical unit of first destination */
+                         u_int ce_sdsttype; /* element type of second destination */
+                         u_int ce_sdstunit; /* logical unit of second destination */
+                         u_int ce_flags;  /* misc. flags */
+                   In _c_e___f_l_a_g_s, CM_INVERT1 and/or CM_INVERT2 may be set to
+                   flip the first or second medium during the exchange opera‐
+                   tion, respectively.
+
+                   _T_h_i_s _o_p_e_r_a_t_i_o_n _i_s _u_n_t_e_s_t_e_d.
+
+     CHIOPOSITION  (_s_t_r_u_c_t _c_h_a_n_g_e_r___p_o_s_i_t_i_o_n) Position the current picker in
+                   front of the specified element.  The element is specified
+                   with a changer_position structure, which includes at least
+                   the following elements:
+
+                         u_int cp_type;  /* element type */
+                         u_int cp_unit;  /* logical unit of element */
+                         u_int cp_flags; /* misc. flags */
+                   The _c_p___f_l_a_g_s field may be set to CP_INVERT to invert the
+                   picker during the operation.
+
+     CHIOGPICKER   (_i_n_t) Return the logical address of the current picker.
+
+     CHIOSPICKER   (_i_n_t) Select the picker specified by the given logical ad‐
+                   dress.
+
+     CHIOGPARAMS   (_s_t_r_u_c_t _c_h_a_n_g_e_r___p_a_r_a_m_s) Return the configuration parameters
+                   for the media changer.  This ioctl fills the changer_params
+                   structure passed by the user with at least the following
+                   fields:
+
+                         u_int cp_npickers; /* number of pickers */
+                         u_int cp_nslots;   /* number of slots */
+                         u_int cp_nportals; /* number of import/export portals */
+                         u_int cp_ndrives;  /* number of drives */
+
+                   This call can be used by applications to query the dimen‐
+                   sions of the jukebox before using the CHIGSTATUS ioctl to
+                   query the jukebox status.
+
+     CHIOIELEM     Perform the IINNIITTIIAALLIIZZEE EELLEEMMEENNTT SSTTAATTUUSS call on the media
+                   changer device.  This forces the media changer to update
+                   its internal status information with respect to loaded me‐
+                   dia.  It also scans any barcode labels provided that it has
+                   a label reader.  The cchh driver's status is not affected by
+                   this call.
+
+     CHIOGSTATUS   (_s_t_r_u_c_t _c_h_a_n_g_e_r___e_l_e_m_e_n_t___s_t_a_t_u_s___r_e_q_u_e_s_t) Perform the RREEAADD
+                   EELLEEMMEENNTT SSTTAATTUUSS call on the media changer device.  This call
+                   reads the element status information of the media changer
+                   and converts it to an array of _c_h_a_n_g_e_r___e_l_e_m_e_n_t___s_t_a_t_u_s
+                   structures.
+
+                   With each call to CHIOGSTATUS, the status of one or more
+                   elements of one type may be queried.
+
+                   The application passes a _c_h_a_n_g_e_r___e_l_e_m_e_n_t___s_t_a_t_u_s___r_e_q_u_e_s_t
+                   structure to the cchh driver which contains the following
+                   fields:
+
+                         u_int                          cesr_element_type;
+                         u_int                          cesr_element_base;
+                         u_int                          cesr_element_count;
+                         u_int                          cesr_flags;
+                         struct changer_element_status *cesr_element_status;
+
+                   This structure is read by the driver to determine the type,
+                   logical base address and number of elements for which in‐
+                   formation is to be returned in the array of
+                   _c_h_a_n_g_e_r___e_l_e_m_e_n_t___s_t_a_t_u_s structures pointed to by the
+                   _c_e_s_r___e_l_e_m_e_n_t___s_t_a_t_u_s field.  The application must allocate
+                   enough memory for _c_e_s_r___e_l_e_m_e_n_t___c_o_u_n_t status structures (see
+                   below).  The _c_e_s_r___f_l_a_g_s can optionally be set to
+                   CESR_VOLTAGS to indicate that volume tag (bar code) infor‐
+                   mation is to be read from the jukebox and returned.
+
+                   The _c_e_s_r___e_l_e_m_e_n_t___b_a_s_e and _c_e_s_r___e_l_e_m_e_n_t___c_o_u_n_t fields must be
+                   valid with respect to the physical configuration of the
+                   changer.  If they are not, the CHIOGSTATUS ioctl returns
+                   the EINVAL error code.
+
+                   The information about the elements is returned in an array
+                   of _c_h_a_n_g_e_r___e_l_e_m_e_n_t___s_t_a_t_u_s structures.  This structure in‐
+                   clude at least the following fields:
+
+                         u_int            ces_addr;      /* element address in media changer */
+                         u_char           ces_flags;     /* see CESTATUS definitions below */
+                         u_char           ces_sensecode; /* additional sense code for element */
+                         u_char           ces_sensequal; /* additional sense code qualifier */
+                         u_char           ces_invert;    /* invert bit */
+                         u_char           ces_svalid;    /* source address (ces_source) valid */
+                         u_short          ces_source;    /* source address of medium */
+                         changer_voltag_t ces_pvoltag;   /* primary volume tag */
+                         changer_voltag_t ces_avoltag;   /* alternate volume tag */
+                         u_char           ces_idvalid;   /* ces_scsi_id is valid */
+                         u_char           ces_scsi_id;   /* SCSI id of element (if ces_idvalid is nonzero) */
+                         u_char           ces_lunvalid;  /* ces_scsi_lun is valid */
+                         u_char           ces_scsi_lun;  /* SCSI lun of element (if ces_lunvalid is nonzero) */
+
+                   The _c_e_s___a_d_d_r field contains the address of the element in
+                   the coordinate system of the media changer.  It is not used
+                   by the driver, and should be used for diagnostic purposes
+                   only.
+
+                   The following flags are defined for the _c_e_s___f_l_a_g_s field:
+
+                   CESTATUS_FULL    A medium is present.
+
+                   CESTATUS_IMPEXP  The medium has been deposited by the oper‐
+                                    ator (and not by a picker).
+
+                   CESTATUS_EXCEPT  The element is in an exceptional state
+                                    (e.g. invalid barcode label, barcode not
+                                    yet scanned).
+
+                   CESTATUS_ACCESS  The element is accessible by the picker.
+
+                   CESTATUS_EXENAB  The element supports medium export.
+
+                   CESTATUS_INENAB  The element supports medium import.
+
+                   Note that not all flags are valid for all element types.
+
+NNOOTTEESS
+     This version of the cchh driver has been tested with a DEC TZ875 (5 slot,
+     one DLT drive) and a Breece Hill Q47 (60 slot, four DLT drives, barcode
+     reader).
+
+     Many of the features the cchh driver supports are not thoroughly tested due
+     to the fact that the devices available for testing do not support the
+     necessary commands.  This is true for alternate volume tags, media flip‐
+     ping, import/export element handling, multiple picker operation and other
+     things.
+
+FFIILLEESS
+     /dev/ch[0-9]  device entries
+
+DDIIAAGGNNOOSSTTIICCSS
+     If the media changer does not support features requested by the cchh
+     driver, it will produce both console error messages and failure return
+     codes to the ioctls described here.
+
+SSEEEE AALLSSOO
+     chio(1), cam(4), cd(4), da(4), sa(4)
+
+HHIISSTTOORRYY
+     The cchh driver appeared in 386BSD 0.1.
+
+AAUUTTHHOORRSS
+     The cchh driver was written by Jason R. Thorpe <_t_h_o_r_p_e_j_@_a_n_d_._c_o_m> for And
+     Communications, _h_t_t_p_:_/_/_w_w_w_._a_n_d_._c_o_m_/.  It was added to the system by
+     Stefan Grefen <_g_r_e_f_e_n_@_g_o_o_f_y_._z_d_v_._u_n_i_-_m_a_i_n_z_._d_e> who apparently had such a
+     device.  It was ported to CAM by Kenneth Merry <_k_e_n_@_F_r_e_e_B_S_D_._o_r_g>.  It was
+     updated to support volume tags by Hans Huebner <_h_a_n_s_@_a_r_t_c_o_m_._d_e>.
+
+BSD                              May 14, 1998                              BSD

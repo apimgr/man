@@ -1,0 +1,416 @@
+TUNING(7)            BSD Miscellaneous Information Manual            TUNING(7)
+
+NNAAMMEE
+     ttuunniinngg — performance tuning under FreeBSD
+
+SSYYSSTTEEMM SSEETTUUPP -- DDIISSKKLLAABBEELL,, NNEEWWFFSS,, TTUUNNEEFFSS,, SSWWAAPP
+     The swap partition should typically be approximately 2x the size of main
+     memory for systems with less than 4GB of RAM, or approximately equal to
+     the size of main memory if you have more.  Keep in mind future memory ex‐
+     pansion when sizing the swap partition.  Configuring too little swap can
+     lead to inefficiencies in the VM page scanning code as well as create is‐
+     sues later on if you add more memory to your machine.  On larger systems
+     with multiple disks, configure swap on each drive.  The swap partitions
+     on the drives should be approximately the same size.  The kernel can han‐
+     dle arbitrary sizes but internal data structures scale to 4 times the
+     largest swap partition.  Keeping the swap partitions near the same size
+     will allow the kernel to optimally stripe swap space across the N disks.
+     Do not worry about overdoing it a little, swap space is the saving grace
+     of UNIX and even if you do not normally use much swap, it can give you
+     more time to recover from a runaway program before being forced to re‐
+     boot.
+
+     It is not a good idea to make one large partition.  First, each partition
+     has different operational characteristics and separating them allows the
+     file system to tune itself to those characteristics.  For example, the
+     root and _/_u_s_r partitions are read-mostly, with very little writing, while
+     a lot of reading and writing could occur in _/_v_a_r_/_t_m_p.  By properly parti‐
+     tioning your system fragmentation introduced in the smaller more heavily
+     write-loaded partitions will not bleed over into the mostly-read parti‐
+     tions.
+
+     Properly partitioning your system also allows you to tune newfs(8), and
+     tunefs(8) parameters.  The only tunefs(8) option worthwhile turning on is
+     _s_o_f_t_u_p_d_a_t_e_s with “tunefs -n enable /filesystem”.  Softupdates drastically
+     improves meta-data performance, mainly file creation and deletion.  We
+     recommend enabling softupdates on most file systems; however, there are
+     two limitations to softupdates that you should be aware of when determin‐
+     ing whether to use it on a file system.  First, softupdates guarantees
+     file system consistency in the case of a crash but could very easily be
+     several seconds (even a minute!) behind on pending write to the physical
+     disk.  If you crash you may lose more work than otherwise.  Secondly,
+     softupdates delays the freeing of file system blocks.  If you have a file
+     system (such as the root file system) which is close to full, doing a ma‐
+     jor update of it, e.g., “make installworld”, can run it out of space and
+     cause the update to fail.  For this reason, softupdates will not be en‐
+     abled on the root file system during a typical install.  There is no loss
+     of performance since the root file system is rarely written to.
+
+     A number of run-time mount(8) options exist that can help you tune the
+     system.  The most obvious and most dangerous one is aassyynncc.  Only use this
+     option in conjunction with gjournal(8), as it is far too dangerous on a
+     normal file system.  A less dangerous and more useful mount(8) option is
+     called nnooaattiimmee.  UNIX file systems normally update the last-accessed time
+     of a file or directory whenever it is accessed.  This operation is han‐
+     dled in FreeBSD with a delayed write and normally does not create a bur‐
+     den on the system.  However, if your system is accessing a huge number of
+     files on a continuing basis the buffer cache can wind up getting polluted
+     with atime updates, creating a burden on the system.  For example, if you
+     are running a heavily loaded web site, or a news server with lots of
+     readers, you might want to consider turning off atime updates on your
+     larger partitions with this mount(8) option.  However, you should not
+     gratuitously turn off atime updates everywhere.  For example, the _/_v_a_r
+     file system customarily holds mailboxes, and atime (in combination with
+     mtime) is used to determine whether a mailbox has new mail.  You might as
+     well leave atime turned on for mostly read-only partitions such as _/ and
+     _/_u_s_r as well.  This is especially useful for _/ since some system utili‐
+     ties use the atime field for reporting.
+
+SSTTRRIIPPIINNGG DDIISSKKSS
+     In larger systems you can stripe partitions from several drives together
+     to create a much larger overall partition.  Striping can also improve the
+     performance of a file system by splitting I/O operations across two or
+     more disks.  The gstripe(8), gvinum(8), and ccdconfig(8) utilities may be
+     used to create simple striped file systems.  Generally speaking, striping
+     smaller partitions such as the root and _/_v_a_r_/_t_m_p, or essentially read-
+     only partitions such as _/_u_s_r is a complete waste of time.  You should
+     only stripe partitions that require serious I/O performance, typically
+     _/_v_a_r, _/_h_o_m_e, or custom partitions used to hold databases and web pages.
+     Choosing the proper stripe size is also important.  File systems tend to
+     store meta-data on power-of-2 boundaries and you usually want to reduce
+     seeking rather than increase seeking.  This means you want to use a large
+     off-center stripe size such as 1152 sectors so sequential I/O does not
+     seek both disks and so meta-data is distributed across both disks rather
+     than concentrated on a single disk.
+
+SSYYSSCCTTLL TTUUNNIINNGG
+     sysctl(8) variables permit system behavior to be monitored and controlled
+     at run-time.  Some sysctls simply report on the behavior of the system;
+     others allow the system behavior to be modified; some may be set at boot
+     time using rc.conf(5), but most will be set via sysctl.conf(5).  There
+     are several hundred sysctls in the system, including many that appear to
+     be candidates for tuning but actually are not.  In this document we will
+     only cover the ones that have the greatest effect on the system.
+
+     The _v_m_._o_v_e_r_c_o_m_m_i_t sysctl defines the overcommit behaviour of the vm sub‐
+     system.  The virtual memory system always does accounting of the swap
+     space reservation, both total for system and per-user.  Corresponding
+     values are available through sysctl _v_m_._s_w_a_p___t_o_t_a_l, that gives the total
+     bytes available for swapping, and _v_m_._s_w_a_p___r_e_s_e_r_v_e_d, that gives number of
+     bytes that may be needed to back all currently allocated anonymous mem‐
+     ory.
+
+     Setting bit 0 of the _v_m_._o_v_e_r_c_o_m_m_i_t sysctl causes the virtual memory sys‐
+     tem to return failure to the process when allocation of memory causes
+     _v_m_._s_w_a_p___r_e_s_e_r_v_e_d to exceed _v_m_._s_w_a_p___t_o_t_a_l.  Bit 1 of the sysctl enforces
+     RLIMIT_SWAP limit (see getrlimit(2)).  Root is exempt from this limit.
+     Bit 2 allows to count most of the physical memory as allocatable, except
+     wired and free reserved pages (accounted by _v_m_._s_t_a_t_s_._v_m_._v___f_r_e_e___t_a_r_g_e_t and
+     _v_m_._s_t_a_t_s_._v_m_._v___w_i_r_e___c_o_u_n_t sysctls, respectively).
+
+     The _k_e_r_n_._i_p_c_._m_a_x_p_i_p_e_k_v_a loader tunable is used to set a hard limit on the
+     amount of kernel address space allocated to mapping of pipe buffers.  Use
+     of the mapping allows the kernel to eliminate a copy of the data from
+     writer address space into the kernel, directly copying the content of
+     mapped buffer to the reader.  Increasing this value to a higher setting,
+     such as `25165824' might improve performance on systems where space for
+     mapping pipe buffers is quickly exhausted.  This exhaustion is not fatal;
+     however, and it will only cause pipes to fall back to using double-copy.
+
+     The _k_e_r_n_._i_p_c_._s_h_m___u_s_e___p_h_y_s sysctl defaults to 0 (off) and may be set to 0
+     (off) or 1 (on).  Setting this parameter to 1 will cause all System V
+     shared memory segments to be mapped to unpageable physical RAM.  This
+     feature only has an effect if you are either (A) mapping small amounts of
+     shared memory across many (hundreds) of processes, or (B) mapping large
+     amounts of shared memory across any number of processes.  This feature
+     allows the kernel to remove a great deal of internal memory management
+     page-tracking overhead at the cost of wiring the shared memory into core,
+     making it unswappable.
+
+     The _v_f_s_._v_m_i_o_d_i_r_e_n_a_b_l_e sysctl defaults to 1 (on).  This parameter controls
+     how directories are cached by the system.  Most directories are small and
+     use but a single fragment (typically 2K) in the file system and even less
+     (typically 512 bytes) in the buffer cache.  However, when operating in
+     the default mode the buffer cache will only cache a fixed number of di‐
+     rectories even if you have a huge amount of memory.  Turning on this
+     sysctl allows the buffer cache to use the VM Page Cache to cache the di‐
+     rectories.  The advantage is that all of memory is now available for
+     caching directories.  The disadvantage is that the minimum in-core memory
+     used to cache a directory is the physical page size (typically 4K) rather
+     than 512 bytes.  We recommend turning this option off in memory-con‐
+     strained environments; however, when on, it will substantially improve
+     the performance of services that manipulate a large number of files.
+     Such services can include web caches, large mail systems, and news sys‐
+     tems.  Turning on this option will generally not reduce performance even
+     with the wasted memory but you should experiment to find out.
+
+     The _v_f_s_._w_r_i_t_e___b_e_h_i_n_d sysctl defaults to 1 (on).  This tells the file sys‐
+     tem to issue media writes as full clusters are collected, which typically
+     occurs when writing large sequential files.  The idea is to avoid satu‐
+     rating the buffer cache with dirty buffers when it would not benefit I/O
+     performance.  However, this may stall processes and under certain circum‐
+     stances you may wish to turn it off.
+
+     The _v_f_s_._h_i_r_u_n_n_i_n_g_s_p_a_c_e sysctl determines how much outstanding write I/O
+     may be queued to disk controllers system-wide at any given time.  It is
+     used by the UFS file system.  The default is self-tuned and usually suf‐
+     ficient but on machines with advanced controllers and lots of disks this
+     may be tuned up to match what the controllers buffer.  Configuring this
+     setting to match tagged queuing capabilities of controllers or drives
+     with average IO size used in production works best (for example: 16 MiB
+     will use 128 tags with IO requests of 128 KiB).  Note that setting too
+     high a value (exceeding the buffer cache's write threshold) can lead to
+     extremely bad clustering performance.  Do not set this value arbitrarily
+     high!  Higher write queuing values may also add latency to reads occur‐
+     ring at the same time.
+
+     The _v_f_s_._r_e_a_d___m_a_x sysctl governs VFS read-ahead and is expressed as the
+     number of blocks to pre-read if the heuristics algorithm decides that the
+     reads are issued sequentially.  It is used by the UFS, ext2fs and msdosfs
+     file systems.  With the default UFS block size of 32 KiB, a setting of 64
+     will allow speculatively reading up to 2 MiB.  This setting may be in‐
+     creased to get around disk I/O latencies, especially where these laten‐
+     cies are large such as in virtual machine emulated environments.  It may
+     be tuned down in specific cases where the I/O load is such that read-
+     ahead adversely affects performance or where system memory is really low.
+
+     The _v_f_s_._n_c_s_i_z_e_f_a_c_t_o_r sysctl defines how large VFS namecache may grow.
+     The number of currently allocated entries in namecache is provided by
+     _d_e_b_u_g_._n_u_m_c_a_c_h_e sysctl and the condition debug.numcache < kern.maxvnodes *
+     vfs.ncsizefactor is adhered to.
+
+     The _v_f_s_._n_c_n_e_g_f_a_c_t_o_r sysctl defines how many negative entries VFS name‐
+     cache is allowed to create.  The number of currently allocated negative
+     entries is provided by _d_e_b_u_g_._n_u_m_n_e_g sysctl and the condition vfs.ncneg‐
+     factor * debug.numneg < debug.numcache is adhered to.
+
+     There are various other buffer-cache and VM page cache related sysctls.
+     We do not recommend modifying these values.
+
+     The _n_e_t_._i_n_e_t_._t_c_p_._s_e_n_d_s_p_a_c_e and _n_e_t_._i_n_e_t_._t_c_p_._r_e_c_v_s_p_a_c_e sysctls are of par‐
+     ticular interest if you are running network intensive applications.  They
+     control the amount of send and receive buffer space allowed for any given
+     TCP connection.  The default sending buffer is 32K; the default receiving
+     buffer is 64K.  You can often improve bandwidth utilization by increasing
+     the default at the cost of eating up more kernel memory for each connec‐
+     tion.  We do not recommend increasing the defaults if you are serving
+     hundreds or thousands of simultaneous connections because it is possible
+     to quickly run the system out of memory due to stalled connections build‐
+     ing up.  But if you need high bandwidth over a fewer number of connec‐
+     tions, especially if you have gigabit Ethernet, increasing these defaults
+     can make a huge difference.  You can adjust the buffer size for incoming
+     and outgoing data separately.  For example, if your machine is primarily
+     doing web serving you may want to decrease the recvspace in order to be
+     able to increase the sendspace without eating too much kernel memory.
+     Note that the routing table (see route(8)) can be used to introduce
+     route-specific send and receive buffer size defaults.
+
+     As an additional management tool you can use pipes in your firewall rules
+     (see ipfw(8)) to limit the bandwidth going to or from particular IP
+     blocks or ports.  For example, if you have a T1 you might want to limit
+     your web traffic to 70% of the T1's bandwidth in order to leave the re‐
+     mainder available for mail and interactive use.  Normally a heavily
+     loaded web server will not introduce significant latencies into other
+     services even if the network link is maxed out, but enforcing a limit can
+     smooth things out and lead to longer term stability.  Many people also
+     enforce artificial bandwidth limitations in order to ensure that they are
+     not charged for using too much bandwidth.
+
+     Setting the send or receive TCP buffer to values larger than 65535 will
+     result in a marginal performance improvement unless both hosts support
+     the window scaling extension of the TCP protocol, which is controlled by
+     the _n_e_t_._i_n_e_t_._t_c_p_._r_f_c_1_3_2_3 sysctl.  These extensions should be enabled and
+     the TCP buffer size should be set to a value larger than 65536 in order
+     to obtain good performance from certain types of network links; specifi‐
+     cally, gigabit WAN links and high-latency satellite links.  RFC1323 sup‐
+     port is enabled by default.
+
+     The _n_e_t_._i_n_e_t_._t_c_p_._a_l_w_a_y_s___k_e_e_p_a_l_i_v_e sysctl determines whether or not the
+     TCP implementation should attempt to detect dead TCP connections by in‐
+     termittently delivering “keepalives” on the connection.  By default, this
+     is enabled for all applications; by setting this sysctl to 0, only appli‐
+     cations that specifically request keepalives will use them.  In most en‐
+     vironments, TCP keepalives will improve the management of system state by
+     expiring dead TCP connections, particularly for systems serving dialup
+     users who may not always terminate individual TCP connections before dis‐
+     connecting from the network.  However, in some environments, temporary
+     network outages may be incorrectly identified as dead sessions, resulting
+     in unexpectedly terminated TCP connections.  In such environments, set‐
+     ting the sysctl to 0 may reduce the occurrence of TCP session disconnec‐
+     tions.
+
+     The _n_e_t_._i_n_e_t_._t_c_p_._d_e_l_a_y_e_d___a_c_k TCP feature is largely misunderstood.  His‐
+     torically speaking, this feature was designed to allow the acknowledge‐
+     ment to transmitted data to be returned along with the response.  For ex‐
+     ample, when you type over a remote shell, the acknowledgement to the
+     character you send can be returned along with the data representing the
+     echo of the character.  With delayed acks turned off, the acknowledgement
+     may be sent in its own packet, before the remote service has a chance to
+     echo the data it just received.  This same concept also applies to any
+     interactive protocol (e.g., SMTP, WWW, POP3), and can cut the number of
+     tiny packets flowing across the network in half.  The FreeBSD delayed ACK
+     implementation also follows the TCP protocol rule that at least every
+     other packet be acknowledged even if the standard 40ms timeout has not
+     yet passed.  Normally the worst a delayed ACK can do is slightly delay
+     the teardown of a connection, or slightly delay the ramp-up of a slow-
+     start TCP connection.  While we are not sure we believe that the several
+     FAQs related to packages such as SAMBA and SQUID which advise turning off
+     delayed acks may be referring to the slow-start issue.
+
+     The _n_e_t_._i_n_e_t_._i_p_._p_o_r_t_r_a_n_g_e_._* sysctls control the port number ranges auto‐
+     matically bound to TCP and UDP sockets.  There are three ranges: a low
+     range, a default range, and a high range, selectable via the IP_PORTRANGE
+     setsockopt(2) call.  Most network programs use the default range which is
+     controlled by _n_e_t_._i_n_e_t_._i_p_._p_o_r_t_r_a_n_g_e_._f_i_r_s_t and _n_e_t_._i_n_e_t_._i_p_._p_o_r_t_r_a_n_g_e_._l_a_s_t,
+     which default to 49152 and 65535, respectively.  Bound port ranges are
+     used for outgoing connections, and it is possible to run the system out
+     of ports under certain circumstances.  This most commonly occurs when you
+     are running a heavily loaded web proxy.  The port range is not an issue
+     when running a server which handles mainly incoming connections, such as
+     a normal web server, or has a limited number of outgoing connections,
+     such as a mail relay.  For situations where you may run out of ports, we
+     recommend decreasing _n_e_t_._i_n_e_t_._i_p_._p_o_r_t_r_a_n_g_e_._f_i_r_s_t modestly.  A range of
+     10000 to 30000 ports may be reasonable.  You should also consider fire‐
+     wall effects when changing the port range.  Some firewalls may block
+     large ranges of ports (usually low-numbered ports) and expect systems to
+     use higher ranges of ports for outgoing connections.  By default
+     _n_e_t_._i_n_e_t_._i_p_._p_o_r_t_r_a_n_g_e_._l_a_s_t is set at the maximum allowable port number.
+
+     The _k_e_r_n_._i_p_c_._s_o_a_c_c_e_p_t_q_u_e_u_e sysctl limits the size of the listen queue for
+     accepting new TCP connections.  The default value of 128 is typically too
+     low for robust handling of new connections in a heavily loaded web server
+     environment.  For such environments, we recommend increasing this value
+     to 1024 or higher.  The service daemon may itself limit the listen queue
+     size (e.g., sendmail(8), apache) but will often have a directive in its
+     configuration file to adjust the queue size up.  Larger listen queues
+     also do a better job of fending off denial of service attacks.
+
+     The _k_e_r_n_._m_a_x_f_i_l_e_s sysctl determines how many open files the system sup‐
+     ports.  The default is typically a few thousand but you may need to bump
+     this up to ten or twenty thousand if you are running databases or large
+     descriptor-heavy daemons.  The read-only _k_e_r_n_._o_p_e_n_f_i_l_e_s sysctl may be in‐
+     terrogated to determine the current number of open files on the system.
+
+     The _v_m_._s_w_a_p___i_d_l_e___e_n_a_b_l_e_d sysctl is useful in large multi-user systems
+     where you have lots of users entering and leaving the system and lots of
+     idle processes.  Such systems tend to generate a great deal of continuous
+     pressure on free memory reserves.  Turning this feature on and adjusting
+     the swapout hysteresis (in idle seconds) via _v_m_._s_w_a_p___i_d_l_e___t_h_r_e_s_h_o_l_d_1 and
+     _v_m_._s_w_a_p___i_d_l_e___t_h_r_e_s_h_o_l_d_2 allows you to depress the priority of pages asso‐
+     ciated with idle processes more quickly then the normal pageout algo‐
+     rithm.  This gives a helping hand to the pageout daemon.  Do not turn
+     this option on unless you need it, because the tradeoff you are making is
+     to essentially pre-page memory sooner rather than later, eating more swap
+     and disk bandwidth.  In a small system this option will have a detrimen‐
+     tal effect but in a large system that is already doing moderate paging
+     this option allows the VM system to stage whole processes into and out of
+     memory more easily.
+
+LLOOAADDEERR TTUUNNAABBLLEESS
+     Some aspects of the system behavior may not be tunable at runtime because
+     memory allocations they perform must occur early in the boot process.  To
+     change loader tunables, you must set their values in loader.conf(5) and
+     reboot the system.
+
+     _k_e_r_n_._m_a_x_u_s_e_r_s controls the scaling of a number of static system tables,
+     including defaults for the maximum number of open files, sizing of net‐
+     work memory resources, etc.  _k_e_r_n_._m_a_x_u_s_e_r_s is automatically sized at boot
+     based on the amount of memory available in the system, and may be deter‐
+     mined at run-time by inspecting the value of the read-only _k_e_r_n_._m_a_x_u_s_e_r_s
+     sysctl.
+
+     The _k_e_r_n_._d_f_l_d_s_i_z and _k_e_r_n_._d_f_l_s_s_i_z tunables set the default soft limits
+     for process data and stack size respectively.  Processes may increase
+     these up to the hard limits by calling setrlimit(2).  The _k_e_r_n_._m_a_x_d_s_i_z,
+     _k_e_r_n_._m_a_x_s_s_i_z, and _k_e_r_n_._m_a_x_t_s_i_z tunables set the hard limits for process
+     data, stack, and text size respectively; processes may not exceed these
+     limits.  The _k_e_r_n_._s_g_r_o_w_s_i_z tunable controls how much the stack segment
+     will grow when a process needs to allocate more stack.
+
+     _k_e_r_n_._i_p_c_._n_m_b_c_l_u_s_t_e_r_s may be adjusted to increase the number of network
+     mbufs the system is willing to allocate.  Each cluster represents approx‐
+     imately 2K of memory, so a value of 1024 represents 2M of kernel memory
+     reserved for network buffers.  You can do a simple calculation to figure
+     out how many you need.  If you have a web server which maxes out at 1000
+     simultaneous connections, and each connection eats a 16K receive and 16K
+     send buffer, you need approximately 32MB worth of network buffers to deal
+     with it.  A good rule of thumb is to multiply by 2, so 32MBx2 = 64MB/2K =
+     32768.  So for this case you would want to set _k_e_r_n_._i_p_c_._n_m_b_c_l_u_s_t_e_r_s to
+     32768.  We recommend values between 1024 and 4096 for machines with mod‐
+     erates amount of memory, and between 4096 and 32768 for machines with
+     greater amounts of memory.  Under no circumstances should you specify an
+     arbitrarily high value for this parameter, it could lead to a boot-time
+     crash.  The --mm option to netstat(1) may be used to observe network clus‐
+     ter use.
+
+     More and more programs are using the sendfile(2) system call to transmit
+     files over the network.  The _k_e_r_n_._i_p_c_._n_s_f_b_u_f_s sysctl controls the number
+     of file system buffers sendfile(2) is allowed to use to perform its work.
+     This parameter nominally scales with _k_e_r_n_._m_a_x_u_s_e_r_s so you should not need
+     to modify this parameter except under extreme circumstances.  See the
+     _T_U_N_I_N_G section in the sendfile(2) manual page for details.
+
+KKEERRNNEELL CCOONNFFIIGG TTUUNNIINNGG
+     There are a number of kernel options that you may have to fiddle with in
+     a large-scale system.  In order to change these options you need to be
+     able to compile a new kernel from source.  The config(8) manual page and
+     the handbook are good starting points for learning how to do this.  Gen‐
+     erally the first thing you do when creating your own custom kernel is to
+     strip out all the drivers and services you do not use.  Removing things
+     like INET6 and drivers you do not have will reduce the size of your ker‐
+     nel, sometimes by a megabyte or more, leaving more memory available for
+     applications.
+
+     SCSI_DELAY may be used to reduce system boot times.  The defaults are
+     fairly high and can be responsible for 5+ seconds of delay in the boot
+     process.  Reducing SCSI_DELAY to something below 5 seconds could work
+     (especially with modern drives).
+
+     There are a number of *_CPU options that can be commented out.  If you
+     only want the kernel to run on a Pentium class CPU, you can easily remove
+     I486_CPU, but only remove I586_CPU if you are sure your CPU is being rec‐
+     ognized as a Pentium II or better.  Some clones may be recognized as a
+     Pentium or even a 486 and not be able to boot without those options.  If
+     it works, great!  The operating system will be able to better use higher-
+     end CPU features for MMU, task switching, timebase, and even device oper‐
+     ations.  Additionally, higher-end CPUs support 4MB MMU pages, which the
+     kernel uses to map the kernel itself into memory, increasing its effi‐
+     ciency under heavy syscall loads.
+
+CCPPUU,, MMEEMMOORRYY,, DDIISSKK,, NNEETTWWOORRKK
+     The type of tuning you do depends heavily on where your system begins to
+     bottleneck as load increases.  If your system runs out of CPU (idle times
+     are perpetually 0%) then you need to consider upgrading the CPU or per‐
+     haps you need to revisit the programs that are causing the load and try
+     to optimize them.  If your system is paging to swap a lot you need to
+     consider adding more memory.  If your system is saturating the disk you
+     typically see high CPU idle times and total disk saturation.  systat(1)
+     can be used to monitor this.  There are many solutions to saturated
+     disks: increasing memory for caching, mirroring disks, distributing oper‐
+     ations across several machines, and so forth.
+
+     Finally, you might run out of network suds.  Optimize the network path as
+     much as possible.  For example, in firewall(7) we describe a firewall
+     protecting internal hosts with a topology where the externally visible
+     hosts are not routed through it.  Most bottlenecks occur at the WAN link.
+     If expanding the link is not an option it may be possible to use the
+     dummynet(4) feature to implement peak shaving or other forms of traffic
+     shaping to prevent the overloaded service (such as web services) from af‐
+     fecting other services (such as email), or vice versa.  In home installa‐
+     tions this could be used to give interactive traffic (your browser,
+     ssh(1) logins) priority over services you export from your box (web ser‐
+     vices, email).
+
+SSEEEE AALLSSOO
+     netstat(1), systat(1), sendfile(2), ata(4), dummynet(4), eventtimers(4),
+     login.conf(5), rc.conf(5), sysctl.conf(5), ffs(7), firewall(7), hier(7),
+     ports(7), boot(8), bsdinstall(8), ccdconfig(8), config(8), fsck(8),
+     gjournal(8), gpart(8), gstripe(8), gvinum(8), ifconfig(8), ipfw(8),
+     loader(8), mount(8), newfs(8), route(8), sysctl(8), tunefs(8)
+
+HHIISSTTOORRYY
+     The ttuunniinngg manual page was originally written by Matthew Dillon and first
+     appeared in FreeBSD 4.3, May 2001.  The manual page was greatly modified
+     by Eitan Adler <_e_a_d_l_e_r_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            November 17, 2023                           BSD

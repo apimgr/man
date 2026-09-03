@@ -1,0 +1,221 @@
+MENU.LUA(8)               BSD System Manager's Manual              MENU.LUA(8)
+
+NNAAMMEE
+     mmeennuu..lluuaa — bootloader dynamic menu module
+
+DDEESSCCRRIIPPTTIIOONN
+     mmeennuu..lluuaa contains the main functionality required to build a dynamic menu
+     system.  It also contains definitions for the built-in menus, some of
+     which are influenced by loader(8) environment variables.
+
+     Before hooking into the functionality provided by mmeennuu..lluuaa, it must be
+     included with a statement such as the following:
+
+           local menu = require("menu")
+
+   MMEENNUU DDEEFFIINNIITTIIOONNSS
+     Menus are represented in mmeennuu..lluuaa as a table.  That table mmuusstt contain an
+     _e_n_t_r_i_e_s key.
+
+     If the value of the _e_n_t_r_i_e_s key is itself a table, then each value in
+     this table defines a single entry in this menu.  See _M_E_N_U _I_T_E_M
+     _D_E_F_I_N_I_T_I_O_N_S for the structure of each entry.
+
+     _e_n_t_r_i_e_s may also be a function.  This function must return a table, each
+     value of which defines a single entry in this menu.  See _M_E_N_U _I_T_E_M
+     _D_E_F_I_N_I_T_I_O_N_S.
+
+   MMEENNUU IITTEEMM DDEEFFIINNIITTIIOONNSS
+     The following keys may be defined for a menu item:
+
+           eennttrryy__ttyyppee             The type of this menu entry.  See _M_E_N_U _I_T_E_M
+                                  _T_Y_P_E_S.
+
+           ccaarroouusseell__iidd            A unique string id for this carousel.  A
+                                  carousel is a menu entry that rotates
+                                  through a selection of items.  Used for
+                                  storage of the carousel's current setting.
+
+           vviissiibbllee                A lambda that returns true if this menu item
+                                  should be visible and false if it should not
+                                  be visible.
+
+           iitteemmss                  A table (or a lambda that returns a table)
+                                  of the possible choices for this carousel.
+
+           nnaammee                   A string (or a lambda that returns a string)
+                                  containing the current name of this item.
+
+           ffuunncc                   The function executed when this entry is se‐
+                                  lected.  Every type except for
+                                  ccoorree..MMEENNUU__SSEEPPAARRAATTOORR may have a ffuunncc.
+
+           ssuubbmmeennuu                The submenu menu definition to draw when
+                                  this entry is selected.
+
+           aalliiaass                  A table of case-sensitive aliases for this
+                                  menu entry.  All menu entries that can be
+                                  selected may have any number of aalliiaass en‐
+                                  tries.
+
+     eennttrryy__ttyyppee is the only required key for every entry type.  nnaammee is re‐
+     quired for all entry types except for ccoorree..MMEENNUU__SSEEPPAARRAATTOORR.
+
+   MMEENNUU IITTEEMM TTYYPPEESS
+     The menu item type constants are defined in core.lua(8).  The following
+     types are available:
+
+           ccoorree..MMEENNUU__RREETTUURRNN          Return to the parent menu.  If the cur‐
+                                     rent menu is the default menu, mmeennuu..lluuaa
+                                     will exit the menu and begin the autoboot
+                                     sequence (if applicable).  This type of
+                                     menu entry may execute ffuunncc, when se‐
+                                     lected, and has a nnaammee.
+
+           ccoorree..MMEENNUU__EENNTTRRYY           A normal menu entry that executes ffuunncc
+                                     when selected, and has a nnaammee.
+
+           ccoorree..MMEENNUU__SSEEPPAARRAATTOORR       A menu entry that serves as a separator.
+                                     It may have a nnaammee.
+
+           ccoorree..MMEENNUU__SSUUBBMMEENNUU         A menu entry that opens ssuubbmmeennuu when se‐
+                                     lected.  It may have a nnaammee.
+
+           ccoorree..MMEENNUU__CCAARROOUUSSEELL__EENNTTRRYY  A menu entry that rotates through iitteemmss
+                                     like a carousel.  ffuunncc is executed when
+                                     selected, and the callback is passed the
+                                     choice index, name of the current choice,
+                                     and the table of choices.
+
+   EEXXPPOORRTTEEDD MMEENNUUSS
+     The following menus are exported by mmeennuu..lluuaa:
+
+           mmeennuu..ddeeffaauulltt            The default menu to draw.  Set to
+                                   mmeennuu..wweellccoommee by default.
+
+           mmeennuu..wweellccoommee            The welcome menu.  Contains single and
+                                   multi user boot options, as well as entries
+                                   to access other menus.
+
+           mmeennuu..bboooott__ooppttiioonnss       The "Boot Options" menu.
+
+           mmeennuu..bboooott__eennvviirroonnmmeennttss  The "Boot Environments" menu.  This menu is
+                                   only visible if the system is booted on a
+                                   ZFS partition and more than one boot envi‐
+                                   ronment was detected at boot.
+
+EEXXAAMMPPLLEESS
+     To replace the default boot menu with a simple boot menu:
+
+           local core = require("core")
+           local menu = require("menu")
+
+           menu.default = {
+                   entries = {
+                           {
+                                   entry_type = core.MENU_ENTRY,
+                                   name = "Boot",
+                                   func = core.boot,
+                           },
+                           {
+                                   entry_type = core.MENU_CAROUSEL_ENTRY,
+                                   carousel_id = "unique_boot_entry_name",
+                                   items = {"NO", "YES"},
+                                   name = function(_, choice, _)
+                                           return "Option: " .. choice
+                                   end,
+                                   func = function(_, _, _)
+                                           loader.setenv("some_envvar", "some_value")
+                                   end,
+                           },
+                   },
+           }
+
+     To add another option to the welcome menu:
+
+           local core = require("core")
+           local menu = require("menu")
+
+           local my_entry = {
+                   entry_type = core.MENU_ENTRY,
+                   name = "Fancy Boot",
+                   func = core.boot,
+           },
+
+           local stock_entries = menu.welcome.entries
+           function menu.welcome.entries()
+                   local ents = stock_entries()
+                   ents[#ents + 1] = my_entry
+                   return ents
+           end
+
+     To create a vendor submenu or other vendor menu option, override
+     mmeennuu..wweellccoommee..aallll__eennttiirreess..vveennddoorr like so:
+
+           local core = require("core")
+           local menu = require("menu")
+
+           -- Fill in with vendor specific entries
+           local vendor_options = {
+                   entries = {
+                   ...
+                   },
+           }
+
+           local welcome_entries = menu.welcome.all_entries
+           welcome_entries.vendor = {
+                   entry_type = core.MENU_SUBMENU,
+                   name = color.highlight("V") .. "endor Options",
+                   submenu = vendor_options,
+                   alias = {"v", "V"},
+                   visible = function()
+                           return true
+                   end,
+           }
+     In the above example, vveennddoorr__ooppttiioonnss is a local variable that defines the
+     vendor submenu.
+
+     To add an additional option, change the mmeennuu..bboooott__ooppttiioonnss..eennttrriieess array.
+     The following illustrates this concept:
+
+           -- This is a silly example that rotates local_option through the values
+           -- 0 to 4.  local_option would still need to be used elsewhere.
+           local local_option = 0
+
+           -- The `entries` of a menu may either be a table or a function.  In this
+           -- example we're augmenting a menu that just has a static table, but if we
+           -- wanted to be more robust then we would need to instead check the type
+           -- of `stock_options` here to determine our next move.
+           --
+           -- If `entries` is a table, then the stock menu system won't be changing it
+           -- so we can just add our menu option as we do below.
+           --
+           -- If `entries` is a function, then we would need to provide a new function to
+           -- replace `entries` that does a core.deepCopyTable() of the result and adds
+           -- the below item to it.  The deep copy is necessary to avoid duplicating our
+           -- new menu item and allowing the menu to alter its behavior however it pleases.
+           local stock_options = menu.boot_options.entries
+           stock_options[#stock_options + 1] = {
+                   entry_type = core.MENU_ENTRY,
+                   name = function()
+                           return color.highlight('L') ..
+                               "ocal Option     : " .. local_option
+                   end,
+                   func = function()
+                           local_option = (local_option + 1) % 5
+                   end,
+                   alias= {"l", "L"}
+           }
+
+SSEEEE AALLSSOO
+     loader.conf(5), core.lua(8), loader(8)
+
+HHIISSTTOORRYY
+     The mmeennuu..lluuaa file first appeared in FreeBSD 12.0.
+
+AAUUTTHHOORRSS
+     The mmeennuu..lluuaa file was originally written by Pedro Souza
+     <_p_e_d_r_o_s_o_u_z_a_@_F_r_e_e_B_S_D_._o_r_g>.  Later work and this manual page was done by
+     Kyle Evans <_k_e_v_a_n_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             March 29, 2025                             BSD

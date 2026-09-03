@@ -1,0 +1,158 @@
+IBV_GET_ASYNC_EVENT(3)  Libibverbs Programmer's Manual  IBV_GET_ASYNC_EVENT(3)
+
+
+
+NNAAMMEE
+       ibv_get_async_event, ibv_ack_async_event - get or acknowledge asynchro‐
+       nous events
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<iinnffiinniibbaanndd//vveerrbbss..hh>>
+
+       iinntt iibbvv__ggeett__aassyynncc__eevveenntt((ssttrruucctt iibbvv__ccoonntteexxtt _*_c_o_n_t_e_x_t,,
+                               ssttrruucctt iibbvv__aassyynncc__eevveenntt _*_e_v_e_n_t));;
+
+       vvooiidd iibbvv__aacckk__aassyynncc__eevveenntt((ssttrruucctt iibbvv__aassyynncc__eevveenntt _*_e_v_e_n_t));;
+
+DDEESSCCRRIIPPTTIIOONN
+       iibbvv__ggeett__aassyynncc__eevveenntt(()) waits for the next async event of the RDMA device
+       context  _c_o_n_t_e_x_t  and returns it through the pointer _e_v_e_n_t, which is an
+       ibv_async_event struct, as defined in <infiniband/verbs.h>.
+
+       struct ibv_async_event {
+               union {
+                       struct ibv_cq  *cq;             /* CQ that got the event */
+                       struct ibv_qp  *qp;             /* QP that got the event */
+                       struct ibv_srq *srq;            /* SRQ that got the event */
+                       int             port_num;       /* port number that got the event */
+               } element;
+               enum ibv_event_type     event_type;     /* type of the event */
+       };
+
+       One member of the  element  union  will  be  valid,  depending  on  the
+       event_type member of the structure.  event_type will be one of the fol‐
+       lowing events:
+
+       _Q_P _e_v_e_n_t_s_:
+
+       IIBBVV__EEVVEENNTT__QQPP__FFAATTAALL  Error occurred on a QP and it transitioned to error
+       state
+
+       IIBBVV__EEVVEENNTT__QQPP__RREEQQ__EERRRR  Invalid Request Local Work Queue Error
+
+       IIBBVV__EEVVEENNTT__QQPP__AACCCCEESSSS__EERRRR  Local access violation error
+
+       IIBBVV__EEVVEENNTT__CCOOMMMM__EESSTT  Communication was established on a QP
+
+       IIBBVV__EEVVEENNTT__SSQQ__DDRRAAIINNEEDD  Send Queue was drained of outstanding messages in
+       progress
+
+       IIBBVV__EEVVEENNTT__PPAATTHH__MMIIGG  A connection has migrated to the alternate path
+
+       IIBBVV__EEVVEENNTT__PPAATTHH__MMIIGG__EERRRR  A connection failed to migrate to the alternate
+       path
+
+       IIBBVV__EEVVEENNTT__QQPP__LLAASSTT__WWQQEE__RREEAACCHHEEDD  Last WQE Reached on a QP associated with
+       an SRQ
+
+       _C_Q _e_v_e_n_t_s_:
+
+       IIBBVV__EEVVEENNTT__CCQQ__EERRRR  CQ is in error (CQ overrun)
+
+       _S_R_Q _e_v_e_n_t_s_:
+
+       IIBBVV__EEVVEENNTT__SSRRQQ__EERRRR  Error occurred on an SRQ
+
+       IIBBVV__EEVVEENNTT__SSRRQQ__LLIIMMIITT__RREEAACCHHEEDD  SRQ limit was reached
+
+       _P_o_r_t _e_v_e_n_t_s_:
+
+       IIBBVV__EEVVEENNTT__PPOORRTT__AACCTTIIVVEE  Link became active on a port
+
+       IIBBVV__EEVVEENNTT__PPOORRTT__EERRRR  Link became unavailable on a port
+
+       IIBBVV__EEVVEENNTT__LLIIDD__CCHHAANNGGEE  LID was changed on a port
+
+       IIBBVV__EEVVEENNTT__PPKKEEYY__CCHHAANNGGEE  P_Key table was changed on a port
+
+       IIBBVV__EEVVEENNTT__SSMM__CCHHAANNGGEE  SM was changed on a port
+
+       IIBBVV__EEVVEENNTT__CCLLIIEENNTT__RREERREEGGIISSTTEERR  SM sent a CLIENT_REREGISTER request  to  a
+       port
+
+       IIBBVV__EEVVEENNTT__GGIIDD__CCHHAANNGGEE  GID table was changed on a port
+
+       _C_A _e_v_e_n_t_s_:
+
+       IIBBVV__EEVVEENNTT__DDEEVVIICCEE__FFAATTAALL  CA is in FATAL state
+
+       iibbvv__aacckk__aassyynncc__eevveenntt(()) acknowledge the async event _e_v_e_n_t.
+
+RREETTUURRNN VVAALLUUEE
+       iibbvv__ggeett__aassyynncc__eevveenntt(()) returns 0 on success, and -1 on error.
+
+       iibbvv__aacckk__aassyynncc__eevveenntt(()) returns no value.
+
+NNOOTTEESS
+       All  async  events  that iibbvv__ggeett__aassyynncc__eevveenntt(()) returns must be acknowl‐
+       edged using iibbvv__aacckk__aassyynncc__eevveenntt(()).  To avoid races, destroying  an  ob‐
+       ject (CQ, SRQ or QP) will wait for all affiliated events for the object
+       to be acknowledged; this avoids an application retrieving an affiliated
+       event after the corresponding object has already been destroyed.
+
+       iibbvv__ggeett__aassyynncc__eevveenntt(()) is a blocking function.  If multiple threads call
+       this function simultaneously, then when an async event occurs, only one
+       thread  will receive it, and it is not possible to predict which thread
+       will receive it.
+
+EEXXAAMMPPLLEESS
+       The following code example demonstrates one possible way to  work  with
+       async events in non-blocking mode.  It performs the following steps:
+
+       1. Set the async events queue work mode to be non-blocked
+       2. Poll the queue until it has an async event
+       3. Get the async event and ack it
+
+       /* change the blocking mode of the async event queue */
+       flags = fcntl(ctx->async_fd, F_GETFL);
+       rc = fcntl(ctx->async_fd, F_SETFL, flags | O_NONBLOCK);
+       if (rc < 0) {
+               fprintf(stderr, "Failed to change file descriptor of async event queue\n");
+               return 1;
+       }
+
+       /*
+        * poll the queue until it has an event and sleep ms_timeout
+        * milliseconds between any iteration
+        */
+       my_pollfd.fd      = ctx->async_fd;
+       my_pollfd.events  = POLLIN;
+       my_pollfd.revents = 0;
+
+       do {
+               rc = poll(&my_pollfd, 1, ms_timeout);
+       } while (rc == 0);
+       if (rc < 0) {
+               fprintf(stderr, "poll failed\n");
+               return 1;
+       }
+
+       /* Get the async event */
+       if (ibv_get_async_event(ctx, &async_event)) {
+               fprintf(stderr, "Failed to get async_event\n");
+               return 1;
+       }
+
+       /* Ack the event */
+       ibv_ack_async_event(&async_event);
+
+
+SSEEEE AALLSSOO
+       iibbvv__ooppeenn__ddeevviiccee(3)
+
+AAUUTTHHOORRSS
+       Dotan Barak <dotanba@gmail.com>
+
+
+
+libibverbs                        2006-10-31            IBV_GET_ASYNC_EVENT(3)

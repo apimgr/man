@@ -1,0 +1,91 @@
+The  driver  provides support for the Topfield TF5000PVR range of
+DVB recorders (nicknamed which are popular  in  Europe  and  Aus‐
+tralia.   These  recorders  have  a device interface which can be
+used to transfer recordings to and from  the  unit’s  hard  disk.
+The interface can also be used to upload binary images for execu‐
+tion  on the Toppy’s MIPS cpu.  The Toppy’s protocol has not been
+officially documented by Topfield, but the  basic  features  have
+been  reverse engineered by others in order to write replacements
+for the official download/upload program from Topfield.  Existing
+replacements for Altair suffer from the fact that they are  ulti‐
+mately  built on top of This has a number of detrimental side‐ef‐
+fects: Performance suffers since all Toppy command  packets  have
+to  cross  the  user‐kernel interface.  The userland programs are
+full of clutter to  deal  with  interpreting  the  command/status
+packets,  not  to  mention  byte‐swapping and host endian issues.
+Signals can interrupt a data transfer at a critical point,  leav‐
+ing the Toppy in an undefined state.  For example, interrupting a
+download  with mode enabled will leave the Toppy completely unre‐
+sponsive to the remote control, and prevent  timer‐based  record‐
+ings  from  starting.  The driver provides a clean and stable in‐
+terface to the Toppy protocol,  and  ensures  that  an  interrupt
+caused  by  a  signal  does  not  leave the Toppy in an undefined
+state.  Use the following header file to get access to  the  spe‐
+cific  structures  and  defines.  #include <dev/usb/utoppy.h> The
+driver can be accessed through the character device.  The primary
+means of controlling the driver is by issuing a series of  system
+calls  followed by or system calls as appropriate.  The following
+commands are supported by the driver: This command can be used to
+enable or disable mode for subsequent or  commands  (see  below).
+If is non‐zero, Turbo mode will be enabled.  Otherwise Turbo mode
+will  be  disabled.   In non‐Turbo mode, the Toppy’s interface is
+capable of sustaining around 5.6 Mbit/s during a  file  transfer.
+With  Turbo mode enabled, it can sustain just over 16 Mbit/s.  Of
+course, these figures are valid only if the  Toppy  is  connected
+via a 2.0 interface.  Performance using an older 1 interface will
+be significantly lower.  This command can be used to abort an in‐
+progress or command.  This command will cause the Toppy to reboot
+cleanly.   This command retrieves statistics for the Toppy’s hard
+disk.  struct utoppy_stats {          uint64_t  us_hdd_size;   /*
+Size  of the disk, in bytes */         uint64_t us_hdd_free;   /*
+Free space, in bytes */ }; This command is used to rename a  file
+or directory on the Toppy’s hard disk.  The full pathname to each
+file  must  be  provided.   struct  utoppy_rename  {         char
+*ur_old_path;      /*  Path  to  existing  file  */          char
+*ur_new_path;      /* Path to new file */ }; This command creates
+the  directory  specified by This command deletes the file or di‐
+rectory specified by This command initiates a read  of  the  con‐
+tents  of  the directory specified by After issuing this command,
+the directory contents must  be  read  using  consecutive  system
+calls.  Each will transfer one or more directory entries into the
+user‐supplied buffer.  The buffer must be large enough to receive
+at  least  one directory entry.  When returns zero, all directory
+entries have been read.  A directory entry is described using the
+following data structure:  struct  utoppy_dirent  {          char
+ud_path[UTOPPY_MAX_FILENAME_LEN     +    1];            enum    {
+                UTOPPY_DIRENT_UNKNOWN,
+                UTOPPY_DIRENT_DIRECTORY,
+                UTOPPY_DIRENT_FILE               }       ud_type;
+        off_t  ud_size;         time_t ud_mtime;         uint32_t
+ud_attributes; }; The field contains the name  of  the  directory
+entry.   The  field  specifies whether the entry corresponds to a
+file or a sub‐directory.  The field is valid for files only,  and
+specifies the file’s size in bytes.  The field describes the file
+or  directory’s  modification time, specified as seconds from the
+Unix epoch.  The timestamp is relative to the  current  timezone,
+so can be used to convert it into human readable form.  Note that
+the Toppy sets directory timestamps to a predefined value so they
+are not particularly useful.  The field is not used at this time.
+This  command is used to initiate reading a file from the Toppy’s
+hard disk.  The full pathname, together with the file  offset  at
+which  to  start  reading,  is specified using the following data
+structure:  struct  utoppy_readfile  {           char   *ur_path;
+        off_t  ur_offset; }; After issuing this command, the file
+must be read using consecutive system calls.  When returns  zero,
+the  entire file has been read.  This command is used to initiate
+writing to a file on the Toppy’s hard disk.  The file to be writ‐
+ten is described  using  the  following  data  structure:  struct
+utoppy_writefile  {          char *uw_path;         off_t uw_off‐
+set;         off_t uw_size;         time_t uw_mtime; }; The field
+specifies the full pathname of the file to be written.  The field
+specifies the file offset at which to start writing, assuming the
+file already exists.  Otherwise, must be zero.  The protocol  re‐
+quires  that  the  Toppy must be informed of a file’s size in ad‐
+vance of the file being written.  This is accomplished using  the
+field.   It  may  be possible to work around this limitation in a
+future version of the driver.  The  field  specifies  the  file’s
+timestamp  expressed  as seconds from the Unix epoch in the local
+timezone.  Due to limitations with the protocol, a device can  be
+opened by only one application at a time.  Also, only a single or
+command  can  be  in progress at any given time.  device node The
+driver appeared in

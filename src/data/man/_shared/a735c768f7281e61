@@ -1,0 +1,353 @@
+RPC(3)                   BSD Library Functions Manual                   RPC(3)
+
+NNAAMMEE
+     rrppcc — library routines for remote procedure calls
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<rrppcc//rrppcc..hh>>
+     ##iinncclluuddee <<nneettccoonnffiigg..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     These routines allow C language programs to make procedure calls on other
+     machines across a network.  First, the client sends a request to the
+     server.  On receipt of the request, the server calls a dispatch routine
+     to perform the requested service, and then sends back a reply.
+
+     All RPC routines require the header <_r_p_c_/_r_p_c_._h>.  Routines that take a
+     _s_t_r_u_c_t _n_e_t_c_o_n_f_i_g also require that <_n_e_t_c_o_n_f_i_g_._h> be included.
+
+NNeettttyyppee
+     Some of the high-level RPC interface routines take a _n_e_t_t_y_p_e string as
+     one of the arguments (for example, ccllnntt__ccrreeaattee(), ssvvcc__ccrreeaattee(),
+     rrppcc__rreegg(), rrppcc__ccaallll()).  This string defines a class of transports which
+     can be used for a particular application.
+
+     The _n_e_t_t_y_p_e argument can be one of the following:
+
+     netpath     Choose from the transports which have been indicated by their
+                 token names in the NETPATH environment variable.  NETPATH is
+                 unset or NULL, it defaults to "visible".  "netpath" is the
+                 default _n_e_t_t_y_p_e.
+
+     visible     Choose the transports which have the visible flag (v) set in
+                 the _/_e_t_c_/_n_e_t_c_o_n_f_i_g file.
+
+     circuit_v   This is same as "visible" except that it chooses only the
+                 connection oriented transports (semantics "tpi_cots" or
+                 "tpi_cots_ord") from the entries in the _/_e_t_c_/_n_e_t_c_o_n_f_i_g file.
+
+     datagram_v  This is same as "visible" except that it chooses only the
+                 connectionless datagram transports (semantics "tpi_clts")
+                 from the entries in the _/_e_t_c_/_n_e_t_c_o_n_f_i_g file.
+
+     circuit_n   This is same as "netpath" except that it chooses only the
+                 connection oriented datagram transports (semantics "tpi_cots"
+                 or "tpi_cots_ord").
+
+     datagram_n  This is same as "netpath" except that it chooses only the
+                 connectionless datagram transports (semantics "tpi_clts").
+
+     udp         This refers to Internet UDP, both version 4 and 6.
+
+     tcp         This refers to Internet TCP, both version 4 and 6.
+
+     If _n_e_t_t_y_p_e is NULL, it defaults to "netpath".  The transports are tried
+     in left to right order in the NETPATH variable or in top to down order in
+     the _/_e_t_c_/_n_e_t_c_o_n_f_i_g file.
+
+DDeerriivveedd TTyyppeess
+     The derived types used in the RPC interfaces are defined as follows:
+
+             typedef uint32_t rpcprog_t;
+             typedef uint32_t rpcvers_t;
+             typedef uint32_t rpcproc_t;
+             typedef uint32_t rpcprot_t;
+             typedef uint32_t rpcport_t;
+             typedef int32_t  rpc_inline_t;
+
+DDaattaa SSttrruuccttuurreess
+     Some of the data structures used by the RPC package are shown below.
+
+TThhee AAUUTTHH SSttrruuccttuurree
+     /*
+      * Authentication info. Opaque to client.
+      */
+     struct opaque_auth {
+         enum_t    oa_flavor;    /* flavor of auth */
+         caddr_t    oa_base;    /* address of more auth stuff */
+         u_int    oa_length;    /* not to exceed MAX_AUTH_BYTES */
+     };
+
+     /*
+      * Auth handle, interface to client side authenticators.
+      */
+     typedef struct {
+         struct    opaque_auth    ah_cred;
+         struct    opaque_auth    ah_verf;
+         struct auth_ops {
+             void    (*ah_nextverf)();
+             int    (*ah_marshal)();    /* nextverf & serialize */
+             int    (*ah_validate)();    /* validate verifier */
+             int    (*ah_refresh)();    /* refresh credentials */
+             void    (*ah_destroy)();    /* destroy this structure */
+         } *ah_ops;
+         caddr_t ah_private;
+     } AUTH;
+
+TThhee CCLLIIEENNTT SSttrruuccttuurree
+     /*
+      * Client rpc handle.
+      * Created by individual implementations.
+      * Client is responsible for initializing auth.
+      */
+
+     typedef struct {
+         AUTH    *cl_auth;    /* authenticator */
+         struct clnt_ops {
+             enum clnt_stat    (*cl_call)();    /* call remote procedure */
+             void    (*cl_abort)();        /* abort a call */
+             void    (*cl_geterr)();        /* get specific error code */
+             bool_t    (*cl_freeres)();    /* frees results */
+             void    (*cl_destroy)();    /* destroy this structure */
+             bool_t    (*cl_control)();    /* the ioctl() of rpc */
+         } *cl_ops;
+         caddr_t    cl_private;    /* private stuff */
+         char    *cl_netid;    /* network identifier */
+         char    *cl_tp;        /* device name */
+     } CLIENT;
+
+TThhee SSVVCCXXPPRRTT ssttrruuccttuurree
+     enum xprt_stat {
+         XPRT_DIED,
+         XPRT_MOREREQS,
+         XPRT_IDLE
+     };
+
+     /*
+      * Server side transport handle
+      */
+     typedef struct {
+         int    xp_fd;    /* file descriptor for the server handle */
+         u_short    xp_port;    /* obsolete */
+         const struct xp_ops {
+             bool_t    (*xp_recv)();    /* receive incoming requests */
+             enum xprt_stat    (*xp_stat)();    /* get transport status */
+             bool_t    (*xp_getargs)();    /* get arguments */
+             bool_t    (*xp_reply)();      /* send reply */
+             bool_t    (*xp_freeargs)(); /* free mem allocated for args */
+             void    (*xp_destroy)();    /* destroy this struct */
+         } *xp_ops;
+         int    xp_addrlen;    /* length of remote addr.  Obsolete */
+         struct sockaddr_in    xp_raddr; /* Obsolete */
+         const struct xp_ops2 {
+             bool_t    (*xp_control)();    /* catch-all function */
+         } *xp_ops2;
+         char    *xp_tp;    /* transport provider device name */
+         char    *xp_netid;    /* network identifier */
+         struct netbuf    xp_ltaddr;    /* local transport address */
+         struct netbuf    xp_rtaddr;    /* remote transport address */
+         struct opaque_auth    xp_verf;    /* raw response verifier */
+         caddr_t    xp_p1;    /* private: for use by svc ops */
+         caddr_t    xp_p2;    /* private: for use by svc ops */
+         caddr_t    xp_p3;    /* private: for use by svc lib */
+         int    xp_type    /* transport type */
+     } SVCXPRT;
+
+TThhee ssvvcc__rreegg ssttrruuccttuurree
+     struct svc_req {
+         rpcprog_t    rq_prog;    /* service program number */
+         rpcvers_t    rq_vers;    /* service protocol version */
+         rpcproc_t    rq_proc;    /* the desired procedure */
+         struct opaque_auth    rq_cred;    /* raw creds from the wire */
+         caddr_t    rq_clntcred;    /* read only cooked cred */
+         SVCXPRT    *rq_xprt;    /* associated transport */
+     };
+
+TThhee XXDDRR ssttrruuccttuurree
+     /*
+      * XDR operations.
+      * XDR_ENCODE causes the type to be encoded into the stream.
+      * XDR_DECODE causes the type to be extracted from the stream.
+      * XDR_FREE can be used to release the space allocated by an XDR_DECODE
+      * request.
+      */
+     enum xdr_op {
+         XDR_ENCODE=0,
+         XDR_DECODE=1,
+         XDR_FREE=2
+     };
+     /*
+      * This is the number of bytes per unit of external data.
+      */
+     #define BYTES_PER_XDR_UNIT    (4)
+     #define RNDUP(x)  ((((x) + BYTES_PER_XDR_UNIT - 1) /
+                        BYTES_PER_XDR_UNIT) \ * BYTES_PER_XDR_UNIT)
+
+     /*
+      * A xdrproc_t exists for each data type which is to be encoded or
+      * decoded.  The second argument to the xdrproc_t is a pointer to
+      * an opaque pointer.  The opaque pointer generally points to a
+      * structure of the data type to be decoded.  If this points to 0,
+      * then the type routines should allocate dynamic storage of the
+      * appropriate size and return it.
+      * bool_t  (*xdrproc_t)(XDR *, caddr_t *);
+      */
+     typedef  bool_t (*xdrproc_t)();
+
+     /*
+      * The XDR handle.
+      * Contains operation which is being applied to the stream,
+      * an operations vector for the particular implementation
+      */
+     typedef struct {
+         enum xdr_op    x_op;    /* operation; fast additional param */
+         struct xdr_ops {
+             bool_t    (*x_getlong)();    /* get a long from underlying stream */
+             bool_t    (*x_putlong)();    /* put a long to underlying stream */
+             bool_t    (*x_getbytes)(); /* get bytes from underlying stream */
+             bool_t    (*x_putbytes)(); /* put bytes to underlying stream */
+             u_int    (*x_getpostn)(); /* returns bytes off from beginning */
+             bool_t    (*x_setpostn)(); /* lets you reposition the stream */
+             long *    (*x_inline)();    /* buf quick ptr to buffered data */
+             void    (*x_destroy)();    /* free privates of this xdr_stream */
+         } *x_ops;
+         caddr_t    x_public;    /* users' data */
+         caddr_t    x_private;    /* pointer to private data */
+         caddr_t    x_base;    /* private used for position info */
+         u_int    x_handy;    /* extra private word */
+     } XDR;
+
+     /*
+      * The netbuf structure. This structure is defined in <xti.h> on SysV
+      * systems, but NetBSD / FreeBSD do not use XTI.
+      *
+      * Usually, buf will point to a struct sockaddr, and len and maxlen
+      * will contain the length and maximum length of that socket address,
+      * respectively.
+      */
+     struct netbuf {
+             unsigned int maxlen;
+             unsigned int len;
+             void *buf;
+     };
+
+     /*
+      * The format of the address and options arguments of the XTI t_bind call.
+      * Only provided for compatibility, it should not be used other than
+      * as an argument to svc_tli_create().
+      */
+
+     struct t_bind {
+             struct netbuf   addr;
+             unsigned int    qlen;
+     };
+
+IInnddeexx ttoo RRoouuttiinneess
+     The following table lists RPC routines and the manual reference pages on
+     which they are described:
+
+     _R_P_C _R_o_u_t_i_n_e                _M_a_n_u_a_l _R_e_f_e_r_e_n_c_e _P_a_g_e
+
+     aauutthh__ddeessttrrooyy()             rpc_clnt_auth(3)
+     aauutthhddeess__ccrreeaattee()           rpc_soc(3)
+     aauutthhnnoonnee__ccrreeaattee()          rpc_clnt_auth(3)
+     aauutthhssyyss__ccrreeaattee()           rpc_clnt_auth(3)
+     aauutthhssyyss__ccrreeaattee__ddeeffaauulltt()   rpc_clnt_auth(3)
+     aauutthhuunniixx__ccrreeaattee()          rpc_soc(3)
+     aauutthhuunniixx__ccrreeaattee__ddeeffaauulltt()  rpc_soc(3)
+     ccaallllrrppcc()                  rpc_soc(3)
+     ccllnntt__bbrrooaaddccaasstt()           rpc_soc(3)
+     ccllnntt__ccaallll()                rpc_clnt_calls(3)
+     ccllnntt__ccoonnttrrooll()             rpc_clnt_create(3)
+     ccllnntt__ccrreeaattee()              rpc_clnt_create(3)
+     ccllnntt__ccrreeaattee__ttiimmeedd()        rpc_clnt_create(3)
+     ccllnntt__ccrreeaattee__vveerrss()         rpc_clnt_create(3)
+     ccllnntt__ccrreeaattee__vveerrss__ttiimmeedd()   rpc_clnt_create(3)
+     ccllnntt__ddeessttrrooyy()             rpc_clnt_create(3)
+     ccllnntt__ddgg__ccrreeaattee()           rpc_clnt_create(3)
+     ccllnntt__ffrreeeerreess()             rpc_clnt_calls(3)
+     ccllnntt__ggeetteerrrr()              rpc_clnt_calls(3)
+     ccllnntt__ppccrreeaatteeeerrrroorr()        rpc_clnt_create(3)
+     ccllnntt__ppeerrrrnnoo()              rpc_clnt_calls(3)
+     ccllnntt__ppeerrrroorr()              rpc_clnt_calls(3)
+     ccllnntt__rraaww__ccrreeaattee()          rpc_clnt_create(3)
+     ccllnntt__ssppccrreeaatteeeerrrroorr()       rpc_clnt_create(3)
+     ccllnntt__ssppeerrrrnnoo()             rpc_clnt_calls(3)
+     ccllnntt__ssppeerrrroorr()             rpc_clnt_calls(3)
+     ccllnntt__ttllii__ccrreeaattee()          rpc_clnt_create(3)
+     ccllnntt__ttpp__ccrreeaattee()           rpc_clnt_create(3)
+     ccllnntt__ttpp__ccrreeaattee__ttiimmeedd()     rpc_clnt_create(3)
+     ccllnntt__uuddppccrreeaattee()           rpc_soc(3)
+     ccllnntt__vvcc__ccrreeaattee()           rpc_clnt_create(3)
+     ccllnnttrraaww__ccrreeaattee()           rpc_soc(3)
+     ccllnnttttccpp__ccrreeaattee()           rpc_soc(3)
+     ccllnnttuuddpp__bbuuffccrreeaattee()        rpc_soc(3)
+     ggeett__mmyyaaddddrreessss()            rpc_soc(3)
+     ppmmaapp__ggeettmmaappss()             rpc_soc(3)
+     ppmmaapp__ggeettppoorrtt()             rpc_soc(3)
+     ppmmaapp__rrmmttccaallll()             rpc_soc(3)
+     ppmmaapp__sseett()                 rpc_soc(3)
+     ppmmaapp__uunnsseett()               rpc_soc(3)
+     rreeggiisstteerrrrppcc()              rpc_soc(3)
+     rrppcc__bbrrooaaddccaasstt()            rpc_clnt_calls(3)
+     rrppcc__bbrrooaaddccaasstt__eexxpp()        rpc_clnt_calls(3)
+     rrppcc__ccaallll()                 rpc_clnt_calls(3)
+     rrppcc__rreegg()                  rpc_svc_calls(3)
+     ssvvcc__ccrreeaattee()               rpc_svc_create(3)
+     ssvvcc__ddeessttrrooyy()              rpc_svc_create(3)
+     ssvvcc__ddgg__ccrreeaattee()            rpc_svc_create(3)
+     ssvvcc__ddgg__eennaabblleeccaacchhee()       rpc_svc_calls(3)
+     ssvvcc__ffdd__ccrreeaattee()            rpc_svc_create(3)
+     ssvvcc__ffddss()                  rpc_soc(3)
+     ssvvcc__ffrreeeeaarrggss()             rpc_svc_reg(3)
+     ssvvcc__ggeettaarrggss()              rpc_svc_reg(3)
+     ssvvcc__ggeettccaalllleerr()            rpc_soc(3)
+     ssvvcc__ggeettrreeqq()               rpc_soc(3)
+     ssvvcc__ggeettrreeqqsseett()            rpc_svc_calls(3)
+     ssvvcc__ggeettrrppccccaalllleerr()         rpc_svc_calls(3)
+     ssvvcc__kkeerrbb__rreegg()             kerberos_rpc(3)
+     ssvvcc__rraaww__ccrreeaattee()           rpc_svc_create(3)
+     ssvvcc__rreegg()                  rpc_svc_calls(3)
+     ssvvcc__rreeggiisstteerr()             rpc_soc(3)
+     ssvvcc__rruunn()                  rpc_svc_reg(3)
+     ssvvcc__sseennddrreeppllyy()            rpc_svc_reg(3)
+     ssvvcc__ttllii__ccrreeaattee()           rpc_svc_create(3)
+     ssvvcc__ttpp__ccrreeaattee()            rpc_svc_create(3)
+     ssvvcc__uunnrreegg()                rpc_svc_calls(3)
+     ssvvcc__uunnrreeggiisstteerr()           rpc_soc(3)
+     ssvvcc__vvcc__ccrreeaattee()            rpc_svc_create(3)
+     ssvvcceerrrr__aauutthh()              rpc_svc_err(3)
+     ssvvcceerrrr__ddeeccooddee()            rpc_svc_err(3)
+     ssvvcceerrrr__nnoopprroocc()            rpc_svc_err(3)
+     ssvvcceerrrr__nnoopprroogg()            rpc_svc_err(3)
+     ssvvcceerrrr__pprrooggvveerrss()          rpc_svc_err(3)
+     ssvvcceerrrr__ssyysstteemmeerrrr()         rpc_svc_err(3)
+     ssvvcceerrrr__wweeaakkaauutthh()          rpc_svc_err(3)
+     ssvvccffdd__ccrreeaattee()             rpc_soc(3)
+     ssvvccrraaww__ccrreeaattee()            rpc_soc(3)
+     ssvvccttccpp__ccrreeaattee()            rpc_soc(3)
+     ssvvccuuddpp__bbuuffccrreeaattee()         rpc_soc(3)
+     ssvvccuuddpp__ccrreeaattee()            rpc_soc(3)
+     xxddrr__aacccceepptteedd__rreeppllyy()       rpc_xdr(3)
+     xxddrr__aauutthhssyyss__ppaarrmmss()        rpc_xdr(3)
+     xxddrr__aauutthhuunniixx__ppaarrmmss()       rpc_soc(3)
+     xxddrr__ccaallllhhddrr()              rpc_xdr(3)
+     xxddrr__ccaallllmmssgg()              rpc_xdr(3)
+     xxddrr__ooppaaqquuee__aauutthh()          rpc_xdr(3)
+     xxddrr__rreejjeecctteedd__rreeppllyy()       rpc_xdr(3)
+     xxddrr__rreeppllyymmssgg()             rpc_xdr(3)
+     xxpprrtt__rreeggiisstteerr()            rpc_svc_calls(3)
+     xxpprrtt__uunnrreeggiisstteerr()          rpc_svc_calls(3)
+
+FFIILLEESS
+     /etc/netconfig
+
+SSEEEE AALLSSOO
+     getnetconfig(3), getnetpath(3), rpc_clnt_auth(3), rpc_clnt_calls(3),
+     rpc_clnt_create(3), rpc_svc_calls(3), rpc_svc_create(3), rpc_svc_err(3),
+     rpc_svc_reg(3), rpc_xdr(3), rpcbind(3), xdr(3), netconfig(5)
+
+BSD                               May 7, 1993                              BSD

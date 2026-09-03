@@ -1,0 +1,171 @@
+BLACKLISTD(8)             BSD System Manager's Manual            BLACKLISTD(8)
+
+NNAAMMEE
+     bbllaacckklliissttdd — block and release ports on demand to avoid DoS abuse
+
+SSYYNNOOPPSSIISS
+     bbllaacckklliissttdd [--ddffrrvv] [--CC _c_o_n_t_r_o_l_p_r_o_g] [--cc _c_o_n_f_i_g_f_i_l_e] [--DD _d_b_f_i_l_e]
+                [--PP _s_o_c_k_p_a_t_h_s_f_i_l_e] [--RR _r_u_l_e_n_a_m_e] [--ss _s_o_c_k_p_a_t_h] [--tt _t_i_m_e_o_u_t]
+
+DDEESSCCRRIIPPTTIIOONN
+     bbllaacckklliissttdd is a daemon similar to syslogd(8) that listens to sockets at
+     paths specified in the _s_o_c_k_p_a_t_h_s_f_i_l_e for notifications from other daemons
+     about successful or failed connection attempts.  If no such file is spec‐
+     ified, then it only listens to the socket path specified by _s_o_c_k_s_p_a_t_h or
+     if that is not specified to _/_v_a_r_/_r_u_n_/_b_l_a_c_k_l_i_s_t_d_._s_o_c_k.  Each notification
+     contains an (action, port, protocol, address, owner) tuple that identi‐
+     fies the remote connection and the action.  This tuple is consulted
+     against entries in _c_o_n_f_i_g_f_i_l_e with syntax specified in
+     blacklistd.conf(5).  If an entry is matched, a state entry is created for
+     that tuple.  Each entry contains a number of tries limit and a duration.
+
+     The way bbllaacckklliissttdd does configuration entry matching is by having the
+     client side pass the file descriptor associated with the connection the
+     client wants to blacklist as well as passing socket credentials.
+
+     The file descriptor is used to retrieve information (address and port)
+     about the remote side with getpeername(2) and the local side with
+     getsockname(2).
+
+     By examining the port of the local side, bbllaacckklliissttdd can determine if the
+     client program “owns” the port.  By examining the optional address por‐
+     tion on the local side, it can match interfaces.  By examining the remote
+     address, it can match specific allow or deny rules.
+
+     Finally bbllaacckklliissttdd can examine the socket credentials to match the user
+     in the configuration file.
+
+     While this works well for TCP sockets, it cannot be relied on for unbound
+     UDP sockets.  It is also less meaningful when it comes to connections us‐
+     ing non-privileged ports.  On the other hand, if we receive a request
+     that has a local endpoint indicating a UDP privileged port, we can pre‐
+     sume that the client was privileged to be able to acquire that port.
+
+     Once an entry is matched bbllaacckklliissttdd can perform various actions.  If the
+     action is “add” and the number of tries limit is reached, then a control
+     script _c_o_n_t_r_o_l_p_r_o_g is invoked with arguments:
+
+           control add <rulename> <proto> <address> <mask> <port>
+
+     and should invoke a packet filter command to block the connection speci‐
+     fied by the arguments.  The _r_u_l_e_n_a_m_e argument can be set from the command
+     line (default blacklistd).  The script could print a numerical id to std‐
+     out as a handle for the rule that can be used later to remove that con‐
+     nection, but that is not required as all information to remove the rule
+     is kept.
+
+     If the action is “rem” Then the same control script is invoked as:
+
+           control rem <rulename> <proto> <address> <mask> <port> <id>
+
+     where _i_d is the number returned from the “add” action.
+
+     bbllaacckklliissttdd maintains a database of known connections in _d_b_f_i_l_e.  On
+     startup it reads entries from that file, and updates its internal state.
+
+     bbllaacckklliissttdd checks the list of active entries every _t_i_m_e_o_u_t seconds (de‐
+     fault 15) and removes entries and block rules using the control program
+     as necessary.
+
+     The following options are available:
+
+     --CC _c_o_n_t_r_o_l_p_r_o_g
+             Use _c_o_n_t_r_o_l_p_r_o_g to communicate with the packet filter, usually
+             _/_u_s_r_/_l_i_b_e_x_e_c_/_b_l_a_c_k_l_i_s_t_d_-_h_e_l_p_e_r.  The following arguments are
+             passed to the control program:
+
+             action    The action to perform: add, rem, or flush to add, re‐
+                       move or flush a firewall rule.
+
+             name      The rule name.
+
+             protocol  The optional protocol name (can be empty): tcp, tcp6,
+                       udp, udp6.
+
+             address   The IPv4 or IPv6 numeric address to be blocked or re‐
+                       leased.
+
+             mask      The numeric mask to be applied to the blocked or re‐
+                       leased address
+
+             port      The optional numeric port to be blocked (can be empty).
+
+             id        For packet filters that support removal of rules by
+                       rule identifier, the identifier of the rule to be re‐
+                       moved.  The add command is expected to return the rule
+                       identifier string to stdout.
+
+     --cc _c_o_n_f_i_g_u_r_a_t_i_o_n
+             The name of the configuration file to read, usually
+             _/_e_t_c_/_b_l_a_c_k_l_i_s_t_d_._c_o_n_f.
+
+     --DD _d_b_f_i_l_e
+             The Berkeley DB file where bbllaacckklliissttdd stores its state, usually
+             _/_v_a_r_/_d_b_/_b_l_a_c_k_l_i_s_t_d_._d_b.
+
+     --dd      Normally, bbllaacckklliissttdd disassociates itself from the terminal un‐
+             less the --dd flag is specified, in which case it stays in the
+             foreground.
+
+     --ff      Truncate the state database and flush all the rules named
+             _r_u_l_e_n_a_m_e are deleted by invoking the control script as:
+
+                   control flush <rulename>
+
+     --PP _s_o_c_k_s_p_a_t_h_s_f_i_l_e
+             A file containing a list of pathnames, one per line that
+             bbllaacckklliissttdd will create sockets to listen to.  This is useful for
+             chrooted environments.
+
+     --RR _r_u_l_e_n_a_m_e
+             Specify the default rule name for the packet filter rules, usu‐
+             ally blacklistd.
+
+     --rr      Re-read the firewall rules from the internal database, then re‐
+             move and re-add them.  This helps for packet filters that do not
+             retain state across reboots.
+
+     --ss _s_o_c_k_p_a_t_h
+             Add _s_o_c_k_p_a_t_h to the list of Unix sockets bbllaacckklliissttdd listens to.
+
+     --tt _t_i_m_e_o_u_t
+             The interval in seconds bbllaacckklliissttdd polls the state file to update
+             the rules.
+
+     --vv      Cause bbllaacckklliissttdd to print diagnostic messages to stdout instead
+             of syslogd(8).
+
+SSIIGGNNAALL HHAANNDDLLIINNGG
+     bbllaacckklliissttdd deals with the following signals:
+
+     HUP   Receipt of this signal causes bbllaacckklliissttdd to re-read the configura‐
+           tion file.
+
+     INT, TERM & QUIT
+           These signals tell bbllaacckklliissttdd to exit in an orderly fashion.
+
+     USR1  This signal tells bbllaacckklliissttdd to increase the internal debugging
+           level by 1.
+
+     USR2  This signal tells bbllaacckklliissttdd to decrease the internal debugging
+           level by 1.
+
+FFIILLEESS
+     /usr/libexec/blacklistd-helper  Shell script invoked to interface with
+                                     the packet filter.
+     /etc/blacklistd.conf            Configuration file.
+     /var/db/blacklistd.db           Database of current connection entries.
+     /var/run/blacklistd.sock        Socket to receive connection notifica‐
+                                     tions.
+
+SSEEEE AALLSSOO
+     blacklistd.conf(5), blacklistctl(8), pfctl(8), syslogd(8)
+
+HHIISSTTOORRYY
+     bbllaacckklliissttdd first appeared in NetBSD 7.  FreeBSD support for bbllaacckklliissttdd
+     was implemented in FreeBSD 11.
+
+AAUUTTHHOORRSS
+     Christos Zoulas
+
+BSD                             April 21, 2020                             BSD

@@ -1,0 +1,182 @@
+FIRMWARE(9)              BSD Kernel Developer's Manual             FIRMWARE(9)
+
+NNAAMMEE
+     ffiirrmmwwaarree__rreeggiisstteerr, ffiirrmmwwaarree__uunnrreeggiisstteerr, ffiirrmmwwaarree__ggeett, ffiirrmmwwaarree__ggeett__ffllaaggss,
+     ffiirrmmwwaarree__ppuutt — firmware image loading and management
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//ssyyssttmm..hh>>
+     ##iinncclluuddee <<ssyyss//lliinnkkeerr..hh>>
+     ##iinncclluuddee <<ssyyss//ffiirrmmwwaarree..hh>>
+
+     struct firmware {
+             const char      *name;          /* system-wide name */
+             const void      *data;          /* location of image */
+             size_t          datasize;       /* size of image in bytes */
+             unsigned int    version;        /* version of the image */
+     };
+
+     _c_o_n_s_t _s_t_r_u_c_t _f_i_r_m_w_a_r_e _*
+     ffiirrmmwwaarree__rreeggiisstteerr(_c_o_n_s_t _c_h_a_r _*_i_m_a_g_e_n_a_m_e, _c_o_n_s_t _v_o_i_d _*_d_a_t_a,
+         _s_i_z_e___t _d_a_t_a_s_i_z_e, _u_n_s_i_g_n_e_d _i_n_t _v_e_r_s_i_o_n,
+         _c_o_n_s_t _s_t_r_u_c_t _f_i_r_m_w_a_r_e _*_p_a_r_e_n_t);
+
+     _i_n_t
+     ffiirrmmwwaarree__uunnrreeggiisstteerr(_c_o_n_s_t _c_h_a_r _*_i_m_a_g_e_n_a_m_e);
+
+     _c_o_n_s_t _s_t_r_u_c_t _f_i_r_m_w_a_r_e _*
+     ffiirrmmwwaarree__ggeett(_c_o_n_s_t _c_h_a_r _*_i_m_a_g_e_n_a_m_e);
+
+     _c_o_n_s_t _s_t_r_u_c_t _f_i_r_m_w_a_r_e _*
+     ffiirrmmwwaarree__ggeett__ffllaaggss(_c_o_n_s_t _c_h_a_r _*_i_m_a_g_e_n_a_m_e, _u_i_n_t_3_2___t _f_l_a_g_s);
+
+     _v_o_i_d
+     ffiirrmmwwaarree__ppuutt(_c_o_n_s_t _s_t_r_u_c_t _f_i_r_m_w_a_r_e _*_f_p, _i_n_t _f_l_a_g_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ffiirrmmwwaarree abstraction provides a convenient interface for loading
+     ffiirrmmwwaarree iimmaaggeess into the kernel, and for accessing such images from ker‐
+     nel components.
+
+     A ffiirrmmwwaarree iimmaaggee (or iimmaaggee for brevity) is an opaque block of data resid‐
+     ing in kernel memory.  It is associated to a unique iimmaaggeennaammee which con‐
+     stitutes a search key, and to an integer vveerrssiioonn number, which is also an
+     opaque piece of information for the firmware subsystem.
+
+     An image is registered with the ffiirrmmwwaarree subsystem by calling the func‐
+     tion ffiirrmmwwaarree__rreeggiisstteerr(), and unregistered by calling
+     ffiirrmmwwaarree__uunnrreeggiisstteerr().  These functions are usually (but not exclusively)
+     called by specially crafted kernel modules that contain the firmware im‐
+     age.  The modules can be statically compiled in the kernel, or loaded by
+     //bboooott//llooaaddeerr, manually at runtime, or on demand by the firmware subsys‐
+     tem.
+
+     CClliieennttss of the firmware subsystem can request access to a given image by
+     calling the function ffiirrmmwwaarree__ggeett() with the iimmaaggeennaammee they want as an
+     argument, or by calling ffiirrmmwwaarree__ggeett__ffllaaggss() with the iimmaaggeennaammee and ffllaaggss
+     they want as an arguments.  If a matching image is not already regis‐
+     tered, the firmware subsystem will try to load it using the mechanisms
+     specified below (typically, a kernel module with ffiirrmmwwaarree__rreeggiisstteerr the
+     same name as the image).
+
+AAPPII DDEESSCCRRIIPPTTIIOONN
+     The kernel ffiirrmmwwaarree__rreeggiisstteerr firmware API is made of the following func‐
+     tions:
+
+     ffiirrmmwwaarree__rreeggiisstteerr() registers with the kernel an image of size ddaattaassiizzee
+     located at address ddaattaa, under the name iimmaaggeennaammee.
+
+     The function returns NULL on error (e.g. because an image with the same
+     name already exists, or the image table is full), or a _c_o_n_s_t _s_t_r_u_c_t
+     _f_i_r_m_w_a_r_e _* pointer to the image requested.
+
+     ffiirrmmwwaarree__uunnrreeggiisstteerr() tries to unregister the firmware image iimmaaggeennaammee
+     from the system.  The function is successful and returns 0 if there are
+     no pending references to the image, otherwise it does not unregister the
+     image and returns EBUSY.
+
+     ffiirrmmwwaarree__ggeett() and ffiirrmmwwaarree__ggeett__ffllaaggss() return the requested firmware im‐
+     age.  The _f_l_a_g_s argument may be set to FIRMWARE_GET_NOWARN to indicate
+     that errors on firmware load or registration should only be logged in
+     case of bboooovveerrbboossee.  If the image is not yet registered with the system,
+     the functions try to load it.  This involves the linker subsystem and
+     disk access, so ffiirrmmwwaarree__ggeett() or ffiirrmmwwaarree__ggeett__ffllaaggss() must not be called
+     with any locks (except for _G_i_a_n_t).  Note also that if the firmware image
+     is loaded from a filesystem it must already be mounted.  In particular
+     this means that it may be necessary to defer requests from a driver at‐
+     tach method unless it is known the root filesystem is already mounted.
+
+     On success, ffiirrmmwwaarree__ggeett() and ffiirrmmwwaarree__ggeett__ffllaaggss() return a pointer to
+     the image description and increase the reference count for this image.
+     On failure, the functions return NULL.
+
+     ffiirrmmwwaarree__ppuutt() drops a reference to a firmware image.  The _f_l_a_g_s argument
+     may be set to FIRMWARE_UNLOAD to indicate that firmware_put is free to
+     reclaim resources associated with the firmware image if this is the last
+     reference.  By default a firmware image will be deferred to a
+     taskqueue(9) thread so the call may be done while holding a lock.  In
+     certain cases, such as on driver detach, this cannot be allowed.
+
+FFIIRRMMWWAARREE LLOOAADDIINNGG MMEECCHHAANNIISSMMSS
+     As mentioned before, any component of the system can register firmware
+     images at any time by simply calling ffiirrmmwwaarree__rreeggiisstteerr().
+
+     This is typically done when a module containing a firmware image is given
+     control, whether compiled in, or preloaded by //bboooott//llooaaddeerr, or manually
+     loaded with kldload(8).  However, a system can implement additional mech‐
+     anisms to bring these images in memory before calling
+     ffiirrmmwwaarree__rreeggiisstteerr().
+
+     When ffiirrmmwwaarree__ggeett() or ffiirrmmwwaarree__ggeett__ffllaaggss() does not find the requested
+     image, it tries to load it using one of the available loading mechanisms.
+     At the moment, there is only one, namely LLooaaddaabbllee kkeerrnneell mmoodduulleess.
+
+     A firmware image named ffoooo is looked up by trying to load the module
+     named ffoooo..kkoo, using the facilities described in kld(4).  In particular,
+     images are looked up in the directories specified by the sysctl variable
+     kkeerrnn..mmoodduullee__ppaatthh which on most systems defaults to
+     //bboooott//kkeerrnneell;;//bboooott//mmoodduulleess.
+
+     Note that in case a module contains multiple images, the caller should
+     first request a ffiirrmmwwaarree__ggeett() or ffiirrmmwwaarree__ggeett__ffllaaggss() for the first im‐
+     age contained in the module, followed by requests for the other images.
+
+BBUUIILLDDIINNGG FFIIRRMMWWAARREE LLOOAADDAABBLLEE MMOODDUULLEESS
+     A firmware module is built by embedding the ffiirrmmwwaarree iimmaaggee into a suit‐
+     able loadable kernel module that calls ffiirrmmwwaarree__rreeggiisstteerr() on loading,
+     and ffiirrmmwwaarree__uunnrreeggiisstteerr() on unloading.
+
+     Various system scripts and makefiles let you build a module by simply
+     writing a Makefile with the following entries:
+
+
+             KMOD=   imagename
+             FIRMWS= image_file:imagename[:version]
+             .include <bsd.kmod.mk>
+
+     where KMOD is the basename of the module; FIRMWS is a list of colon-sepa‐
+     rated tuples indicating the image_file's to be embedded in the module,
+     the imagename and version of each firmware image.
+
+     If you need to embed firmware images into a system, you should write ap‐
+     propriate entries in the <files.arch> file, e.g. this example is from
+     ssyyss//aarrmm//xxssccaallee//iixxpp442255//ffiilleess..iixxpp442255:
+
+     ixp425_npe_fw.c                         optional npe_fw                 \
+             compile-with    "${AWK} -f $S/tools/fw_stub.awk                 \
+                             IxNpeMicrocode.dat:npe_fw -mnpe -c${.TARGET}"   \
+             no-implicit-rule before-depend local                            \
+             clean           "ixp425_npe_fw.c"
+     #
+     # NB: ld encodes the path in the binary symbols generated for the
+     #     firmware image so link the file to the object directory to
+     #     get known values for reference in the _fw.c file.
+     #
+     IxNpeMicrocode.fwo  optional npe_fw                                     \
+             dependency      "IxNpeMicrocode.dat"                            \
+             compile-with    "${LD} -b binary -d -warn-common                \
+                                 -r -d -o ${.TARGET} IxNpeMicrocode.dat"     \
+             no-implicit-rule                                                \
+             clean           "IxNpeMicrocode.fwo"
+
+     Firmware was previously committed to the source tree as uuencoded files,
+     but this is no longer required; the binary firmware file should be com‐
+     mitted to the tree as provided by the vendor.
+
+     Note that generating the firmware modules in this way requires the avail‐
+     ability of the following tools: awk(1), make(1), the compiler and the
+     linker.
+
+SSEEEE AALLSSOO
+     kld(4), module(9)
+
+     _/_u_s_r_/_s_h_a_r_e_/_e_x_a_m_p_l_e_s_/_k_l_d_/_f_i_r_m_w_a_r_e
+
+HHIISSTTOORRYY
+     The ffiirrmmwwaarree system was introduced in FreeBSD 6.1.
+
+AAUUTTHHOORRSS
+     This manual page was written by Max Laier <_m_l_a_i_e_r_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            January 27, 2021                            BSD

@@ -1,0 +1,96 @@
+VKBD(4)                  BSD Kernel Interfaces Manual                  VKBD(4)
+
+NNAAMMEE
+     vvkkbbdd — the virtual AT keyboard interface
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee vvkkbbdd
+
+DDEESSCCRRIIPPTTIIOONN
+     The vvkkbbdd interface is a software loopback mechanism that can be loosely
+     described as the virtual AT keyboard analog of the pty(4), that is, vvkkbbdd
+     does for virtual AT keyboards what the pty(4) driver does for terminals.
+
+     The vvkkbbdd driver, like the pty(4) driver, provides two interfaces: a key‐
+     board interface like the usual facility it is simulating (a virtual AT
+     keyboard in the case of vvkkbbdd, or a terminal for pty(4)), and a character-
+     special device “control” interface.
+
+     The virtual AT keyboards are named _v_k_b_d_0, _v_k_b_d_1, etc., one for each con‐
+     trol device that has been opened.
+
+     The vvkkbbdd interface permits opens on the special control device
+     _/_d_e_v_/_v_k_b_d_c_t_l.  When this device is opened, vvkkbbdd will return a handle for
+     the lowest unused _v_k_b_d_c_t_l device (use devname(3) to determine which).
+
+     Each virtual AT keyboard supports the usual keyboard interface ioctl(2)s,
+     and thus can be used with kbdcontrol(1) like any other keyboard.  The
+     control device supports exactly the same ioctl(2)s as the virtual AT key‐
+     board device.  Writing AT scan codes to the control device generates an
+     input on the virtual AT keyboard, as if the (non-existent) hardware had
+     just received it.
+
+     The virtual AT keyboard control device, normally _/_d_e_v_/_v_k_b_d_c_t_l⟨_N⟩, is ex‐
+     clusive-open (it cannot be opened if it is already open) and is re‐
+     stricted to the super-user.  A read(2) call will return the virtual AT
+     keyboard status structure (defined in <_d_e_v_/_v_k_b_d_/_v_k_b_d___v_a_r_._h>) if one is
+     available; if not, it will either block until one is or return
+     EWOULDBLOCK, depending on whether non-blocking I/O has been enabled.
+
+     A write(2) call passes AT scan codes to be “received” from the virtual AT
+     keyboard.  Each AT scan code must be passed as _u_n_s_i_g_n_e_d _i_n_t.  Although AT
+     scan codes must be passes as _u_n_s_i_g_n_e_d _i_n_ts, the size of the buffer passed
+     to write(2) still should be in bytes, i.e.,
+
+           static unsigned int     codes[] =
+           {
+           /*      Make    Break */
+                   0x1e,   0x9e
+           };
+
+           int
+           main(void)
+           {
+                   int     fd, len;
+
+                   fd = open("/dev/vkbdctl0", O_RDWR);
+                   if (fd < 0)
+                           err(1, "open");
+
+                   /* Note sizeof(codes) - not 2! */
+                   len = write(fd, codes, sizeof(codes));
+                   if (len < 0)
+                           err(1, "write");
+
+                   close(fd);
+
+                   return (0);
+           }
+
+     Write will block if there is not enough space in the input queue.
+
+     The control device also supports select(2) for read and write.
+
+     On the last close of the control device, the virtual AT keyboard is re‐
+     moved.  All queued scan codes are thrown away.
+
+SSEEEE AALLSSOO
+     kbdcontrol(1), atkbdc(4), psm(4), syscons(4), vt(4)
+
+HHIISSTTOORRYY
+     The vvkkbbdd module was implemented in FreeBSD 6.0.
+
+AAUUTTHHOORRSS
+     Maksim Yevmenkin <_m___e_v_m_e_n_k_i_n_@_y_a_h_o_o_._c_o_m>
+
+CCAAVVEEAATTSS
+     The vvkkbbdd interface is a software loopback mechanism, and, thus ddb(4)
+     will not work with it.  Current implementation of the syscons(4) driver
+     can accept input from only one keyboard, even if it is virtual.  Thus it
+     is not possible to have both wired and virtual keyboard to be active at
+     the same time.  It is, however, in principal possible to obtain AT scan
+     codes from the different sources and write them into the same virtual
+     keyboard.  The virtual keyboard state synchronization is the user's re‐
+     sponsibility.
+
+BSD                             August 12, 2004                            BSD

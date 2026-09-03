@@ -1,0 +1,247 @@
+UNIX(4)                  BSD Kernel Interfaces Manual                  UNIX(4)
+
+NNAAMMEE
+     uunniixx — UNIX-domain protocol family
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//uunn..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The UNIX-domain protocol family is a collection of protocols that pro‐
+     vides local (on-machine) interprocess communication through the normal
+     socket(2) mechanisms.  The UNIX-domain family supports the SOCK_STREAM,
+     SOCK_SEQPACKET, and SOCK_DGRAM socket types and uses file system path‐
+     names for addressing.
+
+AADDDDRREESSSSIINNGG
+     UNIX-domain addresses are variable-length file system pathnames of at
+     most 104 characters.  The include file <_s_y_s_/_u_n_._h> defines this address:
+
+           struct sockaddr_un {
+                   u_char  sun_len;
+                   u_char  sun_family;
+                   char    sun_path[104];
+           };
+
+     Binding a name to a UNIX-domain socket with bind(2) causes a socket file
+     to be created in the file system.  This file is _n_o_t removed when the
+     socket is closed — unlink(2) must be used to remove the file.
+
+     Prior to binding a socket, fchmod(2) can be used to set the permissions
+     of the socket file.  This avoids the race that would otherwise occur be‐
+     tween creation of the file and a subsequent call to chmod(2).  Once the
+     socket is bound to a file name, the permissions of the file can not be
+     changed this way.
+
+     The length of UNIX-domain address, required by bind(2) and connect(2),
+     can be calculated by the macro SSUUNN__LLEENN() defined in <_s_y_s_/_u_n_._h>.  The
+     _s_u_n___p_a_t_h field must be terminated by a NUL character to be used with
+     SSUUNN__LLEENN(), but the terminating NUL is _n_o_t part of the address.
+
+     The UNIX-domain protocol family does not support broadcast addressing or
+     any form of “wildcard” matching on incoming messages.  All addresses are
+     absolute- or relative-pathnames of other UNIX-domain sockets.  Normal
+     file system access-control mechanisms are also applied when referencing
+     pathnames; e.g., the destination of a connect(2) or sendto(2) must be
+     writable.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     The UNIX-domain sockets support the communication of UNIX file descrip‐
+     tors and process credentials through the use of the _m_s_g___c_o_n_t_r_o_l field in
+     the _m_s_g argument to sendmsg(2) and recvmsg(2).  The items to be passed
+     are described using a _s_t_r_u_c_t _c_m_s_g_h_d_r that is defined in the include file
+     <_s_y_s_/_s_o_c_k_e_t_._h>.
+
+     To send file descriptors, the type of the message is SCM_RIGHTS, and the
+     data portion of the messages is an array of integers representing the
+     file descriptors to be passed.  The number of descriptors being passed is
+     defined by the length field of the message; the length field is the sum
+     of the size of the header plus the size of the array of file descriptors.
+
+     The received descriptor is a _d_u_p_l_i_c_a_t_e of the sender's descriptor, as if
+     it were created via dup(fd) or fcntl(fd, F_DUPFD_CLOEXEC, 0) depending on
+     whether MSG_CMSG_CLOEXEC is passed in the recvmsg(2) call.  Descriptors
+     that are awaiting delivery, or that are purposely not received, are auto‐
+     matically closed by the system when the destination socket is closed.
+
+     Credentials of the sending process can be transmitted explicitly using a
+     control message of type SCM_CREDS with a data portion of type _s_t_r_u_c_t
+     _c_m_s_g_c_r_e_d, defined in <_s_y_s_/_s_o_c_k_e_t_._h> as follows:
+
+     struct cmsgcred {
+       pid_t cmcred_pid;             /* PID of sending process */
+       uid_t cmcred_uid;             /* real UID of sending process */
+       uid_t cmcred_euid;            /* effective UID of sending process */
+       gid_t cmcred_gid;             /* real GID of sending process */
+       short cmcred_ngroups;         /* number of groups */
+       gid_t cmcred_groups[CMGROUP_MAX];     /* groups */
+     };
+
+     The sender should pass a zeroed buffer which will be filled in by the
+     system.
+
+     The group list is truncated to at most CMGROUP_MAX GIDs.
+
+     The process ID _c_m_c_r_e_d___p_i_d should not be looked up (such as via the
+     KERN_PROC_PID sysctl) for making security decisions.  The sending process
+     could have exited and its process ID already been reused for a new
+     process.
+
+SSOOCCKKEETT OOPPTTIIOONNSS
+     UNIX domain sockets support a number of socket options for the options
+     level SOL_LOCAL, which can be set with setsockopt(2) and tested with
+     getsockopt(2):
+
+     LOCAL_CREDS             This option may be enabled on SOCK_DGRAM,
+                             SOCK_SEQPACKET, or a SOCK_STREAM socket.  This
+                             option provides a mechanism for the receiver to
+                             receive the credentials of the process calling
+                             write(2), send(2), sendto(2) or sendmsg(2) as a
+                             recvmsg(2) control message.  The _m_s_g___c_o_n_t_r_o_l
+                             field in the _m_s_g_h_d_r structure points to a buffer
+                             that contains a _c_m_s_g_h_d_r structure followed by a
+                             variable length _s_o_c_k_c_r_e_d structure, defined in
+                             <_s_y_s_/_s_o_c_k_e_t_._h> as follows:
+
+                             struct sockcred {
+                               uid_t sc_uid;         /* real user id */
+                               uid_t sc_euid;        /* effective user id */
+                               gid_t sc_gid;         /* real group id */
+                               gid_t sc_egid;        /* effective group id */
+                               int   sc_ngroups;     /* number of supplemental groups */
+                               gid_t sc_groups[1];   /* variable length */
+                             };
+
+                             The current implementation truncates the group
+                             list to at most CMGROUP_MAX groups.
+
+                             The SSOOCCKKCCRREEDDSSIIZZEE() macro computes the size of the
+                             _s_o_c_k_c_r_e_d structure for a specified number of
+                             groups.  The _c_m_s_g_h_d_r fields have the following
+                             values:
+
+                             cmsg_len = CMSG_LEN(SOCKCREDSIZE(ngroups))
+                             cmsg_level = SOL_SOCKET
+                             cmsg_type = SCM_CREDS
+
+                             On SOCK_STREAM and SOCK_SEQPACKET sockets creden‐
+                             tials are passed only on the first read from a
+                             socket, then the system clears the option on the
+                             socket.
+
+                             This option and the above explicit _s_t_r_u_c_t
+                             _c_m_s_g_c_r_e_d both use the same value SCM_CREDS but
+                             incompatible control messages.  If this option is
+                             enabled and the sender attached a SCM_CREDS con‐
+                             trol message with a _s_t_r_u_c_t _c_m_s_g_c_r_e_d, it will be
+                             discarded and a _s_t_r_u_c_t _s_o_c_k_c_r_e_d will be included.
+
+                             Many setuid programs will write(2) data at least
+                             partially controlled by the invoker, such as er‐
+                             ror messages.  Therefore, a message accompanied
+                             by a particular _s_c___e_u_i_d value should not be
+                             trusted as being from that user.
+
+     LOCAL_CREDS_PERSISTENT  This option is similar to LOCAL_CREDS, except
+                             that socket credentials are passed on every read
+                             from a SOCK_STREAM or SOCK_SEQPACKET socket, in‐
+                             stead of just the first read.  Additionally, the
+                             _m_s_g___c_o_n_t_r_o_l field in the _m_s_g_h_d_r structure points
+                             to a buffer that contains a _c_m_s_g_h_d_r structure
+                             followed by a variable length _s_o_c_k_c_r_e_d_2 struc‐
+                             ture, defined in <_s_y_s_/_s_o_c_k_e_t_._h> as follows:
+
+                             struct sockcred2 {
+                               int   sc_version;     /* version of this structure */
+                               pid_t sc_pid;         /* PID of sending process */
+                               uid_t sc_uid;         /* real user id */
+                               uid_t sc_euid;        /* effective user id */
+                               gid_t sc_gid;         /* real group id */
+                               gid_t sc_egid;        /* effective group id */
+                               int   sc_ngroups;     /* number of supplemental groups */
+                               gid_t sc_groups[1];   /* variable length */
+                             };
+
+                             The current version is zero.
+
+                             The _c_m_s_g_h_d_r fields have the following values:
+
+                             cmsg_len = CMSG_LEN(SOCKCRED2SIZE(ngroups))
+                             cmsg_level = SOL_SOCKET
+                             cmsg_type = SCM_CREDS2
+
+                             The LOCAL_CREDS and LOCAL_CREDS_PERSISTENT op‐
+                             tions are mutually exclusive.
+
+     LOCAL_CONNWAIT          Used with SOCK_STREAM sockets, this option causes
+                             the connect(2) function to block until accept(2)
+                             has been called on the listening socket.
+
+     LOCAL_PEERCRED          Requested via getsockopt(2) on a SOCK_STREAM or
+                             SOCK_SEQPACKET socket returns credentials of the
+                             remote side.  These will arrive in the form of a
+                             filled in _x_u_c_r_e_d structure, defined in
+                             <_s_y_s_/_u_c_r_e_d_._h> as follows:
+
+                             struct xucred {
+                               u_int cr_version;             /* structure layout version */
+                               uid_t cr_uid;                 /* effective user id */
+                               short cr_ngroups;             /* number of groups */
+                               gid_t cr_groups[XU_NGROUPS];  /* groups */
+                               pid_t cr_pid;                 /* process id of the sending process */
+                             };
+                             The _c_r___v_e_r_s_i_o_n fields should be checked against
+                             XUCRED_VERSION define.
+
+                             The credentials presented to the server (the
+                             listen(2) caller) are those of the client when it
+                             called connect(2); the credentials presented to
+                             the client (the connect(2) caller) are those of
+                             the server when it called listen(2).  This mecha‐
+                             nism is reliable; there is no way for either
+                             party to influence the credentials presented to
+                             its peer except by calling the appropriate system
+                             call (e.g., connect(2) or listen(2)) under dif‐
+                             ferent effective credentials.
+
+                             To reliably obtain peer credentials on a
+                             SOCK_DGRAM socket refer to the LOCAL_CREDS socket
+                             option.
+
+BBUUFFFFEERRIINNGG
+     Due to the local nature of the UNIX-domain sockets, they do not implement
+     send buffers.  The send(2) and write(2) families of system calls attempt
+     to write data to the receive buffer of the destination socket.
+
+     The default buffer sizes for SOCK_STREAM and SOCK_SEQPACKET UNIX-domain
+     sockets can be configured with _n_e_t_._l_o_c_a_l_._s_t_r_e_a_m and _n_e_t_._l_o_c_a_l_._s_e_q_p_a_c_k_e_t
+     branches of sysctl(3) MIB respectively.  Note that setting the send buf‐
+     fer size (sendspace) affects only the maximum write size.
+
+     The UNIX-domain sockets of type SOCK_DGRAM are unreliable and always non-
+     blocking for write operations.  The default receive buffer can be config‐
+     ured with _n_e_t_._l_o_c_a_l_._d_g_r_a_m_._r_e_c_v_s_p_a_c_e.  The maximum allowed datagram size
+     is limited by _n_e_t_._l_o_c_a_l_._d_g_r_a_m_._m_a_x_d_g_r_a_m.  A SOCK_DGRAM socket that has
+     been bound with bind(2) can have multiple peers connected at the same
+     time.  The modern FreeBSD implementation will allocate
+     _n_e_t_._l_o_c_a_l_._d_g_r_a_m_._r_e_c_v_s_p_a_c_e sized private buffers in the receive buffer of
+     the bound socket for every connected socket, preventing a situation when
+     a single writer can exhaust all of buffer space.  Messages coming from
+     unconnected sends using sendto(2) land on the shared buffer of the re‐
+     ceiving socket, which has the same size limit.  A side effect of the im‐
+     plementation is that it doesn't guarantee that writes from different
+     senders will arrive at the receiver in the same chronological order they
+     were sent.  The order is preserved for writes coming through a particular
+     connection.
+
+SSEEEE AALLSSOO
+     connect(2), dup(2), fchmod(2), fcntl(2), getsockopt(2), listen(2),
+     recvmsg(2), sendto(2), setsockopt(2), socket(2), CMSG_DATA(3), intro(4),
+     sysctl(8)
+
+     “An Introductory 4.3 BSD Interprocess Communication Tutorial”, _P_S_1, 7.
+
+     “An Advanced 4.3 BSD Interprocess Communication Tutorial”, _P_S_1, 8.
+
+BSD                            October 31, 2024                            BSD

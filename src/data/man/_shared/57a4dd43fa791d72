@@ -1,0 +1,556 @@
+IEEE80211(9)             BSD Kernel Developer's Manual            IEEE80211(9)
+
+NNAAMMEE
+     IIEEEEEE8800221111 — 802.11 network layer
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneett8800221111//iieeeeee8800221111__vvaarr..hh>>
+
+     _v_o_i_d
+     iieeeeee8800221111__iiffaattttaacchh(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*_i_c);
+
+     _v_o_i_d
+     iieeeeee8800221111__iiffddeettaacchh(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*_i_c);
+
+     _i_n_t
+     iieeeeee8800221111__mmhhzz22iieeeeee(_u___i_n_t _f_r_e_q, _u___i_n_t _f_l_a_g_s);
+
+     _i_n_t
+     iieeeeee8800221111__cchhaann22iieeeeee(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*_i_c,
+         _c_o_n_s_t _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___c_h_a_n_n_e_l _*_c);
+
+     _u___i_n_t
+     iieeeeee8800221111__iieeeeee22mmhhzz(_u___i_n_t _c_h_a_n, _u___i_n_t _f_l_a_g_s);
+
+     _i_n_t
+     iieeeeee8800221111__mmeeddiiaa__cchhaannggee(_s_t_r_u_c_t _i_f_n_e_t _*_i_f_p);
+
+     _v_o_i_d
+     iieeeeee8800221111__mmeeddiiaa__ssttaattuuss(_s_t_r_u_c_t _i_f_n_e_t _*_i_f_p, _s_t_r_u_c_t _i_f_m_e_d_i_a_r_e_q _*_i_m_r);
+
+     _i_n_t
+     iieeeeee8800221111__sseettmmooddee(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*_i_c, _e_n_u_m _i_e_e_e_8_0_2_1_1___p_h_y_m_o_d_e _m_o_d_e);
+
+     _e_n_u_m _i_e_e_e_8_0_2_1_1___p_h_y_m_o_d_e
+     iieeeeee8800221111__cchhaann22mmooddee(_c_o_n_s_t _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1___c_h_a_n_n_e_l _*_c_h_a_n);
+
+     _i_n_t
+     iieeeeee8800221111__rraattee22mmeeddiiaa(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*_i_c, _i_n_t _r_a_t_e,
+         _e_n_u_m _i_e_e_e_8_0_2_1_1___p_h_y_m_o_d_e _m_o_d_e);
+
+     _i_n_t
+     iieeeeee8800221111__mmeeddiiaa22rraattee(_i_n_t _m_w_o_r_d);
+
+DDEESSCCRRIIPPTTIIOONN
+     IEEE 802.11 device drivers are written to use the infrastructure provided
+     by the IIEEEEEE8800221111 software layer.  This software provides a support frame‐
+     work for drivers that includes ifnet cloning, state management, and a
+     user management API by which applications interact with 802.11 devices.
+     Most drivers depend on the IIEEEEEE8800221111 layer for protocol services but de‐
+     vices that off-load functionality may bypass the layer to connect di‐
+     rectly to the device.
+
+     A IIEEEEEE8800221111 device driver implements a virtual radio API that is exported
+     to users through network interfaces (aka vaps) that are cloned from the
+     underlying device.  These interfaces have an operating mode (station, ad‐
+     hoc, hostap, wds, monitor, etc.) that is fixed for the lifetime of the
+     interface.  Devices that can support multiple concurrent interfaces allow
+     multiple vaps to be cloned.  This enables construction of interesting ap‐
+     plications such as an AP vap and one or more WDS vaps or multiple AP
+     vaps, each with a different security model.  The IIEEEEEE8800221111 layer virtual‐
+     izes most 802.11 state and coordinates vap state changes including sched‐
+     uling multiple vaps.  State that is not virtualized includes the current
+     channel and WME/WMM parameters.  Protocol processing is typically handled
+     entirely in the IIEEEEEE8800221111 layer with drivers responsible purely for mov‐
+     ing data between the host and device.  Similarly, IIEEEEEE8800221111 handles most
+     ioctl(2) requests without entering the driver; instead drivers are noti‐
+     fied of state changes that require their involvement.
+
+     The virtual radio interface defined by the IIEEEEEE8800221111 layer means that
+     drivers must be structured to follow specific rules.  Drivers that sup‐
+     port only a single interface at any time must still follow these rules.
+
+     Most of these functions require that attachment to the stack is performed
+     before calling.
+
+     The iieeeeee8800221111__iiffaattttaacchh() function attaches the wireless network interface
+     _i_c to the 802.11 network stack layer.  This function must be called be‐
+     fore using any of the IIEEEEEE8800221111 functions which need to store driver
+     state across invocations.
+
+     The iieeeeee8800221111__iiffddeettaacchh() function frees any IIEEEEEE8800221111 structures associ‐
+     ated with the driver, and performs Ethernet and BPF detachment on behalf
+     of the caller.
+
+     The iieeeeee8800221111__mmhhzz22iieeeeee() utility function converts the frequency _f_r_e_q
+     (specified in MHz) to an IEEE 802.11 channel number.  The _f_l_a_g_s argument
+     is a hint which specifies whether the frequency is in the 2GHz ISM band
+     (_I_E_E_E_8_0_2_1_1___C_H_A_N___2_G_H_Z) or the 5GHz band (_I_E_E_E_8_0_2_1_1___C_H_A_N___5_G_H_Z); appropriate
+     clipping of the result is then performed.
+
+     The iieeeeee8800221111__cchhaann22iieeeeee() function converts the channel specified in _*_c
+     to an IEEE channel number for the driver _i_c.  If the conversion would be
+     invalid, an error message is printed to the system console.  This func‐
+     tion REQUIRES that the driver is hooked up to the IIEEEEEE8800221111 subsystem.
+
+     The iieeeeee8800221111__iieeeeee22mmhhzz() utility function converts the IEEE channel num‐
+     ber _c_h_a_n to a frequency (in MHz).  The _f_l_a_g_s argument is a hint which
+     specifies whether the frequency is in the 2GHz ISM band
+     (_I_E_E_E_8_0_2_1_1___C_H_A_N___2_G_H_Z) or the 5GHz band (_I_E_E_E_8_0_2_1_1___C_H_A_N___5_G_H_Z); appropriate
+     clipping of the result is then performed.
+
+     The iieeeeee8800221111__mmeeddiiaa__ssttaattuuss() and iieeeeee8800221111__mmeeddiiaa__cchhaannggee() functions are
+     device-independent handlers for _i_f_m_e_d_i_a commands and are not intended to
+     be called directly.
+
+     The iieeeeee8800221111__sseettmmooddee() function is called from within the 802.11 stack
+     to change the mode of the driver's PHY; it is not intended to be called
+     directly.
+
+     The iieeeeee8800221111__cchhaann22mmooddee() function returns the PHY mode required for use
+     with the channel _c_h_a_n.  This is typically used when selecting a rate set,
+     to be advertised in beacons, for example.
+
+     The iieeeeee8800221111__rraattee22mmeeddiiaa() function converts the bit rate _r_a_t_e (measured
+     in units of 0.5Mbps) to an _i_f_m_e_d_i_a sub-type, for the device _i_c running in
+     PHY mode _m_o_d_e.  The iieeeeee8800221111__mmeeddiiaa22rraattee() performs the reverse of this
+     conversion, returning the bit rate (in 0.5Mbps units) corresponding to an
+     _i_f_m_e_d_i_a sub-type.
+
+DDAATTAA SSTTRRUUCCTTUURREESS
+     The virtual radio architecture splits state between a single per-device
+     _i_e_e_e_8_0_2_1_1_c_o_m structure and one or more _i_e_e_e_8_0_2_1_1_v_a_p structures.  Drivers
+     are expected to setup various shared state in these structures at device
+     attach and during vap creation but otherwise should treat them as read-
+     only.  The _i_e_e_e_8_0_2_1_1_c_o_m structure is allocated by the IIEEEEEE8800221111 layer as
+     adjunct data to a device's _i_f_n_e_t; it is accessed through the _i_f___l_2_c_o_m
+     structure member.  The _i_e_e_e_8_0_2_1_1_v_a_p structure is allocated by the driver
+     in the “vap create” method and should be extended with any driver-private
+     state.  This technique of giving the driver control to allocate data
+     structures is used for other IIEEEEEE8800221111 data structures and should be ex‐
+     ploited to maintain driver-private state together with public IIEEEEEE8800221111
+     state.
+
+     The other main data structures are the station, or node, table that
+     tracks peers in the local BSS, and the channel table that defines the
+     current set of available radio channels.  Both tables are bound to the
+     _i_e_e_e_8_0_2_1_1_c_o_m structure and shared by all vaps.  Long-lasting references
+     to a node are counted to guard against premature reclamation.  In partic‐
+     ular every packet sent/received holds a node reference (either explicitly
+     for transmit or implicitly on receive).
+
+     The _i_e_e_e_8_0_2_1_1_c_o_m and _i_e_e_e_8_0_2_1_1_v_a_p structures also hold a collection of
+     method pointers that drivers fill-in and/or override to take control of
+     certain operations.  These methods are the primary way drivers are bound
+     to the IIEEEEEE8800221111 layer and are described below.
+
+DDRRIIVVEERR AATTTTAACCHH//DDEETTAACCHH
+     Drivers attach to the IIEEEEEE8800221111 layer with the iieeeeee8800221111__iiffaattttaacchh() func‐
+     tion.  The driver is expected to allocate and setup any device-private
+     data structures before passing control.  The _i_e_e_e_8_0_2_1_1_c_o_m structure must
+     be pre-initialized with state required to setup the IIEEEEEE8800221111 layer:
+
+     ic_ifp       Backpointer to the physical device's ifnet.
+
+     ic_caps      Device/driver capabilities; see below for a complete de‐
+                  scription.
+
+     ic_channels  Table of channels the device is capable of operating on.
+                  This is initially provided by the driver but may be changed
+                  through calls that change the regulatory state.
+
+     ic_nchan     Number of entries in ic_channels.
+
+     On return from iieeeeee8800221111__iiffaattttaacchh() the driver is expected to override
+     default callback functions in the _i_e_e_e_8_0_2_1_1_c_o_m structure to register it's
+     private routines.  Methods marked with a “*” must be provided by the
+     driver.
+
+     ic_vap_create*
+                  Create a vap instance of the specified type (operating
+                  mode).  Any fixed BSSID and/or MAC address is provided.
+                  Drivers that support multi-bssid operation may honor the re‐
+                  quested BSSID or assign their own.
+
+     ic_vap_delete*
+                  Destroy a vap instance created with ic_vap_create.
+
+     ic_getradiocaps
+                  Return the list of calibrated channels for the radio.  The
+                  default method returns the current list of channels (space
+                  permitting).
+
+     ic_setregdomain
+                  Process a request to change regulatory state.  The routine
+                  may reject a request or constrain changes (e.g. reduce
+                  transmit power caps).  The default method accepts all pro‐
+                  posed changes.
+
+     ic_send_mgmt
+                  Send an 802.11 management frame.  The default method fabri‐
+                  cates the frame using IIEEEEEE8800221111 state and passes it to the
+                  driver through the ic_raw_xmit method.
+
+     ic_raw_xmit  Transmit a raw 802.11 frame.  The default method drops the
+                  frame and generates a message on the console.
+
+     ic_updateslot
+                  Update hardware state after an 802.11 IFS slot time change.
+                  There is no default method; the pointer may be NULL in which
+                  case it will not be used.
+
+     ic_update_mcast
+                  Update hardware for a change in the multicast packet filter.
+                  The default method prints a console message.
+
+     ic_update_promisc
+                  Update hardware for a change in the promiscuous mode set‐
+                  ting.  The default method prints a console message.
+
+     ic_newassoc  Update driver/device state for association to a new AP (in
+                  station mode) or when a new station associates (e.g. in AP
+                  mode).  There is no default method; the pointer may be NULL
+                  in which case it will not be used.
+
+     ic_node_alloc
+                  Allocate and initialize a _i_e_e_e_8_0_2_1_1___n_o_d_e structure.  This
+                  method cannot sleep.  The default method allocates zero'd
+                  memory using malloc(9).  Drivers should override this method
+                  to allocate extended storage for their own needs.  Memory
+                  allocated by the driver must be tagged with M_80211_NODE to
+                  balance the memory allocation statistics.
+
+     ic_node_free
+                  Reclaim storage of a node allocated by ic_node_alloc.  Driv‐
+                  ers are expected to _i_n_t_e_r_p_o_s_e their own method to cleanup
+                  private state but must call through this method to allow
+                  IIEEEEEE8800221111 to reclaim it's private state.
+
+     ic_node_cleanup
+                  Cleanup state in a _i_e_e_e_8_0_2_1_1___n_o_d_e created by ic_node_alloc.
+                  This operation is distinguished from ic_node_free in that it
+                  may be called long before the node is actually reclaimed to
+                  cleanup adjunct state.  This can happen, for example, when a
+                  node must not be reclaimed due to references held by packets
+                  in the transmit queue.  Drivers typically interpose
+                  ic_node_cleanup instead of ic_node_free.
+
+     ic_node_age  Age, and potentially reclaim, resources associated with a
+                  node.  The default method ages frames on the power-save
+                  queue (in AP mode) and pending frames in the receive reorder
+                  queues (for stations using A-MPDU).
+
+     ic_node_drain
+                  Reclaim all optional resources associated with a node.  This
+                  call is used to free up resources when they are in short
+                  supply.
+
+     ic_node_getrssi
+                  Return the Receive Signal Strength Indication (RSSI) in .5
+                  dBm units for the specified node.  This interface returns a
+                  subset of the information returned by ic_node_getsignal.
+                  The default method calculates a filtered average over the
+                  last ten samples passed in to ieee80211_input(9) or
+                  ieee80211_input_all(9).
+
+     ic_node_getsignal
+                  Return the RSSI and noise floor (in .5 dBm units) for a sta‐
+                  tion.  The default method calculates RSSI as described
+                  above; the noise floor returned is the last value supplied
+                  to ieee80211_input(9) or ieee80211_input_all(9).
+
+     ic_node_getmimoinfo
+                  Return MIMO radio state for a station in support of the
+                  IEEE80211_IOC_STA_INFO ioctl request.  The default method
+                  returns nothing.
+
+     ic_scan_start*
+                  Prepare driver/hardware state for scanning.  This callback
+                  is done in a sleepable context.
+
+     ic_scan_end*
+                  Restore driver/hardware state after scanning completes.
+                  This callback is done in a sleepable context.
+
+     ic_set_channel*
+                  Set the current radio channel using _i_c___c_u_r_c_h_a_n.  This call‐
+                  back is done in a sleepable context.
+
+     ic_scan_curchan
+                  Start scanning on a channel.  This method is called immedi‐
+                  ately after each channel change and must initiate the work
+                  to scan a channel and schedule a timer to advance to the
+                  next channel in the scan list.  This callback is done in a
+                  sleepable context.  The default method handles active scan
+                  work (e.g. sending ProbeRequest frames), and schedules a
+                  call to ieee80211_scan_next(9) according to the maximum
+                  dwell time for the channel.  Drivers that off-load scan work
+                  to firmware typically use this method to trigger per-channel
+                  scan activity.
+
+     ic_scan_mindwell
+                  Handle reaching the minimum dwell time on a channel when
+                  scanning.  This event is triggered when one or more stations
+                  have been found on a channel and the minimum dwell time has
+                  been reached.  This callback is done in a sleepable context.
+                  The default method signals the scan machinery to advance to
+                  the next channel as soon as possible.  Drivers can use this
+                  method to preempt further work (e.g. if scanning is handled
+                  by firmware) or ignore the request to force maximum dwell
+                  time on a channel.
+
+     ic_recv_action
+                  Process a received Action frame.  The default method points
+                  to ieee80211_recv_action(9) which provides a mechanism for
+                  setting up handlers for each Action frame class.
+
+     ic_send_action
+                  Transmit an Action frame.  The default method points to
+                  ieee80211_send_action(9) which provides a mechanism for set‐
+                  ting up handlers for each Action frame class.
+
+     ic_ampdu_enable
+                  Check if transmit A-MPDU should be enabled for the specified
+                  station and AC.  The default method checks a per-AC traffic
+                  rate against a per-vap threshold to decide if A-MPDU should
+                  be enabled.  This method also rate-limits ADDBA requests so
+                  that requests are not made too frequently when a receiver
+                  has limited resources.
+
+     ic_addba_request
+                  Request A-MPDU transmit aggregation.  The default method
+                  sets up local state and issues an ADDBA Request Action
+                  frame.  Drivers may interpose this method if they need to
+                  setup private state for handling transmit A-MPDU.
+
+     ic_addb_response
+                  Process a received ADDBA Response Action frame and setup re‐
+                  sources as needed for doing transmit A-MPDU.
+
+     ic_addb_stop
+                  Shutdown an A-MPDU transmit stream for the specified station
+                  and AC.  The default method reclaims local state after send‐
+                  ing a DelBA Action frame.
+
+     ic_bar_response
+                  Process a response to a transmitted BAR control frame.
+
+     ic_ampdu_rx_start
+                  Prepare to receive A-MPDU data from the specified station
+                  for the TID.
+
+     ic_ampdu_rx_stop
+                  Terminate receipt of A-MPDU data from the specified station
+                  for the TID.
+
+     Once the IIEEEEEE8800221111 layer is attached to a driver there are two more steps
+     typically done to complete the work:
+
+     1.   Setup “radiotap support” for capturing raw 802.11 packets that pass
+          through the device.  This is done with a call to
+          ieee80211_radiotap_attach(9).
+
+     2.   Do any final device setup like enabling interrupts.
+
+     State is torn down and reclaimed with a call to iieeeeee8800221111__iiffddeettaacchh().
+     Note this call may result in multiple callbacks into the driver so it
+     should be done before any critical driver state is reclaimed.  On return
+     from iieeeeee8800221111__iiffddeettaacchh() all associated vaps and ifnet structures are
+     reclaimed or inaccessible to user applications so it is safe to teardown
+     driver state without worry about being re-entered.  The driver is respon‐
+     sible for calling if_free(9) on the ifnet it allocated for the physical
+     device.
+
+DDRRIIVVEERR CCAAPPAABBIILLIITTIIEESS
+     Driver/device capabilities are specified using several sets of flags in
+     the _i_e_e_e_8_0_2_1_1_c_o_m structure.  General capabilities are specified by
+     _i_c___c_a_p_s.  Hardware cryptographic capabilities are specified by
+     _i_c___c_r_y_p_t_o_c_a_p_s.  Software cryptographic capabilities are specified by
+     _i_c___s_w___c_r_y_p_t_o_c_a_p_s.  802.11n capabilities, if any, are specified by
+     _i_c___h_t_c_a_p_s.  The IIEEEEEE8800221111 layer propagates a subset of these capabilities
+     to each vap through the equivalent fields: _i_v___c_a_p_s, _i_v___c_r_y_p_t_o_c_a_p_s, and
+     _i_v___h_t_c_a_p_s.  The following general capabilities are defined:
+
+     IEEE80211_C_STA        Device is capable of operating in station (aka In‐
+                            frastructure) mode.
+
+     IEEE80211_C_8023ENCAP  Device requires 802.3-encapsulated frames be
+                            passed for transmit.  By default IIEEEEEE8800221111 will
+                            encapsulate all outbound frames as 802.11 frames
+                            (without a PLCP header).
+
+     IEEE80211_C_FF         Device supports Atheros Fast-Frames.
+
+     IEEE80211_C_TURBOP     Device supports Atheros Dynamic Turbo mode.
+
+     IEEE80211_C_IBSS       Device is capable of operating in adhoc/IBSS mode.
+
+     IEEE80211_C_PMGT       Device supports dynamic power-management (aka
+                            power save) in station mode.
+
+     IEEE80211_C_HOSTAP     Device is capable of operating as an Access Point
+                            in Infrastructure mode.
+
+     IEEE80211_C_AHDEMO     Device is capable of operating in Adhoc Demo mode.
+                            In this mode the device is used purely to send/re‐
+                            ceive raw 802.11 frames.
+
+     IEEE80211_C_SWRETRY    Device supports software retry of transmitted
+                            frames.
+
+     IEEE80211_C_TXPMGT     Device support dynamic transmit power changes on
+                            transmitted frames; also known as Transmit Power
+                            Control (TPC).
+
+     IEEE80211_C_SHSLOT     Device supports short slot time operation (for
+                            802.11g).
+
+     IEEE80211_C_SHPREAMBLE
+                            Device supports short preamble operation (for
+                            802.11g).
+
+     IEEE80211_C_MONITOR    Device is capable of operating in monitor mode.
+
+     IEEE80211_C_DFS        Device supports radar detection and/or DFS.  DFS
+                            protocol support can be handled by IIEEEEEE8800221111 but
+                            the device must be capable of detecting radar
+                            events.
+
+     IEEE80211_C_MBSS       Device is capable of operating in MeshBSS (MBSS)
+                            mode (as defined by 802.11s Draft 3.0).
+
+     IEEE80211_C_WPA1       Device supports WPA1 operation.
+
+     IEEE80211_C_WPA2       Device supports WPA2/802.11i operation.
+
+     IEEE80211_C_BURST      Device supports frame bursting.
+
+     IEEE80211_C_WME        Device supports WME/WMM operation (at the moment
+                            this is mostly support for sending and receiving
+                            QoS frames with EDCF).
+
+     IEEE80211_C_WDS        Device supports transmit/receive of 4-address
+                            frames.
+
+     IEEE80211_C_BGSCAN     Device supports background scanning.
+
+     IEEE80211_C_TXFRAG     Device supports transmit of fragmented 802.11
+                            frames.
+
+     IEEE80211_C_TDMA       Device is capable of operating in TDMA mode.
+
+     The follow general crypto capabilities are defined.  In general IIEEEEEE8800221111
+     will fall-back to software support when a device is not capable of hard‐
+     ware acceleration of a cipher.  This can be done on a per-key basis.
+     IIEEEEEE8800221111 can also handle software Michael calculation combined with
+     hardware AES acceleration.
+
+     IEEE80211_CRYPTO_WEP   Device supports hardware WEP cipher.
+
+     IEEE80211_CRYPTO_TKIP  Device supports hardware TKIP cipher.
+
+     IEEE80211_CRYPTO_AES_OCB
+                            Device supports hardware AES-OCB cipher.
+
+     IEEE80211_CRYPTO_AES_CCM
+                            Device supports hardware AES-CCM cipher.
+
+     IEEE80211_CRYPTO_TKIPMIC
+                            Device supports hardware Michael for use with
+                            TKIP.
+
+     IEEE80211_CRYPTO_CKIP  Devices supports hardware CKIP cipher.
+
+     The follow general 802.11n capabilities are defined.  The first capabili‐
+     ties are defined exactly as they appear in the 802.11n specification.
+     Capabilities beginning with IEEE80211_HTC_AMPDU are used solely by the
+     IIEEEEEE8800221111 layer.
+
+     IEEE80211_HTCAP_CHWIDTH40
+                            Device supports 20/40 channel width operation.
+
+     IEEE80211_HTCAP_SMPS_DYNAMIC
+                            Device supports dynamic SM power save operation.
+
+     IEEE80211_HTCAP_SMPS_ENA
+                            Device supports static SM power save operation.
+
+     IEEE80211_HTCAP_GREENFIELD
+                            Device supports Greenfield preamble.
+
+     IEEE80211_HTCAP_SHORTGI20
+                            Device supports Short Guard Interval on 20MHz
+                            channels.
+
+     IEEE80211_HTCAP_SHORTGI40
+                            Device supports Short Guard Interval on 40MHz
+                            channels.
+
+     IEEE80211_HTCAP_TXSTBC
+                            Device supports Space Time Block Convolution
+                            (STBC) for transmit.
+
+     IEEE80211_HTCAP_RXSTBC_1STREAM
+                            Device supports 1 spatial stream for STBC receive.
+
+     IEEE80211_HTCAP_RXSTBC_2STREAM
+                            Device supports 1-2 spatial streams for STBC re‐
+                            ceive.
+
+     IEEE80211_HTCAP_RXSTBC_3STREAM
+                            Device supports 1-3 spatial streams for STBC re‐
+                            ceive.
+
+     IEEE80211_HTCAP_MAXAMSDU_7935
+                            Device supports A-MSDU frames up to 7935 octets.
+
+     IEEE80211_HTCAP_MAXAMSDU_3839
+                            Device supports A-MSDU frames up to 3839 octets.
+
+     IEEE80211_HTCAP_DSSSCCK40
+                            Device supports use of DSSS/CCK on 40MHz channels.
+
+     IEEE80211_HTCAP_PSMP   Device supports PSMP.
+
+     IEEE80211_HTCAP_40INTOLERANT
+                            Device is intolerant of 40MHz wide channel use.
+
+     IEEE80211_HTCAP_LSIGTXOPPROT
+                            Device supports L-SIG TXOP protection.
+
+     IEEE80211_HTC_AMPDU    Device supports A-MPDU aggregation.  Note that any
+                            802.11n compliant device must support A-MPDU re‐
+                            ceive so this implicitly means support for
+                            _t_r_a_n_s_m_i_t of A-MPDU frames.
+
+     IEEE80211_HTC_AMSDU    Device supports A-MSDU aggregation.  Note that any
+                            802.11n compliant device must support A-MSDU re‐
+                            ceive so this implicitly means support for
+                            _t_r_a_n_s_m_i_t of A-MSDU frames.
+
+     IEEE80211_HTC_HT       Device supports High Throughput (HT) operation.
+                            This capability must be set to enable 802.11n
+                            functionality in IIEEEEEE8800221111.
+
+     IEEE80211_HTC_SMPS     Device supports MIMO Power Save operation.
+
+     IEEE80211_HTC_RIFS     Device supports Reduced Inter Frame Spacing
+                            (RIFS).
+
+SSEEEE AALLSSOO
+     ioctl(2), ieee80211_amrr(9), ieee80211_beacon(9), ieee80211_bmiss(9),
+     ieee80211_crypto(9), ieee80211_ddb(9), ieee80211_input(9),
+     ieee80211_node(9), ieee80211_output(9), ieee80211_proto(9),
+     ieee80211_radiotap(9), ieee80211_regdomain(9), ieee80211_scan(9),
+     ieee80211_vap(9), ifnet(9), malloc(9)
+
+HHIISSTTOORRYY
+     The IIEEEEEE8800221111 series of functions first appeared in NetBSD 1.5, and were
+     later ported to FreeBSD 4.6.  This man page was updated with the informa‐
+     tion from NetBSD IIEEEEEE8800221111 man page.
+
+AAUUTTHHOORRSS
+     The original NetBSD IIEEEEEE8800221111 man page was written by Bruce M. Simpson
+     <_b_m_s_@_F_r_e_e_B_S_D_._o_r_g> and Darron Broad <_d_a_r_r_o_n_@_k_e_w_l_._o_r_g>.
+
+BSD                             April 24, 2024                             BSD

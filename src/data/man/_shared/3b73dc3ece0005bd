@@ -1,0 +1,220 @@
+YPSERV(8)                 BSD System Manager's Manual                YPSERV(8)
+
+NNAAMMEE
+     yyppsseerrvv — NIS database server
+
+SSYYNNOOPPSSIISS
+     yyppsseerrvv [--nn] [--dd] [--PP _p_o_r_t] [--pp _p_a_t_h]
+
+DDEESSCCRRIIPPTTIIOONN
+     NIS is an RPC-based service designed to allow a number of UNIX-based ma‐
+     chines to share a common set of configuration files.  Rather than requir‐
+     ing a system administrator to update several copies of files such as
+     _/_e_t_c_/_h_o_s_t_s, _/_e_t_c_/_p_a_s_s_w_d and _/_e_t_c_/_g_r_o_u_p, which tend to require frequent
+     changes in most environments, NIS allows groups of computers to share one
+     set of data which can be updated from a single location.
+
+     The yyppsseerrvv utility is the server that distributes NIS databases to client
+     systems within an NIS _d_o_m_a_i_n.  Each client in an NIS domain must have its
+     domainname set to one of the domains served by yyppsseerrvv using the
+     domainname(1) command.  The clients must also run ypbind(8) in order to
+     attach to a particular server, since it is possible to have several
+     servers within a single NIS domain.
+
+     The databases distributed by yyppsseerrvv are stored in _/_v_a_r_/_y_p_/_[_d_o_m_a_i_n_n_a_m_e_]
+     where _d_o_m_a_i_n_n_a_m_e is the name of the domain being served.  There can be
+     several such directories with different domainnames, and you need only
+     one yyppsseerrvv daemon to handle them all.
+
+     The databases, or _m_a_p_s as they are often called, are created by
+     _/_v_a_r_/_y_p_/_M_a_k_e_f_i_l_e using several system files as source.  The database
+     files are in db(3) format to help speed retrieval when there are many
+     records involved.  In FreeBSD, the maps are always readable and writable
+     only by root for security reasons.  Technically this is only necessary
+     for the password maps, but since the data in the other maps can be found
+     in other world-readable files anyway, it does not hurt and it is consid‐
+     ered good general practice.
+
+     The yyppsseerrvv utility is started by _/_e_t_c_/_r_c_._d_/_y_p_s_e_r_v if it has been enabled
+     in _/_e_t_c_/_r_c_._c_o_n_f.
+
+SSPPEECCIIAALL FFEEAATTUURREESS
+     There are some problems associated with distributing a FreeBSD password
+     database via NIS: FreeBSD normally only stores encrypted passwords in
+     _/_e_t_c_/_m_a_s_t_e_r_._p_a_s_s_w_d, which is readable and writable only by root.  By
+     turning this file into an NIS map, this security feature would be com‐
+     pletely defeated.
+
+     To make up for this, the FreeBSD version of yyppsseerrvv handles the
+     _m_a_s_t_e_r_._p_a_s_s_w_d_._b_y_n_a_m_e and _m_a_s_t_e_r_._p_a_s_s_w_d_._b_y_u_i_d maps in a special way.  When
+     the server receives a request to access either of these two maps (or in
+     fact either of the _s_h_a_d_o_w_._b_y_n_a_m_e or _s_h_a_d_o_w_._b_y_u_i_d maps), it will check the
+     TCP port from which the request originated and return an error if the
+     port number is greater than 1023.  Since only the superuser is allowed to
+     bind to TCP ports with values less than 1024, the server can use this
+     test to determine whether or not the access request came from a privi‐
+     leged user.  Any requests made by non-privileged users are therefore re‐
+     jected.
+
+     Furthermore, the getpwent(3) routines in the FreeBSD standard C library
+     will only attempt to retrieve data from the _m_a_s_t_e_r_._p_a_s_s_w_d_._b_y_n_a_m_e and
+     _m_a_s_t_e_r_._p_a_s_s_w_d_._b_y_u_i_d maps for the superuser: if a normal user calls any of
+     these functions, the standard _p_a_s_s_w_d_._b_y_n_a_m_e and _p_a_s_s_w_d_._b_y_u_i_d maps will be
+     accessed instead.  The latter two maps are constructed by
+     _/_v_a_r_/_y_p_/_M_a_k_e_f_i_l_e by parsing the _m_a_s_t_e_r_._p_a_s_s_w_d file and stripping out the
+     password fields, and are therefore safe to pass on to unprivileged users.
+     In this way, the shadow password aspect of the protected _m_a_s_t_e_r_._p_a_s_s_w_d
+     database is maintained through NIS.
+
+NNOOTTEESS
+   SSeettttiinngg UUpp MMaasstteerr aanndd SSllaavvee SSeerrvveerrss
+     ypinit(8) is a convenient script that will help setup master and slave
+     NIS servers.
+
+   LLiimmiittaattiioonnss
+     There are two problems inherent with password shadowing in NIS that users
+     should be aware of:
+
+           1.   The ‘TCP port less than 1024’ test is trivial to defeat for
+                users with unrestricted access to machines on your network
+                (even those machines which do not run UNIX-based operating
+                systems).
+
+           2.   If you plan to use a FreeBSD system to serve non-FreeBSD
+                clients that have no support for password shadowing (which is
+                most of them), you will have to disable the password shadowing
+                entirely by uncommenting the _U_N_S_E_C_U_R_E_=_T_r_u_e entry in
+                _/_v_a_r_/_y_p_/_M_a_k_e_f_i_l_e.  This will cause the standard _p_a_s_s_w_d_._b_y_n_a_m_e
+                and _p_a_s_s_w_d_._b_y_u_i_d maps to be generated with valid encrypted
+                password fields, which is necessary in order for non-FreeBSD
+                clients to perform user authentication through NIS.
+
+   SSeeccuurriittyy
+     In general, any remote user can issue an RPC to yyppsseerrvv and retrieve the
+     contents of your NIS maps, provided the remote user knows your domain
+     name.  To prevent such unauthorized transactions, yyppsseerrvv supports a fea‐
+     ture called _s_e_c_u_r_e_n_e_t_s which can be used to restrict access to a given
+     set of hosts.  At startup, yyppsseerrvv will attempt to load the securenets in‐
+     formation from a file called _/_v_a_r_/_y_p_/_s_e_c_u_r_e_n_e_t_s.  (Note that this path
+     varies depending on the path specified with the --pp option, which is ex‐
+     plained below.)  This file contains entries that consist of a network
+     specification and a network mask separated by white space.  Lines start‐
+     ing with “#” are considered to be comments.  A sample securenets file
+     might look like this:
+
+           # allow connections from local host -- mandatory
+           127.0.0.1     255.255.255.255
+           # allow connections from any host
+           # on the 192.168.128.0 network
+           192.168.128.0 255.255.255.0
+           # allow connections from any host
+           # between 10.0.0.0 to 10.0.15.255
+           10.0.0.0      255.255.240.0
+
+     If yyppsseerrvv receives a request from an address that matches one of these
+     rules, it will process the request normally.  If the address fails to
+     match a rule, the request will be ignored and a warning message will be
+     logged.  If the _/_v_a_r_/_y_p_/_s_e_c_u_r_e_n_e_t_s file does not exist, yyppsseerrvv will allow
+     connections from any host.
+
+     The yyppsseerrvv utility also has support for Wietse Venema's _t_c_p_w_r_a_p_p_e_r pack‐
+     age.  This allows the administrator to use the tcpwrapper configuration
+     files (_/_e_t_c_/_h_o_s_t_s_._a_l_l_o_w and _/_e_t_c_/_h_o_s_t_s_._d_e_n_y) for access control instead
+     of _/_v_a_r_/_y_p_/_s_e_c_u_r_e_n_e_t_s.
+
+     Note: while both of these access control mechanisms provide some secu‐
+     rity, they, like the privileged port test, are both vulnerable to “IP
+     spoofing” attacks.
+
+   NNIISS vv11 ccoommppaattiibbiilliittyy
+     This version of yyppsseerrvv has some support for serving NIS v1 clients.  The
+     FreeBSD NIS implementation only uses the NIS v2 protocol, however other
+     implementations include support for the v1 protocol for backwards compat‐
+     ibility with older systems.  The ypbind(8) daemons supplied with these
+     systems will try to establish a binding to an NIS v1 server even though
+     they may never actually need it (and they may persist in broadcasting in
+     search of one even after they receive a response from a v2 server).  Note
+     that while support for normal client calls is provided, this version of
+     yyppsseerrvv does not handle v1 map transfer requests; consequently, it cannot
+     be used as a master or slave in conjunction with older NIS servers that
+     only support the v1 protocol.  Fortunately, there probably are not any
+     such servers still in use today.
+
+   NNIISS sseerrvveerrss tthhaatt aarree aallssoo NNIISS cclliieennttss
+     Care must be taken when running yyppsseerrvv in a multi-server domain where the
+     server machines are also NIS clients.  It is generally a good idea to
+     force the servers to bind to themselves rather than allowing them to
+     broadcast bind requests and possibly become bound to each other: strange
+     failure modes can result if one server goes down and others are dependent
+     upon on it.  (Eventually all the clients will time out and attempt to
+     bind to other servers, but the delay involved can be considerable and the
+     failure mode is still present since the servers might bind to each other
+     all over again).
+
+     Refer to the ypbind(8) man page for details on how to force it to bind to
+     a particular server.
+
+OOPPTTIIOONNSS
+     The following options are supported by yyppsseerrvv:
+
+     --nn    This option affects the way yyppsseerrvv handles yp_match requests for
+           the _h_o_s_t_s_._b_y_n_a_m_e and _h_o_s_t_s_._b_y_a_d_d_r_e_s_s maps.  By default, if yyppsseerrvv
+           cannot find an entry for a given host in its hosts maps, it will
+           return an error and perform no further processing.  With the --nn
+           flag, yyppsseerrvv will go one step further: rather than giving up imme‐
+           diately, it will try to resolve the hostname or address using a DNS
+           nameserver query.  If the query is successful, yyppsseerrvv will con‐
+           struct a fake database record and return it to the client, thereby
+           making it seem as though the client's yp_match request succeeded.
+
+           This feature is provided for compatibility with SunOS 4.1.x, which
+           has brain-damaged resolver functions in its standard C library that
+           depend on NIS for hostname and address resolution.  The FreeBSD re‐
+           solver can be configured to do DNS queries directly, therefore it
+           is not necessary to enable this option when serving only FreeBSD
+           NIS clients.
+
+     --dd    Cause the server to run in debugging mode.  Normally, yyppsseerrvv re‐
+           ports only unusual errors (access violations, file access failures)
+           using the syslog(3) facility.  In debug mode, the server does not
+           background itself and prints extra status messages to stderr for
+           each request that it receives.  Also, while running in debug mode,
+           yyppsseerrvv will not spawn any additional subprocesses as it normally
+           does when handling yp_all requests or doing DNS lookups.  (These
+           actions often take a fair amount of time to complete and are there‐
+           fore handled in subprocesses, allowing the parent server process to
+           go on handling other requests.)  This makes it easier to trace the
+           server with a debugging tool.
+
+     --hh _a_d_d_r
+           Specify a specific address to bind to for requests.  This option
+           may be specified multiple times.  If no --hh option is specified,
+           yyppsseerrvv will bind to default passive address (e.g. INADDR_ANY for
+           IPv4) for each transport.
+
+     --PP _p_o_r_t
+           Force ypserv to bind to a specific TCP/UDP port, rather than se‐
+           lecting its own.
+
+     --pp _p_a_t_h
+           Normally, yyppsseerrvv assumes that all NIS maps are stored under
+           _/_v_a_r_/_y_p.  The --pp flag may be used to specify an alternate NIS root
+           path, allowing the system administrator to move the map files to a
+           different place within the file system.
+
+FFIILLEESS
+     /var/yp/[domainname]/[maps]       the NIS maps
+     /etc/nsswitch.conf                name switch configuration file
+     /var/yp/securenets                host access control file
+
+SSEEEE AALLSSOO
+     ypcat(1), db(3), hosts_access(5), rpc.yppasswdd(8), yp(8), ypbind(8),
+     ypinit(8), yppush(8), ypxfr(8)
+
+HHIISSTTOORRYY
+     This version of yyppsseerrvv first appeared in FreeBSD 2.2.
+
+AAUUTTHHOORRSS
+     Bill Paul <_w_p_a_u_l_@_c_t_r_._c_o_l_u_m_b_i_a_._e_d_u>
+
+BSD                            December 13, 2009                           BSD

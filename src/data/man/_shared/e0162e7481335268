@@ -1,0 +1,133 @@
+HASTCTL(8)                BSD System Manager's Manual               HASTCTL(8)
+
+NNAAMMEE
+     hhaassttccttll — Highly Available Storage control utility
+
+SSYYNNOOPPSSIISS
+     hhaassttccttll ccrreeaattee [--dd] [--cc _c_o_n_f_i_g] [--ee _e_x_t_e_n_t_s_i_z_e] [--kk _k_e_e_p_d_i_r_t_y]
+             [--mm _m_e_d_i_a_s_i_z_e] _n_a_m_e _._._.
+     hhaassttccttll rroollee [--dd] [--cc _c_o_n_f_i_g] ⟨init | primary | secondary⟩ _a_l_l | _n_a_m_e _._._.
+     hhaassttccttll lliisstt [--dd] [--cc _c_o_n_f_i_g] [_a_l_l | _n_a_m_e _._._.]
+     hhaassttccttll ssttaattuuss [--dd] [--cc _c_o_n_f_i_g] [_a_l_l | _n_a_m_e _._._.]
+     hhaassttccttll dduummpp [--dd] [--cc _c_o_n_f_i_g] [_a_l_l | _n_a_m_e _._._.]
+
+DDEESSCCRRIIPPTTIIOONN
+     The hhaassttccttll utility is used to control the behaviour of the hastd(8) dae‐
+     mon.
+
+     This utility should be used by HA software like hheeaarrttbbeeaatt or uuccaarrpp to
+     setup HAST resources role when changing from primary mode to secondary or
+     vice versa.  Be aware that if a file system like UFS exists on HAST
+     provider and primary node dies, file system has to be checked for incon‐
+     sistencies with the fsck(8) utility after switching secondary node to
+     primary role.
+
+     The first argument to hhaassttccttll indicates an action to be performed:
+
+     ccrreeaattee  Initialize local provider configured for the given resource.  Ad‐
+             ditional options include:
+
+             --ee _e_x_t_e_n_t_s_i_z_e  Size of an extent.  Extent is a block which is
+                            used for synchronization.  hastd(8) maintains a
+                            map of dirty extents and extent is the smallest
+                            region that can be marked as dirty.  If any part
+                            of an extent is modified, entire extent will be
+                            synchronized when nodes connect.  If extent size
+                            is too small, there will be too much disk activity
+                            related to dirty map updates, which will degrade
+                            performance of the given resource.  If extent size
+                            is too large, synchronization, even in case of
+                            short outage, can take a long time increasing the
+                            risk of losing up-to-date node before synchroniza‐
+                            tion process is completed.  The default extent
+                            size is _2_M_B.
+
+             --kk _k_e_e_p_d_i_r_t_y   Maximum number of dirty extents to keep dirty all
+                            the time.  Most recently used extents are kept
+                            dirty to reduce number of metadata updates.  The
+                            default number of most recently used extents which
+                            will be kept dirty is _6_4.
+
+             --mm _m_e_d_i_a_s_i_z_e   Size of the smaller provider used as backend stor‐
+                            age on both nodes.  This option can be omitted if
+                            node providers have the same size on both sides.
+
+             If size is suffixed with a k, M, G or T, it is taken as a kilo‐
+             byte, megabyte, gigabyte or terabyte measurement respectively.
+
+     rroollee    Change role of the given resource.  The role can be one of:
+
+             iinniitt       Resource is turned off.
+
+             pprriimmaarryy    Local hastd(8) daemon will act as primary node for the
+                        given resource.  System on which resource role is set
+                        to primary can use _/_d_e_v_/_h_a_s_t_/_<_n_a_m_e_> GEOM provider.
+
+             sseeccoonnddaarryy  Local hastd(8) daemon will act as secondary node for
+                        the given resource - it will wait for connection from
+                        the primary node and will handle I/O requests received
+                        from it.  GEOM provider _/_d_e_v_/_h_a_s_t_/_<_n_a_m_e_> will not be
+                        created on secondary node.
+
+     lliisstt    Present verbose status of the configured resources.
+
+     ssttaattuuss  Present terse (and more easy machine-parseable) status of the
+             configured resources.
+
+     dduummpp    Dump metadata stored on local component for the configured re‐
+             sources.
+
+     In addition, every subcommand can be followed by the following options:
+
+     --cc _c_o_n_f_i_g  Specify alternative location of the configuration file.  The
+                default location is _/_e_t_c_/_h_a_s_t_._c_o_n_f.
+
+     --dd         Print debugging information.  This option can be specified
+                multiple times to raise the verbosity level.
+
+FFIILLEESS
+     /etc/hast.conf    Configuration file for hhaassttccttll and hastd(8).
+     /var/run/hastctl  Control socket used by hhaassttccttll to communicate with the
+                       hastd(8) daemon.
+
+EEXXIITT SSTTAATTUUSS
+     Exit status is 0 on success, or one of the values described in
+     sysexits(3) on failure.
+
+EEXXAAMMPPLLEESS
+     Initialize HAST provider, create file system on it and mount it.
+
+           nodeB# hastctl create shared
+           nodeB# hastd
+           nodeB# hastctl role secondary shared
+
+           nodeA# hastctl create shared
+           nodeA# hastd
+           nodeA# hastctl role primary shared
+           nodeA# newfs -U /dev/hast/shared
+           nodeA# mount -o noatime /dev/hast/shared /shared
+           nodeA# application_start
+
+     Switch roles for the sshhaarreedd HAST resource.
+
+           nodeA# application_stop
+           nodeA# umount -f /shared
+           nodeA# hastctl role secondary shared
+
+           nodeB# hastctl role primary shared
+           nodeB# fsck -t ufs /dev/hast/shared
+           nodeB# mount -o noatime /dev/hast/shared /shared
+           nodeB# application_start
+
+SSEEEE AALLSSOO
+     sysexits(3), geom(4), hast.conf(5), fsck(8), ggatec(8), ggatel(8),
+     hastd(8), mount(8), newfs(8)
+
+HHIISSTTOORRYY
+     The hhaassttccttll utility appeared in FreeBSD 8.1.
+
+AAUUTTHHOORRSS
+     The hhaassttccttll was developed by Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g> under
+     sponsorship of the FreeBSD Foundation.
+
+BSD                            September 8, 2016                           BSD

@@ -1,0 +1,128 @@
+NG_KSOCKET(4)            BSD Kernel Interfaces Manual            NG_KSOCKET(4)
+
+NNAAMMEE
+     nngg__kkssoocckkeett — kernel socket netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__kkssoocckkeett..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     A kkssoocckkeett node is both a netgraph node and a BSD socket.  The nngg__kkssoocckkeett
+     node type allows one to open a socket inside the kernel and have it ap‐
+     pear as a Netgraph node.  The nngg__kkssoocckkeett node type is the reverse of the
+     socket node type (see ng_socket(4)): whereas the socket node type enables
+     the user-level manipulation (via a socket) of what is normally a kernel-
+     level entity (the associated Netgraph node), the nngg__kkssoocckkeett node type en‐
+     ables the kernel-level manipulation (via a Netgraph node) of what is nor‐
+     mally a user-level entity (the associated socket).
+
+     A nngg__kkssoocckkeett node allows at most one hook connection.  Connecting to the
+     node is equivalent to opening the associated socket.  The name given to
+     the hook determines what kind of socket the node will open (see below).
+     When the hook is disconnected and/or the node is shutdown, the associated
+     socket is closed.
+
+HHOOOOKKSS
+     This node type supports a single hook connection at a time.  The name of
+     the hook must be of the form _<_f_a_m_i_l_y_>_/_<_t_y_p_e_>_/_<_p_r_o_t_o_>, where the _f_a_m_i_l_y,
+     _t_y_p_e, and _p_r_o_t_o are the decimal equivalent of the same arguments to
+     socket(2).  Alternately, aliases for the commonly used values are ac‐
+     cepted as well.  For example inet/dgram/udp is a more readable but equiv‐
+     alent version of 2/2/17.
+
+     Data received into socket is sent out via hook.  Data received on hook is
+     sent out from socket, if the latter is connected (an NGM_KSOCKET_CONNECT
+     was sent to node before).  If socket is not connected, destination _s_t_r_u_c_t
+     _s_o_c_k_a_d_d_r must be supplied in an mbuf tag with cookie NGM_KSOCKET_COOKIE
+     and type NG_KSOCKET_TAG_SOCKADDR attached to data.  Otherwise nngg__kkssoocckkeett
+     will return ENOTCONN to sender.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_KSOCKET_BIND (bbiinndd)
+          This functions exactly like the bind(2) system call.  The _s_t_r_u_c_t
+          _s_o_c_k_a_d_d_r socket address parameter should be supplied as an argument.
+
+     NGM_KSOCKET_LISTEN (lliisstteenn)
+          This functions exactly like the listen(2) system call.  The backlog
+          parameter (a single 32 bit int) should be supplied as an argument.
+
+     NGM_KSOCKET_CONNECT (ccoonnnneecctt)
+          This functions exactly like the connect(2) system call.  The _s_t_r_u_c_t
+          _s_o_c_k_a_d_d_r destination address parameter should be supplied as an ar‐
+          gument.
+
+     NGM_KSOCKET_ACCEPT (aacccceepptt)
+          Equivalent to the accept(2) system call on a non-blocking socket.
+          If there is a pending connection on the queue, a new socket and a
+          corresponding cloned node are created.  Returned are the cloned
+          node's ID and a peer name (as _s_t_r_u_c_t _s_o_c_k_a_d_d_r).  If there are no
+          pending connections, this control message returns nothing, and a
+          connected node will receive the above message asynchronously, when a
+          connection is established.
+
+          A cloned node supports a single hook with an arbitrary name.  If not
+          connected, a node disappears when its parent node is destroyed.
+          Once connected, it becomes an independent node.
+
+     NGM_KSOCKET_GETNAME (ggeettnnaammee)
+          Equivalent to the getsockname(2) system call.  The name is returned
+          as a _s_t_r_u_c_t _s_o_c_k_a_d_d_r in the arguments field of the reply.
+
+     NGM_KSOCKET_GETPEERNAME (ggeettppeeeerrnnaammee)
+          Equivalent to the getpeername(2) system call.  The name is returned
+          as a _s_t_r_u_c_t _s_o_c_k_a_d_d_r in the arguments field of the reply.
+
+     NGM_KSOCKET_SETOPT (sseettoopptt)
+          Equivalent to the setsockopt(2) system call, except that the option
+          name, level, and value are passed in a _s_t_r_u_c_t _n_g___k_s_o_c_k_e_t___s_o_c_k_o_p_t.
+
+     NGM_KSOCKET_GETOPT (ggeettoopptt)
+          Equivalent to the getsockopt(2) system call, except that the option
+          is passed in a _s_t_r_u_c_t _n_g___k_s_o_c_k_e_t___s_o_c_k_o_p_t.  When sending this com‐
+          mand, the value field should be empty; upon return, it will contain
+          the retrieved value.
+
+AASSCCIIII FFOORRMM CCOONNTTRROOLL MMEESSSSAAGGEESS
+     For control messages that pass a _s_t_r_u_c_t _s_o_c_k_a_d_d_r in the argument field,
+     the normal ASCII equivalent of the C structure is an acceptable form.
+     For the PF_INET and PF_LOCAL address families, a more convenient form is
+     also used, which is the protocol family name, followed by a slash, fol‐
+     lowed by the actual address.  For PF_INET, the address is an IP address
+     followed by an optional colon and port number.  For PF_LOCAL, the address
+     is the pathname as a doubly quoted string.
+
+     Examples:
+
+     PF_LOCAL  local/"/tmp/foo.socket"
+
+     PF_INET   inet/192.168.1.1:1234
+
+     Other     { family=16 len=16 data=[0x70 0x00 0x01 0x23] }
+
+     For control messages that pass a _s_t_r_u_c_t _n_g___k_s_o_c_k_e_t___s_o_c_k_o_p_t, the normal
+     ASCII form for that structure is used.  In the future, more convenient
+     encoding of the more common socket options may be supported.
+
+     Setting socket options example:
+
+     Set FIB 2 for a socket (SOL_SOCKET, SO_SETFIB):
+               setopt { level=0xffff name=0x1014 data=[ 2 ] }
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when the hook is disconnected.  Shutdown of the node closes the associ‐
+     ated socket.
+
+SSEEEE AALLSSOO
+     socket(2), netgraph(4), ng_socket(4), ngctl(8), mbuf_tags(9), socket(9)
+
+HHIISSTTOORRYY
+     The nngg__kkssoocckkeett node type was implemented in FreeBSD 4.0.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                             January 9, 2012                            BSD

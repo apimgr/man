@@ -1,0 +1,202 @@
+_s_p_r_o_f(1)                    General Commands Manual                   _s_p_r_o_f(1)
+
+NNAAMMEE
+       sprof - read and display shared object profiling data
+
+SSYYNNOOPPSSIISS
+       sspprrooff [_o_p_t_i_o_n ...] _s_h_a_r_e_d_‐_o_b_j_e_c_t_‐_p_a_t_h [_p_r_o_f_i_l_e_‐_d_a_t_a_‐_p_a_t_h]
+
+DDEESSCCRRIIPPTTIIOONN
+       The  sspprrooff  command  displays a profiling summary for the shared object
+       (shared library) specified as its  first  command‐line  argument.   The
+       profiling  summary is created using previously generated profiling data
+       in the (optional) second command‐line argument.  If the profiling  data
+       pathname  is  omitted,  then  sspprrooff will attempt to deduce it using the
+       soname of the shared object, looking for a file  with  the  name  _<_s_o_n_‐
+       _a_m_e_>_._p_r_o_f_i_l_e in the current directory.
+
+OOPPTTIIOONNSS
+       The  following  command‐line  options  specify the profile output to be
+       produced:
+
+       ----ccaallll--ppaaiirrss
+       --cc     Print a list of pairs of call paths for the interfaces  exported
+              by  the  shared object, along with the number of times each path
+              is used.
+
+       ----ffllaatt--pprrooffiillee
+       --pp     Generate a flat profile of all of the functions in the monitored
+              object, with counts and ticks.
+
+       ----ggrraapphh
+       --qq     Generate a call graph.
+
+       If none of the above options is specified, then the default behavior is
+       to display a flat profile and a call graph.
+
+       The following additional command‐line options are available:
+
+       ----hheellpp
+       --??     Display a summary of  command‐line  options  and  arguments  and
+              exit.
+
+       ----uussaaggee
+              Display a short usage message and exit.
+
+       ----vveerrssiioonn
+       --VV     Display the program version and exit.
+
+SSTTAANNDDAARRDDSS
+       GNU.
+
+EEXXAAMMPPLLEESS
+       The  following example demonstrates the use of sspprrooff.  The example con‐
+       sists of a main program that calls two functions in  a  shared  object.
+       First, the code of the main program:
+
+           $ ccaatt pprroogg..cc;
+           #include <stdlib.h>
+
+           void x1(void);
+           void x2(void);
+
+           int
+           main(int argc, char *argv[])
+           {
+               x1();
+               x2();
+               exit(EXIT_SUCCESS);
+           }
+
+       The  functions  _x_1()  and _x_2() are defined in the following source file
+       that is used to construct the shared object:
+
+           $ ccaatt lliibbddeemmoo..cc;
+           #include <unistd.h>
+
+           void
+           consumeCpu1(int lim)
+           {
+               for (unsigned int j = 0; j < lim; j++)
+                getppid();
+           }
+
+           void
+           x1(void) {
+               for (unsigned int j = 0; j < 100; j++)
+                consumeCpu1(200000);
+           }
+
+           void
+           consumeCpu2(int lim)
+           {
+               for (unsigned int j = 0; j < lim; j++)
+                getppid();
+           }
+
+           void
+           x2(void)
+           {
+               for (unsigned int j = 0; j < 1000; j++)
+                consumeCpu2(10000);
+           }
+
+       Now we construct the shared object with the real name _l_i_b_d_e_m_o_._s_o_._1_._0_._1,
+       and the soname _l_i_b_d_e_m_o_._s_o_._1:
+
+           $ cccc --gg --ffPPIICC --sshhaarreedd --WWll,,--ssoonnaammee,,lliibbddeemmoo..ssoo..11 \\
+                   --oo lliibbddeemmoo..ssoo..11..00..11 lliibbddeemmoo..cc;
+
+       Then we construct symbolic links for the library soname and the library
+       linker name:
+
+           $ llnn --ssff lliibbddeemmoo..ssoo..11..00..11 lliibbddeemmoo..ssoo..11;
+           $ llnn --ssff lliibbddeemmoo..ssoo..11 lliibbddeemmoo..ssoo;
+
+       Next, we compile the main program, linking it against  the  shared  ob‐
+       ject, and then list the dynamic dependencies of the program:
+
+           $ cccc --gg --oo pprroogg pprroogg..cc --LL.. --llddeemmoo;
+           $ lldddd pprroogg;
+                linux-vdso.so.1 =>  (0x00007fff86d66000)
+                libdemo.so.1 => not found
+                libc.so.6 => /lib64/libc.so.6 (0x00007fd4dc138000)
+                /lib64/ld-linux-x86-64.so.2 (0x00007fd4dc51f000)
+
+       In  order to get profiling information for the shared object, we define
+       the environment variable LLDD__PPRROOFFIILLEE with the soname of the library:
+
+           $ eexxppoorrtt LLDD__PPRROOFFIILLEE==lliibbddeemmoo..ssoo..11;
+
+       We then define the  environment  variable  LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT  with  the
+       pathname  of  the directory where profile output should be written, and
+       create that directory if it does not exist already:
+
+           $ eexxppoorrtt LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT==$$((ppwwdd))//pprrooff__ddaattaa;
+           $ mmkkddiirr --pp $$LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT;
+
+       LLDD__PPRROOFFIILLEE causes profiling output to be _a_p_p_e_n_d_e_d to the output file if
+       it already exists, so we ensure that there is no preexisting  profiling
+       data:
+
+           $ rrmm --ff $$LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT//$$LLDD__PPRROOFFIILLEE..pprrooffiillee;
+
+       We then run the program to produce the profiling output, which is writ‐
+       ten to a file in the directory specified in LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT:
+
+           $ LLDD__LLIIBBRRAARRYY__PPAATTHH==.. ..//pprroogg;
+           $ llss pprrooff__ddaattaa;
+           libdemo.so.1.profile
+
+       We  then use the sspprrooff --pp option to generate a flat profile with counts
+       and ticks:
+
+           $ sspprrooff --pp lliibbddeemmoo..ssoo..11 $$LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT//lliibbddeemmoo..ssoo..11..pprrooffiillee;
+           Flat profile:
+
+           Each sample counts as 0.01 seconds.
+             %   cumulative   self              self     total
+            time   seconds   seconds    calls  us/call  us/call  name
+            60.00      0.06     0.06      100   600.00           consumeCpu1
+            40.00      0.10     0.04     1000    40.00           consumeCpu2
+             0.00      0.10     0.00        1     0.00           x1
+             0.00      0.10     0.00        1     0.00           x2
+
+       The sspprrooff --qq option generates a call graph:
+
+           $ sspprrooff --qq lliibbddeemmoo..ssoo..11 $$LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT//lliibbddeemmoo..ssoo..11..pprrooffiillee;
+
+           index % time    self  children    called     name
+
+                           0.00    0.00      100/100         x1 [1]
+           [0]    100.0    0.00    0.00      100         consumeCpu1 [0]
+           -----------------------------------------------
+                           0.00    0.00        1/1           <UNKNOWN>
+           [1]      0.0    0.00    0.00        1         x1 [1]
+                           0.00    0.00      100/100         consumeCpu1 [0]
+           -----------------------------------------------
+                           0.00    0.00     1000/1000        x2 [3]
+           [2]      0.0    0.00    0.00     1000         consumeCpu2 [2]
+           -----------------------------------------------
+                           0.00    0.00        1/1           <UNKNOWN>
+           [3]      0.0    0.00    0.00        1         x2 [3]
+                           0.00    0.00     1000/1000        consumeCpu2 [2]
+           -----------------------------------------------
+
+       Above and below, the "<UNKNOWN>" strings represent identifiers that are
+       outside of the profiled object (in this example, these are instances of
+       _m_a_i_n_(_)).
+
+       The sspprrooff --cc option generates a list of call pairs and  the  number  of
+       their occurrences:
+
+           $ sspprrooff --cc lliibbddeemmoo..ssoo..11 $$LLDD__PPRROOFFIILLEE__OOUUTTPPUUTT//lliibbddeemmoo..ssoo..11..pprrooffiillee;
+           <UNKNOWN>                  x1                                 1
+           x1                         consumeCpu1                      100
+           <UNKNOWN>                  x2                                 1
+           x2                         consumeCpu2                     1000
+
+SSEEEE AALLSSOO
+       ggpprrooff(1), lldddd(1), lldd..ssoo(8)
+
+Linux man‐pages (unreleased)        (date)                            _s_p_r_o_f(1)

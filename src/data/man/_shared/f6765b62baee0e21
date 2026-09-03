@@ -1,0 +1,195 @@
+SCRIPT(7)            BSD Miscellaneous Information Manual            SCRIPT(7)
+
+NNAAMMEE
+     ssccrriipptt — interpreter script execution
+
+DDEESSCCRRIIPPTTIIOONN
+     The system is capable of treating a text file containing commands in‐
+     tended for an interpreter, such as sh(1) or awk(1), as an executable pro‐
+     gram.
+
+     An “interpreter script” is a file which has been set executable (see
+     chmod(2)) and which has a first line of the form:
+
+           #! _p_a_t_h_n_a_m_e [_a_r_g_u_m_e_n_t]
+
+     The ‘#!’ must appear as the first two characters of the file.  A space
+     between the ‘#!’ and _p_a_t_h_n_a_m_e is optional.  At most one _a_r_g_u_m_e_n_t may fol‐
+     low _p_a_t_h_n_a_m_e, and the length of the entire line is limited (see below).
+
+     If such a file is executed (such as via the execve(2) system call), the
+     interpreter specified by the _p_a_t_h_n_a_m_e is executed by the system.  (The
+     _p_a_t_h_n_a_m_e is executed without regard to the PATH variable, so in general
+     _p_a_t_h_n_a_m_e should be an absolute path.)
+
+     The arguments passed to the interpreter will be as follows.  _a_r_g_v_[_0_] will
+     be the path to the interpreter itself, as specified on the first line of
+     the script.  If there is an _a_r_g_u_m_e_n_t following _p_a_t_h_n_a_m_e on the first line
+     of the script, it will be passed as _a_r_g_v_[_1_].  The subsequent elements of
+     _a_r_g_v will be the path to the interpreter script file itself (i.e. the
+     original _a_r_g_v_[_0_]) followed by any further arguments passed when execve(2)
+     was invoked to execute the script file.
+
+     By convention, it is expected that an interpreter will open the script
+     file passed as an argument and process the commands within it.  Typical
+     interpreters treat ‘#’ as a comment character, and thus will ignore the
+     initial line of the script because it begins ‘#!’, but there is no re‐
+     quirement for this per se.
+
+     On OpenBSD, the length of the interpreter line following the ‘#!’ is lim‐
+     ited to MAXINTERP, as defined in <_s_y_s_/_p_a_r_a_m_._h>.  Other operating systems
+     impose different limits on the length of the ‘#!’ line (see below).
+
+     Note that the interpreter may not itself be an interpreter script.  If
+     _p_a_t_h_n_a_m_e does not point to an executable binary, execution of the inter‐
+     preter script will fail.
+
+   TTrraammppoolliinneess aanndd PPoorrttaabbllee SSccrriippttss
+     Different operating systems often have interpreters located in different
+     locations, and the kernel executes the passed interpreter without regard
+     to the setting of environment variables such as PATH.  This makes it
+     somewhat challenging to set the ‘#!’ line of a script so that it will run
+     identically on different systems.
+
+     Since the env(1) utility executes a command passed to it on its command
+     line, it is often used as a “trampoline” to render scripts portable.  If
+     the leading line of a script reads
+
+           #! /usr/bin/env interp
+
+     then the env(1) command will execute the “interp” command it finds in its
+     PATH, passing on to it all subsequent arguments with which it itself was
+     called.  Since _/_u_s_r_/_b_i_n_/_e_n_v is found on almost all POSIX style systems,
+     this trick is frequently exploited by authors who need a script to exe‐
+     cute without change on multiple systems.
+
+   HHiissttoorriiccaall NNoottee:: SSccrriippttss wwiitthhoouutt ``##!!''
+     Shell scripts predate the invention of the ‘#!’ convention, which is im‐
+     plemented in the kernel.  In the days of Version 7 AT&T UNIX, there was
+     only one interpreter used on the system, _/_b_i_n_/_s_h, and the shell treated
+     any file that failed to execute with an ENOEXEC error (see intro(2)) as a
+     shell script.
+
+     Most shells (such as sh(1)) and certain other facilities (including
+     execlp(3) and execvp(3)) still pass interpreter scripts that do not in‐
+     clude the ‘#!’ (and thus fail to execute with ENOEXEC) to _/_b_i_n_/_s_h.
+
+     As this behavior is implemented outside the kernel, there is no mechanism
+     that forces it to be respected by all programs that execute other pro‐
+     grams.  It is thus not completely reliable.  It is therefore important to
+     always include
+
+           #!/bin/sh
+
+     in front of Bourne shell scripts, and to treat the traditional behavior
+     as obsolete.
+
+EEXXAAMMPPLLEESS
+     Suppose that an executable binary exists in _/_b_i_n_/_i_n_t_e_r_p and that the file
+     _/_t_m_p_/_s_c_r_i_p_t contains:
+
+           #!/bin/interp -arg
+
+           [...]
+
+     and that _/_t_m_p_/_s_c_r_i_p_t is set mode 755.
+
+     Executing
+
+           $ /tmp/script one two three
+
+     at the shell will result in _/_b_i_n_/_i_n_t_e_r_p being executed, receiving the
+     following arguments in _a_r_g_v (numbered from 0):
+
+           "/bin/interp", "-arg", "/tmp/script", "one", "two", "three"
+
+   PPoorrttaabbiilliittyy NNoottee:: MMuullttiippllee aarrgguummeennttss
+     The behavior of multiple arguments on the ‘#!’ line is highly non-porta‐
+     ble between different systems.  In general, only one argument can be as‐
+     sumed to work consistently.
+
+     Consider the following variation on the previous example.  Suppose that
+     an executable binary exists in _/_b_i_n_/_i_n_t_e_r_p and that the file _/_t_m_p_/_s_c_r_i_p_t
+     contains:
+
+           #!/bin/interp -x -y
+
+           [...]
+
+     and that _/_t_m_p_/_s_c_r_i_p_t is set mode 755.
+
+     Executing
+
+           $ /tmp/script one two three
+
+     at the shell will result in _/_b_i_n_/_i_n_t_e_r_p being executed, receiving the
+     following arguments in _a_r_g_v (numbered from 0):
+
+           "/bin/interp", "-x -y", "/tmp/script", "one", "two", "three"
+
+     Note that "-x -y" will be passed on OpenBSD as a single argument.
+
+     Although most POSIX style operating systems will pass only one _a_r_g_u_m_e_n_t,
+     the behavior when multiple arguments are included is not consistent be‐
+     tween platforms.  Some, such as OpenBSD, will concatenate multiple argu‐
+     ments into a single argument (as above), some will truncate them, and at
+     least one will pass them as multiple arguments.
+
+     The OpenBSD behavior is common but not universal.  Sun's Solaris would
+     present the above argument as "-x", dropping the " -y" entirely.  Perhaps
+     uniquely, recent versions of Apple's OS X will actually pass multiple ar‐
+     guments properly, i.e.:
+
+           "/bin/interp", "-x", "-y", "/tmp/script", "one", "two", "three"
+
+     The behavior of the system in the face of multiple arguments is thus not
+     currently standardized, should not be relied on, and may be changed in
+     future releases.  In general, pass at most one argument, and do not rely
+     on multiple arguments being concatenated.
+
+SSEEEE AALLSSOO
+     awk(1), csh(1), ksh(1), sh(1), chmod(2), execve(2), intro(2), execlp(3),
+     execvp(3)
+
+SSTTAANNDDAARRDDSS
+     The behavior of interpreter scripts is obliquely referred to, but never
+     actually described in, IEEE Std 1003.1-2004 (“POSIX.1”).
+
+     The behavior is partially (but not completely) described in the System V
+     Interface Definition, Fourth Edition (“SVID4”).
+
+     Although it has never been formally standardized, the behavior described
+     is largely portable across POSIX style systems, with two significant ex‐
+     ceptions: the maximum length of the ‘#!’ line, and the behavior if multi‐
+     ple arguments are passed.  Be aware that the behavior in the face of mul‐
+     tiple arguments is not consistent across systems.
+
+HHIISSTTOORRYY
+     The behavior of the kernel when encountering scripts that start in ‘#!’
+     was not present in Version 7 AT&T UNIX.  A Usenet posting to net.unix by
+     Guy Harris on October 16, 1984 claims that the idea for the ‘#!’ behavior
+     was first proposed by Dennis Ritchie but that the first implementation
+     was on BSD.
+
+     Historical manuals (specifically the exec man page) indicate that the be‐
+     havior was present in 4BSD at least as early as April, 1981.  Information
+     on precisely when it was first implemented, and in which version of UNIX,
+     is solicited.
+
+CCAAVVEEAATTSS
+     Numerous security problems are associated with setuid interpreter
+     scripts.
+
+     In addition to the fact that many interpreters (and scripts) are simply
+     not designed to be robust in a setuid context, a race condition exists
+     between the moment that the kernel examines the interpreter script file
+     and the moment that the newly invoked interpreter opens the file itself.
+
+     Subtle techniques can be used to subvert even seemingly well written
+     scripts.  Scripts executed by Bourne type shells can be subverted in nu‐
+     merous ways, such as by setting the IFS variable before executing the
+     script.  Other interpreters possess their own vulnerabilities.  Setting
+     the Set-user-ID on execution (SUID) bit is therefore very dangerous, and
+     should not be done lightly, if at all.
+
+BSD                            February 6, 2022                            BSD

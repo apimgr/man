@@ -1,0 +1,151 @@
+SCHEDULER(9)             BSD Kernel Developer's Manual            SCHEDULER(9)
+
+NNAAMMEE
+     ccuurrpprriioorriittyy__ccmmpp, mmaayybbee__rreesscchheedd, rreesseettpprriioorriittyy, rroouunnddrroobbiinn,
+     rroouunnddrroobbiinn__iinntteerrvvaall, sscchheedd__sseettuupp, sscchheeddcclloocckk, sscchheeddccppuu, sseettrruunnnnaabbllee,
+     uuppddaatteepprrii — perform round-robin scheduling of runnable processes
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//pprroocc..hh>>
+
+     _i_n_t
+     ccuurrpprriioorriittyy__ccmmpp(_s_t_r_u_c_t _p_r_o_c _*_p);
+
+     _v_o_i_d
+     mmaayybbee__rreesscchheedd(_s_t_r_u_c_t _t_h_r_e_a_d _*_t_d);
+
+     _v_o_i_d
+     pprrooppaaggaattee__pprriioorriittyy(_s_t_r_u_c_t _p_r_o_c _*_p);
+
+     _v_o_i_d
+     rreesseettpprriioorriittyy(_s_t_r_u_c_t _k_s_e_g_r_p _*_k_g);
+
+     _v_o_i_d
+     rroouunnddrroobbiinn(_v_o_i_d _*_a_r_g);
+
+     _i_n_t
+     rroouunnddrroobbiinn__iinntteerrvvaall(_v_o_i_d);
+
+     _v_o_i_d
+     sscchheedd__sseettuupp(_v_o_i_d _*_d_u_m_m_y);
+
+     _v_o_i_d
+     sscchheeddcclloocckk(_s_t_r_u_c_t _t_h_r_e_a_d _*_t_d);
+
+     _v_o_i_d
+     sscchheeddccppuu(_v_o_i_d _*_a_r_g);
+
+     _v_o_i_d
+     sseettrruunnnnaabbllee(_s_t_r_u_c_t _t_h_r_e_a_d _*_t_d);
+
+     _v_o_i_d
+     uuppddaatteepprrii(_s_t_r_u_c_t _t_h_r_e_a_d _*_t_d);
+
+DDEESSCCRRIIPPTTIIOONN
+     Each process has three different priorities stored in _s_t_r_u_c_t _p_r_o_c:
+     _p___u_s_r_p_r_i, _p___n_a_t_i_v_e_p_r_i, and _p___p_r_i_o_r_i_t_y.
+
+     The _p___u_s_r_p_r_i member is the user priority of the process calculated from a
+     process' estimated CPU time and nice level.
+
+     The _p___n_a_t_i_v_e_p_r_i member is the saved priority used by
+     pprrooppaaggaattee__pprriioorriittyy().  When a process obtains a mutex, its priority is
+     saved in _p___n_a_t_i_v_e_p_r_i.  While it holds the mutex, the process's priority
+     may be bumped by another process that blocks on the mutex.  When the
+     process releases the mutex, then its priority is restored to the priority
+     saved in _p___n_a_t_i_v_e_p_r_i.
+
+     The _p___p_r_i_o_r_i_t_y member is the actual priority of the process and is used
+     to determine what runqueue(9) it runs on, for example.
+
+     The ccuurrpprriioorriittyy__ccmmpp() function compares the cached priority of the cur‐
+     rently running process with process _p.  If the currently running process
+     has a higher priority, then it will return a value less than zero.  If
+     the current process has a lower priority, then it will return a value
+     greater than zero.  If the current process has the same priority as _p,
+     then ccuurrpprriioorriittyy__ccmmpp() will return zero.  The cached priority of the cur‐
+     rently running process is updated when a process resumes from tsleep(9)
+     or returns to userland in uusseerrrreett() and is stored in the private variable
+     _c_u_r_p_r_i_o_r_i_t_y.
+
+     The mmaayybbee__rreesscchheedd() function compares the priorities of the current
+     thread and _t_d.  If _t_d has a higher priority than the current thread, then
+     a context switch is needed, and KEF_NEEDRESCHED is set.
+
+     The pprrooppaaggaattee__pprriioorriittyy() looks at the process that owns the mutex _p is
+     blocked on.  That process's priority is bumped to the priority of _p if
+     needed.  If the process is currently running, then the function returns.
+     If the process is on a runqueue(9), then the process is moved to the ap‐
+     propriate runqueue(9) for its new priority.  If the process is blocked on
+     a mutex, its position in the list of processes blocked on the mutex in
+     question is updated to reflect its new priority.  Then, the function re‐
+     peats the procedure using the process that owns the mutex just encoun‐
+     tered.  Note that a process's priorities are only bumped to the priority
+     of the original process _p, not to the priority of the previously encoun‐
+     tered process.
+
+     The rreesseettpprriioorriittyy() function recomputes the user priority of the ksegrp
+     _k_g (stored in _k_g___u_s_e_r___p_r_i) and calls mmaayybbee__rreesscchheedd() to force a resched‐
+     ule of each thread in the group if needed.
+
+     The rroouunnddrroobbiinn() function is used as a timeout(9) function to force a
+     reschedule every _s_c_h_e_d___q_u_a_n_t_u_m ticks.
+
+     The rroouunnddrroobbiinn__iinntteerrvvaall() function simply returns the number of clock
+     ticks in between reschedules triggered by rroouunnddrroobbiinn().  Thus, all it
+     does is return the current value of _s_c_h_e_d___q_u_a_n_t_u_m.
+
+     The sscchheedd__sseettuupp() function is a SYSINIT(9) that is called to start the
+     callout driven scheduler functions.  It just calls the rroouunnddrroobbiinn() and
+     sscchheeddccppuu() functions for the first time.  After the initial call, the two
+     functions will propagate themselves by registering their callout event
+     again at the completion of the respective function.
+
+     The sscchheeddcclloocckk() function is called by ssttaattcclloocckk() to adjust the priority
+     of the currently running thread's ksegrp.  It updates the group's esti‐
+     mated CPU time and then adjusts the priority via rreesseettpprriioorriittyy().
+
+     The sscchheeddccppuu() function updates all process priorities.  First, it up‐
+     dates statistics that track how long processes have been in various
+     process states.  Secondly, it updates the estimated CPU time for the cur‐
+     rent process such that about 90% of the CPU usage is forgotten in 5 *
+     load average seconds.  For example, if the load average is 2.00, then at
+     least 90% of the estimated CPU time for the process should be based on
+     the amount of CPU time the process has had in the last 10 seconds.  It
+     then recomputes the priority of the process and moves it to the appropri‐
+     ate runqueue(9) if necessary.  Thirdly, it updates the %CPU estimate used
+     by utilities such as ps(1) and top(1) so that 95% of the CPU usage is
+     forgotten in 60 seconds.  Once all process priorities have been updated,
+     sscchheeddccppuu() calls vvmmmmeetteerr() to update various other statistics including
+     the load average.  Finally, it schedules itself to run again in _h_z clock
+     ticks.
+
+     The sseettrruunnnnaabbllee() function is used to change a process's state to be
+     runnable.  The process is placed on a runqueue(9) if needed, and the
+     swapper process is woken up and told to swap the process in if the
+     process is swapped out.  If the process has been asleep for at least one
+     run of sscchheeddccppuu(), then uuppddaatteepprrii() is used to adjust the priority of the
+     process.
+
+     The uuppddaatteepprrii() function is used to adjust the priority of a process that
+     has been asleep.  It retroactively decays the estimated CPU time of the
+     process for each sscchheeddccppuu() event that the process was asleep.  Finally,
+     it calls rreesseettpprriioorriittyy() to adjust the priority of the process.
+
+SSEEEE AALLSSOO
+     mi_switch(9), runqueue(9), sleepqueue(9), tsleep(9)
+
+BBUUGGSS
+     The _c_u_r_p_r_i_o_r_i_t_y variable really should be per-CPU.  In addition,
+     mmaayybbee__rreesscchheedd() should compare the priority of _c_h_k with that of each CPU,
+     and then send an IPI to the processor with the lowest priority to trigger
+     a reschedule if needed.
+
+     Priority propagation is broken and is thus disabled by default.  The
+     _p___n_a_t_i_v_e_p_r_i variable is only updated if a process does not obtain a sleep
+     mutex on the first try.  Also, if a process obtains more than one sleep
+     mutex in this manner, and had its priority bumped in between, then
+     _p___n_a_t_i_v_e_p_r_i will be clobbered.
+
+BSD                            November 3, 2000                            BSD

@@ -1,0 +1,108 @@
+SENSORSD.CONF(5)            BSD File Formats Manual           SENSORSD.CONF(5)
+
+NNAAMMEE
+     sseennssoorrssdd..ccoonnff — configuration file for sensorsd
+
+DDEESSCCRRIIPPTTIIOONN
+     The sseennssoorrssdd..ccoonnff file is read by sensorsd(8) to configure hardware sen‐
+     sor monitoring.  Each variable in the sysctl(2) _h_w_._s_e_n_s_o_r_s subtree repre‐
+     sents a sensor.  Each sensor is matched by at most one entry in
+     sseennssoorrssdd..ccoonnff, which may specify high and low limits, and whether sensor
+     status changes provided by the driver should be ignored.  Each time the
+     limits are crossed in either direction or the status provided by the
+     driver changes, sensorsd(8)'s alert functionality is triggered and a com‐
+     mand, if specified, is executed.
+
+     sseennssoorrssdd..ccoonnff follows the syntax of configuration databases as documented
+     in cgetent(3).  Sensors may be specified by their full _h_w_._s_e_n_s_o_r_s
+     sysctl(8) variable name or by type, with the full name taking precedence.
+     For example, if an entry “hw.sensors.lm0.temp1” is not found, then an en‐
+     try for “temp” will instead be looked for.
+
+     The following attributes may be used:
+
+           command    Specify a command to be executed on state change.
+           high       Specify the largest acceptable value.
+           low        Specify the smallest acceptable value.
+           istatus    Ignore status provided by the driver.
+
+     The values for temperature sensors can be given in degrees Celsius or
+     Fahrenheit, for voltage sensors in volts, and fan speed sensors take a
+     unit-less number representing RPM.  For Boolean sensors, specify 0 for
+     "Off" or 1 for "On".  Values for all other types of sensors can be speci‐
+     fied in the same units as they appear under the sysctl(8) _h_w_._s_e_n_s_o_r_s
+     tree.
+
+     Sensors that provide status (such as those from bio(4), esm(4), or
+     ipmi(4)) do not require boundary values specified and simply trigger on
+     status transitions.  If boundaries are specified nonetheless, then they
+     are used in addition to automatic status monitoring, unless the “istatus”
+     attribute is specified to ignore status values that are provided by the
+     drivers.
+
+     The command is executed when there is any change in sensor state.  Tokens
+     in the command are substituted as follows:
+
+           %l      Whether the value exceeds or is within the user specified
+                   limits.  Can be one of: "below", "above", "within", "in‐
+                   valid", or "uninitialised".
+           %n      The sensor number.
+           %s      The sensor status.
+           %x      The xname of the device the sensor sits on.
+           %t      The type of sensor.
+           %2      The sensor's current value.
+           %3      The sensor's low limit.
+           %4      The sensor's high limit.
+
+     For Boolean sensors, %2, %3, and %4 are substituted with "On" or "Off".
+
+     By default, sensorsd(8) monitors status changes on all sensors that keep
+     their state.  This behaviour may be altered by using the “istatus” attri‐
+     bute to ignore status changes of sensors of a certain type or individual
+     sensors.
+
+FFIILLEESS
+     /etc/sensorsd.conf           Configuration file for sensorsd(8).
+     /etc/examples/sensorsd.conf  Example configuration file.
+
+EEXXAAMMPPLLEESS
+     In the following configuration file, if hw.sensors.ipmi0.temp0 moves up‐
+     wards beyond 80C or downwards to 80C or less or if its status as provided
+     by ipmi(4) changes, the command _/_e_t_c_/_s_e_n_s_o_r_s_d_/_l_o_g___w_a_r_n_i_n_g will be exe‐
+     cuted, with the sensor type, number and current value passed to it.
+     Alerts will be sent if hw.sensors.lm0.volt3 moves into or out of the
+     range from 4.8V to 5.2V, inclusive; if the speed of the fan attached to
+     hw.sensors.lm0.fan1 transitions to being below or above 1000RPM; if any
+     RAID volume drive changes its status from, for example, “OK”, such as in
+     the case of drive failure, rebuild, or a complete failure, the command
+     _/_e_t_c_/_s_e_n_s_o_r_s_d_/_d_r_i_v_e will be executed, with the sensor number passed to
+     it; however, no alerts will be generated for status changes on timedelta
+     sensors.  For all other sensors whose drivers automatically provide sen‐
+     sor status updates, alerts will be generated each time those sensors un‐
+     dergo status transitions.
+
+           # Comments are allowed
+           hw.sensors.ipmi0.temp0:high=80C:command=/etc/sensorsd/log_warning %t %n %2
+           hw.sensors.lm0.volt3:low=4.8V:high=5.2V
+           hw.sensors.lm0.fan1:low=1000
+           drive:command=/etc/sensorsd/drive %n
+           timedelta:istatus       #ignore status changes for timedelta
+
+SSEEEE AALLSSOO
+     cgetent(3), bio(4), ipmi(4), sensorsd(8), sysctl(8)
+
+HHIISSTTOORRYY
+     The sseennssoorrssdd..ccoonnff file format first appeared in OpenBSD 3.5.  The format
+     was altered in OpenBSD 4.1 to accommodate hierarchical device-based sen‐
+     sor addressing.  The “istatus” attribute was introduced in OpenBSD 4.2.
+
+CCAAVVEEAATTSS
+     Alert functionality is triggered every time there is a change in sensor
+     state; for example, when sensorsd(8) is started, the status of each moni‐
+     tored sensor changes from undefined to whatever it is.  One must keep
+     this in mind when using commands that may unconditionally perform adverse
+     actions (e.g. shutdown(8)), as they will be executed even when all sen‐
+     sors perform to specification.  If this is undesirable, then a wrapper
+     shell script should be used instead.
+
+BSD                            February 10, 2020                           BSD

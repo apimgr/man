@@ -1,0 +1,194 @@
+_t_i_m_e___n_a_m_e_s_p_a_c_e_s(7)     Miscellaneous Information Manual     _t_i_m_e___n_a_m_e_s_p_a_c_e_s(7)
+
+NNAAMMEE
+       time_namespaces - overview of Linux time namespaces
+
+DDEESSCCRRIIPPTTIIOONN
+       Time namespaces virtualize the values of two system clocks:
+
+       •  CCLLOOCCKK__MMOONNOOTTOONNIICC  (and  likewise CCLLOOCCKK__MMOONNOOTTOONNIICC__CCOOAARRSSEE and CCLLOOCCKK__MMOO‐‐
+          NNOOTTOONNIICC__RRAAWW), a nonsettable clock  that  represents  monotonic  time
+          since —as described by POSIX— "some unspecified point in the past".
+
+       •  CCLLOOCCKK__BBOOOOTTTTIIMMEE  (and  likewise  CCLLOOCCKK__BBOOOOTTTTIIMMEE__AALLAARRMM), a nonsettable
+          clock that is identical to CCLLOOCCKK__MMOONNOOTTOONNIICC, except that it also  in‐
+          cludes any time that the system is suspended.
+
+       Thus,  the processes in a time namespace share per‐namespace values for
+       these clocks.  This affects various APIs  that  measure  against  these
+       clocks,  including: cclloocckk__ggeettttiimmee(2), cclloocckk__nnaannoosslleeeepp(2), nnaannoosslleeeepp(2),
+       ttiimmeerr__sseettttiimmee(2), ttiimmeerrffdd__sseettttiimmee(2), and _/_p_r_o_c_/_u_p_t_i_m_e.
+
+       Currently, the only way to create a time namespace is  by  calling  uunn‐‐
+       sshhaarree(2)  with  the  CCLLOONNEE__NNEEWWTTIIMMEE  flag.  This call creates a new time
+       namespace but does _n_o_t place the calling process in the new  namespace.
+       Instead, the calling process’s subsequently created children are placed
+       in  the  new  namespace.  This allows clock offsets (see below) for the
+       new namespace to be set before the first process is placed in the name‐
+       space.  The _/_p_r_o_c_/pid_/_n_s_/_t_i_m_e___f_o_r___c_h_i_l_d_r_e_n symbolic link shows the time
+       namespace in which the children of  a  process  will  be  created.   (A
+       process  can  use  a  file descriptor opened on this symbolic link in a
+       call to sseettnnss(2) in order to move into the namespace.)
+
+   _//_pp_rr_oo_cc_//ppiidd_//_tt_ii_mm_ee_nn_ss____oo_ff_ff_ss_ee_tt_ss
+       Associated with each time namespace are offsets, expressed with respect
+       to the initial time namespace, that define the values of the  monotonic
+       and  boot‐time clocks in that namespace.  These offsets are exposed via
+       the file _/_p_r_o_c_/pid_/_t_i_m_e_n_s___o_f_f_s_e_t_s.  Within this file, the  offsets  are
+       expressed as lines consisting of three space‐delimited fields:
+
+           <clock‐id> <offset‐secs> <offset‐nanosecs>
+
+       The  _c_l_o_c_k_‐_i_d  is  a string that identifies the clock whose offsets are
+       being shown.  This field is either _m_o_n_o_t_o_n_i_c, for  CCLLOOCCKK__MMOONNOOTTOONNIICC,  or
+       _b_o_o_t_t_i_m_e,  for CCLLOOCCKK__BBOOOOTTTTIIMMEE.  The remaining fields express the offset
+       (seconds plus nanoseconds) for the clock in this time namespace.  These
+       offsets are expressed relative to the clock values in the initial  time
+       namespace.   The _o_f_f_s_e_t_‐_s_e_c_s value can be negative, subject to restric‐
+       tions noted below; _o_f_f_s_e_t_‐_n_a_n_o_s_e_c_s is an unsigned value.
+
+       In the initial time namespace, the contents of the _t_i_m_e_n_s___o_f_f_s_e_t_s  file
+       are as follows:
+
+           $ ccaatt //pprroocc//sseellff//ttiimmeennss__ooffffsseettss
+           monotonic           0         0
+           boottime            0         0
+
+       In  a  new  time  namespace that has had no member processes, the clock
+       offsets can be modified by writing newline‐terminated  records  of  the
+       same  form to the _t_i_m_e_n_s___o_f_f_s_e_t_s file.  The file can be written to mul‐
+       tiple times, but after the first process has been created in or has en‐
+       tered the namespace, wwrriittee(2)s on this file fail with the error EEAACCCCEESS.
+       In order to write to the _t_i_m_e_n_s___o_f_f_s_e_t_s file, a process must  have  the
+       CCAAPP__SSYYSS__TTIIMMEE  capability in the user namespace that owns the time name‐
+       space.
+
+       Writes to the _t_i_m_e_n_s___o_f_f_s_e_t_s file can fail with the following errors:
+
+       EEIINNVVAALL An _o_f_f_s_e_t_‐_n_a_n_o_s_e_c_s value is greater than 999,999,999.
+
+       EEIINNVVAALL A _c_l_o_c_k_‐_i_d value is not valid.
+
+       EEPPEERRMM  The caller does not have the CCAAPP__SSYYSS__TTIIMMEE capability.
+
+       EERRAANNGGEE An _o_f_f_s_e_t_‐_s_e_c_s value is out of range.  In particular;
+
+              •  _o_f_f_s_e_t_‐_s_e_c_s can’t be set to a value which would make the cur‐
+                 rent time on the corresponding clock inside the  namespace  a
+                 negative value; and
+
+              •  _o_f_f_s_e_t_‐_s_e_c_s can’t be set to a value such that the time on the
+                 corresponding clock inside the namespace would exceed half of
+                 the  value  of the kernel constant KKTTIIMMEE__SSEECC__MMAAXX (this limits
+                 the clock value to a maximum of approximately 146 years).
+
+       In a new time namespace created by  uunnsshhaarree(2),  the  contents  of  the
+       _t_i_m_e_n_s___o_f_f_s_e_t_s file are inherited from the time namespace of the creat‐
+       ing process.
+
+NNOOTTEESS
+       Use  of  time  namespaces requires a kernel that is configured with the
+       CCOONNFFIIGG__TTIIMMEE__NNSS option.
+
+       Note that time namespaces do not virtualize the  CCLLOOCCKK__RREEAALLTTIIMMEE  clock.
+       Virtualization  of this clock was avoided for reasons of complexity and
+       overhead within the kernel.
+
+       For compatibility with  the  initial  implementation,  when  writing  a
+       _c_l_o_c_k_‐_i_d  to the _/_p_r_o_c_/pid_/_t_i_m_e_n_s___o_f_f_s_e_t_s file, the numerical values of
+       the IDs can be written instead of the symbolic names show above;  i.e.,
+       1  instead  of  _m_o_n_o_t_o_n_i_c, and 7 instead of _b_o_o_t_t_i_m_e.  For readability,
+       the use of the symbolic names over the numbers is preferred.
+
+       The motivation for adding time namespaces was to  allow  the  monotonic
+       and boot‐time clocks to maintain consistent values during container mi‐
+       gration and checkpoint/restore.
+
+EEXXAAMMPPLLEESS
+       The  following  shell  session demonstrates the operation of time name‐
+       spaces.  We begin by displaying the inode number of the time  namespace
+       of a shell in the initial time namespace:
+
+           $ rreeaaddlliinnkk //pprroocc//$$$$//nnss//ttiimmee
+           time:[4026531834]
+
+       Continuing  in the initial time namespace, we display the system uptime
+       using uuppttiimmee(1) and  use  the  _c_l_o_c_k___t_i_m_e_s  example  program  shown  in
+       cclloocckk__ggeettrreess(2) to display the values of various clocks:
+
+           $ uuppttiimmee ----pprreettttyy
+           up 21 hours, 17 minutes
+           $ ..//cclloocckk__ttiimmeess
+           CLOCK_REALTIME : 1585989401.971 (18356 days +  8h 36m 41s)
+           CLOCK_TAI      : 1585989438.972 (18356 days +  8h 37m 18s)
+           CLOCK_MONOTONIC:      56338.247 (15h 38m 58s)
+           CLOCK_BOOTTIME :      76633.544 (21h 17m 13s)
+
+       We then use uunnsshhaarree(1) to create a time namespace and execute a bbaasshh(1)
+       shell.   From  the new shell, we use the built‐in eecchhoo command to write
+       records to  the  _t_i_m_e_n_s___o_f_f_s_e_t_s  file  adjusting  the  offset  for  the
+       CCLLOOCCKK__MMOONNOOTTOONNIICC clock forward 2 days and the offset for the CCLLOOCCKK__BBOOOOTT‐‐
+       TTIIMMEE clock forward 7 days:
+
+           $ PPSS11==ns2# ssuuddoo uunnsshhaarree --TT ---- bbaasshh ----nnoorrcc
+           ns2# eecchhoo monotonic$$((((22**2244**6600**6600))))0">>/proc/$$/timens_offsets"
+           ns2# eecchhoo boottime$$((((77**2244**6600**6600))))0">>/proc/$$/timens_offsets"
+
+       Above,  we  started the bbaasshh(1) shell with the ----nnoorrcc option so that no
+       start‐up scripts were executed.  This ensures that no  child  processes
+       are  created  from  the  shell  before  we  have a chance to update the
+       _t_i_m_e_n_s___o_f_f_s_e_t_s file.
+
+       We then use ccaatt(1) to display the contents of the _t_i_m_e_n_s___o_f_f_s_e_t_s  file.
+       The execution of ccaatt(1) creates the first process in the new time name‐
+       space,  after  which further attempts to update the _t_i_m_e_n_s___o_f_f_s_e_t_s file
+       produce an error.
+
+           ns2# ccaatt //pprroocc//$$$$//ttiimmeennss__ooffffsseettss
+           monotonic      172800         0
+           boottime       604800         0
+           ns2# eecchhoo ""bboooottttiimmee $$((((99**2244**6600**6600)))) 00"" >> //pprroocc//$$$$//ttiimmeennss__ooffffsseettss
+           bash: echo: write error: Permission denied
+
+       Continuing  in  the  new  namespace,  we  execute  uuppttiimmee(1)  and   the
+       _c_l_o_c_k___t_i_m_e_s example program:
+
+           ns2# uuppttiimmee ----pprreettttyy
+           up 1 week, 21 hours, 18 minutes
+           ns2# ..//cclloocckk__ttiimmeess
+           CLOCK_REALTIME : 1585989457.056 (18356 days +  8h 37m 37s)
+           CLOCK_TAI      : 1585989494.057 (18356 days +  8h 38m 14s)
+           CLOCK_MONOTONIC:     229193.332 (2 days + 15h 39m 53s)
+           CLOCK_BOOTTIME :     681488.629 (7 days + 21h 18m  8s)
+
+       From  the  above  output,  we  can see that the monotonic and boot‐time
+       clocks have different values in the new time namespace.
+
+       Examining the _/_p_r_o_c_/pid_/_n_s_/_t_i_m_e and _/_p_r_o_c_/pid_/_n_s_/_t_i_m_e___f_o_r___c_h_i_l_d_r_e_n sym‐
+       bolic links, we see that the shell is a  member  of  the  initial  time
+       namespace, but its children are created in the new namespace.
+
+           ns2# rreeaaddlliinnkk //pprroocc//$$$$//nnss//ttiimmee
+           time:[4026531834]
+           ns2# rreeaaddlliinnkk //pprroocc//$$$$//nnss//ttiimmee__ffoorr__cchhiillddrreenn
+           time:[4026532900]
+           ns2# rreeaaddlliinnkk //pprroocc//sseellff//nnss//ttiimmee  # Creates a child process
+           time:[4026532900]
+
+       Returning  to  the shell in the initial time namespace, we see that the
+       monotonic and boot‐time clocks are  unaffected  by  the  _t_i_m_e_n_s___o_f_f_s_e_t_s
+       changes that were made in the other time namespace:
+
+           $ uuppttiimmee ----pprreettttyy
+           up 21 hours, 19 minutes
+           $ ..//cclloocckk__ttiimmeess
+           CLOCK_REALTIME : 1585989401.971 (18356 days +  8h 38m 51s)
+           CLOCK_TAI      : 1585989438.972 (18356 days +  8h 39m 28s)
+           CLOCK_MONOTONIC:      56338.247 (15h 41m  8s)
+           CLOCK_BOOTTIME :      76633.544 (21h 19m 23s)
+
+SSEEEE AALLSSOO
+       nnsseenntteerr(1),  uunnsshhaarree(1),  cclloocckk__sseettttiimmee(2), sseettnnss(2), uunnsshhaarree(2), nnaammee‐‐
+       ssppaacceess(7), ttiimmee(7)
+
+Linux man‐pages (unreleased)      2025‐09‐21                _t_i_m_e___n_a_m_e_s_p_a_c_e_s(7)

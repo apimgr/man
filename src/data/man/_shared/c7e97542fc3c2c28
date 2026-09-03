@@ -1,0 +1,162 @@
+SDOC(7)              BSD Miscellaneous Information Manual              SDOC(7)
+
+NNAAMMEE
+     ssddoocc — guide to adding security considerations sections to manual pages
+
+DDEESSCCRRIIPPTTIIOONN
+     This document presents guidelines for adding security considerations sec‐
+     tions to manual pages.  It provides two typical examples.
+
+     The guidelines for writing FreeBSD manual pages in groff_mdoc(7) mandate
+     that each manual page describing a feature of the FreeBSD system should
+     contain a security considerations section describing what security re‐
+     quirements can be broken through the misuse of that feature.  When writ‐
+     ing these sections, authors should attempt to achieve a happy medium be‐
+     tween two conflicting goals: brevity and completeness.  On one hand, se‐
+     curity consideration sections must not be too verbose, or busy readers
+     might be dissuaded from reading them.  On the other hand, security con‐
+     sideration sections must not be incomplete, or they will fail in their
+     purpose of instructing the reader on how to avoid all insecure uses.
+     This document provides guidelines for balancing brevity and completeness
+     in the security consideration section for a given feature of the FreeBSD
+     system.
+
+   WWhheerree ttoo SSttaarrtt
+     Begin by listing those general security requirements that can be violated
+     through the misuse of the feature.  There are four classes of security
+     requirements:
+
+           _i_n_t_e_g_r_i_t_y (example: non-administrators should not modify system bi‐
+                   naries),
+
+           _c_o_n_f_i_d_e_n_t_i_a_l_i_t_y (example: non-administrators should not view the
+                   shadow password file),
+
+           _a_v_a_i_l_a_b_i_l_i_t_y (example: the web server should respond to client re‐
+                   quests in a timely fashion), and
+
+           _c_o_r_r_e_c_t_n_e_s_s (example: the ps program should provide exactly the
+                   process table information listing functionality described
+                   in its documentation - no more, no less.)
+
+     A good security considerations section should explain how the feature can
+     be misused to violate each general security requirement in the list.
+     Each explanation should be accompanied by instructions the reader should
+     follow in order to avoid a violation.  When referencing potential vulner‐
+     abilities described in the Secure Programming Practices manual page,
+     sprog(7), likewise cross-reference that document rather than replicating
+     information.  Whenever possible, refer to this document rather than re‐
+     producing the material it contains.
+
+   WWhheerree ttoo SSttoopp
+     Security problems are often interrelated; individual problems often have
+     far-reaching implications.  For example, the correctness of virtually any
+     dynamically-linked program is dependent on the correct implementation and
+     configuration of the run-time linker.  The correctness of this program,
+     in turn, depends on the correctness of its libraries, the compiler used
+     to build it, the correctness of the preceding compiler that was used to
+     build that compiler, and so on, as described by Thompson (see _S_E_E _A_L_S_O,
+     below).
+
+     Due to the need for brevity, security consideration sections should de‐
+     scribe only those issues directly related to the feature that is the sub‐
+     ject of the manual page.  Refer to other manual pages rather than dupli‐
+     cating the material found there.
+
+EEXXAAMMPPLLEESS
+     Security considerations sections for most individual functions can follow
+     this simple formula:
+
+           1.   Provide one or two sentences describing each potential secu‐
+                rity problem.
+           2.   Provide one or two sentences describing how to avoid each po‐
+                tential security problem.
+           3.   Provide a short example in code.
+
+     This is an example security considerations section for the strcpy(3) man‐
+     ual page:
+
+     The ssttrrccppyy() function is easily misused in a manner which enables mali‐
+     cious users to arbitrarily change a running program's functionality
+     through a buffer overflow attack.
+
+     Avoid using ssttrrccppyy().  Instead, use ssttrrnnccppyy() and ensure that no more
+     characters are copied to the destination buffer than it can hold.  Do not
+     forget to NUL-terminate the destination buffer, as ssttrrnnccppyy() will not
+     terminate the destination string if it is truncated.
+
+     Note that ssttrrnnccppyy() can also be problematic.  It may be a security con‐
+     cern for a string to be truncated at all.  Since the truncated string
+     will not be as long as the original, it may refer to a completely differ‐
+     ent resource and usage of the truncated resource could result in very in‐
+     correct behavior.  Example:
+
+     void
+     foo(const char *arbitrary_string)
+     {
+             char onstack[8];
+
+     #if defined(BAD)
+             /*
+              * This first strcpy is bad behavior.  Do not use strcpy()!
+              */
+             (void)strcpy(onstack, arbitrary_string);     /* BAD! */
+     #elif defined(BETTER)
+             /*
+              * The following two lines demonstrate better use of
+              * strncpy().
+              */
+             (void)strncpy(onstack, arbitrary_string, sizeof(onstack) - 1);
+             onstack[sizeof(onstack - 1)] = '\0';
+     #elif defined(BEST)
+             /*
+              * These lines are even more robust due to testing for
+              * truncation.
+              */
+             if (strlen(arbitrary_string) + 1 > sizeof(onstack))
+                     err(1, "onstack would be truncated");
+             (void)strncpy(onstack, arbitrary_string, sizeof(onstack));
+     #endif
+     }
+
+     Security considerations sections for tools and commands are apt to be
+     less formulaic.  Let your list of potentially-violated security require‐
+     ments be your guide; explain each one and list a solution in as concise a
+     manner as possible.
+
+     This is an example security considerations section for the rtld(1) manual
+     page:
+
+     Using the LD_LIBRARY_PATH and LD_PRELOAD environment variables, malicious
+     users can cause the dynamic linker to link shared libraries of their own
+     devising into the address space of processes running non-set-user-
+     ID/group-ID programs.  These shared libraries can arbitrarily change the
+     functionality of the program by replacing calls to standard library func‐
+     tions with calls to their own.  Although this feature is disabled for
+     set-user-ID and set-group-ID programs, it can still be used to create
+     Trojan horses in other programs.
+
+     All users should be aware that the correct operation of non set-user-
+     ID/group-ID dynamically-linked programs depends on the proper configura‐
+     tion of these environment variables, and take care to avoid actions that
+     might set them to values which would cause the run-time linker to link in
+     shared libraries of unknown pedigree.
+
+SSEEEE AALLSSOO
+     groff_mdoc(7), security(7), sprog(7)
+
+     Edward Amoroso, AT&T Bell Laboratories, _F_u_n_d_a_m_e_n_t_a_l_s _o_f _C_o_m_p_u_t_e_r _S_e_c_u_r_i_t_y
+     _T_e_c_h_n_o_l_o_g_y, _P _T _R _P_r_e_n_t_i_c_e _H_a_l_l, 1994.
+
+     Ken Thompson, “Reflections on Trusting Trust”, _A_s_s_o_c_i_a_t_i_o_n _f_o_r _C_o_m_p_u_t_i_n_g
+     _M_a_c_h_i_n_e_r_y_, _I_n_c_., _C_o_m_m_u_n_i_c_a_t_i_o_n_s _o_f _t_h_e _A_C_M, Vol. 27, No. 8, 761-763,
+     August, 1984.
+
+HHIISSTTOORRYY
+     The ssddoocc manual page first appeared in FreeBSD 5.0.
+
+AAUUTTHHOORRSS
+     Tim Fraser <_t_f_r_a_s_e_r_@_t_i_s_l_a_b_s_._c_o_m>, NAI Labs CBOSS project
+     Brian Feldman <_b_f_e_l_d_m_a_n_@_t_i_s_l_a_b_s_._c_o_m>, NAI Labs CBOSS project
+
+BSD                            September 5, 2005                           BSD

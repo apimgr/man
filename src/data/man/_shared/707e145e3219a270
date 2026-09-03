@@ -1,0 +1,217 @@
+_p_i_d___n_a_m_e_s_p_a_c_e_s(7)      Miscellaneous Information Manual      _p_i_d___n_a_m_e_s_p_a_c_e_s(7)
+
+NNAAMMEE
+       pid_namespaces - overview of Linux PID namespaces
+
+DDEESSCCRRIIPPTTIIOONN
+       For an overview of namespaces, see nnaammeessppaacceess(7).
+
+       PID  namespaces  isolate  the  process  ID  number  space, meaning that
+       processes in different PID namespaces can have the same PID.  PID name‐
+       spaces allow containers to provide functionality such as suspending/re‐
+       suming the set of processes in the container  and  migrating  the  con‐
+       tainer  to a new host while the processes inside the container maintain
+       the same PIDs.
+
+       PIDs in a new PID namespace start at 1, somewhat like a standalone sys‐
+       tem, and calls to ffoorrkk(2), vvffoorrkk(2), or cclloonnee(2) will produce processes
+       with PIDs that are unique within the namespace.
+
+       Use of PID namespaces requires a kernel that  is  configured  with  the
+       CCOONNFFIIGG__PPIIDD__NNSS option.
+
+   TThhee nnaammeessppaaccee iinniitt pprroocceessss
+       The first process created in a new namespace (i.e., the process created
+       using  cclloonnee(2)  with the CCLLOONNEE__NNEEWWPPIIDD flag, or the first child created
+       by a process after a call to uunnsshhaarree(2) using  the  CCLLOONNEE__NNEEWWPPIIDD  flag)
+       has  the  PID  1,  and  is  the  "init"  process for the namespace (see
+       iinniitt(1)).  This process becomes the parent of any child processes  that
+       are  orphaned because a process that resides in this PID namespace ter‐
+       minated (see below for further details).
+
+       If the "init" process of a PID namespace terminates, the kernel  termi‐
+       nates all of the processes in the namespace via a SSIIGGKKIILLLL signal.  This
+       behavior reflects the fact that the "init" process is essential for the
+       correct  operation  of  a  PID  namespace.   In this case, a subsequent
+       ffoorrkk(2) into this PID namespace fail with the error EENNOOMMEEMM; it  is  not
+       possible  to  create  a  new  process  in  a PID namespace whose "init"
+       process has terminated.  Such scenarios can occur when, for example,  a
+       process uses an open file descriptor for a _/_p_r_o_c_/pid_/_n_s_/_p_i_d file corre‐
+       sponding  to  a  process  that was in a namespace to sseettnnss(2) into that
+       namespace after the "init" process has  terminated.   Another  possible
+       scenario  can occur after a call to uunnsshhaarree(2): if the first child sub‐
+       sequently created by a ffoorrkk(2) terminates,  then  subsequent  calls  to
+       ffoorrkk(2) fail with EENNOOMMEEMM.
+
+       Only signals for which the "init" process has established a signal han‐
+       dler  can  be  sent  to  the "init" process by other members of the PID
+       namespace.  This restriction applies even to privileged processes,  and
+       prevents  other  members of the PID namespace from accidentally killing
+       the "init" process.
+
+       Likewise, a process in an ancestor namespace can—subject to  the  usual
+       permission  checks  described  in  kkiillll(2)—send  signals  to the "init"
+       process of a child PID namespace only if the "init" process has  estab‐
+       lished  a  handler for that signal.  (Within the handler, the _s_i_g_i_n_f_o___t
+       _s_i___p_i_d field described in  ssiiggaaccttiioonn(2)  will  be  zero.)   SSIIGGKKIILLLL  or
+       SSIIGGSSTTOOPP are treated exceptionally: these signals are forcibly delivered
+       when sent from an ancestor PID namespace.  Neither of these signals can
+       be  caught  by  the "init" process, and so will result in the usual ac‐
+       tions associated with  those  signals  (respectively,  terminating  and
+       stopping the process).
+
+       Starting  with  Linux 3.4, the rreebboooott(2) system call causes a signal to
+       be sent to the namespace "init" process.  See rreebboooott(2)  for  more  de‐
+       tails.
+
+   NNeessttiinngg PPIIDD nnaammeessppaacceess
+       PID  namespaces  can be nested: each PID namespace has a parent, except
+       for the initial ("root") PID namespace.  The parent of a PID  namespace
+       is  the  PID  namespace of the process that created the namespace using
+       cclloonnee(2) or uunnsshhaarree(2).  PID namespaces thus  form  a  tree,  with  all
+       namespaces  ultimately  tracing  their  ancestry to the root namespace.
+       Since Linux 3.7, the kernel limits the maximum nesting  depth  for  PID
+       namespaces to 32.
+
+       A  process  is  visible to other processes in its PID namespace, and to
+       the processes in each direct ancestor PID namespace going back  to  the
+       root  PID namespace.  In this context, "visible" means that one process
+       can be the target of operations by another process using  system  calls
+       that  specify  a  process ID.  Conversely, the processes in a child PID
+       namespace can’t see processes in the parent and further removed  ances‐
+       tor namespaces.  More succinctly: a process can see (e.g., send signals
+       with kkiillll(2), set nice values with sseettpprriioorriittyy(2), etc.) only processes
+       contained  in  its  own  PID namespace and in descendants of that name‐
+       space.
+
+       A process has one process ID in each of the layers of the PID namespace
+       hierarchy in which is visible, and walking back though each direct  an‐
+       cestor  namespace through to the root PID namespace.  System calls that
+       operate on process IDs always operate using the process ID that is vis‐
+       ible in the PID namespace of the caller.  A call  to  ggeettppiidd(2)  always
+       returns  the PID associated with the namespace in which the process was
+       created.
+
+       Some processes in a PID namespace may have parents that are outside  of
+       the  namespace.   For example, the parent of the initial process in the
+       namespace (i.e., the iinniitt(1) process with PID 1) is necessarily in  an‐
+       other  namespace.  Likewise, the direct children of a process that uses
+       sseettnnss(2) to cause its children to join a PID namespace are in a differ‐
+       ent PID namespace from the caller of sseettnnss(2).  Calls to ggeettppppiidd(2) for
+       such processes return 0.
+
+       While processes may freely descend into child PID namespaces (e.g., us‐
+       ing sseettnnss(2) with a PID namespace file descriptor), they may  not  move
+       in  the  other  direction.  That is to say, processes may not enter any
+       ancestor namespaces (parent, grandparent, etc.).   Changing  PID  name‐
+       spaces is a one‐way operation.
+
+       The  NNSS__GGEETT__PPAARREENNTT  iiooccttll(2)  operation  can  be  used  to discover the
+       parental relationship between PID namespaces; see iiooccttll__nnssffss(2).
+
+   sseettnnss((22)) aanndd uunnsshhaarree((22)) sseemmaannttiiccss
+       Calls to sseettnnss(2) that specify a  PID  namespace  file  descriptor  and
+       calls  to  uunnsshhaarree(2)  with the CCLLOONNEE__NNEEWWPPIIDD flag cause children subse‐
+       quently created by the caller to be placed in a different PID namespace
+       from the caller.  (Since Linux 4.12, that PID namespace  is  shown  via
+       the _/_p_r_o_c_/pid_/_n_s_/_p_i_d___f_o_r___c_h_i_l_d_r_e_n file, as described in nnaammeessppaacceess(7).)
+       These  calls  do  not, however, change the PID namespace of the calling
+       process, because doing so would change the caller’s idea of its own PID
+       (as reported by ggeettppiidd()), which would break many applications and  li‐
+       braries.
+
+       To  put things another way: a process’s PID namespace membership is de‐
+       termined when the process is created and cannot be changed  thereafter.
+       Among  other  things, this means that the parental relationship between
+       processes mirrors the parental relationship between PID namespaces: the
+       parent of a process is either in the same namespace or resides  in  the
+       immediate parent PID namespace.
+
+       A  process  may  call  uunnsshhaarree(2) with the CCLLOONNEE__NNEEWWPPIIDD flag only once.
+       After it has performed this operation,  its  _/_p_r_o_c_/pid_/_n_s_/_p_i_d___f_o_r___c_h_i_l_‐
+       _d_r_e_n  symbolic  link  will be empty until the first child is created in
+       the namespace.
+
+   AAddooppttiioonn ooff oorrpphhaanneedd cchhiillddrreenn
+       When a child process becomes orphaned, it is reparented to  the  "init"
+       process  in  the  PID namespace of its parent (unless one of the nearer
+       ancestors of the parent employed  the  pprrccttll(2)  PPRR__SSEETT__CCHHIILLDD__SSUUBBRREEAAPPEERR
+       command to mark itself as the reaper of orphaned descendant processes).
+       Note  that  because  of the sseettnnss(2) and uunnsshhaarree(2) semantics described
+       above, this may be the "init" process in the PID namespace that is  the
+       _p_a_r_e_n_t  of the child’s PID namespace, rather than the "init" process in
+       the child’s own PID namespace.
+
+   CCoommppaattiibbiilliittyy ooff CCLLOONNEE__NNEEWWPPIIDD wwiitthh ootthheerr CCLLOONNEE__** ffllaaggss
+       In current versions of  Linux,  CCLLOONNEE__NNEEWWPPIIDD  can’t  be  combined  with
+       CCLLOONNEE__TTHHRREEAADD.   Threads  are  required  to be in the same PID namespace
+       such that the threads in a process can  send  signals  to  each  other.
+       Similarly,  it  must be possible to see all of the threads of a process
+       in the pprroocc(5) filesystem.  Additionally, if two threads were  in  dif‐
+       ferent  PID  namespaces, the process ID of the process sending a signal
+       could not be meaningfully encoded when a signal is sent  (see  the  de‐
+       scription  of  the _s_i_g_i_n_f_o___t type in ssiiggaaccttiioonn(2)).  Since this is com‐
+       puted when a signal is enqueued, a signal queue shared by processes  in
+       multiple PID namespaces would defeat that.
+
+       In  earlier versions of Linux, CCLLOONNEE__NNEEWWPPIIDD was additionally disallowed
+       (failing with the error EEIINNVVAALL) in combination with CCLLOONNEE__SSIIGGHHAANNDD  (be‐
+       fore  Linux  4.3) as well as CCLLOONNEE__VVMM (before Linux 3.12).  The changes
+       that lifted these restrictions have also been ported to earlier  stable
+       kernels.
+
+   //pprroocc aanndd PPIIDD nnaammeessppaacceess
+       A  _/_p_r_o_c filesystem shows (in the _/_p_r_o_c_/pid directories) only processes
+       visible in the PID namespace of the process that performed  the  mount,
+       even  if  the  _/_p_r_o_c filesystem is viewed from processes in other name‐
+       spaces.
+
+       After creating a new PID namespace, it  is  useful  for  the  child  to
+       change  its  root directory and mount a new procfs instance at _/_p_r_o_c so
+       that tools such as ppss(1) work correctly.  If a new mount  namespace  is
+       simultaneously  created  by including CCLLOONNEE__NNEEWWNNSS in the _f_l_a_g_s argument
+       of cclloonnee(2) or uunnsshhaarree(2), then it isn’t necessary to change  the  root
+       directory: a new procfs instance can be mounted directly over _/_p_r_o_c.
+
+       From a shell, the command to mount _/_p_r_o_c is:
+
+           $ mount -t proc proc /proc
+
+       Calling rreeaaddlliinnkk(2) on the path _/_p_r_o_c_/_s_e_l_f yields the process ID of the
+       caller  in  the  PID namespace of the procfs mount (i.e., the PID name‐
+       space of the process that mounted the procfs).  This can be useful  for
+       introspection  purposes,  when  a  process wants to discover its PID in
+       other namespaces.
+
+   //pprroocc ffiilleess
+       //pprroocc//ssyyss//kkeerrnneell//nnss__llaasstt__ppiidd (since Linux 3.3)
+              This file (which is virtualized per PID namespace) displays  the
+              last  PID  that  was  allocated in this PID namespace.  When the
+              next PID is allocated, the kernel will search for the lowest un‐
+              allocated PID that is greater than this  value,  and  when  this
+              file is subsequently read it will show that PID.
+
+              This file is writable by a process that has the CCAAPP__SSYYSS__AADDMMIINN or
+              (since  Linux  5.9) CCAAPP__CCHHEECCKKPPOOIINNTT__RREESSTTOORREE capability inside the
+              user namespace that owns the PID namespace.  This makes it  pos‐
+              sible to determine the PID that is allocated to the next process
+              that is created inside this PID namespace.
+
+   MMiisscceellllaanneeoouuss
+       When a process ID is passed over a UNIX domain socket to a process in a
+       different  PID  namespace  (see  the  description of SSCCMM__CCRREEDDEENNTTIIAALLSS in
+       uunniixx(7)), it is translated into the corresponding PID value in the  re‐
+       ceiving process’s PID namespace.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+EEXXAAMMPPLLEESS
+       See uusseerr__nnaammeessppaacceess(7).
+
+SSEEEE AALLSSOO
+       cclloonnee(2),  rreebboooott(2),  sseettnnss(2),  uunnsshhaarree(2), pprroocc(5), ccaappaabbiilliittiieess(7),
+       ccrreeddeennttiiaallss(7), mmoouunntt__nnaammeessppaacceess(7), nnaammeessppaacceess(7), uusseerr__nnaammeessppaacceess(7),
+       sswwiittcchh__rroooott(8)
+
+Linux man‐pages (unreleased)      2025‐09‐21                 _p_i_d___n_a_m_e_s_p_a_c_e_s(7)

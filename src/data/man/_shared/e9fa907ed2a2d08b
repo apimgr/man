@@ -1,0 +1,119 @@
+VOP_GETPAGES(9)          BSD Kernel Developer's Manual         VOP_GETPAGES(9)
+
+NNAAMMEE
+     VVOOPP__GGEETTPPAAGGEESS, VVOOPP__PPUUTTPPAAGGEESS — read or write VM pages from a file
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//vvnnooddee..hh>>
+     ##iinncclluuddee <<vvmm//vvmm..hh>>
+
+     _i_n_t
+     VVOOPP__GGEETTPPAAGGEESS(_s_t_r_u_c_t _v_n_o_d_e _*_v_p, _v_m___p_a_g_e___t _*_m_a, _i_n_t _c_o_u_n_t, _i_n_t _*_r_b_e_h_i_n_d,
+         _i_n_t _*_r_a_h_e_a_d);
+
+     _i_n_t
+     VVOOPP__PPUUTTPPAAGGEESS(_s_t_r_u_c_t _v_n_o_d_e _*_v_p, _v_m___p_a_g_e___t _*_m_a, _i_n_t _b_y_t_e_c_o_u_n_t, _i_n_t _f_l_a_g_s,
+         _i_n_t _*_r_t_v_a_l_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     The VVOOPP__GGEETTPPAAGGEESS() method is called to read in pages of virtual memory
+     which are backed by ordinary files.  If other adjacent pages are backed
+     by adjacent regions of the same file, VVOOPP__GGEETTPPAAGGEESS() is requested to read
+     those pages as well, although it is not required to do so.  The
+     VVOOPP__PPUUTTPPAAGGEESS() method does the converse; that is to say, it writes out
+     adjacent dirty pages of virtual memory.
+
+     On entry, the vnode lock is held but neither the page queue nor VM object
+     locks are held.  Both methods return in the same state on both success
+     and error returns.
+
+     The arguments are:
+
+     _v_p       The file to access.
+
+     _m_a       Pointer to the first element of an array of pages representing a
+              contiguous region of the file to be read or written.
+
+     _c_o_u_n_t    The length of the _m_a array.
+
+     _b_y_t_e_c_o_u_n_t
+              The number of bytes that should be written from the pages of the
+              array.
+
+     _f_l_a_g_s    A bitfield of flags affecting the function operation.  If
+              VM_PAGER_PUT_SYNC is set, the write should be synchronous; con‐
+              trol must not be returned to the caller until after the write is
+              finished.  If VM_PAGER_PUT_INVAL is set, the pages are to be in‐
+              validated after being written.  If VM_PAGER_PUT_NOREUSE is set,
+              the I/O performed should set the IO_NOREUSE flag, to indicate to
+              the filesystem that pages should be marked for fast reuse if
+              needed.  This could occur via a call to
+              vm_page_deactivate_noreuse(9), which puts such pages onto the
+              head of the inactive queue.  If VM_PAGER_CLUSTER_OK is set,
+              writes may be delayed, so that related writes can be coalesced
+              for efficiency, e.g., using the clustering mechanism of the buf‐
+              fer cache.
+
+     _r_t_v_a_l_s   An array of VM system result codes indicating the status of each
+              page written by VVOOPP__PPUUTTPPAAGGEESS().
+
+     _r_b_e_h_i_n_d  Optional pointer to integer specifying number of pages to be
+              read behind, if possible.  If the filesystem supports that fea‐
+              ture, number of actually read pages is reported back, otherwise
+              zero is returned.
+
+     _r_a_h_e_a_d   Optional pointer to integer specifying number of pages to be
+              read ahead, if possible.  If the filesystem supports that fea‐
+              ture, number of actually read pages is reported back, otherwise
+              zero is returned.
+
+     The status of the VVOOPP__PPUUTTPPAAGGEESS() method is returned on a page-by-page ba‐
+     sis in the array _r_t_v_a_l_s_[_].  The possible status values are as follows:
+
+     VM_PAGER_OK     The page was successfully written.  The implementation
+                     must call vm_page_undirty(9) to mark the page as clean.
+
+     VM_PAGER_PEND   The page was scheduled to be written asynchronously.
+                     When the write completes, the completion callback should
+                     call vm_object_pip_wakeup(9) and vm_page_sunbusy(9) to
+                     clear the busy flag and awaken any other threads waiting
+                     for this page, in addition to calling vm_page_undirty(9).
+
+     VM_PAGER_BAD    The page was entirely beyond the end of the backing file.
+                     This condition should not be possible if the vnode's file
+                     system is correctly implemented.
+
+     VM_PAGER_ERROR  The page could not be written because of an error on the
+                     underlying storage medium or protocol.
+
+     VM_PAGER_FAIL   Treated identically to VM_PAGER_ERROR.
+
+     VM_PAGER_AGAIN  The page was not handled by this request.
+
+     The VVOOPP__GGEETTPPAAGGEESS() method must populate and validate all requested pages
+     in order to return success.  It is expected to release any pages in _m_a
+     that it does not successfully handle, by calling vm_page_free(9).  When
+     it succeeds, VVOOPP__GGEETTPPAAGGEESS() must set the valid bits appropriately.  Upon
+     entry to VVOOPP__GGEETTPPAAGGEESS(), all pages in _m_a are busied exclusively.  Upon
+     successful return, the pages must all be busied exclusively as well, but
+     pages may be unbusied during processing.  The filesystem is responsible
+     for activating paged-out pages, but this does not necessarily need to be
+     done within VVOOPP__GGEETTPPAAGGEESS() depending on the architecture of the particu‐
+     lar filesystem.
+
+RREETTUURRNN VVAALLUUEESS
+     If it successfully reads all pages in _m_a, VVOOPP__GGEETTPPAAGGEESS() returns
+     VM_PAGER_OK; otherwise, it returns VM_PAGER_ERROR.  By convention, the
+     return value of VVOOPP__PPUUTTPPAAGGEESS() is _r_t_v_a_l_s_[_0_].
+
+SSEEEE AALLSSOO
+     vm_object_pip_wakeup(9), vm_page_free(9), vm_page_sunbusy(9),
+     vm_page_undirty(9), vm_page_xunbusy(9), vnode(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Doug Rabson and then substantially
+     rewritten by
+     Garrett Wollman.
+
+BSD                              June 29, 2019                             BSD

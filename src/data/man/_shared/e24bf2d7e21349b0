@@ -1,0 +1,169 @@
+NG_ONE2MANY(4)           BSD Kernel Interfaces Manual           NG_ONE2MANY(4)
+
+NNAAMMEE
+     nngg__oonnee22mmaannyy — packet multiplexing netgraph node type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__oonnee22mmaannyy..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The oonnee22mmaannyy provides a simple mechanism for routing packets over several
+     links in a one-to-many (and in the reverse direction, many-to-one) fash‐
+     ion.  There is a single hook named one, and multiple hooks named many0,
+     many1, etc.  Packets received on any of the many hooks are forwarded out
+     the one hook.  Packets received on the one hook are forwarded out one or
+     more of the many hooks; which hook(s) is determined by the node's config‐
+     ured transmit algorithm.  Packets are not altered in any way.
+
+     Each of the connected many links may be considered to be up or down.
+     Packets are never delivered out a many hook that is down.  How a link is
+     determined to be up or down depends on the node's configured link failure
+     detection algorithm.
+
+     Before an interface or link can be plumbed into a group, its status must
+     be marked as being “up”.  This is normally setup during the initial boot
+     stages by rc.conf(5).  It is also possible to change an interface's sta‐
+     tus to “up” by using the ifconfig(8) utility.
+
+TTRRAANNSSMMIITT AALLGGOORRIITTHHMMSS
+     NG_ONE2MANY_XMIT_ROUNDROBIN
+          Packets are delivered out the many hooks in sequential order.  Each
+          packet goes out on a different many hook.
+
+     NG_ONE2MANY_XMIT_ALL
+          Packets are delivered out all the many hooks.  Each packet goes out
+          each many hook.
+
+     NG_ONE2MANY_XMIT_FAILOVER
+          Packets are delivered out the first active many hook.
+
+     In the future other algorithms may be added as well.
+
+LLIINNKK FFAAIILLUURREE DDEETTEECCTTIIOONN
+     The node distinguishes between active and failed links.  Data is sent
+     only to active links.  The following link failure detection algorithms
+     are available:
+
+     NG_ONE2MANY_FAIL_MANUAL
+          The node is explicitly told which of the links are up via the
+          NGM_ONE2MANY_SET_CONFIG control message (see below).  Newly con‐
+          nected links are down until configured otherwise.
+
+     NG_ONE2MANY_FAIL_NOTIFY
+          The node listens to flow control message from _m_a_n_y hooks, and con‐
+          siders link failed if NGM_LINK_IS_DOWN is received.  If the
+          NGM_LINK_IS_UP message is received, node considers link active.
+
+     In the future other algorithms may be added as well.
+
+     When all links are considered failed, node sends the NGM_LINK_IS_DOWN
+     message towards the _o_n_e hook.  When at least one link comes up, node
+     sends the NGM_LINK_IS_UP message towards the _o_n_e hook.
+
+HHOOOOKKSS
+     This node type supports up to NG_ONE2MANY_MAX_LINKS hooks named many0,
+     many1, etc., plus a single hook named one.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_ONE2MANY_SET_CONFIG (sseettccoonnffiigg)
+          Sets the node configuration using a struct ng_one2many_link_config
+          as the control message argument:
+
+          /* Node configuration structure */
+          struct ng_one2many_config {
+            uint32_t    xmitAlg;        /* how to distribute packets */
+            uint32_t    failAlg;        /* how to detect link failure */
+            u_char      enabledLinks[NG_ONE2MANY_MAX_LINKS];
+          };
+
+          Currently, the valid settings for the xmitAlg field are
+          NG_ONE2MANY_XMIT_ROUNDROBIN (default) or NG_ONE2MANY_XMIT_ALL.  The
+          valid settings for failAlg are NG_ONE2MANY_FAIL_MANUAL (default) or
+          NG_ONE2MANY_FAIL_NOTIFY.
+
+     NGM_ONE2MANY_GET_CONFIG (ggeettccoonnffiigg)
+          Returns the current node configuration in a struct
+          ng_one2many_link_config.
+
+     NGM_ONE2MANY_GET_STATS (ggeettssttaattss)
+          This command takes a 32 bit link number as an argument and returns a
+          struct ng_one2many_link_stats containing statistics for the corre‐
+          sponding many link, which may or may not be currently connected:
+
+          /* Statistics structure (one for each link) */
+          struct ng_one2many_link_stats {
+            uint64_t   recvOctets;     /* total octets rec'd on link */
+            uint64_t   recvPackets;    /* total pkts rec'd on link */
+            uint64_t   xmitOctets;     /* total octets xmit'd on link */
+            uint64_t   xmitPackets;    /* total pkts xmit'd on link */
+            uint64_t   memoryFailures; /* times couldn't get mem or mbuf */
+          };
+
+          To access statistics for the one link, use the link number -1.
+
+     NGM_ONE2MANY_CLR_STATS (ccllrrssttaattss)
+          This command takes a 32 bit link number as an argument and clears
+          the statistics for that link.
+
+     NGM_ONE2MANY_GETCLR_STATS (ggeettccllrrssttaattss)
+          Same as NGM_ONE2MANY_GET_STATS, but also atomically clears the sta‐
+          tistics for the link as well.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+EEXXAAMMPPLLEESS
+     The following commands will set up Ethernet interfaces fxp0 to deliver
+     packets alternating over the physical interfaces corresponding to net‐
+     working interfaces fxp0 through fxp3:
+
+       # Plumb nodes together
+
+       ngctl mkpeer fxp0: one2many upper one
+       ngctl connect fxp0: fxp0:upper lower many0
+       ngctl connect fxp1: fxp0:upper lower many1
+       ngctl connect fxp2: fxp0:upper lower many2
+       ngctl connect fxp3: fxp0:upper lower many3
+
+       # Allow fxp1 through fxp3 to xmit/recv fxp0 frames
+
+       ngctl msg fxp1: setpromisc 1
+       ngctl msg fxp2: setpromisc 1
+       ngctl msg fxp3: setpromisc 1
+       ngctl msg fxp1: setautosrc 0
+       ngctl msg fxp2: setautosrc 0
+       ngctl msg fxp3: setautosrc 0
+
+       # Configure all four links as up
+
+       ngctl msg fxp0:upper \
+         setconfig "{ xmitAlg=1 failAlg=1 enabledLinks=[ 1 1 1 1 ] }"
+
+       # Bring up interface
+
+       ifconfig fxp0 192.168.1.1 netmask 0xfffffffc
+
+     With a similar setup on a peer machine (using the address 192.168.1.2), a
+     point-to-point Ethernet connection with four times normal bandwidth is
+     achieved.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_bridge(4), ng_ether(4), ng_hub(4), ifconfig(8), ngctl(8)
+
+HHIISSTTOORRYY
+     The nngg__oonnee22mmaannyy node type was implemented in FreeBSD 4.2.
+
+AAUUTTHHOORRSS
+     The oonnee22mmaannyy netgraph node (with round-robin algorithm) was written by
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>.  The all algorithm was added by Rogier
+     R. Mulhuijzen <_d_r_w_i_l_c_o_@_d_r_w_i_l_c_o_._n_e_t>.
+
+BBUUGGSS
+     More transmit and link failure algorithms should be supported.  A good
+     candidate is Cisco's Etherchannel.
+
+BSD                            November 13, 2012                           BSD

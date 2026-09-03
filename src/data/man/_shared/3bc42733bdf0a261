@@ -1,0 +1,186 @@
+SYM(4)                   BSD Kernel Interfaces Manual                   SYM(4)
+
+NNAAMMEE
+     ssyymm — NCR/Symbios/LSI Logic 53C8XX PCI SCSI host adapter driver
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following lines in your
+     kernel configuration file:
+
+           ddeevviiccee ppccii
+           ddeevviiccee ssccbbuuss
+           ddeevviiccee ssyymm
+
+     To disable PCI parity checking (needed for broken bridges):
+     ooppttiioonnss SSYYMM__SSEETTUUPP__PPCCII__PPAARRIITTYY==<<bboooolleeaann>>
+
+     To control driver probing against HVD buses:
+     ooppttiioonnss SSYYMM__SSEETTUUPP__SSCCSSII__DDIIFFFF==<<bbiitt ccoommbbiinnaattiioonn>>
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           sym_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     This driver provides support for the Symbios/LSI Logic 53C8XX PCI SCSI
+     controllers.
+
+     Driver features include support for wide SCSI busses and fast10, fast20,
+     fast40 and fast80-dt synchronous data transfers depending on controller
+     capabilities.  It also provides generic SCSI features such as tagged com‐
+     mand queueing and auto-request sense.  This driver is configured by de‐
+     fault for a maximum of 446 outstanding commands per bus, 8 LUNs per tar‐
+     get and 64 tagged tasks per LUN.  These numbers are not so much limited
+     by design as they are considered reasonable values for current SCSI tech‐
+     nology.  These values can be increased by changing appropriate constants
+     in driver header files (not recommended).
+
+     This driver supports the entire Symbios 53C8XX family of PCI SCSI con‐
+     trollers.  It also offers the advantage of architectural improvements
+     available only with newer chips.
+
+     ssyymm notably handles phase mismatch from SCRIPTS for the 53C896, 53C895A,
+     and 53C1010 cores.  As a result, it guarantees that no more than 1 inter‐
+     rupt per IO completion is delivered to the CPU, and that the SCRIPTS pro‐
+     cessor is never stalled waiting for CPU attention in normal situations.
+
+     ssyymm also uses LOAD/STORE SCRIPTS instructions for chips that support it.
+     Only the early 810, 815 and 825 NCR chips do not support LOAD/STORE.  Use
+     of LOAD/STORE instead of MEMORY MOVE allows SCRIPTS to access IO regis‐
+     ters internal to the chip (no external PCI cycles).  As a result, the
+     driver guarantees that no PCI self-mastering will occur for chips that
+     support LOAD/STORE.
+
+     LOAD/STORE instructions are also faster than MEMORY MOVE because they do
+     not involve the chip DMA FIFO and are coded on 2 DWORDs instead of 3.
+
+     For the early NCR 810, 815 and 825 chips, the driver uses a separate
+     SCRIPTS set that uses MEMORY MOVE instructions for data movements.  This
+     is because LOAD/STORE are not supported by these chips.
+
+     HVD/LVD capable controllers (895, 895A, 896, and 897) report the actual
+     bus mode in the STEST4 chip IO registers.  This feature allows the driver
+     to safely probe against bus mode and to set up the chip accordingly.  By
+     default the driver only supports HVD for these chips.  For other chips
+     that can support HVD but not LVD, the driver has to probe implementation
+     dependent registers (GPIO) in order to detect HVD bus mode.  Only HVD im‐
+     plementations that conform with Symbios Logic recommendations can be de‐
+     tected by the driver.  When the _S_Y_M___S_E_T_U_P___S_C_S_I___D_I_F_F kernel option is as‐
+     signed a value of 1, the driver will also probe against HVD for 825a,
+     875, 876 and 885 chips, assuming Symbios Logic compatible implementation
+     of HVD.
+
+     When the _S_Y_M___S_E_T_U_P___P_C_I___P_A_R_I_T_Y is assigned a value of 0, the driver will
+     not enable PCI parity checking for 53C8XX devices.  PCI parity checking
+     should not be an option for PCI SCSI controllers, but some systems have
+     been reported to fail using 53C8XX chips, due to spurious or permanent
+     PCI parity errors detected.  This option is supplied for convenience but
+     it is neither recommended nor supported.
+
+     This driver offers other options that are not currently exported to the
+     user.  They are defined and documented in the _s_y_m___c_o_n_f_._h driver file.
+     Changing these options is not recommended unless absolutely necessary.
+     Some of these options are planned to be exported through sysctl(3) or an
+     equivalent mechanism in a future driver releases and therefore, no com‐
+     patibility is guaranteed.
+
+     At initialization, the driver tries to detect and read user settings from
+     controller NVRAM.  The Symbios/Logic NVRAM layout and the Tekram NVRAM
+     layout are currently supported.  If the reading of the NVRAM succeeds,
+     the following settings are taken into account and reported to CAM:
+
+     _H_o_s_t _s_e_t_t_i_n_g_s           _S_y_m_b_i_o_s    _T_e_k_r_a_m
+     SCSI parity checking    Y          N
+     Host SCSI ident         Y          Y
+     Verbose messages        Y          N
+     Scan targets hi-lo      Y          N
+     Avoid SCSI bus reset    Y          N
+
+     _D_e_v_i_c_e _s_e_t_t_i_n_g_s       _S_y_m_b_i_o_s    _T_e_k_r_a_m
+     Synchronous period    Y          Y
+     SCSI bus width        Y          Y
+     Queue tag enable      Y          Y
+     Number of tags        NA         Y
+     Disconnect enable     Y          Y
+     Scan at boot time     Y          N
+     Scan LUN              Y          N
+
+     Devices that are configured as disabled for 'scan' in the NVRAM are not
+     reported to CAM at system start-up.  They can be discovered later using
+     the ‘camcontrol rescan’ command.
+
+     The table below summarizes the main features and capabilities of the
+     NCR/Symbios/LSI Logic 53C8XX family of PCI SCSI controllers.
+
+     _C_h_i_p          _S_y_n_c    _W_i_d_t_h   _S_R_A_M   _P_C_I_6_4   _S_u_p_p_o_r_t_e_d
+     sym53c810     10MHz   8Bit    N      N       Y
+     sym53c810a    10MHz   8Bit    N      N       Y
+     sym53c815     10MHz   8Bit    N      N       Y
+     sym53c825     10MHz   16Bit   N      N       Y
+     sym53c825a    10MHz   16Bit   4KB    N       Y
+     sym53c860     20MHz   8Bit    N      N       Y
+     sym53c875     20MHz   16Bit   4KB    N       Y
+     sym53c876     20MHz   16Bit   4KB    N       Y
+     sym53c885     20MHz   16Bit   4KB    N       Y
+     sym53c895     40MHz   16Bit   4KB    N       Y
+     sym53c895A    40MHz   16Bit   8KB    N       Y
+     sym53c896     40MHz   16Bit   8KB    Y       Y
+     sym53c897     40MHz   16Bit   8KB    Y       Y
+     sym53c1510D   40MHz   16Bit   4KB    Y       Y
+     sym53c1010    80MHz   16Bit   8KB    Y       Y
+
+HHAARRDDWWAARREE
+     The ssyymm driver provides support for the following Symbios/LSI Logic PCI
+     SCSI controllers:
+
+     ••   53C810
+     ••   53C810A
+     ••   53C815
+     ••   53C825
+     ••   53C825A
+     ••   53C860
+     ••   53C875
+     ••   53C876
+     ••   53C895
+     ••   53C895A
+     ••   53C896
+     ••   53C897
+     ••   53C1000
+     ••   53C1000R
+     ••   53C1010-33
+     ••   53C1010-66
+     ••   53C1510D
+
+     The SCSI controllers supported by ssyymm can be either embedded on a mother‐
+     board, or on one of the following add-on boards:
+
+     ••   ASUS SC-200, SC-896
+     ••   Data Technology DTC3130 (all variants)
+     ••   DawiControl DC2976UW
+     ••   Diamond FirePort (all)
+     ••   NCR cards (all)
+     ••   Symbios cards (all)
+     ••   Tekram DC390W, 390U, 390F, 390U2B, 390U2W, 390U3D, and 390U3W
+     ••   Tyan S1365
+
+MMIISSCC
+     The DEC KZPCA-AA is a rebadged SYM8952U.
+
+SSEEEE AALLSSOO
+     cd(4), da(4), sa(4), scsi(4), camcontrol(8)
+
+HHIISSTTOORRYY
+     The ssyymm driver appeared in FreeBSD 4.0.
+
+AAUUTTHHOORRSS
+     The ssyymm driver was written by Gerard Roudier and is derived from the
+     Linux sym53c8xx driver from the same author.  The sym53c8xx driver is de‐
+     rived from the ncr53c8xx driver, which was ported from the FreeBSD ncr(4)
+     driver to Linux-1.2.13.  The original ncr(4) driver was written for
+     386BSD and FreeBSD by Wolfgang Stanglmeier and Stefan Esser.
+
+BBUUGGSS
+     No known bugs.
+
+BSD                            December 26, 2020                           BSD

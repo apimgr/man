@@ -1,0 +1,248 @@
+DPV(3)                   BSD Library Functions Manual                   DPV(3)
+
+NNAAMMEE
+     ddppvv — dialog progress view library
+
+LLIIBBRRAARRYY
+     library “libdpv”
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ddppvv..hh>>
+
+     _i_n_t
+     ddppvv(_s_t_r_u_c_t _d_p_v___c_o_n_f_i_g _*_c_o_n_f_i_g, _s_t_r_u_c_t _d_p_v___f_i_l_e___n_o_d_e _*_f_i_l_e___l_i_s_t);
+
+     _v_o_i_d
+     ddppvv__ffrreeee(_v_o_i_d);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ddppvv library provides an interface for creating complex “gauge” wid‐
+     gets for displaying progress on various actions.  The ddppvv library can
+     display progress with one of dialog(3), dialog(1), or Xdialog(1)
+     (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g).
+
+     The ddppvv() _c_o_n_f_i_g argument properties for configuring global display fea‐
+     tures:
+
+           struct dpv_config {
+               uint8_t          keep_tite;     /* Cleaner exit for scripts */
+               enum dpv_display display_type;  /* Def. DPV_DISPLAY_LIBDIALOG */
+               enum dpv_output  output_type;   /* Default DPV_OUTPUT_NONE */
+               int              debug;         /* Enable debug on stderr */
+               int              display_limit; /* Files/page. Default -1 */
+               int              label_size;    /* Label size. Default 28 */
+               int              pbar_size;     /* Mini-progress size */
+               int              dialog_updates_per_second; /* Default 16 */
+               int              status_updates_per_second; /* Default 2 */
+               uint16_t         options;       /* Default 0 (none) */
+               char             *title;        /* Widget title */
+               char             *backtitle;    /* Widget backtitle */
+               char             *aprompt;      /* Append. Default NULL */
+               char             *pprompt;      /* Prefix. Default NULL */
+               char             *msg_done;     /* Default `Done' */
+               char             *msg_fail;     /* Default `Fail' */
+               char             *msg_pending;  /* Default `Pending' */
+               char             *output;       /* Output format string */
+               const char       *status_solo;  /* dialog(3) solo-status format.
+                                                * Default DPV_STATUS_SOLO */
+               const char       *status_many;  /* dialog(3) many-status format.
+                                                * Default DPV_STATUS_MANY */
+
+               /*
+                * Function pointer; action to perform data transfer
+                */
+               int (*action)(struct dpv_file_node *file, int out);
+           };
+
+           enum dpv_display {
+               DPV_DISPLAY_LIBDIALOG = 0, /* Use dialog(3) (default) */
+               DPV_DISPLAY_STDOUT,        /* Use stdout */
+               DPV_DISPLAY_DIALOG,        /* Use spawned dialog(1) */
+               DPV_DISPLAY_XDIALOG,       /* Use spawned Xdialog(1) */
+           };
+
+           enum dpv_output {
+               DPV_OUTPUT_NONE = 0, /* No output (default) */
+               DPV_OUTPUT_FILE,     /* Read `output' member as file path */
+               DPV_OUTPUT_SHELL,    /* Read `output' member as shell cmd */
+           };
+
+     The _o_p_t_i_o_n_s member of the ddppvv() _c_o_n_f_i_g argument is a mask of bit fields
+     indicating various processing options.  Possible flags are:
+
+     DPV_TEST_MODE   Enable test mode.  In test mode, the aaccttiioonn() callback of
+                     the _c_o_n_f_i_g argument is not called but instead simulated-
+                     data is used to drive progress.  Appends “[TEST MODE]” to
+                     the status line (to override, set the _s_t_a_t_u_s___f_o_r_m_a_t
+                     member of the ddppvv() _c_o_n_f_i_g argument; for example, to
+                     DPV_STATUS_DEFAULT).
+
+     DPV_WIDE_MODE   Enable wide mode.  In wide mode, the length of the
+                     _a_p_r_o_m_p_t and _p_p_r_o_m_p_t members of the ddppvv() _c_o_n_f_i_g argument
+                     will bump the width of the gauge widget.  Prompts wider
+                     than the maximum width will wrap (unless using Xdialog(1)
+                     (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g); see BUGS section below).
+
+     DPV_NO_LABELS   Disables the display of labels associated with each
+                     transfer (_l_a_b_e_l___s_i_z_e member of ddppvv() _c_o_n_f_i_g argument is
+                     ignored).
+
+     DPV_USE_COLOR   Force the use of color even if the _d_i_s_p_l_a_y___t_y_p_e does not
+                     support color (USE_COLOR environment variable is
+                     ignored).
+
+     DPV_NO_OVERRUN  When enabled, callbacks for the current _d_p_v___f_i_l_e___n_o_d_e are
+                     terminated when aaccttiioonn() returns 100 or greater
+                     (alleviates the need to change the _s_t_a_t_u_s of the current
+                     _d_p_v___f_i_l_e___n_o_d_e but may also cause file truncation if the
+                     stream exceeds expected length).
+
+     The _f_i_l_e___l_i_s_t argument to ddppvv() is a pointer to a “linked-list”, de‐
+     scribed in <_d_p_v_._h>:
+
+           struct dpv_file_node {
+               enum dpv_status    status; /* status of read operation */
+               char               *msg;   /* display instead of "Done/Fail" */
+               char               *name;  /* name of file to read */
+               char               *path;  /* path to file */
+               long long          length; /* expected size */
+               long long          read;   /* number units read (e.g., bytes) */
+               struct dpv_file_node *next;/* pointer to next (end with NULL) */
+           };
+
+     For each of the items in the _f_i_l_e___l_i_s_t “linked-list” argument, the
+     aaccttiioonn() callback member of the ddppvv() _c_o_n_f_i_g argument is called.  The
+     aaccttiioonn() function performs a “nominal” action on the file and return.
+     The return value of _i_n_t represents the current progress percentage
+     (0-100) for the current file.
+
+     The aaccttiioonn() callback provides two variables for each call.  _f_i_l_e pro‐
+     vides a reference to the current _d_p_v___f_i_l_e___n_o_d_e being processed.  _o_u_t pro‐
+     vides a file descriptor where the data goes.
+
+     If the _o_u_t_p_u_t member of the ddppvv() _c_o_n_f_i_g argument was set to DPV_OUT‐
+     PUT_NONE (default; when invoking ddppvv()), the _o_u_t file descriptor of
+     aaccttiioonn() will be zero and can be ignored.  If _o_u_t_p_u_t was set to DPV_OUT‐
+     PUT_FILE, _o_u_t will be an open file descriptor to a file.  If _o_u_t_p_u_t was
+     set to DPV_OUTPUT_SHELL, _o_u_t will be an open file descriptor to a pipe
+     for a spawned shell program.  When _o_u_t is greater than zero, write data
+     that has been read back to _o_u_t.
+
+     To abort ddppvv(), either from the aaccttiioonn() callback or asynchronously from
+     a signal handler, two globals are provided via <_d_p_v_._h>:
+
+           extern int dpv_interrupt; /* Set to TRUE in interrupt handler */
+           extern int dpv_abort;     /* Set to true in callback to abort */
+
+     These globals are not automatically reset and must be manually main‐
+     tained.  Do not forget to reset these globals before subsequent invoca‐
+     tions of ddppvv() when making multiple calls from the same program.
+
+     In addition, the _s_t_a_t_u_s member of the aaccttiioonn() _f_i_l_e argument can be used
+     to control callbacks for the current file.  The _s_t_a_t_u_s member can be set
+     to any of the below from <_d_p_v_._h>:
+
+           enum dpv_status {
+                   DPV_STATUS_RUNNING = 0, /* Running (default) */
+                   DPV_STATUS_DONE,        /* Completed */
+                   DPV_STATUS_FAILED,      /* Oops, something went wrong */
+           };
+
+     The default _s_t_a_t_u_s is zero, DPV_STATUS_RUNNING, which keeps the callbacks
+     coming for the current ffiillee().  Setting ‘file->status’ to anything other
+     than DPV_STATUS_RUNNING will cause ddppvv() to loop to the next file, ef‐
+     fecting the next callback, if any.
+
+     The aaccttiioonn() callback is responsible for calculating percentages and
+     (recommended) maintaining a ddppvv global counter so ddppvv() can display
+     throughput statistics.  Percentages are reported through the _i_n_t return
+     value of the aaccttiioonn() callback.  Throughput statistics are calculated
+     from the below global _i_n_t in <_d_p_v_._h>:
+
+           extern int dpv_overall_read;
+
+     Set this to the number of bytes that have been read for all files.
+     Throughput information is displayed in the status line (only available
+     when using dialog(3)) at the bottom of the screen.  See DPV_DISPLAY_LIB‐
+     DIALOG above.
+
+     Note that _d_p_v___o_v_e_r_a_l_l___r_e_a_d does not have to represent bytes.  For exam‐
+     ple, the _s_t_a_t_u_s___f_o_r_m_a_t can be changed to display something other than
+     “bytes” and increment _d_p_v___o_v_e_r_a_l_l___r_e_a_d accordingly (for example, counting
+     lines).
+
+     When ddppvv() is processing the current file, the _l_e_n_g_t_h and _r_e_a_d members of
+     the aaccttiioonn() _f_i_l_e argument are used for calculating the display of mini
+     progress bars (if enabled; see _p_b_a_r___s_i_z_e above).  If the _l_e_n_g_t_h member of
+     the current _f_i_l_e is less than zero (indicating an unknown file length), a
+     humanize_number(3) version of the _r_e_a_d member is used instead of a tradi‐
+     tional progress bar.  Otherwise a progress bar is calculated as percent‐
+     age read to file length.  aaccttiioonn() callback must maintain these member
+     values for mini-progress bars.
+
+     The ddppvv__ffrreeee() function performs free(3) on private global variables ini‐
+     tialized by ddppvv().
+
+EENNVVIIRROONNMMEENNTT
+     The below environment variables are referenced by ddppvv:
+
+     DIALOG     Override command string used to launch dialog(1) (requires
+                DPV_DISPLAY_DIALOG) or Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g)
+                (requires DPV_DISPLAY_XDIALOG); default is either ‘dialog’
+                (for DPV_DISPLAY_DIALOG) or ‘Xdialog’ (for
+                DPV_DISPLAY_XDIALOG).
+
+     DIALOGRC   If set and non-NULL, path to ‘.dialogrc’ file.
+
+     HOME       If ‘$DIALOGRC’ is either not set or NULL, used as a prefix to
+                ‘.dialogrc’ (that is, ‘$HOME/.dialogrc’).
+
+     USE_COLOR  If set and NULL, disables the use of color when using
+                dialog(1).  Does not apply to Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g).
+
+     msg_done msg_fail msg_pending
+                Internationalization strings for overriding the default Eng‐
+                lish strings ‘Done’, ‘Fail’, and ‘Pending’ respectively.  To
+                prevent their usage, explicitly set the _m_s_g___d_o_n_e, _m_s_g___f_a_i_l,
+                and _m_s_g___p_e_n_d_i_n_g members of ddppvv() _c_o_n_f_i_g argument to default
+                macros (DPV_DONE_DEFAULT, DPV_FAIL_DEFAULT, and
+                DPV_PENDING_DEFAULT) or desired values.
+
+FFIILLEESS
+     $HOME/.dialogrc
+
+SSEEEE AALLSSOO
+     dialog(1), Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g), dialog(3)
+
+HHIISSTTOORRYY
+     The ddppvv library first appeared in FreeBSD 10.2.
+
+AAUUTTHHOORRSS
+     Devin Teske <dteske@FreeBSD.org>
+
+BBUUGGSS
+     Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g), when given both ‘----ttiittllee _t_i_t_l_e’ (see
+     above ‘_t_i_t_l_e’ member of _s_t_r_u_c_t _d_p_v___c_o_n_f_i_g) and ‘----bbaacckkttiittllee _b_a_c_k_t_i_t_l_e’
+     (see above ‘_b_a_c_k_t_i_t_l_e’ member of _s_t_r_u_c_t _d_p_v___c_o_n_f_i_g), displays the backti‐
+     tle in place of the title and vice-versa.
+
+     Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g) does not wrap long prompt texts received
+     after initial launch.  This is a known issue with the ‘--gauge’ widget in
+     Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g).  Embed escaped newlines within prompt
+     text to force line breaks.
+
+     dialog(1) does not display the first character after a series of escaped
+     escape-sequences (for example, ``\\n'' produces ``\'' instead of ``\n'').
+     This is a known issue with dialog(1) and does not affect dialog(3) or
+     Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g).
+
+     If an application ignores USE_COLOR when set and NULL before calling
+     ddppvv() with color escape sequences anyway, dialog(3) and dialog(1) may not
+     render properly.  Workaround is to detect when USE_COLOR is set and NULL
+     and either not use color escape sequences at that time or use unsetenv(3)
+     to unset USE_COLOR, forcing interpretation of color sequences.  This does
+     not effect Xdialog(1) (_p_o_r_t_s_/_x_1_1_/_x_d_i_a_l_o_g), which renders the color escape
+     sequences as plain text.  See “embedded "\Z" sequences” in dialog(1) for
+     additional information.
+
+BSD                             March 13, 2018                             BSD

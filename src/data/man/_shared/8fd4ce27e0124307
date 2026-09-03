@@ -1,0 +1,68 @@
+TFTP-PROXY(8)             BSD System Manager's Manual            TFTP-PROXY(8)
+
+NNAAMMEE
+     ttffttpp--pprrooxxyy — Internet Trivial File Transfer Protocol proxy
+
+SSYYNNOOPPSSIISS
+     ttffttpp--pprrooxxyy [--vv] [--ww _t_r_a_n_s_w_a_i_t]
+
+DDEESSCCRRIIPPTTIIOONN
+     ttffttpp--pprrooxxyy is a proxy for the Internet Trivial File Transfer Protocol in‐
+     voked by the inetd(8) internet server.  TFTP connections should be redi‐
+     rected to the proxy using the pf(4) _r_d_r command, after which the proxy
+     connects to the server on behalf of the client.
+
+     The proxy establishes a pf(4) _r_d_r rule using the _a_n_c_h_o_r facility to re‐
+     write packets between the client and the server.  Once the rule is estab‐
+     lished, ttffttpp--pprrooxxyy forwards the initial request from the client to the
+     server to begin the transfer.  After _t_r_a_n_s_w_a_i_t seconds, the pf(4) NAT
+     state is assumed to have been established and the _r_d_r rule is deleted and
+     the program exits.  Once the transfer between the client and the server
+     is completed, the NAT state will naturally expire.
+
+     Assuming the TFTP command request is from $client to $server, the proxy
+     connected to the server using the $proxy source address, and $port is ne‐
+     gotiated, ttffttpp--pprrooxxyy adds the following rule to the anchor:
+
+           rdr proto udp from $server to $proxy port $port -> $client
+
+     The options are as follows:
+
+     --vv      Log the connection and request information to syslogd(8).
+
+     --ww _t_r_a_n_s_w_a_i_t
+             Number of seconds to wait for the data transmission to begin be‐
+             fore removing the pf(4) _r_d_r rule.  The default is 2 seconds.
+
+CCOONNFFIIGGUURRAATTIIOONN
+     To make use of the proxy, pf.conf(5) needs the following rules.  The an‐
+     chors are mandatory.  Adjust the rules as needed for your configuration.
+
+     In the NAT section:
+
+           nat on $ext_if from $int_if -> ($ext_if:0)
+
+           no nat on $ext_if to port tftp
+
+           rdr-anchor "tftp-proxy/*"
+           rdr on $int_if proto udp from $lan to any port tftp -> \
+               127.0.0.1 port 6969
+
+     In the filter section, an anchor must be added to hold the pass rules:
+
+           anchor "tftp-proxy/*"
+
+     inetd(8) must be configured to spawn the proxy on the port that packets
+     are being forwarded to by pf(4).  An example inetd.conf(5) entry follows:
+
+           127.0.0.1:6969  dgram   udp     wait    root \
+                   /usr/libexec/tftp-proxy tftp-proxy
+
+SSEEEE AALLSSOO
+     tftp(1), pf(4), pf.conf(5), ftp-proxy(8), inetd(8), syslogd(8), tftpd(8)
+
+CCAAVVEEAATTSS
+     ttffttpp--pprrooxxyy chroots to _/_v_a_r_/_e_m_p_t_y and changes to user “proxy” to drop
+     privileges.
+
+BSD                            November 28, 2005                           BSD

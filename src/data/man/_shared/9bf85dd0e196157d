@@ -1,0 +1,821 @@
+_m_o_u_n_t___n_a_m_e_s_p_a_c_e_s(7)    Miscellaneous Information Manual    _m_o_u_n_t___n_a_m_e_s_p_a_c_e_s(7)
+
+NNAAMMEE
+       mount_namespaces - overview of Linux mount namespaces
+
+DDEESSCCRRIIPPTTIIOONN
+       For an overview of namespaces, see nnaammeessppaacceess(7).
+
+       Mount  namespaces  provide  isolation of the list of mounts seen by the
+       processes in each namespace instance.  Thus, the processes in  each  of
+       the  mount namespace instances will see distinct single‐directory hier‐
+       archies.
+
+       The views provided by the  _/_p_r_o_c_/pid_/_m_o_u_n_t_s,  _/_p_r_o_c_/pid_/_m_o_u_n_t_i_n_f_o,  and
+       _/_p_r_o_c_/pid_/_m_o_u_n_t_s_t_a_t_s files (all described in pprroocc(5)) correspond to the
+       mount namespace in which the process with the PID _p_i_d resides.  (All of
+       the processes that reside in the same mount namespace will see the same
+       view in these files.)
+
+       A  new  mount  namespace is created using either cclloonnee(2) or uunnsshhaarree(2)
+       with the CCLLOONNEE__NNEEWWNNSS flag.  When a new mount namespace is created,  its
+       mount list is initialized as follows:
+
+       •  If  the  namespace  is created using cclloonnee(2), the mount list of the
+          child’s namespace is  a  copy  of  the  mount  list  in  the  parent
+          process’s mount namespace.
+
+       •  If  the namespace is created using uunnsshhaarree(2), the mount list of the
+          new namespace is a copy of the mount list in the  caller’s  previous
+          mount namespace.
+
+       Subsequent  modifications to the mount list (mmoouunntt(2) and uummoouunntt(2)) in
+       either mount namespace will not (by default) affect the mount list seen
+       in the other namespace (but see the following discussion of shared sub‐
+       trees).
+
+SSHHAARREEDD SSUUBBTTRREEEESS
+       After the implementation of mount namespaces was completed,  experience
+       showed  that  the  isolation that they provided was, in some cases, too
+       great.  For example, in order to  make  a  newly  loaded  optical  disk
+       available  in  all  mount namespaces, a mount operation was required in
+       each namespace.  For this use case, and others, the shared subtree fea‐
+       ture was introduced in Linux 2.6.15.  This  feature  allows  for  auto‐
+       matic,  controlled propagation of mmoouunntt(2) and uummoouunntt(2) _e_v_e_n_t_s between
+       namespaces (or, more precisely, between the mounts that are members  of
+       a _p_e_e_r _g_r_o_u_p that are propagating events to one another).
+
+       Each  mount  is  marked  (via  mmoouunntt(2)) as having one of the following
+       _p_r_o_p_a_g_a_t_i_o_n _t_y_p_e_s:
+
+       MMSS__SSHHAARREEDD
+              This mount shares events with members of a peer group.  mmoouunntt(2)
+              and uummoouunntt(2) events immediately under this mount will propagate
+              to the other mounts that are members of the peer group.   _P_r_o_p_a_‐
+              _g_a_t_i_o_n here means that the same mmoouunntt(2) or uummoouunntt(2) will auto‐
+              matically occur under all of the other mounts in the peer group.
+              Conversely,  mmoouunntt(2) and uummoouunntt(2) events that take place under
+              peer mounts will propagate to this mount.
+
+       MMSS__PPRRIIVVAATTEE
+              This mount is private; it does not have a peer group.   mmoouunntt(2)
+              and uummoouunntt(2) events do not propagate into or out of this mount.
+
+       MMSS__SSLLAAVVEE
+              mmoouunntt(2)  and  uummoouunntt(2) events propagate into this mount from a
+              (master) shared peer group.  mmoouunntt(2) and uummoouunntt(2) events under
+              this mount do not propagate to any peer.
+
+              Note that a mount can be the slave of another peer  group  while
+              at  the  same  time sharing mmoouunntt(2) and uummoouunntt(2) events with a
+              peer group of which it is a member.  (More precisely,  one  peer
+              group can be the slave of another peer group.)
+
+       MMSS__UUNNBBIINNDDAABBLLEE
+              This  is  like a private mount, and in addition this mount can’t
+              be bind mounted.  Attempts to bind mount  this  mount  (mmoouunntt(2)
+              with the MMSS__BBIINNDD flag) will fail.
+
+              When  a  recursive  bind  mount  (mmoouunntt(2)  with the MMSS__BBIINNDD and
+              MMSS__RREECC flags) is performed on  a  directory  subtree,  any  bind
+              mounts  within  the  subtree are automatically pruned (i.e., not
+              replicated) when replicating that subtree to produce the  target
+              subtree.
+
+       For  a  discussion of the propagation type assigned to a new mount, see
+       NOTES.
+
+       The propagation type is a per‐mount‐point setting; some mounts  may  be
+       marked  as  shared (with each shared mount being a member of a distinct
+       peer group), while others are private (or slaved or unbindable).
+
+       Note that a mount’s propagation type determines  whether  mmoouunntt(2)  and
+       uummoouunntt(2)  of mounts _i_m_m_e_d_i_a_t_e_l_y _u_n_d_e_r the mount are propagated.  Thus,
+       the propagation type does not affect propagation of events  for  grand‐
+       children  and  further  removed descendant mounts.  What happens if the
+       mount itself is unmounted is determined by the propagation type that is
+       in effect for the _p_a_r_e_n_t of the mount.
+
+       Members are added to a _p_e_e_r _g_r_o_u_p when a mount is marked as shared  and
+       either:
+
+       (a)  the  mount  is replicated during the creation of a new mount name‐
+            space; or
+
+       (b)  a new bind mount is created from the mount.
+
+       In both of these cases, the new mount joins the peer group of which the
+       existing mount is a member.
+
+       A new peer group is also created when a child mount is created under an
+       existing mount that is marked as shared.  In this case, the  new  child
+       mount is also marked as shared and the resulting peer group consists of
+       all the mounts that are replicated under the peers of parent mounts.
+
+       A  mount ceases to be a member of a peer group when either the mount is
+       explicitly unmounted, or when the mount is implicitly unmounted because
+       a mount namespace is removed (because it has no more member processes).
+
+       The propagation type of the mounts in a mount namespace can be  discov‐
+       ered  via  the  "optional fields" exposed in _/_p_r_o_c_/pid_/_m_o_u_n_t_i_n_f_o.  (See
+       pprroocc(5) for details of this file.)  The following tags  can  appear  in
+       the optional fields for a record in that file:
+
+       _s_h_a_r_e_d_:_X
+              This  mount  is  shared  in peer group _X.  Each peer group has a
+              unique ID that is automatically generated by the kernel, and all
+              mounts in the same peer group will show the same ID.  (These IDs
+              are assigned starting from the value 1, and may be recycled when
+              a peer group ceases to have any members.)
+
+       _m_a_s_t_e_r_:_X
+              This mount is a slave to shared peer group _X.
+
+       _p_r_o_p_a_g_a_t_e___f_r_o_m_:_X (since Linux 2.6.26)
+              This mount is a slave and receives propagation from shared  peer
+              group _X.  This tag will always appear in conjunction with a _m_a_s_‐
+              _t_e_r_:_X tag.  Here, _X is the closest dominant peer group under the
+              process’s  root  directory.  If _X is the immediate master of the
+              mount, or if there is no dominant  peer  group  under  the  same
+              root, then only the _m_a_s_t_e_r_:_X field is present and not the _p_r_o_p_a_‐
+              _g_a_t_e___f_r_o_m_:_X field.  For further details, see below.
+
+       _u_n_b_i_n_d_a_b_l_e
+              This is an unbindable mount.
+
+       If none of the above tags is present, then this is a private mount.
+
+   MMSS__SSHHAARREEDD aanndd MMSS__PPRRIIVVAATTEE eexxaammppllee
+       Suppose  that on a terminal in the initial mount namespace, we mark one
+       mount as shared and another as private, and then  view  the  mounts  in
+       _/_p_r_o_c_/_s_e_l_f_/_m_o_u_n_t_i_n_f_o:
+
+           sh1# mmoouunntt ----mmaakkee--sshhaarreedd //mmnnttSS
+           sh1# mmoouunntt ----mmaakkee--pprriivvaattee //mmnnttPP
+           sh1# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           77 61 8:17 / /mntS rw,relatime shared:1
+           83 61 8:15 / /mntP rw,relatime
+
+       From  the  _/_p_r_o_c_/_s_e_l_f_/_m_o_u_n_t_i_n_f_o  output,  we see that _/_m_n_t_S is a shared
+       mount in peer group 1, and that _/_m_n_t_P has no optional tags,  indicating
+       that  it  is  a  private mount.  The first two fields in each record in
+       this file are the unique ID for this mount, and the  mount  ID  of  the
+       parent  mount.  We can further inspect this file to see that the parent
+       mount of _/_m_n_t_S and _/_m_n_t_P is the root directory, _/, which is mounted  as
+       private:
+
+           sh1# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || aawwkk ''$$11 ==== 6611'' || sseedd ''ss// -- ..**////''
+           61 0 8:2 / / rw,relatime
+
+       On  a  second  terminal, we create a new mount namespace where we run a
+       second shell and inspect the mounts:
+
+           $ PPSS11==''sshh22## '' ssuuddoo uunnsshhaarree --mm ----pprrooppaaggaattiioonn uunncchhaannggeedd sshh
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           222 145 8:17 / /mntS rw,relatime shared:1
+           225 145 8:15 / /mntP rw,relatime
+
+       The new mount namespace received a copy  of  the  initial  mount  name‐
+       space’s  mounts.  These new mounts maintain the same propagation types,
+       but have unique mount IDs.  (The _-_-_p_r_o_p_a_g_a_t_i_o_n  _u_n_c_h_a_n_g_e_d  option  pre‐
+       vents uunnsshhaarree(1) from marking all mounts as private when creating a new
+       mount namespace, which it does by default.)
+
+       In  the  second  terminal, we then create submounts under each of _/_m_n_t_S
+       and _/_m_n_t_P and inspect the set‐up:
+
+           sh2# mmkkddiirr //mmnnttSS//aa
+           sh2# mmoouunntt //ddeevv//ssddbb66 //mmnnttSS//aa
+           sh2# mmkkddiirr //mmnnttPP//bb
+           sh2# mmoouunntt //ddeevv//ssddbb77 //mmnnttPP//bb
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           222 145 8:17 / /mntS rw,relatime shared:1
+           225 145 8:15 / /mntP rw,relatime
+           178 222 8:22 / /mntS/a rw,relatime shared:2
+           230 225 8:23 / /mntP/b rw,relatime
+
+       From the above, it can be seen that _/_m_n_t_S_/_a was created as shared  (in‐
+       heriting this setting from its parent mount) and _/_m_n_t_P_/_b was created as
+       a private mount.
+
+       Returning  to the first terminal and inspecting the set‐up, we see that
+       the new mount created under the shared mount _/_m_n_t_S  propagated  to  its
+       peer  mount (in the initial mount namespace), but the new mount created
+       under the private mount _/_m_n_t_P did not propagate:
+
+           sh1# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           77 61 8:17 / /mntS rw,relatime shared:1
+           83 61 8:15 / /mntP rw,relatime
+           179 77 8:22 / /mntS/a rw,relatime shared:2
+
+   MMSS__SSLLAAVVEE eexxaammppllee
+       Making a mount a slave allows it to  receive  propagated  mmoouunntt(2)  and
+       uummoouunntt(2)  events  from a master shared peer group, while preventing it
+       from propagating events to that master.  This is useful if we  want  to
+       (say) receive a mount event when an optical disk is mounted in the mas‐
+       ter shared peer group (in another mount namespace), but want to prevent
+       mmoouunntt(2)  and  uummoouunntt(2)  events under the slave mount from having side
+       effects in other namespaces.
+
+       We can demonstrate the effect of slaving by first marking two mounts as
+       shared in the initial mount namespace:
+
+           sh1# mmoouunntt ----mmaakkee--sshhaarreedd //mmnnttXX
+           sh1# mmoouunntt ----mmaakkee--sshhaarreedd //mmnnttYY
+           sh1# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           132 83 8:23 / /mntX rw,relatime shared:1
+           133 83 8:22 / /mntY rw,relatime shared:2
+
+       On a second terminal, we create a new mount namespace and  inspect  the
+       mounts:
+
+           sh2# uunnsshhaarree --mm ----pprrooppaaggaattiioonn uunncchhaannggeedd sshh
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           168 167 8:23 / /mntX rw,relatime shared:1
+           169 167 8:22 / /mntY rw,relatime shared:2
+
+       In the new mount namespace, we then mark one of the mounts as a slave:
+
+           sh2# mmoouunntt ----mmaakkee--ssllaavvee //mmnnttYY
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           168 167 8:23 / /mntX rw,relatime shared:1
+           169 167 8:22 / /mntY rw,relatime master:2
+
+       From  the  above output, we see that _/_m_n_t_Y is now a slave mount that is
+       receiving propagation events from the shared peer group with the ID 2.
+
+       Continuing in the new namespace, we  create  submounts  under  each  of
+       _/_m_n_t_X and _/_m_n_t_Y:
+
+           sh2# mmkkddiirr //mmnnttXX//aa
+           sh2# mmoouunntt //ddeevv//ssddaa33 //mmnnttXX//aa
+           sh2# mmkkddiirr //mmnnttYY//bb
+           sh2# mmoouunntt //ddeevv//ssddaa55 //mmnnttYY//bb
+
+       When  we inspect the state of the mounts in the new mount namespace, we
+       see that _/_m_n_t_X_/_a was created as a  new  shared  mount  (inheriting  the
+       "shared"  setting  from  its parent mount) and _/_m_n_t_Y_/_b was created as a
+       private mount:
+
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           168 167 8:23 / /mntX rw,relatime shared:1
+           169 167 8:22 / /mntY rw,relatime master:2
+           173 168 8:3 / /mntX/a rw,relatime shared:3
+           175 169 8:5 / /mntY/b rw,relatime
+
+       Returning to the first terminal (in the initial  mount  namespace),  we
+       see  that  the mount _/_m_n_t_X_/_a propagated to the peer (the shared _/_m_n_t_X),
+       but the mount _/_m_n_t_Y_/_b was not propagated:
+
+           sh1# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           132 83 8:23 / /mntX rw,relatime shared:1
+           133 83 8:22 / /mntY rw,relatime shared:2
+           174 132 8:3 / /mntX/a rw,relatime shared:3
+
+       Now we create a new mount under _/_m_n_t_Y in the first shell:
+
+           sh1# mmkkddiirr //mmnnttYY//cc
+           sh1# mmoouunntt //ddeevv//ssddaa11 //mmnnttYY//cc
+           sh1# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           132 83 8:23 / /mntX rw,relatime shared:1
+           133 83 8:22 / /mntY rw,relatime shared:2
+           174 132 8:3 / /mntX/a rw,relatime shared:3
+           178 133 8:1 / /mntY/c rw,relatime shared:4
+
+       When we examine the mounts in the second mount namespace, we  see  that
+       in  this case the new mount has been propagated to the slave mount, and
+       that the new mount is itself a slave mount (to peer group 4):
+
+           sh2# ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           168 167 8:23 / /mntX rw,relatime shared:1
+           169 167 8:22 / /mntY rw,relatime master:2
+           173 168 8:3 / /mntX/a rw,relatime shared:3
+           175 169 8:5 / /mntY/b rw,relatime
+           179 169 8:1 / /mntY/c rw,relatime master:4
+
+   MMSS__UUNNBBIINNDDAABBLLEE eexxaammppllee
+       One of the primary purposes of unbindable mounts is to avoid the "mount
+       explosion" problem when repeatedly performing bind mounts of a  higher‐
+       level  subtree  at  a lower‐level mount.  The problem is illustrated by
+       the following shell session.
+
+       Suppose we have a system with the following mounts:
+
+           # mmoouunntt || aawwkk ''{{pprriinntt $$11,, $$22,, $$33}}''
+           /dev/sda1 on /
+           /dev/sdb6 on /mntX
+           /dev/sdb7 on /mntY
+
+       Suppose furthermore that we wish to recursively bind mount the root di‐
+       rectory under several users’ home directories.   We  do  this  for  the
+       first user, and inspect the mounts:
+
+           # mmoouunntt ----rrbbiinndd // //hhoommee//cceecciilliiaa//
+           # mmoouunntt || aawwkk ''{{pprriinntt $$11,, $$22,, $$33}}''
+           /dev/sda1 on /
+           /dev/sdb6 on /mntX
+           /dev/sdb7 on /mntY
+           /dev/sda1 on /home/cecilia
+           /dev/sdb6 on /home/cecilia/mntX
+           /dev/sdb7 on /home/cecilia/mntY
+
+       When  we repeat this operation for the second user, we start to see the
+       explosion problem:
+
+           # mmoouunntt ----rrbbiinndd // //hhoommee//hheennrryy
+           # mmoouunntt || aawwkk ''{{pprriinntt $$11,, $$22,, $$33}}''
+           /dev/sda1 on /
+           /dev/sdb6 on /mntX
+           /dev/sdb7 on /mntY
+           /dev/sda1 on /home/cecilia
+           /dev/sdb6 on /home/cecilia/mntX
+           /dev/sdb7 on /home/cecilia/mntY
+           /dev/sda1 on /home/henry
+           /dev/sdb6 on /home/henry/mntX
+           /dev/sdb7 on /home/henry/mntY
+           /dev/sda1 on /home/henry/home/cecilia
+           /dev/sdb6 on /home/henry/home/cecilia/mntX
+           /dev/sdb7 on /home/henry/home/cecilia/mntY
+
+       Under _/_h_o_m_e_/_h_e_n_r_y, we have not only recursively  added  the  _/_m_n_t_X  and
+       _/_m_n_t_Y  mounts, but also the recursive mounts of those directories under
+       _/_h_o_m_e_/_c_e_c_i_l_i_a that were created in the previous step.   Upon  repeating
+       the step for a third user, it becomes obvious that the explosion is ex‐
+       ponential in nature:
+
+           # mmoouunntt ----rrbbiinndd // //hhoommee//oottttoo
+           # mmoouunntt || aawwkk ''{{pprriinntt $$11,, $$22,, $$33}}''
+           /dev/sda1 on /
+           /dev/sdb6 on /mntX
+           /dev/sdb7 on /mntY
+           /dev/sda1 on /home/cecilia
+           /dev/sdb6 on /home/cecilia/mntX
+           /dev/sdb7 on /home/cecilia/mntY
+           /dev/sda1 on /home/henry
+           /dev/sdb6 on /home/henry/mntX
+           /dev/sdb7 on /home/henry/mntY
+           /dev/sda1 on /home/henry/home/cecilia
+           /dev/sdb6 on /home/henry/home/cecilia/mntX
+           /dev/sdb7 on /home/henry/home/cecilia/mntY
+           /dev/sda1 on /home/otto
+           /dev/sdb6 on /home/otto/mntX
+           /dev/sdb7 on /home/otto/mntY
+           /dev/sda1 on /home/otto/home/cecilia
+           /dev/sdb6 on /home/otto/home/cecilia/mntX
+           /dev/sdb7 on /home/otto/home/cecilia/mntY
+           /dev/sda1 on /home/otto/home/henry
+           /dev/sdb6 on /home/otto/home/henry/mntX
+           /dev/sdb7 on /home/otto/home/henry/mntY
+           /dev/sda1 on /home/otto/home/henry/home/cecilia
+           /dev/sdb6 on /home/otto/home/henry/home/cecilia/mntX
+           /dev/sdb7 on /home/otto/home/henry/home/cecilia/mntY
+
+       The  mount  explosion  problem  in the above scenario can be avoided by
+       making each of the new mounts unbindable.  The effect of doing this  is
+       that  recursive mounts of the root directory will not replicate the un‐
+       bindable mounts.  We make such a mount for the first user:
+
+           # mmoouunntt ----rrbbiinndd ----mmaakkee--uunnbbiinnddaabbllee // //hhoommee//cceecciilliiaa
+
+       Before going further, we show that unbindable mounts are indeed unbind‐
+       able:
+
+           # mmkkddiirr //mmnnttZZ
+           # mmoouunntt ----bbiinndd //hhoommee//cceecciilliiaa //mmnnttZZ
+           mount: wrong fs type, bad option, bad superblock on /home/cecilia,
+                  missing codepage or helper program, or other error
+
+                  In some cases useful info is found in syslog - try
+                  dmesg | tail or so.
+
+       Now we create unbindable recursive bind mounts for the other two users:
+
+           # mmoouunntt ----rrbbiinndd ----mmaakkee--uunnbbiinnddaabbllee // //hhoommee//hheennrryy
+           # mmoouunntt ----rrbbiinndd ----mmaakkee--uunnbbiinnddaabbllee // //hhoommee//oottttoo
+
+       Upon examining the list of mounts, we see there has been  no  explosion
+       of mounts, because the unbindable mounts were not replicated under each
+       user’s directory:
+
+           # mmoouunntt || aawwkk ''{{pprriinntt $$11,, $$22,, $$33}}''
+           /dev/sda1 on /
+           /dev/sdb6 on /mntX
+           /dev/sdb7 on /mntY
+           /dev/sda1 on /home/cecilia
+           /dev/sdb6 on /home/cecilia/mntX
+           /dev/sdb7 on /home/cecilia/mntY
+           /dev/sda1 on /home/henry
+           /dev/sdb6 on /home/henry/mntX
+           /dev/sdb7 on /home/henry/mntY
+           /dev/sda1 on /home/otto
+           /dev/sdb6 on /home/otto/mntX
+           /dev/sdb7 on /home/otto/mntY
+
+   PPrrooppaaggaattiioonn ttyyppee ttrraannssiittiioonnss
+       The  following  table  shows the effect that applying a new propagation
+       type (i.e., _m_o_u_n_t _-_-_m_a_k_e_-_x_x_x_x) has on the existing propagation type  of
+       a  mount.   The  rows correspond to existing propagation types, and the
+       columns are the new propagation settings.  For reasons of space,  "pri‐
+       vate"  is  abbreviated as "priv" and "unbindable" as "unbind".  lb2 lb2
+       lb2 lb2 lb1 lb | l l l l  l.        make‐shared    make‐slave     make‐
+       priv make‐unbind   _   shared    shared    slave/priv   [1] priv unbind
+       slave     slave+shared   slave                          [2] priv unbind
+       slave+shared   slave+shared   slave     priv unbind                pri‐
+       vate   shared    priv  [2] priv unbind  unbindable     shared    unbind
+       [2]     priv unbind
+
+       Note the following details to the table:
+
+       [1]  If a shared mount is the only mount in its peer group, making it a
+            slave automatically makes it private.
+
+       [2]  Slaving a nonshared mount has no effect on the mount.
+
+   BBiinndd ((MMSS__BBIINNDD)) sseemmaannttiiccss
+       Suppose that the following command is performed:
+
+           mount --bind A/a B/b
+
+       Here,  _A is the source mount, _B is the destination mount, _a is a subdi‐
+       rectory path under the mount point _A, and _b is a subdirectory path  un‐
+       der  the  mount  point _B.  The propagation type of the resulting mount,
+       _B_/_b, depends on the propagation types of the mounts _A  and  _B,  and  is
+       summarized in the following table.
+
+       lb2  lb1  lb2  lb2  lb2  lb0 lb2 lb1 lb2 lb2 lb2 lb0 lb lb | l l l l l.
+                      source(A)           shared    private   slave     unbind
+       _        dest(B)   shared    shared    shared    slave+shared   invalid
+            nonshared shared    private   slave     invalid
+
+       Note  that  a recursive bind of a subtree follows the same semantics as
+       for a bind operation on each mount in the subtree.  (Unbindable  mounts
+       are automatically pruned at the target mount point.)
+
+       For further details, see _D_o_c_u_m_e_n_t_a_t_i_o_n_/_f_i_l_e_s_y_s_t_e_m_s_/_s_h_a_r_e_d_s_u_b_t_r_e_e_._r_s_t in
+       the kernel source tree.
+
+   MMoovvee ((MMSS__MMOOVVEE)) sseemmaannttiiccss
+       Suppose that the following command is performed:
+
+           mount --move A B/b
+
+       Here,  _A  is  the  source mount, _B is the destination mount, and _b is a
+       subdirectory path under the mount point _B.  The propagation type of the
+       resulting mount, _B_/_b, depends on the propagation types of the mounts  _A
+       and _B, and is summarized in the following table.
+
+       lb2  lb1  lb2  lb2  lb2  lb0 lb2 lb1 lb2 lb2 lb2 lb0 lb lb | l l l l l.
+                      source(A)           shared    private   slave     unbind
+       _        dest(B)   shared    shared    shared    slave+shared   invalid
+            nonshared shared    private   slave     unbindable
+
+       Note: moving a mount that resides under a shared mount is invalid.
+
+       For further details, see _D_o_c_u_m_e_n_t_a_t_i_o_n_/_f_i_l_e_s_y_s_t_e_m_s_/_s_h_a_r_e_d_s_u_b_t_r_e_e_._r_s_t in
+       the kernel source tree.
+
+   MMoouunntt sseemmaannttiiccss
+       Suppose that we use the following command to create a mount:
+
+           mount device B/b
+
+       Here,  _B  is  the destination mount, and _b is a subdirectory path under
+       the mount point _B.  The propagation type of the resulting  mount,  _B_/_b,
+       follows  the same rules as for a bind mount, where the propagation type
+       of the source mount is considered always to be private.
+
+   UUnnmmoouunntt sseemmaannttiiccss
+       Suppose that we use the following command to tear down a mount:
+
+           umount A
+
+       Here, _A is a mount on _B_/_b, where _B is the parent mount and _b is a  sub‐
+       directory path under the mount point _B.  If BB is shared, then all most‐
+       recently‐mounted  mounts  at  _b on mounts that receive propagation from
+       mount _B and do not have submounts under them are unmounted.
+
+   TThhee //pprroocc// ppiidd //mmoouunnttiinnffoo pprrooppaaggaattee__ffrroomm ttaagg
+       The  _p_r_o_p_a_g_a_t_e___f_r_o_m_:_X  tag  is  shown  in  the  optional  fields  of  a
+       _/_p_r_o_c_/pid_/_m_o_u_n_t_i_n_f_o record in cases where a process can’t see a slave’s
+       immediate  master  (i.e.,  the  pathname of the master is not reachable
+       from the filesystem root directory) and so cannot determine  the  chain
+       of propagation between the mounts it can see.
+
+       In the following example, we first create a two‐link master‐slave chain
+       between  the  mounts  _/_m_n_t,  _/_t_m_p_/_e_t_c,  and _/_m_n_t_/_t_m_p_/_e_t_c.  Then the cchh‐‐
+       rroooott(1) command is used to make the _/_t_m_p_/_e_t_c  mount  point  unreachable
+       from  the  root  directory,  creating  a  situation where the master of
+       _/_m_n_t_/_t_m_p_/_e_t_c is not reachable from the  (new)  root  directory  of  the
+       process.
+
+       First,  we  bind mount the root directory onto _/_m_n_t and then bind mount
+       _/_p_r_o_c at _/_m_n_t_/_p_r_o_c so  that  after  the  later  cchhrroooott(1)  the  pprroocc(5)
+       filesystem remains visible at the correct location in the chroot‐ed en‐
+       vironment.
+
+           # mmkkddiirr --pp //mmnntt//pprroocc
+           # mmoouunntt ----bbiinndd // //mmnntt
+           # mmoouunntt ----bbiinndd //pprroocc //mmnntt//pprroocc
+
+       Next,  we  ensure  that  the _/_m_n_t mount is a shared mount in a new peer
+       group (with no peers):
+
+           # mmoouunntt ----mmaakkee--pprriivvaattee //mmnntt  # Isolate from any previous peer group
+           # mmoouunntt ----mmaakkee--sshhaarreedd //mmnntt
+           # ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || ggrreepp ''//mmnntt'' || sseedd ''ss// -- ..**////''
+           239 61 8:2 / /mnt ... shared:102
+           248 239 0:4 / /mnt/proc ... shared:5
+
+       Next, we bind mount _/_m_n_t_/_e_t_c onto _/_t_m_p_/_e_t_c:
+
+           # mmkkddiirr --pp //ttmmpp//eettcc
+           # mmoouunntt ----bbiinndd //mmnntt//eettcc //ttmmpp//eettcc
+           # ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || eeggrreepp ''//mmnntt||//ttmmpp//'' || sseedd ''ss// -- ..**////''
+           239 61 8:2 / /mnt ... shared:102
+           248 239 0:4 / /mnt/proc ... shared:5
+           267 40 8:2 /etc /tmp/etc ... shared:102
+
+       Initially, these two mounts are in the same peer  group,  but  we  then
+       make the _/_t_m_p_/_e_t_c a slave of _/_m_n_t_/_e_t_c, and then make _/_t_m_p_/_e_t_c shared as
+       well, so that it can propagate events to the next slave in the chain:
+
+           # mmoouunntt ----mmaakkee--ssllaavvee //ttmmpp//eettcc
+           # mmoouunntt ----mmaakkee--sshhaarreedd //ttmmpp//eettcc
+           # ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || eeggrreepp ''//mmnntt||//ttmmpp//'' || sseedd ''ss// -- ..**////''
+           239 61 8:2 / /mnt ... shared:102
+           248 239 0:4 / /mnt/proc ... shared:5
+           267 40 8:2 /etc /tmp/etc ... shared:105 master:102
+
+       Then  we  bind mount _/_t_m_p_/_e_t_c onto _/_m_n_t_/_t_m_p_/_e_t_c.  Again, the two mounts
+       are initially in the same peer group, but we then make  _/_m_n_t_/_t_m_p_/_e_t_c  a
+       slave of _/_t_m_p_/_e_t_c:
+
+           # mmkkddiirr --pp //mmnntt//ttmmpp//eettcc
+           # mmoouunntt ----bbiinndd //ttmmpp//eettcc //mmnntt//ttmmpp//eettcc
+           # mmoouunntt ----mmaakkee--ssllaavvee //mmnntt//ttmmpp//eettcc
+           # ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || eeggrreepp ''//mmnntt||//ttmmpp//'' || sseedd ''ss// -- ..**////''
+           239 61 8:2 / /mnt ... shared:102
+           248 239 0:4 / /mnt/proc ... shared:5
+           267 40 8:2 /etc /tmp/etc ... shared:105 master:102
+           273 239 8:2 /etc /mnt/tmp/etc ... master:105
+
+       From  the  above, we see that _/_m_n_t is the master of the slave _/_t_m_p_/_e_t_c,
+       which in turn is the master of the slave _/_m_n_t_/_t_m_p_/_e_t_c.
+
+       We then cchhrroooott(1) to the _/_m_n_t directory, which renders the  mount  with
+       ID 267 unreachable from the (new) root directory:
+
+           # cchhrroooott //mmnntt
+
+       When  we  examine the state of the mounts inside the chroot‐ed environ‐
+       ment, we see the following:
+
+           # ccaatt //pprroocc//sseellff//mmoouunnttiinnffoo || sseedd ''ss// -- ..**////''
+           239 61 8:2 / / ... shared:102
+           248 239 0:4 / /proc ... shared:5
+           273 239 8:2 /etc /tmp/etc ... master:105 propagate_from:102
+
+       Above, we see that the mount with ID 273 is a slave whose master is the
+       peer group 105.  The mount point for that master is unreachable, and so
+       a _p_r_o_p_a_g_a_t_e___f_r_o_m tag is displayed, indicating that the closest dominant
+       peer group (i.e., the nearest reachable mount in the  slave  chain)  is
+       the  peer  group with the ID 102 (corresponding to the _/_m_n_t mount point
+       before the cchhrroooott(1) was performed).
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 2.4.19.
+
+NNOOTTEESS
+       The propagation type assigned to a new mount depends on the propagation
+       type of the parent mount.  If the mount has a parent  (i.e.,  it  is  a
+       non‐root  mount)  and  the propagation type of the parent is MMSS__SSHHAARREEDD,
+       then the propagation type of the new mount is also  MMSS__SSHHAARREEDD.   Other‐
+       wise, the propagation type of the new mount is MMSS__PPRRIIVVAATTEE.
+
+       Notwithstanding  the  fact  that  the  default propagation type for new
+       mount is in many cases MMSS__PPRRIIVVAATTEE, MMSS__SSHHAARREEDD is typically more  useful.
+       For  this  reason,  ssyysstteemmdd(1)  automatically  remounts  all  mounts as
+       MMSS__SSHHAARREEDD on system startup.  Thus, on most modern systems, the default
+       propagation type is in practice MMSS__SSHHAARREEDD.
+
+       Since, when one uses uunnsshhaarree(1) to create a mount namespace,  the  goal
+       is  commonly  to  provide full isolation of the mounts in the new name‐
+       space, uunnsshhaarree(1) (since _u_t_i_l_-_l_i_n_u_x 2.27) in  turn  reverses  the  step
+       performed  by ssyysstteemmdd(1), by making all mounts private in the new name‐
+       space.  That is, uunnsshhaarree(1) performs the equivalent of the following in
+       the new mount namespace:
+
+           mount --make-rprivate /
+
+       To prevent this, one can use the _-_-_p_r_o_p_a_g_a_t_i_o_n _u_n_c_h_a_n_g_e_d option to  uunn‐‐
+       sshhaarree(1).
+
+       An  application  that  creates  a  new  mount  namespace directly using
+       cclloonnee(2) or uunnsshhaarree(2) may  desire  to  prevent  propagation  of  mount
+       events  to other mount namespaces (as is done by uunnsshhaarree(1)).  This can
+       be done by changing the propagation type of mounts in the new namespace
+       to either MMSS__SSLLAAVVEE or MMSS__PPRRIIVVAATTEE, using a call such as the following:
+
+           mount(NULL, "/", MS_SLAVE | MS_REC, NULL);
+
+       For a discussion of propagation types when moving mounts (MMSS__MMOOVVEE)  and
+       creating  bind  mounts (MMSS__BBIINNDD), see _D_o_c_u_m_e_n_t_a_t_i_o_n_/_f_i_l_e_s_y_s_t_e_m_s_/_s_h_a_r_e_d_‐
+       _s_u_b_t_r_e_e_._r_s_t.
+
+   RReessttrriiccttiioonnss oonn mmoouunntt nnaammeessppaacceess
+       Note the following points with respect to mount namespaces:
+
+       [1]  Each mount namespace has an owner user  namespace.   As  explained
+            above,  when  a  new mount namespace is created, its mount list is
+            initialized as a copy of the mount list  of  another  mount  name‐
+            space.   If  the  new  namespace  and the namespace from which the
+            mount list was copied are owned by different user namespaces, then
+            the new mount namespace is considered _l_e_s_s _p_r_i_v_i_l_e_g_e_d.
+
+       [2]  When creating a less privileged mount namespace, shared mounts are
+            reduced to slave mounts.  This ensures that mappings performed  in
+            less privileged mount namespaces will not propagate to more privi‐
+            leged mount namespaces.
+
+       [3]  Mounts  that  come  as  a single unit from a more privileged mount
+            namespace are locked together and may not be separated in  a  less
+            privileged mount namespace.  (The uunnsshhaarree(2) CCLLOONNEE__NNEEWWNNSS operation
+            brings  across all of the mounts from the original mount namespace
+            as a single unit, and  recursive  mounts  that  propagate  between
+            mount namespaces propagate as a single unit.)
+
+            In  this context, "may not be separated" means that the mounts are
+            locked so that they may not be individually  unmounted.   Consider
+            the following example:
+
+                $ ssuuddoo sshh
+                # mmoouunntt ----bbiinndd //ddeevv//nnuullll //eettcc//sshhaaddooww
+                # ccaatt //eettcc//sshhaaddooww       # Produces no output
+
+            The  above  steps, performed in a more privileged mount namespace,
+            have created a bind mount that obscures the contents of the shadow
+            password file, _/_e_t_c_/_s_h_a_d_o_w.  For security reasons, it  should  not
+            be  possible  to  uummoouunntt(2)  that mount in a less privileged mount
+            namespace, since that would reveal the contents of _/_e_t_c_/_s_h_a_d_o_w.
+
+            Suppose we now create a new mount namespace owned by  a  new  user
+            namespace.   The new mount namespace will inherit copies of all of
+            the mounts from the  previous  mount  namespace.   However,  those
+            mounts  will  be  locked  because  the new mount namespace is less
+            privileged.  Consequently, an attempt to uummoouunntt(2) the mount fails
+            as show in the following step:
+
+                # uunnsshhaarree ----uusseerr ----mmaapp--rroooott--uusseerr ----mmoouunntt \\
+                               ssttrraaccee --oo //ttmmpp//lloogg \\
+                               uummoouunntt //eettcc//sshhaaddooww
+                umount: /etc/shadow: not mounted.
+                # ggrreepp ''^^uummoouunntt'' //ttmmpp//lloogg
+                umount2("/etc/shadow", 0)     = -1 EINVAL (Invalid argument)
+
+            The error message from mmoouunntt(8) is a  little  confusing,  but  the
+            ssttrraaccee(1)  output  reveals  that  the underlying uummoouunntt22(2) system
+            call failed with the error EEIINNVVAALL, which is  the  error  that  the
+            kernel returns to indicate that the mount is locked.
+
+            Note,  however, that it is possible to stack (and unstack) a mount
+            on top of one of the inherited locked mounts in a less  privileged
+            mount namespace:
+
+                # eecchhoo ''aaaaaaaaaa'' >> //ttmmpp//aa    # File to mount onto /etc/shadow
+                # uunnsshhaarree ----uusseerr ----mmaapp--rroooott--uusseerr ----mmoouunntt \\
+                    sshh --cc ''mmoouunntt ----bbiinndd //ttmmpp//aa //eettcc//sshhaaddooww;; ccaatt //eettcc//sshhaaddooww''
+                aaaaa
+                # uummoouunntt //eettcc//sshhaaddooww
+
+            The  final uummoouunntt(8) command above, which is performed in the ini‐
+            tial mount namespace, makes the  original  _/_e_t_c_/_s_h_a_d_o_w  file  once
+            more visible in that namespace.
+
+       [4]  Following on from point [3], note that it is possible to uummoouunntt(2)
+            an  entire subtree of mounts that propagated as a unit into a less
+            privileged mount namespace, as illustrated in the following  exam‐
+            ple.
+
+            First,  we  create new user and mount namespaces using uunnsshhaarree(1).
+            In the new mount namespace, the propagation type of all mounts  is
+            set to private.  We then create a shared bind mount at _/_m_n_t, and a
+            small hierarchy of mounts underneath that mount.
+
+                $ PPSS11==''nnss11## '' ssuuddoo uunnsshhaarree ----uusseerr ----mmaapp--rroooott--uusseerr \\
+                                       ----mmoouunntt ----pprrooppaaggaattiioonn pprriivvaattee bbaasshh
+                ns1# eecchhoo $$$$        # We need the PID of this shell later
+                778501
+                ns1# mmoouunntt ----mmaakkee--sshhaarreedd ----bbiinndd //mmnntt //mmnntt
+                ns1# mmkkddiirr //mmnntt//xx
+                ns1# mmoouunntt ----mmaakkee--pprriivvaattee --tt ttmmppffss nnoonnee //mmnntt//xx
+                ns1# mmkkddiirr //mmnntt//xx//yy
+                ns1# mmoouunntt ----mmaakkee--pprriivvaattee --tt ttmmppffss nnoonnee //mmnntt//xx//yy
+                ns1# ggrreepp //mmnntt //pprroocc//sseellff//mmoouunnttiinnffoo || sseedd ''ss// -- ..**////''
+                986 83 8:5 /mnt /mnt rw,relatime shared:344
+                989 986 0:56 / /mnt/x rw,relatime
+                990 989 0:57 / /mnt/x/y rw,relatime
+
+            Continuing  in  the  same  shell  session, we then create a second
+            shell in a new user namespace and a new  (less  privileged)  mount
+            namespace  and  check the state of the propagated mounts rooted at
+            _/_m_n_t.
+
+                ns1# PPSS11==''nnss22## '' uunnsshhaarree ----uusseerr ----mmaapp--rroooott--uusseerr \\
+                                       ----mmoouunntt ----pprrooppaaggaattiioonn uunncchhaannggeedd bbaasshh
+                ns2# ggrreepp //mmnntt //pprroocc//sseellff//mmoouunnttiinnffoo || sseedd ''ss// -- ..**////''
+                1239 1204 8:5 /mnt /mnt rw,relatime master:344
+                1240 1239 0:56 / /mnt/x rw,relatime
+                1241 1240 0:57 / /mnt/x/y rw,relatime
+
+            Of note in the above output is that the propagation  type  of  the
+            mount  _/_m_n_t  has been reduced to slave, as explained in point [2].
+            This means that submount events will  propagate  from  the  master
+            _/_m_n_t  in "ns1", but propagation will not occur in the opposite di‐
+            rection.
+
+            From a separate terminal window, we then use nnsseenntteerr(1)  to  enter
+            the  mount  and  user  namespaces corresponding to "ns1".  In that
+            terminal window, we then recursively bind mount _/_m_n_t_/_x at the  lo‐
+            cation _/_m_n_t_/_p_p_p.
+
+                $ PPSS11==''nnss33## '' ssuuddoo nnsseenntteerr --tt 777788550011 ----uusseerr ----mmoouunntt
+                ns3# mmoouunntt ----rrbbiinndd ----mmaakkee--pprriivvaattee //mmnntt//xx //mmnntt//pppppp
+                ns3# ggrreepp //mmnntt //pprroocc//sseellff//mmoouunnttiinnffoo || sseedd ''ss// -- ..**////''
+                986 83 8:5 /mnt /mnt rw,relatime shared:344
+                989 986 0:56 / /mnt/x rw,relatime
+                990 989 0:57 / /mnt/x/y rw,relatime
+                1242 986 0:56 / /mnt/ppp rw,relatime
+                1243 1242 0:57 / /mnt/ppp/y rw,relatime shared:518
+
+            Because  the  propagation  type  of  the  parent  mount, _/_m_n_t, was
+            shared, the recursive bind mount propagated  a  small  subtree  of
+            mounts  under  the slave mount _/_m_n_t into "ns2", as can be verified
+            by executing the following command in that shell session:
+
+                ns2# ggrreepp //mmnntt //pprroocc//sseellff//mmoouunnttiinnffoo || sseedd ''ss// -- ..**////''
+                1239 1204 8:5 /mnt /mnt rw,relatime master:344
+                1240 1239 0:56 / /mnt/x rw,relatime
+                1241 1240 0:57 / /mnt/x/y rw,relatime
+                1244 1239 0:56 / /mnt/ppp rw,relatime
+                1245 1244 0:57 / /mnt/ppp/y rw,relatime master:518
+
+            While it is not possible to uummoouunntt(2) a  part  of  the  propagated
+            subtree (_/_m_n_t_/_p_p_p_/_y) in "ns2", it is possible to uummoouunntt(2) the en‐
+            tire subtree, as shown by the following commands:
+
+                ns2# uummoouunntt //mmnntt//pppppp//yy
+                umount: /mnt/ppp/y: not mounted.
+                ns2# uummoouunntt --ll //mmnntt//pppppp || sseedd ''ss// -- ..**////''      # Succeeds...
+                ns2# ggrreepp //mmnntt //pprroocc//sseellff//mmoouunnttiinnffoo
+                1239 1204 8:5 /mnt /mnt rw,relatime master:344
+                1240 1239 0:56 / /mnt/x rw,relatime
+                1241 1240 0:57 / /mnt/x/y rw,relatime
+
+       [5]  The  mmoouunntt(2)  flags  MMSS__RRDDOONNLLYY,  MMSS__NNOOSSUUIIDD,  MMSS__NNOOEEXXEECC,  and  the
+            "atime" flags (MMSS__NNOOAATTIIMMEE,  MMSS__NNOODDIIRRAATTIIMMEE,  MMSS__RREELLAATTIIMMEE)  settings
+            become  locked  when  propagated  from a more privileged to a less
+            privileged mount namespace, and may not be  changed  in  the  less
+            privileged mount namespace.
+
+            This  point  is  illustrated  in the following example where, in a
+            more privileged mount namespace, we create a bind  mount  that  is
+            marked  as read‐only.  For security reasons, it should not be pos‐
+            sible to make the mount writable in a less privileged mount  name‐
+            space, and indeed the kernel prevents this:
+
+                $ ssuuddoo mmkkddiirr //mmnntt//ddiirr
+                $ ssuuddoo mmoouunntt ----bbiinndd --oo rroo //ssoommee//ppaatthh //mmnntt//ddiirr
+                $ ssuuddoo uunnsshhaarree ----uusseerr ----mmaapp--rroooott--uusseerr ----mmoouunntt \\
+                               mmoouunntt --oo rreemmoouunntt,,rrww //mmnntt//ddiirr
+                mount: /mnt/dir: permission denied.
+
+       [6]  A file or directory that is a mount point in one namespace that is
+            not  a mount point in another namespace, may be renamed, unlinked,
+            or removed (rrmmddiirr(2)) in the mount namespace in which it is not  a
+            mount  point  (subject  to  the  usual permission checks).  Conse‐
+            quently, the mount point is removed in the mount  namespace  where
+            it was a mount point.
+
+            Previously  (before  Linux 3.18), attempting to unlink, rename, or
+            remove a file or directory that was a mount point in another mount
+            namespace would result in the  error  EEBBUUSSYY.   That  behavior  had
+            technical  problems  of  enforcement (e.g., for NFS) and permitted
+            denial‐of‐service attacks against  more  privileged  users  (i.e.,
+            preventing individual files from being updated by bind mounting on
+            top of them).
+
+EEXXAAMMPPLLEESS
+       See ppiivvoott__rroooott(2).
+
+SSEEEE AALLSSOO
+       uunnsshhaarree(1),   cclloonnee(2),   mmoouunntt(2),   mmoouunntt__sseettaattttrr(2),  ppiivvoott__rroooott(2),
+       sseettnnss(2), uummoouunntt(2),  uunnsshhaarree(2),  pprroocc(5),  nnaammeessppaacceess(7),  uusseerr__nnaammee‐‐
+       ssppaacceess(7),   ffiinnddmmnntt(8),   mmoouunntt(8),  ppaamm__nnaammeessppaaccee(8),  ppiivvoott__rroooott(8),
+       uummoouunntt(8)
+
+       _D_o_c_u_m_e_n_t_a_t_i_o_n_/_f_i_l_e_s_y_s_t_e_m_s_/_s_h_a_r_e_d_s_u_b_t_r_e_e_._r_s_t in the kernel source tree.
+
+Linux man‐pages (unreleased)      2025‐09‐21               _m_o_u_n_t___n_a_m_e_s_p_a_c_e_s(7)

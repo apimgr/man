@@ -1,0 +1,145 @@
+SMTPD-TABLES(7)      BSD Miscellaneous Information Manual      SMTPD-TABLES(7)
+
+NNAAMMEE
+     ssmmttppdd--ttaabblleess — table API for the smtpd daemon
+
+DDEESSCCRRIIPPTTIIOONN
+     The smtpd(8) daemon provides a Simple Mail Transfer Protocol (SMTPD) im‐
+     plementation, which allows ordinary machines to become Mail eXchangers
+     (MX).  Some features that are commonly used by MX, such as querying data‐
+     bases for user credentials, are outside of the scope of SMTP and too com‐
+     plex to fit in smtpd(8).
+
+     Because an MX may need to provide these features, smtpd(8) provides an
+     API to implement table(5) backends with a simple text-based protocol.
+
+DDEESSIIGGNN
+     ssmmttppdd--ttaabblleess are programs that run as unique standalone processes, they
+     do not share smtpd(8) address space.  They are executed by smtpd(8) at
+     startup and expected to run in an infinite loop, reading events and
+     queries from standard input and writing responses to standard output.
+     They are not allowed to terminate.
+
+     Because ssmmttppdd--ttaabblleess are standalone programs that communicate with
+     smtpd(8), they may run as different users than smtpd(8) and may be writ‐
+     ten in any language.  ssmmttppdd--ttaabblleess must not use blocking I/O, they must
+     support answering asynchronously to smtpd(8).
+
+PPRROOTTOOCCOOLL
+     The protocol consist of human-readable lines exchanged between
+     ssmmttppdd--ttaabblleess and smtpd(8).
+
+     The protocol begins with a handshake.  First, smtpd(8) provides
+     ssmmttppdd--ttaabblleess with general configuration information in the form of key-
+     value lines, terminated by ‘config|ready’.  For example:
+
+           config|smtpd-version|7.7.0
+           config|protocol|0.1
+           config|tablename|devs
+           config|ready
+
+     Then, ssmmttppdd--ttaabblleess register the supported services, terminating with
+     ‘register|ready’.  For example:
+
+           register|alias
+           register|credentials
+           register|ready
+
+     Finally, smtpd(8) can start querying the table.  For example:
+
+           table|0.1|1713795082.354255|devs|lookup|alias|b72508d|op
+
+     The “|” character is used to separate the fields and may only appear ver‐
+     batim in the last field of the payload, in which case it should be con‐
+     sidered a regular character and not a separator.  No other field may con‐
+     tain a “|”.
+
+     Each request has a common set of fields, followed by some other fields
+     that are operation-specific.  The common format consists of a protocol
+     prefix ‘table’, the protocol version, the timestamp and the table name.
+     For example:
+
+           table|0.1|1713795091.202157|devs
+
+     The protocol is inherently asynchronous, so multiple request may be sent
+     without waiting for the table to reply.  All the replies have a common
+     prefix, followed by the operation-specific response.  The common format
+     consist of a prefix with the operation name in followed by ‘-result’, and
+     the unique ID of the request.  For example:
+
+           lookup-result|b72508d
+
+     The list of operations, operation-specific parameters and responses are
+     as follows:
+
+     uuppddaattee _i_d
+             Ask the table to reload its configuration.  The result is either
+             ‘ok’ on success or ‘error’ and a message upon a failure to do so.
+
+     cchheecckk _s_e_r_v_i_c_e _i_d _q_u_e_r_y
+             Check whether _q_u_e_r_y is present in the table.  The result is
+             ‘found’ if found, ‘not-found’ if not, or ‘error’ and a message
+             upon an error.
+
+     llooookkuupp _s_e_r_v_i_c_e _i_d _q_u_e_r_y
+             Look up a value in the table for given the _q_u_e_r_y.  The result is
+             ‘found’ and the value if found, ‘not-found’ if not found, or
+             ‘error’ and a message upon an error.
+
+     ffeettcchh _s_e_r_v_i_c_e _i_d
+             Fetch the next item from the table, eventually wrapping around.
+             It is only supported for the ssoouurrccee and rreellaayyhhoosstt services.  The
+             result is ‘found’ and the value if found, ‘not-found’ if the ta‐
+             ble is empty, or ‘error’ and a message upon an error.
+
+     Each service has a specific format for the result.  The exact syntax for
+     the values and eventually the keys are described in table(5).  The ser‐
+     vices and their result format are as follows:
+
+     aalliiaass        One or more aliases separated by a comma.
+     aauutthh         Only usable for check.  Lookup key is username and cleartext
+                  password separated by ‘:’.
+     ddoommaaiinn       A domain name.
+     ccrreeddeennttiiaallss  The user name, followed by ‘:’ and the encrypted password as
+                  per smtpctl(8) eennccrryypptt subcommand.
+     nneettaaddddrr      IPv4 and IPv6 address or netmask.
+     uusseerriinnffoo     The user id, followed by ‘:’ then the group id, then ‘:’ and
+                  finally the home directory.
+     ssoouurrccee       IPv4 and IPv6 address.
+     mmaaiillaaddddrr     An username, a domain or a full email address.
+     aaddddrrnnaammee     Used to map IP addresses to hostnames.
+
+EEXXAAMMPPLLEESS
+     Assuming the table is called “devs”, here's an example of a failed uuppddaattee
+     transaction:
+
+           table|0.1|1713795097.394049|devs|update|478ff0d2
+           update-result|478ff0d2|error|failed to connect to the database
+
+     A cchheecckk request for the nneettaaddddrr service for the 192.168.0.7 IPv4 address
+     which is not in the table:
+
+           table|0.1|1713795103.314423|devs|check|netaddr|e5862859|192.168.0.7
+           check-result|e5862859|not-found
+
+     A successful llooookkuupp request for the uusseerriinnffoo service for the user ‘op’:
+
+           table|0.1|1713795110.354921|devs|lookup|userinfo|f993c74|op
+           lookup-result|f993c74|found|1000:1000:/home/op
+
+     A series of ffeettcchh requests for the ssoouurrccee service that wraps around:
+
+           table|0.1|1713795116.227321|devs|fetch|source|189bd3ee
+           lookup-result|189bd3ee|found|192.168.1.7
+           table|0.1|1713795120.162438|devs|fetch|source|9e4c56d4
+           lookup-result|9e4c56d4|found|10.0.0.8
+           table|0.1|1713795122.930928|devs|fetch|source|f2c8b906
+           lookup-result|f2c8b906|found|192.168.1.7
+
+SSEEEE AALLSSOO
+     smtpd(8)
+
+HHIISSTTOORRYY
+     ssmmttppdd--ttaabblleess first appeared in OpenBSD 7.6.
+
+BSD                              April 8, 2025                             BSD

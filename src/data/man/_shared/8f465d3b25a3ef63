@@ -1,0 +1,107 @@
+GIF(4)                   BSD Kernel Interfaces Manual                   GIF(4)
+
+NNAAMMEE
+     ggiiff — generic tunnel interface
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ggiiff
+
+DDEESSCCRRIIPPTTIIOONN
+     The ggiiff interface is a generic tunnelling device for IPv4 and IPv6.  It
+     can tunnel IPv[46] traffic over IPv[46].  Therefore, there can be four
+     possible configurations.  The behavior of ggiiff is mainly based on RFC2893
+     IPv6-over-IPv4 configured tunnel.  On NetBSD, ggiiff can also tunnel ISO
+     traffic over IPv[46] using EON encapsulation.  Note that ggiiff does not
+     perform GRE encapsulation; use gre(4) for GRE encapsulation.
+
+     Each ggiiff interface is created at runtime using interface cloning.  This
+     is most easily done with the “iiffccoonnffiigg ccrreeaattee” command or using the
+     _i_f_c_o_n_f_i_g__⟨_i_n_t_e_r_f_a_c_e⟩ variable in rc.conf(5).
+
+     To use ggiiff, the administrator needs to configure the protocol and ad‐
+     dresses used for the outer header.  This can be done by using ifconfig(8)
+     ttuunnnneell, or SIOCSIFPHYADDR ioctl.  The administrator also needs to config‐
+     ure the protocol and addresses for the inner header, with ifconfig(8).
+     Note that IPv6 link-local addresses (those that start with fe80::) will
+     be automatically configured whenever possible.  You may need to remove
+     IPv6 link-local addresses manually using ifconfig(8), if you want to dis‐
+     able the use of IPv6 as the inner header (for example, if you need a pure
+     IPv4-over-IPv6 tunnel).  Finally, you must modify the routing table to
+     route the packets through the ggiiff interface.
+
+     The ggiiff device can be configured to be ECN friendly.  This can be config‐
+     ured by IFF_LINK1.
+
+   EECCNN ffrriieennddllyy bbeehhaavviioorr
+     The ggiiff device can be configured to be ECN friendly, as described in
+     draft-ietf-ipsec-ecn-02.txt.  This is turned off by default, and can be
+     turned on by the IFF_LINK1 interface flag.
+
+     Without IFF_LINK1, ggiiff will show normal behavior, as described in
+     RFC2893.  This can be summarized as follows:
+
+           Ingress  Set outer TOS bit to 0.
+
+           Egress   Drop outer TOS bit.
+
+     With IFF_LINK1, ggiiff will copy ECN bits (0x02 and 0x01 on IPv4 TOS byte or
+     IPv6 traffic class byte) on egress and ingress, as follows:
+
+           Ingress  Copy TOS bits except for ECN CE (masked with 0xfe) from
+                    inner to outer.  Set ECN CE bit to 0.
+
+           Egress   Use inner TOS bits with some change.  If outer ECN CE bit
+                    is 1, enable ECN CE bit on the inner.
+
+     Note that the ECN friendly behavior violates RFC2893.  This should be
+     used in mutual agreement with the peer.
+
+   SSeeccuurriittyy
+     A malicious party may try to circumvent security filters by using tun‐
+     nelled packets.  For better protection, ggiiff performs both martian and
+     ingress filtering against the outer source address on egress.  Note that
+     martian/ingress filters are in no way complete.  You may want to secure
+     your node by using packet filters.  Ingress filtering can break tunnel
+     operation in an asymmetrically routed network.  It can be turned off by
+     IFF_LINK2 bit.
+
+   MMiisscceellllaanneeoouuss
+     By default, ggiiff tunnels may not be nested.  This behavior may be modified
+     at runtime by setting the sysctl(8) variable _n_e_t_._l_i_n_k_._g_i_f_._m_a_x___n_e_s_t_i_n_g to
+     the desired level of nesting.
+
+SSEEEE AALLSSOO
+     gre(4), inet(4), inet6(4), ifconfig(8)
+
+     R. Gilligan and E. Nordmark, “Transition Mechanisms for IPv6 Hosts and
+     Routers”, _R_F_C_2_8_9_3, http://tools.ietf.org/html/rfc2893, August 2000.
+
+     Sally Floyd, David L. Black, and K. K. Ramakrishnan, _I_P_s_e_c _I_n_t_e_r_a_c_t_i_o_n_s
+     _w_i_t_h _E_C_N, December 1999, draft-ietf-ipsec-ecn-02.txt.
+
+HHIISSTTOORRYY
+     The ggiiff device first appeared in the WIDE hydrangea IPv6 kit.
+
+BBUUGGSS
+     There are many tunnelling protocol specifications, all defined differ‐
+     ently from each other.  The ggiiff device may not interoperate with peers
+     which are based on different specifications, and are picky about outer
+     header fields.  For example, you cannot usually use ggiiff to talk with
+     IPsec devices that use IPsec tunnel mode.
+
+     If the outer protocol is IPv4, ggiiff does not try to perform path MTU dis‐
+     covery for the encapsulated packet (DF bit is set to 0).
+
+     If the outer protocol is IPv6, path MTU discovery for encapsulated pack‐
+     ets may affect communication over the interface.  The first bigger-than-
+     pmtu packet may be lost.  To avoid the problem, you may want to set the
+     interface MTU for ggiiff to 1240 or smaller, when the outer header is IPv6
+     and the inner header is IPv4.
+
+     The ggiiff device does not translate ICMP messages for the outer header into
+     the inner header.
+
+     In the past, ggiiff had a multi-destination behavior, configurable via
+     IFF_LINK0 flag.  The behavior is obsolete and is no longer supported.
+
+BSD                            October 21, 2018                            BSD

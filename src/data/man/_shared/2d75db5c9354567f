@@ -1,0 +1,398 @@
+_p_o_l_l(2)                       System Calls Manual                      _p_o_l_l(2)
+
+NNAAMMEE
+       poll, ppoll - wait for some event on a file descriptor
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ppoollll..hh>>
+
+       iinntt ppoollll((ssttrruucctt ppoollllffdd **_f_d_s,, nnffddss__tt _n_f_d_s,, iinntt _t_i_m_e_o_u_t));;
+
+       ##ddeeffiinnee __GGNNUU__SSOOUURRCCEE         /* See feature_test_macros(7) */
+       ##iinncclluuddee <<ppoollll..hh>>
+
+       iinntt ppppoollll((ssttrruucctt ppoollllffdd **_f_d_s,, nnffddss__tt _n_f_d_s,,
+                 ccoonnsstt ssttrruucctt ttiimmeessppeecc **__NNuullllaabbllee _t_m_o___p,,
+                 ccoonnsstt ssiiggsseett__tt **__NNuullllaabbllee _s_i_g_m_a_s_k));;
+
+DDEESSCCRRIIPPTTIIOONN
+       ppoollll()  performs a similar task to sseelleecctt(2): it waits for one of a set
+       of file descriptors to become ready to perform I/O.  The Linux‐specific
+       eeppoollll(7) API performs a similar task, but offers features beyond  those
+       found in ppoollll().
+
+       The set of file descriptors to be monitored is specified in the _f_d_s ar‐
+       gument, which is an array of structures of the following form:
+
+           struct pollfd {
+               int   fd;         /* file descriptor */
+               short events;     /* requested events */
+               short revents;    /* returned events */
+           };
+
+       The caller should specify the number of items in the _f_d_s array in _n_f_d_s.
+
+       The  field  _f_d  contains  a  file descriptor for an open file.  If this
+       field is negative, then the corresponding _e_v_e_n_t_s field is  ignored  and
+       the _r_e_v_e_n_t_s field returns zero.  (This provides an easy way of ignoring
+       a  file descriptor for a single ppoollll() call: simply set the _f_d field to
+       its bitwise complement.)
+
+       The field _e_v_e_n_t_s is an input  parameter,  a  bit  mask  specifying  the
+       events  the  application  is  interested in for the file descriptor _f_d.
+       This field may be specified as zero, in which case the only events that
+       can be returned in _r_e_v_e_n_t_s are PPOOLLLLHHUUPP, PPOOLLLLEERRRR, and PPOOLLLLNNVVAALL (see  be‐
+       low).
+
+       The field _r_e_v_e_n_t_s is an output parameter, filled by the kernel with the
+       events  that  actually  occurred.  The bits returned in _r_e_v_e_n_t_s can in‐
+       clude any of those specified in _e_v_e_n_t_s, or one of the  values  PPOOLLLLEERRRR,
+       PPOOLLLLHHUUPP,  or PPOOLLLLNNVVAALL.  (These three bits are meaningless in the _e_v_e_n_t_s
+       field, and will be set in the _r_e_v_e_n_t_s field whenever the  corresponding
+       condition is true.)
+
+       If  none of the events requested (and no error) has occurred for any of
+       the file descriptors, then ppoollll() blocks until one of  the  events  oc‐
+       curs.
+
+       The  _t_i_m_e_o_u_t  argument specifies the number of milliseconds that ppoollll()
+       should block waiting for a file descriptor to become ready.   The  call
+       will block until either:
+
+       •  a file descriptor becomes ready;
+
+       •  the call is interrupted by a signal handler; or
+
+       •  the timeout expires.
+
+       Being  "ready" means that the requested operation will not block; thus,
+       ppoollll()ing regular files, block devices, and other files with no reason‐
+       able polling semantic _a_l_w_a_y_s returns instantly as  ready  to  read  and
+       write.
+
+       Note  that  the _t_i_m_e_o_u_t interval will be rounded up to the system clock
+       granularity, and kernel scheduling delays mean that the blocking inter‐
+       val may overrun by a small amount.   Specifying  a  negative  value  in
+       _t_i_m_e_o_u_t means an infinite timeout.  Specifying a _t_i_m_e_o_u_t of zero causes
+       ppoollll() to return immediately, even if no file descriptors are ready.
+
+       The  bits that may be set/returned in _e_v_e_n_t_s and _r_e_v_e_n_t_s are defined in
+       _<_p_o_l_l_._h_>:
+
+       PPOOLLLLIINN There is data to read.
+
+       PPOOLLLLPPRRII
+              There is some exceptional  condition  on  the  file  descriptor.
+              Possibilities include:
+
+              •  There is out‐of‐band data on a TCP socket (see ttccpp(7)).
+
+              •  A  pseudoterminal  master  in  packet  mode  has seen a state
+                 change on the slave (see iiooccttll__ttttyy(2)).
+
+              •  A _c_g_r_o_u_p_._e_v_e_n_t_s file has been modified (see ccggrroouuppss(7)).
+
+       PPOOLLLLOOUUTT
+              Writing is now possible, though a write larger than  the  avail‐
+              able  space  in a socket or pipe will still block (unless OO__NNOONN‐‐
+              BBLLOOCCKK is set).
+
+       PPOOLLLLRRDDHHUUPP (since Linux 2.6.17)
+              Stream socket peer closed connection, or shut down writing  half
+              of  connection.   The __GGNNUU__SSOOUURRCCEE feature test macro must be de‐
+              fined (before including _a_n_y header files)  in  order  to  obtain
+              this definition.
+
+       PPOOLLLLEERRRR
+              Error  condition  (only returned in _r_e_v_e_n_t_s; ignored in _e_v_e_n_t_s).
+              This bit is also set for a  file  descriptor  referring  to  the
+              write end of a pipe when the read end has been closed.
+
+       PPOOLLLLHHUUPP
+              Hang  up  (only  returned  in _r_e_v_e_n_t_s; ignored in _e_v_e_n_t_s).  Note
+              that when reading from a channel such as  a  pipe  or  a  stream
+              socket, this event merely indicates that the peer closed its end
+              of the channel.  Subsequent reads from the channel will return 0
+              (end of file) only after all outstanding data in the channel has
+              been consumed.
+
+       PPOOLLLLNNVVAALL
+              Invalid  request: _f_d not open (only returned in _r_e_v_e_n_t_s; ignored
+              in _e_v_e_n_t_s).
+
+       When compiling with __XXOOPPEENN__SSOOUURRCCEE defined, one also has the  following,
+       which convey no further information beyond the bits listed above:
+
+       PPOOLLLLRRDDNNOORRMM
+              Equivalent to PPOOLLLLIINN.
+
+       PPOOLLLLRRDDBBAANNDD
+              Priority band data can be read (generally unused on Linux).
+
+       PPOOLLLLWWRRNNOORRMM
+              Equivalent to PPOOLLLLOOUUTT.
+
+       PPOOLLLLWWRRBBAANNDD
+              Priority data may be written.
+
+       Linux also knows about, but does not use PPOOLLLLMMSSGG.
+
+   ppppoollll(())
+       The  relationship  between ppoollll() and ppppoollll() is analogous to the rela‐
+       tionship between sseelleecctt(2) and ppsseelleecctt(2): like ppsseelleecctt(2), ppppoollll() al‐
+       lows an application to safely wait until either a file  descriptor  be‐
+       comes ready or until a signal is caught.
+
+       Other than the difference in the precision of the _t_i_m_e_o_u_t argument, the
+       following ppppoollll() call:
+
+           ready = ppoll(&fds, nfds, tmo_p, &sigmask);
+
+       is nearly equivalent to _a_t_o_m_i_c_a_l_l_y executing the following calls:
+
+           sigset_t origmask;
+           int timeout;
+
+           timeout = (tmo_p == NULL) ? -1 :
+                     (tmo_p->tv_sec * 1000 + tmo_p->tv_nsec / 1000000);
+           pthread_sigmask(SIG_SETMASK, &sigmask, &origmask);
+           ready = poll(&fds, nfds, timeout);
+           pthread_sigmask(SIG_SETMASK, &origmask, NULL);
+
+       The  above  code  segment  is  described  as  _n_e_a_r_l_y equivalent because
+       whereas a negative _t_i_m_e_o_u_t value for ppoollll() is interpreted as an  infi‐
+       nite  timeout, a negative value expressed in _*_t_m_o___p results in an error
+       from ppppoollll().
+
+       See the description of ppsseelleecctt(2) for an explanation of why ppppoollll()  is
+       necessary.
+
+       If  the  _s_i_g_m_a_s_k argument is specified as NULL, then no signal mask ma‐
+       nipulation is performed (and thus ppppoollll() differs from ppoollll()  only  in
+       the precision of the _t_i_m_e_o_u_t argument).
+
+       The  _t_m_o___p argument specifies an upper limit on the amount of time that
+       ppppoollll() will block.  This argument is a pointer to a ttiimmeessppeecc(3) struc‐
+       ture.
+
+       If _t_m_o___p is specified as NULL, then ppppoollll() can block indefinitely.
+
+RREETTUURRNN VVAALLUUEE
+       On success, ppoollll() returns a nonnegative value which is the  number  of
+       elements in the _p_o_l_l_f_d_s whose _r_e_v_e_n_t_s fields have been set to a nonzero
+       value  (indicating an event or an error).  A return value of zero indi‐
+       cates that the system call timed out before any file descriptors became
+       ready.
+
+       On error, -1 is returned, and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEFFAAUULLTT _f_d_s points outside the process’s accessible address space.   The
+              array  given  as  argument was not contained in the calling pro‐
+              gram’s address space.
+
+       EEIINNTTRR  A signal occurred before any requested event; see ssiiggnnaall(7).
+
+       EEIINNVVAALL The _n_f_d_s value exceeds the RRLLIIMMIITT__NNOOFFIILLEE value.
+
+       EEIINNVVAALL (ppppoollll()) The timeout value expressed in _*_t_m_o___p is invalid (neg‐
+              ative).
+
+       EENNOOMMEEMM Unable to allocate memory for kernel data structures.
+
+VVEERRSSIIOONNSS
+       On some other UNIX systems, ppoollll() can fail with the  error  EEAAGGAAIINN  if
+       the  system  fails  to  allocate kernel‐internal resources, rather than
+       EENNOOMMEEMM as Linux does.  POSIX permits this behavior.  Portable  programs
+       may wish to check for EEAAGGAAIINN and loop, just as with EEIINNTTRR.
+
+       Some  implementations  define  the nonstandard constant IINNFFTTIIMM with the
+       value -1 for use as a _t_i_m_e_o_u_t for ppoollll().  This constant  is  not  pro‐
+       vided in glibc.
+
+   CC lliibbrraarryy//kkeerrnneell ddiiffffeerreenncceess
+       The  Linux  ppppoollll()  system call modifies its _t_m_o___p argument.  However,
+       the glibc wrapper function hides this behavior by using a  local  vari‐
+       able for the timeout argument that is passed to the system call.  Thus,
+       the glibc ppppoollll() function does not modify its _t_m_o___p argument.
+
+       The  raw  ppppoollll()  system call has a fifth argument, _s_i_z_e___t _s_i_g_s_e_t_s_i_z_e,
+       which specifies the size in bytes of the _s_i_g_m_a_s_k argument.   The  glibc
+       ppppoollll()  wrapper  function  specifies  this  argument  as a fixed value
+       (equal to _s_i_z_e_o_f_(_k_e_r_n_e_l___s_i_g_s_e_t___t_)).  See ssiiggpprrooccmmaasskk(2) for  a  discus‐
+       sion  on  the differences between the kernel and the libc notion of the
+       sigset.
+
+SSTTAANNDDAARRDDSS
+       POSIX.1‐2024.
+
+HHIISSTTOORRYY
+       ppoollll() POSIX.1‐2001.  Linux 2.1.23.
+
+              On older kernels that lack this system call,  the  glibc  ppoollll()
+              wrapper function provides emulation using sseelleecctt(2).
+
+       ppppoollll()
+              POSIX.1‐2024.  Linux 2.6.16, glibc 2.4.
+
+NNOOTTEESS
+       The  operation  of ppoollll() and ppppoollll() is not affected by the OO__NNOONNBBLLOOCCKK
+       flag.
+
+       For a discussion of what may happen if a file  descriptor  being  moni‐
+       tored by ppoollll() is closed in another thread, see sseelleecctt(2).
+
+BBUUGGSS
+       See  the  discussion of spurious readiness notifications under the BUGS
+       section of sseelleecctt(2).
+
+EEXXAAMMPPLLEESS
+       The program below opens each of the files named in its command‐line ar‐
+       guments and monitors the resulting file descriptors  for  readiness  to
+       read  (PPOOLLLLIINN).   The program loops, repeatedly using ppoollll() to monitor
+       the file descriptors, printing the number of ready file descriptors  on
+       return.  For each ready file descriptor, the program:
+
+       •  displays the returned _r_e_v_e_n_t_s field in a human‐readable form;
+
+       •  if  the  file  descriptor  is readable, reads some data from it, and
+          displays that data on standard output; and
+
+       •  if the file descriptor was not readable, but some  other  event  oc‐
+          curred (presumably PPOOLLLLHHUUPP), closes the file descriptor.
+
+       Suppose we run the program in one terminal, asking it to open a FIFO:
+
+           $ mmkkffiiffoo mmyyffiiffoo;
+           $ ..//ppoollll__iinnppuutt mmyyffiiffoo;
+
+       In  a  second terminal window, we then open the FIFO for writing, write
+       some data to it, and close the FIFO:
+
+           $ eecchhoo aaaaaaaaaabbbbbbbbbbcccccccccc >> mmyyffiiffoo;
+
+       In the terminal where we are running the program, we would then see:
+
+           Opened "myfifo" on fd 3
+           About to poll()
+           Ready: 1
+             fd=3; events: POLLIN POLLHUP
+               read 10 bytes: aaaaabbbbb
+           About to poll()
+           Ready: 1
+             fd=3; events: POLLIN POLLHUP
+               read 6 bytes: ccccc
+
+           About to poll()
+           Ready: 1
+             fd=3; events: POLLHUP
+               closing fd 3
+           All file descriptors closed.  Bye.
+
+       In the above output, we see that ppoollll() returned three times:
+
+       •  On the first return, the bits returned in  the  _r_e_v_e_n_t_s  field  were
+          PPOOLLLLIINN,  indicating  that the file descriptor is readable, and PPOOLLLL‐‐
+          HHUUPP, indicating that the other end of the FIFO has been closed.  The
+          program then consumed some of the available input.
+
+       •  The second return from ppoollll() also indicated PPOOLLLLIINN and PPOOLLLLHHUUPP; the
+          program then consumed the last of the available input.
+
+       •  On the final return, ppoollll() indicated only PPOOLLLLHHUUPP on the  FIFO,  at
+          which  point  the  file descriptor was closed and the program termi‐
+          nated.
+
+   PPrrooggrraamm ssoouurrccee
+
+       /* poll_input.c
+
+          Licensed under GNU General Public License v2 or later.
+       */
+       #include <err.h>
+       #include <fcntl.h>
+       #include <poll.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/types.h>
+       #include <unistd.h>
+
+       int
+       main(int argc, char *argv[])
+       {
+           int            ready;
+           char           buf[10];
+           nfds_t         num_open_fds, nfds;
+           ssize_t        s;
+           struct pollfd  *pfds;
+
+           if (argc < 2) {
+              fprintf(stderr, "Usage: %s file...\n", argv[0]);
+              exit(EXIT_FAILURE);
+           }
+
+           num_open_fds = nfds = argc - 1;
+           pfds = calloc(nfds, sizeof(struct pollfd));
+           if (pfds == NULL)
+               err(EXIT_FAILURE, "malloc");
+
+           /* Open each file on command line, and add it to 'pfds' array.  */
+
+           for (nfds_t j = 0; j < nfds; j++) {
+               pfds[j].fd = open(argv[j + 1], O_RDONLY);
+               if (pfds[j].fd == -1)
+                   err(EXIT_FAILURE, "open");
+
+               printf("Opened \"%s\" on fd %d\n", argv[j + 1], pfds[j].fd);
+
+               pfds[j].events = POLLIN;
+           }
+
+           /* Keep calling poll() as long as at least one file descriptor is
+              open.  */
+
+           while (num_open_fds > 0) {
+               printf("About to poll()\n");
+               ready = poll(pfds, nfds, -1);
+               if (ready == -1)
+                   err(EXIT_FAILURE, "poll");
+
+               printf("Ready: %d\n", ready);
+
+               /* Deal with array returned by poll().  */
+
+               for (nfds_t j = 0; j < nfds; j++) {
+                   if (pfds[j].revents != 0) {
+                       printf("  fd=%d; events: %s%s%s\n", pfds[j].fd,
+                              (pfds[j].revents & POLLIN)  ? "POLLIN "  : "",
+                              (pfds[j].revents & POLLHUP) ? "POLLHUP " : "",
+                              (pfds[j].revents & POLLERR) ? "POLLERR " : "");
+
+                       if (pfds[j].revents & POLLIN) {
+                           s = read(pfds[j].fd, buf, sizeof(buf));
+                           if (s == -1)
+                               err(EXIT_FAILURE, "read");
+                           printf("    read %zd bytes: %.*s\n",
+                                  s, (int) s, buf);
+                       } else {                /* POLLERR | POLLHUP */
+                           printf("    closing fd %d\n", pfds[j].fd);
+                           if (close(pfds[j].fd) == -1)
+                               err(EXIT_FAILURE, "close");
+                           num_open_fds--;
+                       }
+                   }
+               }
+           }
+
+           printf("All file descriptors closed.  Bye.\n");
+           exit(EXIT_SUCCESS);
+       }
+
+SSEEEE AALLSSOO
+       rreessttaarrtt__ssyyssccaallll(2), sseelleecctt(2),  sseelleecctt__ttuutt(2),  ttiimmeessppeecc(3),  eeppoollll(7),
+       ttiimmee(7)
+
+Linux man‐pages (unreleased)      2025‐10‐29                           _p_o_l_l(2)

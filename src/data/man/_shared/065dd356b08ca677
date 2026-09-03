@@ -1,0 +1,111 @@
+KERNEL_MOUNT(9)          BSD Kernel Developer's Manual         KERNEL_MOUNT(9)
+
+NNAAMMEE
+     ffrreeee__mmnnttaarrgg, kkeerrnneell__mmoouunntt, mmoouunntt__aarrgg, mmoouunntt__aarrggbb, mmoouunntt__aarrggff, mmoouunntt__aarrggssuu
+     — functions provided as part of the kernel mount interface
+
+SSYYNNOOPPSSIISS
+     _v_o_i_d
+     ffrreeee__mmnnttaarrgg(_s_t_r_u_c_t _m_n_t_a_r_g _*_m_a);
+
+     _i_n_t
+     kkeerrnneell__mmoouunntt(_s_t_r_u_c_t _m_n_t_a_r_g _*_m_a, _i_n_t _f_l_a_g_s);
+
+     _s_t_r_u_c_t _m_n_t_a_r_g _*
+     mmoouunntt__aarrgg(_s_t_r_u_c_t _m_n_t_a_r_g _*_m_a, _c_o_n_s_t _c_h_a_r _*_n_a_m_e, _c_o_n_s_t _v_o_i_d _*_v_a_l, _i_n_t _l_e_n);
+
+     _s_t_r_u_c_t _m_n_t_a_r_g _*
+     mmoouunntt__aarrggbb(_s_t_r_u_c_t _m_n_t_a_r_g _*_m_a, _i_n_t _f_l_a_g, _c_o_n_s_t _c_h_a_r _*_n_a_m_e);
+
+     _s_t_r_u_c_t _m_n_t_a_r_g _*
+     mmoouunntt__aarrggff(_s_t_r_u_c_t _m_n_t_a_r_g _*_m_a, _c_o_n_s_t _c_h_a_r _*_n_a_m_e, _c_o_n_s_t _c_h_a_r _*_f_m_t, _._._.);
+
+     _s_t_r_u_c_t _m_n_t_a_r_g _*
+     mmoouunntt__aarrggssuu(_s_t_r_u_c_t _m_n_t_a_r_g _*_m_a, _c_o_n_s_t _c_h_a_r _*_n_a_m_e, _c_o_n_s_t _v_o_i_d _*_v_a_l,
+         _i_n_t _l_e_n);
+
+DDEESSCCRRIIPPTTIIOONN
+     The kkeerrnneell__mmoouunntt() family of functions are provided as an API for build‐
+     ing a list of mount arguments which will be used to mount file systems
+     from inside the kernel.  By accumulating a list of arguments, the API
+     takes shape and provides the information necessary for the kernel to con‐
+     trol the mount(8) utility.  When an error occurs, the process will stop.
+     This will not cause a panic(9).
+
+     The header of the structure is stored in _s_r_c_/_s_y_s_/_k_e_r_n_/_v_f_s___m_o_u_n_t_._c which
+     permits automatic structure creation to ease the mount process.  Memory
+     allocation must always be freed when the entire process is complete, it
+     is an error otherwise.
+
+     The ffrreeee__mmnnttaarrgg() function is used to free or clear the _m_n_t_a_r_g structure.
+
+     The kkeerrnneell__mmoouunntt() function pulls information from the structure to per‐
+     form the mount request on a given file system.  Additionally, the
+     kkeerrnneell__mmoouunntt() function always calls the ffrreeee__mmnnttaarrgg() function.  If _m_a
+     contains any error code generated during the construction, that code will
+     be called and the file system mount will not be attempted.
+
+     The mmoouunntt__aarrgg() function takes a plain argument and crafts parts of the
+     structure with regards to various mount options.  If the length is a
+     value less than 0, strlen(3) is used.  This argument will be referenced
+     until either ffrreeee__mmnnttaarrgg() or kkeerrnneell__mmoouunntt() is called.
+
+     The mmoouunntt__aarrggbb() function is used to add boolean arguments to the struc‐
+     ture.  The _f_l_a_g is the boolean value and _n_a_m_e must start with "no", oth‐
+     erwise a panic will occur.
+
+     The mmoouunntt__aarrggff() function adds printf(9) style arguments to the current
+     structure.
+
+     The mmoouunntt__aarrggssuu() function will add arguments to the structure from a
+     userland string.
+
+EEXXAAMMPPLLEESS
+     An example of the **__ccmmoouunntt() function:
+
+     static int
+     msdosfs_cmount(struct mntarg *ma, void *data, int flags, struct thread *td)
+     {
+             struct msdosfs_args args;
+             int error;
+
+             if (data == NULL)
+                     return (EINVAL);
+             error = copyin(data, &args, sizeof(args));
+             if (error)
+                     return (error);
+
+             ma = mount_argsu(ma, "from", args.fspec, MAXPATHLEN);
+             ma = mount_arg(ma, "export", &args.export, sizeof(args.export));
+             ma = mount_argf(ma, "uid", "%d", args.uid);
+             ma = mount_argf(ma, "gid", "%d", args.gid);
+             ma = mount_argf(ma, "mask", "%d", args.mask);
+             ma = mount_argf(ma, "dirmask", "%d", args.dirmask);
+
+             ma = mount_argb(ma, args.flags & MSDOSFSMNT_SHORTNAME, "noshortname");
+             ma = mount_argb(ma, args.flags & MSDOSFSMNT_LONGNAME, "nolongname");
+             ma = mount_argb(ma, !(args.flags & MSDOSFSMNT_NOWIN95), "nowin95");
+             ma = mount_argb(ma, args.flags & MSDOSFSMNT_KICONV, "nokiconv");
+
+             ma = mount_argsu(ma, "cs_win", args.cs_win, MAXCSLEN);
+             ma = mount_argsu(ma, "cs_dos", args.cs_dos, MAXCSLEN);
+             ma = mount_argsu(ma, "cs_local", args.cs_local, MAXCSLEN);
+
+             error = kernel_mount(ma, flags);
+
+             return (error);
+     }
+
+SSEEEE AALLSSOO
+     VFS(9), VFS_MOUNT(9)
+
+HHIISSTTOORRYY
+     The kkeerrnneell__mmoouunntt() family of functions and this manual page first ap‐
+     peared in FreeBSD 6.0.
+
+AAUUTTHHOORRSS
+     The kkeerrnneell__mmoouunntt() family of functions and API was developed by
+     Poul-Henning Kamp <_p_h_k_@_F_r_e_e_B_S_D_._o_r_g>.  This manual page was written by Tom
+     Rhodes <_t_r_h_o_d_e_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            November 20, 2021                           BSD

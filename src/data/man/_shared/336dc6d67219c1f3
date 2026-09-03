@@ -1,0 +1,479 @@
+SOUND(4)                 BSD Kernel Interfaces Manual                 SOUND(4)
+
+NNAAMMEE
+     ssoouunndd, ppccmm, ssnndd — FreeBSD PCM audio device infrastructure
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee ssoouunndd
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssoouunndd driver is the main component of the FreeBSD sound system.  It
+     works in conjunction with a bridge device driver on supported devices and
+     provides PCM audio record and playback once it attaches.  Each bridge de‐
+     vice driver supports a specific set of audio chipsets and needs to be en‐
+     abled together with the ssoouunndd driver.  PCI and ISA PnP audio devices
+     identify themselves so users are usually not required to add anything to
+     _/_b_o_o_t_/_d_e_v_i_c_e_._h_i_n_t_s.
+
+     Some of the main features of the ssoouunndd driver are: multichannel audio,
+     per-application volume control, dynamic mixing through virtual sound
+     channels, true full duplex operation, bit perfect audio, rate conversion
+     and low latency modes.
+
+     The ssoouunndd driver is enabled by default, along with several bridge device
+     drivers.  Those not enabled by default can be loaded during runtime with
+     kldload(8) or during boot via loader.conf(5).  The following bridge de‐
+     vice drivers are available:
+
+     ••   snd_ai2s(4) (enabled by default on powerpc)
+     ••   snd_als4000(4)
+     ••   snd_atiixp(4)
+     ••   snd_cmi(4) (enabled by default on amd64, i386)
+     ••   snd_cs4281(4)
+     ••   snd_csa(4) (enabled by default on amd64, i386)
+     ••   snd_davbus(4) (enabled by default on powerpc)
+     ••   snd_emu10k1(4)
+     ••   snd_emu10kx(4) (enabled by default on amd64, i386)
+     ••   snd_envy24(4)
+     ••   snd_envy24ht(4)
+     ••   snd_es137x(4) (enabled by default on amd64, i386)
+     ••   snd_fm801(4)
+     ••   snd_hda(4) (enabled by default on amd64, i386)
+     ••   snd_hdspe(4)
+     ••   snd_ich(4) (enabled by default on amd64, i386)
+     ••   snd_maestro3(4)
+     ••   snd_neomagic(4)
+     ••   snd_solo(4)
+     ••   snd_spicds(4)
+     ••   snd_uaudio(4) (auto-loaded on device plug)
+     ••   snd_via8233(4) (enabled by default on amd64, i386)
+     ••   snd_via82c686(4)
+     ••   snd_vibes(4)
+
+     Refer to the manual page for each bridge device driver for driver spe‐
+     cific settings and information.
+
+   BBoooott VVaarriiaabblleess
+     In general, the module _s_n_d___f_o_o corresponds to ddeevviiccee ssnndd__ffoooo and can be
+     loaded by the boot loader(8) via loader.conf(5) or from the command line
+     using the kldload(8) utility.  Options which can be specified in
+     _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f include:
+
+           _s_n_d___d_r_i_v_e_r___l_o_a_d  (“NO”) If set to “YES”, this option loads all
+                            available drivers.
+
+           _s_n_d___h_d_a___l_o_a_d     (“NO”) If set to “YES”, only the Intel High Defi‐
+                            nition Audio bridge device driver and dependent
+                            modules will be loaded.
+
+           _s_n_d___f_o_o___l_o_a_d     (“NO”) If set to “YES”, load driver for
+                            card/chipset foo.
+
+     To define default values for the different mixer channels, set the chan‐
+     nel to the preferred value using hints, e.g.: _h_i_n_t_._p_c_m_._0_._l_i_n_e="0".  This
+     will mute the input channel per default.
+
+   MMuullttiicchhaannnneell AAuuddiioo
+     Multichannel audio, popularly referred to as “surround sound” is sup‐
+     ported and enabled by default.  The FreeBSD multichannel matrix processor
+     supports up to 18 interleaved channels, but the limit is currently set to
+     8 channels (as commonly used for 7.1 surround sound).  The internal ma‐
+     trix mapping can handle reduction, expansion or re-routing of channels.
+     This provides a base interface for related multichannel iiooccttll() support.
+     Multichannel audio works both with and without VCHANs.
+
+     Most bridge device drivers are still missing multichannel matrixing sup‐
+     port, but in most cases this should be trivial to implement.  Use the
+     _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_f_o_r_m_a_t sysctl(8) to adjust the number of chan‐
+     nels used.  The current multichannel interleaved structure and arrange‐
+     ment was implemented by inspecting various popular UNIX applications.
+     There were no single standard, so much care has been taken to try to sat‐
+     isfy each possible scenario, despite the fact that each application has
+     its own conflicting standard.
+
+   EEQQ
+     The Parametric Software Equalizer (EQ) enables the use of “tone” controls
+     (bass and treble).  Commonly used for ear-candy or frequency compensation
+     due to the vast difference in hardware quality.  EQ is disabled by de‐
+     fault, but can be enabled with the _h_i_n_t_._p_c_m_._%_d_._e_q tunable.
+
+   VVCCHHAANNss
+     Each device can optionally support more playback and recording channels
+     than physical hardware provides by using “virtual channels” or VCHANs.
+     VCHAN options can be configured via the sysctl(8) interface but can only
+     be manipulated while the device is inactive.
+
+   VVPPCC
+     FreeBSD supports independent and individual volume controls for each ac‐
+     tive application, without touching the master ssoouunndd volume.  This is
+     sometimes referred to as Volume Per Channel (VPC).  The VPC feature is
+     enabled by default.
+
+   LLooaaddeerr TTuunnaabblleess
+     The following loader tunables are used to set driver configuration at the
+     loader(8) prompt before booting the kernel, or they can be stored in
+     _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f in order to automatically set them before booting the
+     kernel.  It is also possible to use kenv(1) to change these tunables be‐
+     fore loading the ssoouunndd driver.  The following tunables can not be changed
+     during runtime using sysctl(8).
+
+     _h_i_n_t_._p_c_m_._%_d_._e_q
+             Set to 1 or 0 to explicitly enable (1) or disable (0) the equal‐
+             izer.  Requires a driver reload if changed.  Enabling this will
+             make bass and treble controls appear in mixer applications.  This
+             tunable is undefined by default.  Equalizing is disabled by de‐
+             fault.
+
+     _h_i_n_t_._p_c_m_._%_d_._v_p_c
+             Set to 1 or 0 to explicitly enable (1) or disable (0) the VPC
+             feature.  This tunable is undefined by default.  VPC is however
+             enabled by default.
+
+   RRuunnttiimmee CCoonnffiigguurraattiioonn
+     There are a number of sysctl(8) variables available which can be modified
+     during runtime.  These values can also be stored in _/_e_t_c_/_s_y_s_c_t_l_._c_o_n_f in
+     order to automatically set them during the boot process.  _h_w_._s_n_d_._* are
+     global settings and _d_e_v_._p_c_m_._* are device specific.
+
+     _h_w_._s_n_d_._c_o_m_p_a_t___l_i_n_u_x___m_m_a_p
+             Linux mmap(2) compatibility.  The following values are supported
+             (default is 0):
+
+             -1  Force disabling/denying PROT_EXEC mmap(2) requests.
+
+             0   Auto detect proc/ABI type, allow mmap(2) for Linux applica‐
+                 tions, and deny for everything else.
+
+             1   Always allow PROT_EXEC page mappings.
+
+     _h_w_._s_n_d_._d_e_f_a_u_l_t___a_u_t_o
+             Automatically assign the default sound unit.  The following val‐
+             ues are supported (default is 1):
+
+             0   Do not assign the default sound unit automatically.
+
+             1   Use the best available sound device based on playing and
+                 recording capabilities of the device.
+
+             2   Use the most recently attached device.
+
+     _h_w_._s_n_d_._d_e_f_a_u_l_t___u_n_i_t
+             Default sound card for systems with multiple sound cards.  When
+             using devfs(5), the default device for _/_d_e_v_/_d_s_p.  Equivalent to a
+             symlink from _/_d_e_v_/_d_s_p to _/_d_e_v_/_d_s_p_$_{_h_w_._s_n_d_._d_e_f_a_u_l_t___u_n_i_t_}.
+
+     _h_w_._s_n_d_._f_e_e_d_e_r___e_q___e_x_a_c_t___r_a_t_e
+             Only certain rates are allowed for precise processing.  The de‐
+             fault behavior is however to allow sloppy processing for all
+             rates, even the unsupported ones.  Enable to toggle this require‐
+             ment and only allow processing for supported rates.
+
+     _h_w_._s_n_d_._f_e_e_d_e_r___r_a_t_e___m_a_x
+             Maximum allowable sample rate.
+
+     _h_w_._s_n_d_._f_e_e_d_e_r___r_a_t_e___m_i_n
+             Minimum allowable sample rate.
+
+     _h_w_._s_n_d_._f_e_e_d_e_r___r_a_t_e___p_o_l_y_p_h_a_s_e___m_a_x
+             Adjust to set the maximum number of allowed polyphase entries
+             during the process of building resampling filters.  Disabling
+             polyphase resampling has the benefit of reducing memory usage, at
+             the expense of slower and lower quality conversion.  Only appli‐
+             cable when the SINC interpolator is used.  Default value is
+             183040.  Set to 0 to disable polyphase resampling.
+
+     _h_w_._s_n_d_._f_e_e_d_e_r___r_a_t_e___q_u_a_l_i_t_y
+             Sample rate converter quality.  Default value is 1, linear inter‐
+             polation.  Available options include:
+
+             0   Zero Order Hold, ZOH.  Very fast, but with poor quality.
+
+             1   Linear interpolation.  Fast, quality is subject to personal
+                 preference.  Technically the quality is poor however, due to
+                 the lack of anti-aliasing filtering.
+
+             2   Bandlimited SINC interpolator.  Implements polyphase banking
+                 to boost the conversion speed, at the cost of memory usage,
+                 with multiple high quality polynomial interpolators to im‐
+                 prove the conversion accuracy.  100% fixed point, 64bit accu‐
+                 mulator with 32bit coefficients and high precision sample
+                 buffering.  Quality values are 100dB stopband, 8 taps and 85%
+                 bandwidth.
+
+             3   Continuation of the bandlimited SINC interpolator, with 100dB
+                 stopband, 36 taps and 90% bandwidth as quality values.
+
+             4   Continuation of the bandlimited SINC interprolator, with
+                 100dB stopband, 164 taps and 97% bandwidth as quality values.
+
+     _h_w_._s_n_d_._f_e_e_d_e_r___r_a_t_e___r_o_u_n_d
+             Sample rate rounding threshold, to avoid large prime division at
+             the cost of accuracy.  All requested sample rates will be rounded
+             to the nearest threshold value.  Possible values range between 0
+             (disabled) and 500.  Default is 25.
+
+     _h_w_._s_n_d_._l_a_t_e_n_c_y
+             Configure the buffering latency.  Only affects applications that
+             do not explicitly request blocksize / fragments.  This tunable
+             provides finer granularity than the _h_w_._s_n_d_._l_a_t_e_n_c_y___p_r_o_f_i_l_e tun‐
+             able.  Possible values range between 0 (lowest latency) and 10
+             (highest latency).
+
+     _h_w_._s_n_d_._l_a_t_e_n_c_y___p_r_o_f_i_l_e
+             Define sets of buffering latency conversion tables for the
+             _h_w_._s_n_d_._l_a_t_e_n_c_y tunable.  A value of 0 will use a low and aggres‐
+             sive latency profile which can result in possible underruns if
+             the application cannot keep up with a rapid irq rate, especially
+             during high workload.  The default value is 1, which is consid‐
+             ered a moderate/safe latency profile.
+
+     _h_w_._s_n_d_._v_c_h_a_n_s___e_n_a_b_l_e
+             Global VCHAN setting to enable (1) or disable (0) VCHANs.  This
+             setting can be overridden for an individual device by using the
+             _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_s tunables.  Default is enabled.
+
+     _h_w_._s_n_d_._r_e_p_o_r_t___s_o_f_t___f_o_r_m_a_t_s
+             Controls the internal format conversion if it is available trans‐
+             parently to the application software.  When disabled or not
+             available, the application will only be able to select formats
+             the device natively supports.
+
+     _h_w_._s_n_d_._r_e_p_o_r_t___s_o_f_t___m_a_t_r_i_x
+             Enable seamless channel matrixing even if the hardware does not
+             support it.  Makes it possible to play multichannel streams even
+             with a simple stereo sound card.
+
+     _h_w_._s_n_d_._v_e_r_b_o_s_e
+             Level of verbosity for the _/_d_e_v_/_s_n_d_s_t_a_t device.  Higher values
+             include more output and the highest level, four, should be used
+             when reporting problems.  Other options include:
+
+             0   Installed devices and their allocated bus resources.
+
+             1   The number of playback, record, virtual channels, and flags
+                 per device.
+
+             2   Channel information per device including the channel's cur‐
+                 rent format, speed, and pseudo device statistics such as buf‐
+                 fer overruns and buffer underruns.
+
+             3   File names and versions of the currently loaded sound mod‐
+                 ules.
+
+             4   Various messages intended for debugging.
+
+     _h_w_._s_n_d_._v_p_c___0_d_b
+             Default value for ssoouunndd volume.  Increase to give more room for
+             attenuation control.  Decrease for more amplification, with the
+             possible cost of sound clipping.
+
+     _h_w_._s_n_d_._v_p_c___a_u_t_o_r_e_s_e_t
+             When a channel is closed the channel volume will be reset to 0db.
+             This means that any changes to the volume will be lost.  Enabling
+             this will preserve the volume, at the cost of possible confusion
+             when applications tries to re-open the same device.
+
+     _h_w_._s_n_d_._v_p_c___m_i_x_e_r___b_y_p_a_s_s
+             The recommended way to use the VPC feature is to teach applica‐
+             tions to use the correct iiooccttll(): SNDCTL_DSP_GETPLAYVOL,
+             SNDCTL_DSP_SETPLAYVOL, SNDCTL_DSP_SETRECVOL,
+             SNDCTL_DSP_SETRECVOL.  This is however not always possible.  En‐
+             able this to allow applications to use their own existing mixer
+             logic to control their own channel volume.
+
+     _h_w_._s_n_d_._v_p_c___r_e_s_e_t
+             Enable to restore all channel volumes back to the default value
+             of 0db.
+
+     _d_e_v_._p_c_m_._%_d_._b_i_t_p_e_r_f_e_c_t
+             Enable or disable bitperfect mode.  When enabled, channels will
+             skip all dsp processing, such as channel matrixing, rate convert‐
+             ing and equalizing.  The pure ssoouunndd stream will be fed directly
+             to the hardware.  If VCHANs are enabled, the bitperfect mode will
+             use the VCHAN format/rate as the definitive format/rate target.
+             The recommended way to use bitperfect mode is to disable VCHANs
+             and enable this sysctl.  Default is disabled.
+
+     _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_s
+             Enable (1) or disable (0) VCHANs.  Default is enabled.
+
+     _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_f_o_r_m_a_t
+             Format for VCHAN mixing.  All playback paths will be converted to
+             this format before the mixing process begins.  By default only 2
+             channels are enabled.  Available options include:
+
+             s16le:1.0
+                 Mono.
+
+             s16le:2.0
+                 Stereo, 2 channels (left, right).
+
+             s16le:2.1
+                 3 channels (left, right, LFE).
+
+             s16le:3.0
+                 3 channels (left, right, rear center).
+
+             s16le:4.0
+                 Quadraphonic, 4 channels (front/rear left and right).
+
+             s16le:4.1
+                 5 channels (4.0 + LFE).
+
+             s16le:5.0
+                 5 channels (4.0 + center).
+
+             s16le:5.1
+                 6 channels (4.0 + center + LFE).
+
+             s16le:6.0
+                 6 channels (4.0 + front/rear center).
+
+             s16le:6.1
+                 7 channels (6.0 + LFE).
+
+             s16le:7.1
+                 8 channels (4.0 + center + LFE + left and right side).
+
+     _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_m_o_d_e
+             VCHAN format/rate selection.  Available options include:
+
+             fixed
+                 Channel mixing is done using fixed format/rate.  Advanced op‐
+                 erations such as digital passthrough will not work.  Can be
+                 considered as a “legacy” mode.  This is the default mode for
+                 hardware channels which lack support for digital formats.
+
+             passthrough
+                 Channel mixing is done using fixed format/rate, but advanced
+                 operations such as digital passthrough also work.  All chan‐
+                 nels will produce sound as usual until a digital format play‐
+                 back is requested.  When this happens all other channels will
+                 be muted and the latest incoming digital format will be al‐
+                 lowed to pass through undisturbed.  Multiple concurrent digi‐
+                 tal streams are supported, but the latest stream will take
+                 precedence and mute all other streams.
+
+             adaptive
+                 Works like the “passthrough” mode, but is a bit smarter, es‐
+                 pecially for multiple ssoouunndd channels with different for‐
+                 mat/rate.  When a new channel is about to start, the entire
+                 list of virtual channels will be scanned, and the channel
+                 with the best format/rate (usually the highest/biggest) will
+                 be selected.  This ensures that mixing quality depends on the
+                 best channel.  The downside is that the hardware DMA mode
+                 needs to be restarted, which may cause annoying pops or
+                 clicks.
+
+     _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_r_a_t_e
+             Sample rate speed for VCHAN mixing.  All playback paths will be
+             converted to this sample rate before the mixing process begins.
+
+     _d_e_v_._p_c_m_._%_d_._p_o_l_l_i_n_g
+             Experimental polling mode support where the driver operates by
+             querying the device state on each tick using a callout(9) mecha‐
+             nism.  Disabled by default and currently only available for a few
+             device drivers.
+
+   SSttaattiissttiiccss
+     Channel statistics are only kept while the device is open.  So with situ‐
+     ations involving overruns and underruns, consider the output while the
+     errant application is open and running.
+
+   IIOOCCTTLL SSuuppppoorrtt
+     The driver supports most of the OSS iiooccttll() functions, and most applica‐
+     tions work unmodified.  A few differences exist, while memory mapped
+     playback is supported natively and in Linux emulation, memory mapped
+     recording is not due to VM system design.  As a consequence, some appli‐
+     cations may need to be recompiled with a slightly modified audio module.
+     See <_s_y_s_/_s_o_u_n_d_c_a_r_d_._h> for a complete list of the supported iiooccttll() func‐
+     tions.
+
+FFIILLEESS
+     The ssoouunndd drivers may create the following device nodes:
+
+     /dev/dsp%d    Audio device.  The number represents the unit number of the
+                   device.
+     /dev/dsp      Alias of _/_d_e_v_/_d_s_p_$_{_h_w_._s_n_d_._d_e_f_a_u_l_t___u_n_i_t_}.  Available only if
+                   _h_w_._s_n_d_._b_a_s_e_n_a_m_e___c_l_o_n_e is set.
+     /dev/sndstat  Current ssoouunndd status, including all channels and drivers.
+
+     All ssoouunndd devices are listed in _/_d_e_v_/_s_n_d_s_t_a_t.  Additional messages are
+     sometimes recorded when the device is probed and attached, these messages
+     can be viewed with the dmesg(8) utility.
+
+EEXXAAMMPPLLEESS
+     Use the sound metadriver to load all ssoouunndd bridge device drivers at once
+     (for example if it is unclear which the correct driver to use is):
+
+           kldload snd_driver
+
+     Load a specific bridge device driver, in this case the Intel High Defini‐
+     tion Audio driver:
+
+           kldload snd_hda
+
+     Check the status of all detected ssoouunndd devices:
+
+           cat /dev/sndstat
+
+     Change the default sound device, in this case to the second device.  This
+     is handy if there are multiple ssoouunndd devices available:
+
+           mixer -d pcm1
+
+DDIIAAGGNNOOSSTTIICCSS
+     ppccmm%%dd::ppllaayy::%%dd::ddsspp%%dd..pp%%dd:: ppllaayy iinntteerrrruupptt ttiimmeeoouutt,, cchhaannnneell ddeeaadd  The hard‐
+     ware does not generate interrupts to serve incoming (play) or outgoing
+     (record) data.
+
+     uunnssuuppppoorrtteedd ssuubbddeevviiccee XXXX  A device node is not created properly.
+
+SSEEEE AALLSSOO
+     snd_ai2s(4), snd_als4000(4), snd_atiixp(4), snd_cmi(4), snd_cs4281(4),
+     snd_csa(4), snd_davbus(4), snd_emu10k1(4), snd_emu10kx(4), snd_envy24(4),
+     snd_envy24ht(4), snd_es137x(4), snd_fm801(4), snd_hda(4), snd_hdspe(4),
+     snd_ich(4), snd_maestro3(4), snd_neomagic(4), snd_solo(4), snd_spicds(4),
+     snd_t4dwave(4), snd_uaudio(4), snd_via8233(4), snd_via82c686(4),
+     snd_vibes(4), devfs(5), device.hints(5), loader.conf(5), dmesg(8),
+     kldload(8), mixer(8), sysctl(8)
+
+     _C_o_o_k_b_o_o_k _f_o_r_m_u_l_a_e _f_o_r _a_u_d_i_o _E_Q _b_i_q_u_a_d _f_i_l_t_e_r _c_o_e_f_f_i_c_i_e_n_t_s _(_A_u_d_i_o_-_E_Q_-
+     _C_o_o_k_b_o_o_k_._t_x_t_)_, _b_y _R_o_b_e_r_t _B_r_i_s_t_o_w_-_J_o_h_n_s_o_n,
+     https://www.musicdsp.org/en/latest/Filters/197-rbj-audio-eq-
+     cookbook.html.
+
+     _J_u_l_i_u_s _O_'_S_m_i_t_h_'_s _D_i_g_i_t_a_l _A_u_d_i_o _R_e_s_a_m_p_l_i_n_g,
+     http://ccrma.stanford.edu/~jos/resample/.
+
+     _P_o_l_y_n_o_m_i_a_l _I_n_t_e_r_p_o_l_a_t_o_r_s _f_o_r _H_i_g_h_-_Q_u_a_l_i_t_y _R_e_s_a_m_p_l_i_n_g _o_f _O_v_e_r_s_a_m_p_l_e_d
+     _A_u_d_i_o_, _b_y _O_l_l_i _N_i_e_m_i_t_a_l_o, http://yehar.com/blog/wp-
+     content/uploads/2009/08/deip.pdf.
+
+     _T_h_e _O_S_S _A_P_I, http://www.opensound.com/pguide/oss.pdf.
+
+HHIISSTTOORRYY
+     The ssoouunndd device driver first appeared in FreeBSD 2.2.6 as ppccmm, written
+     by Luigi Rizzo.  It was later rewritten in FreeBSD 4.0 by Cameron Grant.
+     The API evolved from the VOXWARE standard which later became OSS stan‐
+     dard.
+
+AAUUTTHHOORRSS
+     Luigi Rizzo <_l_u_i_g_i_@_i_e_t_._u_n_i_p_i_._i_t> initially wrote the ppccmm device driver
+     and this manual page.  Cameron Grant <_g_a_n_d_a_l_f_@_v_i_l_n_y_a_._d_e_m_o_n_._c_o_._u_k> later
+     revised the device driver for FreeBSD 4.0.  Seigo Tanimura
+     <_t_a_n_i_m_u_r_a_@_r_._d_l_._i_t_c_._u_-_t_o_k_y_o_._a_c_._j_p> revised this manual page.  It was then
+     rewritten for FreeBSD 5.2.
+
+BBUUGGSS
+     Some features of your sound card (e.g., global volume control) might not
+     be supported on all devices.
+
+     Some audio devices might refuse to work properly unless the sample rate
+     is configured the same for both recording and playback, even if only sim‐
+     plex is used.  See the _d_e_v_._p_c_m_._%_d_._[_p_l_a_y_|_r_e_c_]_._v_c_h_a_n_r_a_t_e sysctls.
+
+BSD                            February 15, 2025                           BSD

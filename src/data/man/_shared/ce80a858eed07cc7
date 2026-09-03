@@ -1,0 +1,104 @@
+MI_SWITCH(9)             BSD Kernel Developer's Manual            MI_SWITCH(9)
+
+NNAAMMEE
+     mmii__sswwiittcchh — switch to another thread context
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//pprroocc..hh>>
+
+     _v_o_i_d
+     mmii__sswwiittcchh(_i_n_t _f_l_a_g_s);
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmii__sswwiittcchh() function implements the machine-independent prelude to a
+     thread context switch.  It is the single entry point for every context
+     switch and is called from only a few distinguished places in the kernel.
+     The context switch is, by necessity, always performed by the switched
+     thread, even when the switch is initiated from elsewhere; e.g. preemption
+     requested via Inter-Processor Interrupt (IPI).
+
+     The various major uses of mmii__sswwiittcchh() can be enumerated as follows:
+
+           1.   From within a function such as sleepq_wait(9) or
+                ttuurrnnssttiillee__wwaaiitt() when the current thread voluntarily relin‐
+                quishes the CPU to wait for some resource or lock to become
+                available.
+
+           2.   Involuntary preemption due to arrival of a higher-priority
+                thread.
+
+           3.   At the tail end of critical_exit(9), if preemption was de‐
+                ferred due to the critical section.
+
+           4.   Within the TDA_SCHED AST handler, when rescheduling before the
+                return to usermode was requested.  There are several reasons
+                for this, a notable one coming from sscchheedd__cclloocckk() when the
+                running thread has exceeded its time slice.
+
+           5.   In the signal handling code (see issignal(9)) if a signal is
+                delivered that causes a process to stop.
+
+           6.   In tthhrreeaadd__ssuussppeenndd__cchheecckk() where a thread needs to stop execu‐
+                tion due to the suspension state of the process as a whole.
+
+           7.   In kern_yield(9) when a thread wants to voluntarily relinquish
+                the processor.
+
+     The _f_l_a_g_s argument to mmii__sswwiittcchh() indicates the context switch type.  One
+     of the following must be passed:
+
+           SWT_OWEPREEMPT      Switch due to delayed preemption after exiting
+                               a critical section.
+
+           SWT_TURNSTILE       Switch after propagating scheduling priority to
+                               the owner of a resource.
+
+           SWT_SLEEPQ          Begin waiting on a sleepqueue(9).
+
+           SWT_RELINQUISH      Yield call.
+
+           SWT_NEEDRESCHED     Rescheduling was requested.
+
+           SWT_IDLE            Switch from the idle thread.
+
+           SWT_IWAIT           A kernel thread which handles interrupts has
+                               finished work and must wait for interrupts to
+                               schedule additional work.
+
+           SWT_SUSPEND         Thread suspended.
+
+           SWT_REMOTEPREEMPT   Preemption by a higher-priority thread, initi‐
+                               ated by a remote processor.
+
+           SWT_REMOTEWAKEIDLE  Idle thread preempted, initiated by a remote
+                               processor.
+
+           SWT_BIND            The running thread has been bound to another
+                               processor and must be switched out.
+
+     In addition to the switch type, callers must specify the nature of the
+     switch by performing a bitwise OR with one of the SW_VOL or SW_INVOL
+     flags, but not both.  Respectively, these flags denote whether the con‐
+     text switch is voluntary or involuntary on the part of the current
+     thread.  For an involuntary context switch in which the running thread is
+     being preempted, the caller should also pass the SW_PREEMPT flag.
+
+     Upon entry to mmii__sswwiittcchh(), the current thread must be holding its as‐
+     signed thread lock.  It may be unlocked as part of the context switch.
+     After they have been rescheduled and execution resumes, threads will exit
+     mmii__sswwiittcchh() with their thread lock unlocked.
+
+     mmii__sswwiittcchh() records the amount of time the current thread has been run‐
+     ning before handing control over to the scheduler, via sscchheedd__sswwiittcchh().
+     After selecting a new thread to run, the scheduler will call ccppuu__sswwiittcchh()
+     to perform the low-level context switch.
+
+     ccppuu__sswwiittcchh() is the machine-dependent function that performs the actual
+     switch from the running thread _o_l_d_t_d to the chosen thread _n_e_w_t_d.
+
+SSEEEE AALLSSOO
+     cpu_switch(9), cpu_throw(9), critical_exit(9), issignal(9),
+     kern_yield(9), mutex(9), pmap(9), sleepqueue(9), thread_exit(9)
+
+BSD                             January 7, 2025                            BSD

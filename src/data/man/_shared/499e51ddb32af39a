@@ -1,0 +1,619 @@
+KQUEUE(2)                   BSD System Calls Manual                  KQUEUE(2)
+
+NNAAMMEE
+     kkqquueeuuee, kkeevveenntt — kernel event notification mechanism
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//eevveenntt..hh>>
+
+     _i_n_t
+     kkqquueeuuee(_v_o_i_d);
+
+     _i_n_t
+     kkqquueeuueexx(_u___i_n_t _f_l_a_g_s);
+
+     _i_n_t
+     kkqquueeuuee11(_i_n_t _f_l_a_g_s);
+
+     _i_n_t
+     kkeevveenntt(_i_n_t _k_q, _c_o_n_s_t _s_t_r_u_c_t _k_e_v_e_n_t _*_c_h_a_n_g_e_l_i_s_t, _i_n_t _n_c_h_a_n_g_e_s,
+         _s_t_r_u_c_t _k_e_v_e_n_t _*_e_v_e_n_t_l_i_s_t, _i_n_t _n_e_v_e_n_t_s,
+         _c_o_n_s_t _s_t_r_u_c_t _t_i_m_e_s_p_e_c _*_t_i_m_e_o_u_t);
+
+     EEVV__SSEETT(_k_e_v, _i_d_e_n_t, _f_i_l_t_e_r, _f_l_a_g_s, _f_f_l_a_g_s, _d_a_t_a, _u_d_a_t_a);
+
+DDEESSCCRRIIPPTTIIOONN
+     The kkqquueeuuee() system call provides a generic method of notifying the user
+     when an event happens or a condition holds, based on the results of small
+     pieces of kernel code termed filters.  A kevent is identified by the
+     (ident, filter) pair; there may only be one unique kevent per kqueue.
+
+     The filter is executed upon the initial registration of a kevent in order
+     to detect whether a preexisting condition is present, and is also exe‐
+     cuted whenever an event is passed to the filter for evaluation.  If the
+     filter determines that the condition should be reported, then the kevent
+     is placed on the kqueue for the user to retrieve.
+
+     The filter is also run when the user attempts to retrieve the kevent from
+     the kqueue.  If the filter indicates that the condition that triggered
+     the event no longer holds, the kevent is removed from the kqueue and is
+     not returned.
+
+     Multiple events which trigger the filter do not result in multiple
+     kevents being placed on the kqueue; instead, the filter will aggregate
+     the events into a single struct kevent.  Calling cclloossee() on a file de‐
+     scriptor will remove any kevents that reference the descriptor.
+
+     The kkqquueeuuee() system call creates a new kernel event queue and returns a
+     descriptor.  The queue is not inherited by a child created with fork(2).
+     However, if rfork(2) is called without the RFFDG flag, then the descrip‐
+     tor table is shared, which will allow sharing of the kqueue between two
+     processes.
+
+     The kkqquueeuueexx() system call also creates a new kernel event queue, and ad‐
+     ditionally takes a _f_l_a_g_s argument, which is a bitwise-inclusive OR of the
+     following flags:
+
+     KQUEUE_CLOEXEC  The returned file descriptor is automatically closed on
+                     execve(2)
+
+     The kkqquueeuuee() system call is equivalent to calling kkqquueeuueexx() with _f_l_a_g_s
+     set to 0.
+
+     The kkqquueeuuee11() function exists for compatibility with NetBSD.  The _f_l_a_g_s
+     argument accepts zero or more of the following values:
+
+     O_CLOEXEC  The returned file descriptor is automatically closed on
+                execve(2)
+
+     The kkeevveenntt() system call is used to register events with the queue, and
+     return any pending events to the user.  The _c_h_a_n_g_e_l_i_s_t argument is a
+     pointer to an array of _k_e_v_e_n_t structures, as defined in <_s_y_s_/_e_v_e_n_t_._h>.
+     All changes contained in the _c_h_a_n_g_e_l_i_s_t are applied before any pending
+     events are read from the queue.  The _n_c_h_a_n_g_e_s argument gives the size of
+     _c_h_a_n_g_e_l_i_s_t.  The _e_v_e_n_t_l_i_s_t argument is a pointer to an array of kevent
+     structures.  The _n_e_v_e_n_t_s argument determines the size of _e_v_e_n_t_l_i_s_t.  When
+     _n_e_v_e_n_t_s is zero, kkeevveenntt() will return immediately even if there is a
+     _t_i_m_e_o_u_t specified unlike select(2).  If _t_i_m_e_o_u_t is a non-NULL pointer, it
+     specifies a maximum interval to wait for an event, which will be inter‐
+     preted as a struct timespec.  If _t_i_m_e_o_u_t is a NULL pointer, kkeevveenntt()
+     waits indefinitely.  To effect a poll, the _t_i_m_e_o_u_t argument should be
+     non-NULL, pointing to a zero-valued _t_i_m_e_s_p_e_c structure.  The same array
+     may be used for the _c_h_a_n_g_e_l_i_s_t and _e_v_e_n_t_l_i_s_t.
+
+     The EEVV__SSEETT() macro is provided for ease of initializing a kevent struc‐
+     ture.
+
+     The _k_e_v_e_n_t structure is defined as:
+
+     struct kevent {
+             uintptr_t  ident;       /* identifier for this event */
+             short     filter;       /* filter for event */
+             u_short   flags;        /* action flags for kqueue */
+             u_int     fflags;       /* filter flag value */
+             int64_t   data;         /* filter data value */
+             void      *udata;       /* opaque user data identifier */
+             uint64_t  ext[4];       /* extensions */
+     };
+
+     The fields of _s_t_r_u_c_t _k_e_v_e_n_t are:
+
+     _i_d_e_n_t      Value used to identify this event.  The exact interpretation
+                is determined by the attached filter, but often is a file de‐
+                scriptor.
+
+     _f_i_l_t_e_r     Identifies the kernel filter used to process this event.  The
+                pre-defined system filters are described below.
+
+     _f_l_a_g_s      Actions to perform on the event.
+
+     _f_f_l_a_g_s     Filter-specific flags.
+
+     _d_a_t_a       Filter-specific data value.
+
+     _u_d_a_t_a      Opaque user-defined value passed through the kernel unchanged.
+
+     _e_x_t        Extended data passed to and from kernel.  The meaning of the
+                _e_x_t_[_0_] and _e_x_t_[_1_] members is defined by the filter.  If a fil‐
+                ter does not use them, these members are passed through the
+                kernel unchanged.  The _e_x_t_[_2_] and _e_x_t_[_3_] members are always
+                passed through the kernel unchanged, providing additional
+                user-defined values.
+
+     The _f_l_a_g_s field can contain the following values:
+
+     EV_ADD        Adds the event to the kqueue.  Re-adding an existing event
+                   will modify the parameters of the original event, and not
+                   result in a duplicate entry.  Adding an event automatically
+                   enables it, unless overridden by the EV_DISABLE flag.
+
+     EV_ENABLE     Permit kkeevveenntt() to return the event if it is triggered.
+
+     EV_DISABLE    Disable the event so kkeevveenntt() will not return it.  The fil‐
+                   ter itself is not disabled.
+
+     EV_DISPATCH   Disable the event source immediately after delivery of an
+                   event.  See EV_DISABLE above.
+
+     EV_DELETE     Removes the event from the kqueue.  Events which are at‐
+                   tached to file descriptors are automatically deleted on the
+                   last close of the descriptor.
+
+     EV_RECEIPT    This flag is useful for making bulk changes to a kqueue
+                   without draining any pending events.  When passed as input,
+                   it forces EV_ERROR to always be returned.  When a filter is
+                   successfully added the _d_a_t_a field will be zero.  Note that
+                   if this flag is encountered and there is no remaining space
+                   in _e_v_e_n_t_l_i_s_t to hold the EV_ERROR event, then subsequent
+                   changes will not get processed.
+
+     EV_ONESHOT    Return only the first occurrence of the filter being trig‐
+                   gered.  After the user retrieves the event from the kqueue,
+                   it is deleted.
+
+     EV_CLEAR      Reset the state of the event after it is retrieved by the
+                   user.  This is useful for filters which report state tran‐
+                   sitions instead of the current state.  Note that some fil‐
+                   ters may automatically set this flag internally.
+
+     EV_EOF        Filters may set this flag to indicate filter-specific EOF
+                   condition.
+
+     EV_ERROR      See _R_E_T_U_R_N _V_A_L_U_E_S below.
+
+     EV_KEEPUDATA  Preserve the _u_d_a_t_a associated with an existing event.  This
+                   allows other aspects of the event to be modified without
+                   requiring the caller to know the _u_d_a_t_a value previously
+                   registered with the event.  This is especially useful with
+                   NOTE_TRIGGER or EV_ENABLE.  This flag may not be used with
+                   EV_ADD.
+
+     The predefined system filters are listed below.  Arguments may be passed
+     to and from the filter via the _f_f_l_a_g_s and _d_a_t_a fields in the kevent
+     structure.
+
+     EVFILT_READ         Takes a descriptor as the identifier, and returns
+                         whenever there is data available to read.  The behav‐
+                         ior of the filter is slightly different depending on
+                         the descriptor type.
+
+                         Sockets
+                             Sockets which have previously been passed to
+                             listen(2) return when there is an incoming con‐
+                             nection pending.  _d_a_t_a contains the size of the
+                             listen backlog.
+
+                             Other socket descriptors return when there is
+                             data to be read, subject to the SO_RCVLOWAT value
+                             of the socket buffer.  This may be overridden
+                             with a per-filter low water mark at the time the
+                             filter is added by setting the NOTE_LOWAT flag in
+                             _f_f_l_a_g_s, and specifying the new low water mark in
+                             _d_a_t_a.  On return, _d_a_t_a contains the number of
+                             bytes of protocol data available to read.
+
+                             If the read direction of the socket has shutdown,
+                             then the filter also sets EV_EOF in _f_l_a_g_s, and
+                             returns the socket error (if any) in _f_f_l_a_g_s.  It
+                             is possible for EOF to be returned (indicating
+                             the connection is gone) while there is still data
+                             pending in the socket buffer.
+
+                         Vnodes
+                             Returns when the file pointer is not at the end
+                             of file.  _d_a_t_a contains the offset from current
+                             position to end of file, and may be negative.
+
+                             This behavior is different from poll(2), where
+                             read events are triggered for regular files un‐
+                             conditionally.  This event can be triggered un‐
+                             conditionally by setting the NOTE_FILE_POLL flag
+                             in _f_f_l_a_g_s.
+
+                         Fifos, Pipes
+                             Returns when the there is data to read; _d_a_t_a con‐
+                             tains the number of bytes available.
+
+                             When the last writer disconnects, the filter will
+                             set EV_EOF in _f_l_a_g_s.  This will be cleared by the
+                             filter when a new writer connects, at which point
+                             the filter will resume waiting for data to become
+                             available before returning.
+
+                         BPF devices
+                             Returns when the BPF buffer is full, the BPF
+                             timeout has expired, or when the BPF has
+                             “immediate mode” enabled and there is any data to
+                             read; _d_a_t_a contains the number of bytes avail‐
+                             able.
+
+                         Eventfds
+                             Returns when the counter is greater than 0; _d_a_t_a
+                             contains the counter value, which must be cast to
+                             _u_i_n_t_6_4___t.
+
+                         Kqueues
+                             Returns when pending events are present on the
+                             queue; _d_a_t_a contains the number of events avail‐
+                             able.
+
+     EVFILT_WRITE        Takes a descriptor as the identifier, and returns
+                         whenever it is possible to write to the descriptor.
+                         For sockets, pipes and fifos, _d_a_t_a will contain the
+                         amount of space remaining in the write buffer.  The
+                         filter will set EV_EOF when the reader disconnects,
+                         and for the fifo case, this will be cleared when a
+                         new reader connects.  Note that this filter is not
+                         supported for vnodes.
+
+                         For sockets, the low water mark and socket error han‐
+                         dling is identical to the EVFILT_READ case.
+
+                         For eventfds, _d_a_t_a will contain the maximum value
+                         that can be added to the counter without blocking.
+
+                         For BPF devices, when the descriptor is attached to
+                         an interface the filter always indicates that it is
+                         possible to write and _d_a_t_a will contain the MTU size
+                         of the underlying interface.
+
+     EVFILT_EMPTY        Takes a descriptor as the identifier, and returns
+                         whenever there is no remaining data in the write buf‐
+                         fer.
+
+     EVFILT_AIO          Events for this filter are not registered with
+                         kkeevveenntt() directly but are registered via the
+                         _a_i_o___s_i_g_e_v_e_n_t member of an asynchronous I/O request
+                         when it is scheduled via an asynchronous I/O system
+                         call such as aaiioo__rreeaadd().  The filter returns under
+                         the same conditions as aaiioo__eerrrroorr().  For more details
+                         on this filter see sigevent(3) and aio(4).
+
+     EVFILT_VNODE        Takes a file descriptor as the identifier and the
+                         events to watch for in _f_f_l_a_g_s, and returns when one
+                         or more of the requested events occurs on the de‐
+                         scriptor.  The events to monitor are:
+
+                         NOTE_ATTRIB          The file referenced by the de‐
+                                              scriptor had its attributes
+                                              changed.
+
+                         NOTE_CLOSE           A file descriptor referencing
+                                              the monitored file, was closed.
+                                              The closed file descriptor did
+                                              not have write access.
+
+                         NOTE_CLOSE_WRITE     A file descriptor referencing
+                                              the monitored file, was closed.
+                                              The closed file descriptor had
+                                              write access.
+
+                                              This note, as well as
+                                              NOTE_CLOSE, are not activated
+                                              when files are closed forcibly
+                                              by unmount(2) or revoke(2).  In‐
+                                              stead, NOTE_REVOKE is sent for
+                                              such events.
+
+                         NOTE_DELETE          The uunnlliinnkk() system call was
+                                              called on the file referenced by
+                                              the descriptor.
+
+                         NOTE_EXTEND          For regular file, the file ref‐
+                                              erenced by the descriptor was
+                                              extended.
+
+                                              For directory, reports that a
+                                              directory entry was added or re‐
+                                              moved, as the result of rename
+                                              operation.  The NOTE_EXTEND
+                                              event is not reported when a
+                                              name is changed inside the di‐
+                                              rectory.
+
+                         NOTE_LINK            The link count on the file
+                                              changed.  In particular, the
+                                              NOTE_LINK event is reported if a
+                                              subdirectory was created or
+                                              deleted inside the directory
+                                              referenced by the descriptor.
+
+                         NOTE_OPEN            The file referenced by the de‐
+                                              scriptor was opened.
+
+                         NOTE_READ            A read occurred on the file ref‐
+                                              erenced by the descriptor.
+
+                         NOTE_RENAME          The file referenced by the de‐
+                                              scriptor was renamed.
+
+                         NOTE_REVOKE          Access to the file was revoked
+                                              via revoke(2) or the underlying
+                                              file system was unmounted.
+
+                         NOTE_WRITE           A write occurred on the file
+                                              referenced by the descriptor.
+
+                         On return, _f_f_l_a_g_s contains the events which triggered
+                         the filter.
+
+     EVFILT_PROC         Takes the process ID to monitor as the identifier and
+                         the events to watch for in _f_f_l_a_g_s, and returns when
+                         the process performs one or more of the requested
+                         events.  If a process can normally see another
+                         process, it can attach an event to it.  The events to
+                         monitor are:
+
+                         NOTE_EXIT         The process has exited.  The exit
+                                           status will be stored in _d_a_t_a in
+                                           the same format as the status re‐
+                                           turned by wait(2).
+
+                         NOTE_FORK         The process has called ffoorrkk().
+
+                         NOTE_EXEC         The process has executed a new
+                                           process via execve(2) or a similar
+                                           call.
+
+                         NOTE_TRACK        Follow a process across ffoorrkk()
+                                           calls.  The parent process regis‐
+                                           ters a new kevent to monitor the
+                                           child process using the same _f_f_l_a_g_s
+                                           as the original event.  The child
+                                           process will signal an event with
+                                           NOTE_CHILD set in _f_f_l_a_g_s and the
+                                           parent PID in _d_a_t_a.
+
+                                           If the parent process fails to reg‐
+                                           ister a new kevent (usually due to
+                                           resource limitations), it will sig‐
+                                           nal an event with NOTE_TRACKERR set
+                                           in _f_f_l_a_g_s, and the child process
+                                           will not signal a NOTE_CHILD event.
+
+                         On return, _f_f_l_a_g_s contains the events which triggered
+                         the filter.
+
+     EVFILT_PROCDESC     Takes the process descriptor created by pdfork(2) to
+                         monitor as the identifier and the events to watch for
+                         in _f_f_l_a_g_s, and returns when the associated process
+                         performs one or more of the requested events.  The
+                         events to monitor are:
+
+                         NOTE_EXIT     The process has exited.  The exit sta‐
+                                       tus will be stored in _d_a_t_a.
+
+                         On return, _f_f_l_a_g_s contains the events which triggered
+                         the filter.
+
+     EVFILT_SIGNAL       Takes the signal number to monitor as the identifier
+                         and returns when the given signal is delivered to the
+                         process.  This coexists with the ssiiggnnaall() and
+                         ssiiggaaccttiioonn() facilities, and has a lower precedence.
+                         The filter will record all attempts to deliver a sig‐
+                         nal to a process, even if the signal has been marked
+                         as SIG_IGN, except for the SIGCHLD signal, which, if
+                         ignored, will not be recorded by the filter.  Event
+                         notification happens after normal signal delivery
+                         processing.  _d_a_t_a returns the number of times the
+                         signal has occurred since the last call to kkeevveenntt().
+                         This filter automatically sets the EV_CLEAR flag in‐
+                         ternally.
+
+     EVFILT_TIMER        Establishes an arbitrary timer identified by _i_d_e_n_t.
+                         When adding a timer, _d_a_t_a specifies the moment to
+                         fire the timer (for NOTE_ABSTIME) or the timeout pe‐
+                         riod.  The timer will be periodic unless EV_ONESHOT
+                         or NOTE_ABSTIME is specified.  On return, _d_a_t_a con‐
+                         tains the number of times the timeout has expired
+                         since the last call to kkeevveenntt().  For non-monotonic
+                         timers, this filter automatically sets the EV_CLEAR
+                         flag internally.
+
+                         The filter accepts the following flags in the _f_f_l_a_g_s
+                         argument:
+
+                         NOTE_SECONDS      _d_a_t_a is in seconds.
+
+                         NOTE_MSECONDS     _d_a_t_a is in milliseconds.
+
+                         NOTE_USECONDS     _d_a_t_a is in microseconds.
+
+                         NOTE_NSECONDS     _d_a_t_a is in nanoseconds.
+
+                         NOTE_ABSTIME      The specified expiration time is
+                                           absolute.
+
+                         If _f_f_l_a_g_s is not set, the default is milliseconds.
+                         On return, _f_f_l_a_g_s contains the events which triggered
+                         the filter.
+
+                         Periodic timers with a specified timeout of 0 will be
+                         silently adjusted to timeout after 1 of the time
+                         units specified by the requested precision in _f_f_l_a_g_s.
+                         If an absolute time is specified that has already
+                         passed, then it is treated as if the current time
+                         were specified and the event will fire as soon as
+                         possible.
+
+                         If an existing timer is re-added, the existing timer
+                         will be effectively canceled (throwing away any unde‐
+                         livered record of previous timer expiration) and re-
+                         started using the new parameters contained in _d_a_t_a
+                         and _f_f_l_a_g_s.
+
+                         There is a system wide limit on the number of timers
+                         which is controlled by the _k_e_r_n_._k_q___c_a_l_l_o_u_t_m_a_x sysctl.
+
+     EVFILT_USER         Establishes a user event identified by _i_d_e_n_t which is
+                         not associated with any kernel mechanism but is trig‐
+                         gered by user level code.  The lower 24 bits of the
+                         _f_f_l_a_g_s may be used for user defined flags and manipu‐
+                         lated using the following:
+
+                         NOTE_FFNOP          Ignore the input _f_f_l_a_g_s.
+
+                         NOTE_FFAND          Bitwise AND _f_f_l_a_g_s.
+
+                         NOTE_FFOR           Bitwise OR _f_f_l_a_g_s.
+
+                         NOTE_FFCOPY         Copy _f_f_l_a_g_s.
+
+                         NOTE_FFCTRLMASK     Control mask for _f_f_l_a_g_s.
+
+                         NOTE_FFLAGSMASK     User defined flag mask for
+                                             _f_f_l_a_g_s.
+
+                         A user event is triggered for output with the follow‐
+                         ing:
+
+                         NOTE_TRIGGER        Cause the event to be triggered.
+
+                         On return, _f_f_l_a_g_s contains the users defined flags in
+                         the lower 24 bits.
+
+CCAANNCCEELLLLAATTIIOONN BBEEHHAAVVIIOOUURR
+     If _n_e_v_e_n_t_s is non-zero, i.e., the function is potentially blocking, the
+     call is a cancellation point.  Otherwise, i.e., if _n_e_v_e_n_t_s is zero, the
+     call is not cancellable.  Cancellation can only occur before any changes
+     are made to the kqueue, or when the call was blocked and no changes to
+     the queue were requested.
+
+RREETTUURRNN VVAALLUUEESS
+     The kkqquueeuuee() system call creates a new kernel event queue and returns a
+     file descriptor.  If there was an error creating the kernel event queue,
+     a value of -1 is returned and errno set.
+
+     The kkeevveenntt() system call returns the number of events placed in the
+     _e_v_e_n_t_l_i_s_t, up to the value given by _n_e_v_e_n_t_s.  If an error occurs while
+     processing an element of the _c_h_a_n_g_e_l_i_s_t and there is enough room in the
+     _e_v_e_n_t_l_i_s_t, then the event will be placed in the _e_v_e_n_t_l_i_s_t with EV_ERROR
+     set in _f_l_a_g_s and the system error in _d_a_t_a.  Otherwise, -1 will be re‐
+     turned, and errno will be set to indicate the error condition.  If the
+     time limit expires, then kkeevveenntt() returns 0.
+
+EEXXAAMMPPLLEESS
+     #include <sys/event.h>
+     #include <err.h>
+     #include <fcntl.h>
+     #include <stdio.h>
+     #include <stdlib.h>
+     #include <string.h>
+
+     int
+     main(int argc, char **argv)
+     {
+         struct kevent event;    /* Event we want to monitor */
+         struct kevent tevent;   /* Event triggered */
+         int kq, fd, ret;
+
+         if (argc != 2)
+             err(EXIT_FAILURE, "Usage: %s path\n", argv[0]);
+         fd = open(argv[1], O_RDONLY);
+         if (fd == -1)
+             err(EXIT_FAILURE, "Failed to open '%s'", argv[1]);
+
+         /* Create kqueue. */
+         kq = kqueue();
+         if (kq == -1)
+             err(EXIT_FAILURE, "kqueue() failed");
+
+         /* Initialize kevent structure. */
+         EV_SET(&event, fd, EVFILT_VNODE, EV_ADD | EV_CLEAR, NOTE_WRITE,
+             0, NULL);
+         /* Attach event to the kqueue. */
+         ret = kevent(kq, &event, 1, NULL, 0, NULL);
+         if (ret == -1)
+             err(EXIT_FAILURE, "kevent register");
+
+         for (;;) {
+             /* Sleep until something happens. */
+             ret = kevent(kq, NULL, 0, &tevent, 1, NULL);
+             if (ret == -1) {
+                 err(EXIT_FAILURE, "kevent wait");
+             } else if (ret > 0) {
+                 if (tevent.flags & EV_ERROR)
+                     errx(EXIT_FAILURE, "Event error: %s", strerror(event.data));
+                 else
+                     printf("Something was written in '%s'\n", argv[1]);
+             }
+         }
+
+         /* kqueues are destroyed upon close() */
+         (void)close(kq);
+         (void)close(fd);
+     }
+
+EERRRROORRSS
+     The kkqquueeuuee() system call fails if:
+
+     [ENOMEM]           The kernel failed to allocate enough memory for the
+                        kernel queue.
+
+     [ENOMEM]           The RLIMIT_KQUEUES rlimit (see getrlimit(2)) for the
+                        current user would be exceeded.
+
+     [EMFILE]           The per-process descriptor table is full.
+
+     [ENFILE]           The system file table is full.
+
+     The kkeevveenntt() system call fails if:
+
+     [EACCES]           The process does not have permission to register a
+                        filter.
+
+     [EFAULT]           There was an error reading or writing the _k_e_v_e_n_t
+                        structure.
+
+     [EBADF]            The specified descriptor is invalid.
+
+     [EINTR]            A signal was delivered before the timeout expired and
+                        before any events were placed on the kqueue for re‐
+                        turn.
+
+     [EINTR]            A cancellation request was delivered to the thread,
+                        but not yet handled.
+
+     [EINVAL]           The specified time limit or filter is invalid.
+
+     [EINVAL]           The specified length of the event or change lists is
+                        negative.
+
+     [ENOENT]           The event could not be found to be modified or
+                        deleted.
+
+     [ENOMEM]           No memory was available to register the event or, in
+                        the special case of a timer, the maximum number of
+                        timers has been exceeded.  This maximum is config‐
+                        urable via the _k_e_r_n_._k_q___c_a_l_l_o_u_t_m_a_x sysctl.
+
+     [ESRCH]            The specified process to attach to does not exist.
+
+     When kkeevveenntt() call fails with EINTR error, all changes in the _c_h_a_n_g_e_l_i_s_t
+     have been applied.
+
+SSEEEE AALLSSOO
+     aio_error(2), aio_read(2), aio_return(2), poll(2), read(2), select(2),
+     sigaction(2), write(2), pthread_setcancelstate(3), signal(3)
+
+     Jonathan Lemon, “Kqueue: A Generic and Scalable Event Notification
+     Facility”, _P_r_o_c_e_e_d_i_n_g_s _o_f _t_h_e _F_R_E_E_N_I_X _T_r_a_c_k_: _2_0_0_1 _U_S_E_N_I_X _A_n_n_u_a_l _T_e_c_h_n_i_c_a_l
+     _C_o_n_f_e_r_e_n_c_e, _U_S_E_N_I_X _A_s_s_o_c_i_a_t_i_o_n, June 25-30, 2001.
+
+HHIISSTTOORRYY
+     The kkqquueeuuee() and kkeevveenntt() system calls first appeared in FreeBSD 4.1.
+     The kkqquueeuueexx() system call and kkeevveenntt11() function first appeared in
+     FreeBSD 14.0.
+
+AAUUTTHHOORRSS
+     The kkqquueeuuee() system and this manual page were written by Jonathan Lemon
+     <_j_l_e_m_o_n_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     In versions older than FreeBSD 12.0, <_s_y_s_/_e_v_e_n_t_._h> failed to parse with‐
+     out including <_s_y_s_/_t_y_p_e_s_._h> manually.
+
+BSD                             March 26, 2023                             BSD

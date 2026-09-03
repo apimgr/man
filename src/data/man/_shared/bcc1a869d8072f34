@@ -1,0 +1,194 @@
+RPC.TLSSERVD(8)           BSD System Manager's Manual          RPC.TLSSERVD(8)
+
+NNAAMMEE
+     rrppcc..ttllsssseerrvvdd — Sun RPC over TLS Server Daemon
+
+SSYYNNOOPPSSIISS
+     rrppcc..ttllsssseerrvvdd [--22] [--CC _a_v_a_i_l_a_b_l_e___c_i_p_h_e_r_s] [--DD _c_e_r_t_d_i_r] [--dd] [--hh]
+                  [--ll _C_A_f_i_l_e] [--mm] [--NN _n_u_m___s_e_r_v_e_r_s] [--nn _d_o_m_a_i_n] [--pp _C_A_p_a_t_h]
+                  [--rr _C_R_L_f_i_l_e] [--uu] [--vv] [--WW] [--ww]
+
+DDEESSCCRRIIPPTTIIOONN
+     The rrppcc..ttllsssseerrvvdd program provides support for the server side of the ker‐
+     nel Sun RPC over TLS implementation.  This daemon must be running to al‐
+     low the kernel RPC to perform the TLS handshake after a TCP client has
+     sent the STARTTLS Null RPC request to the server.  This daemon requires
+     that the kernel be built with “options KERNEL_TLS” and be running on an
+     architecture such as “amd64” that supports a direct map (not i386) with
+     ktls(4) enabled.  Note that the --ttllss option in the exports(5) file speci‐
+     fies that the client must use RPC over TLS.  The --ttllsscceerrtt option in the
+     exports(5) file specifies that the client must provide a certificate that
+     verifies.  The --ttllsscceerrttuusseerr option in the exports(5) file specifies that
+     the client must provide a certificate that verifies and has a other‐
+     Name:1.3.6.1.4.1.2238.1.1.1;UTF8: field of subjectAltName of the form
+     “user@domain” where “domain” matches the one for this server and “user”
+     is a valid user name that maps to a <uid, gid_list>.  For the latter two
+     cases, the --mm and either the --ll or --pp options must be specified.  The
+     --ttllsscceerrttuusseerr option also requires that the --uu option on this daemon be
+     specified.
+
+     Also, if the IP address used by the client cannot be trusted, the rules
+     in exports(5) cannot be applied safely.  As such, the --hh option can be
+     used along with --mm and either the --ll or --pp options to require that the
+     client certificate have the correct Fully Qualified Domain Name (FQDN) in
+     it.
+
+     A certificate and associated key must exist in /etc/rpc.tlsservd (or the
+     “certdir” specified by the --DD option) in files named “cert.pem” and
+     “certkey.pem”.
+
+     If a SIGHUP signal is sent to the daemon it will reload the “CRLfile” and
+     will shut down any extant connections that presented certificates during
+     TLS handshake that have been revoked.  If the --rr option was not speci‐
+     fied, the SIGHUP signal will be ignored.
+
+     The daemon will log failed certificate verifications via syslogd(8) using
+     LOG_INFO | LOG_DAEMON when the --mm option has been specified.
+
+     The options are as follows:
+
+     --22, ----aalllloowwttllss11__22
+             Permit clients to mount using TLS version 1.2.  By default, the
+             daemon will only allow mounts using TLS version 1.3, as required
+             by the RFC.  However, early FreeBSD (13.0 and 13.1) clients re‐
+             quire this option, since they use TLS version 1.2.
+
+     --CC _a_v_a_i_l_a_b_l_e___c_i_p_h_e_r_s, ----cciipphheerrss==_a_v_a_i_l_a_b_l_e___c_i_p_h_e_r_s
+             Specify which ciphers are available during TLS handshake.  If
+             this option is specified, “SSL_CTX_set_ciphersuites()” will be
+             called with “available_ciphers” as the argument.  If this option
+             is not specified, the cipher will be chosen by ssl(7), which
+             should be adequate for most cases.  The format for the available
+             ciphers is a simple ‘:’ separated list, in order of preference.
+             The command “openssl ciphers -s -tls1_3” lists available ciphers.
+
+     --DD _c_e_r_t_d_i_r, ----cceerrttddiirr==_c_e_r_t_d_i_r
+             Use “certdir” instead of /etc/rpc.tlsservd as the location for
+             the certificate in a file called “cert.pem” and associated key in
+             “certkey.pem”.
+
+     --dd, ----ddeebbuugglleevveell
+             Run in debug mode.  In this mode, rrppcc..ttllsssseerrvvdd will not fork when
+             it starts.
+
+     --hh, ----cchheecckkhhoosstt
+             This option specifies that the client must provide a certificate
+             that both verifies and has a FQDN that matches the reverse DNS
+             name for the IP address that the client uses to connect to the
+             server.  The FQDN should be in the DNS field of the subjectAlt‐
+             Name, but is also allowed to be in the CN field of the subject‐
+             Name in the certificate.  By default, a wildcard "*" in the FQDN
+             is not allowed.  With this option, a failure to verify the client
+             certificate or match the FQDN will result in the server sending
+             AUTH_REJECTEDCRED replies to all client RPCs.  This option re‐
+             quires the --mm and either the --ll or --pp options.
+
+     --ll _C_A_f_i_l_e, ----vveerriiffyyllooccss==_C_A_f_i_l_e
+             This option specifies the path name of a CA certificate(s) file
+             in pem format, which is used to verify client certificates and to
+             set the list of CA(s) sent to the client so that it knows which
+             certificate to send to the server during the TLS handshake.  This
+             path name is used in
+             “SSL_CTX_load_verify_locations(ctx,CAfile,NULL)” and
+             “SSL_CTX_set_client_CA_list(ctx,SSL_load_client_CA_file(CAfile))”
+             openssl library calls.  Note that this is a path name for the
+             file and is not assumed to be in “certdir”.  Either this option
+             or the --pp option must be specified when the --mm option is speci‐
+             fied so that the daemon can verify the client's certificate.
+
+     --mm, ----mmuuttuuaallvveerrff
+             This option specifies that the server is to request a certificate
+             from the client during the TLS handshake.  It does not require
+             that the client provide a certificate.  It should be specified
+             unless no client doing RPC over TLS is required to have a cer‐
+             tificate.  For NFS, either the exports(5) option --ttllsscceerrtt or
+             --ttllsscceerrttuusseerr may be used to require a client to provide a cer‐
+             tificate that verifies.  See exports(5).
+
+     --NN _n_u_m___s_e_r_v_e_r_s, ----nnuummddaaeemmoonnss==_n_u_m___s_e_r_v_e_r_s
+             For a server with a large number of NFS-over-TLS client mounts,
+             this daemon might get overloaded after a reboot, when many
+             clients attempt to do a TLS handshake at the same time.  This op‐
+             tion may be used to specify that “num_servers” daemons are to be
+             run instead of a single daemon.  When this is done, the TLS hand‐
+             shakes are spread across the “num_servers” daemons in a round
+             robin fashion to spread out the load.
+
+     --nn _d_o_m_a_i_n, ----ddoommaaiinn==_d_o_m_a_i_n
+             This option specifies what the “domain” is for use with the --uu
+             option, overriding the domain taken from the gethostname(2) of
+             the server this daemon is running on.  If you have specified the
+             --ddoommaaiinn command line option for nfsuserd(8) then you should spec‐
+             ify this option with the same “domain” that was specified for
+             nfsuserd(8).  This option is only meaningful when used with the
+             --uu option.
+
+     --pp _C_A_p_a_t_h, ----vveerriiffyyddiirr==_C_A_p_a_t_h
+             This option is similar to the --ll option, but specifies the path
+             of a directory with CA certificates in it.  When this option is
+             used, “SSL_CTX_set_client_CA_list(ctx,SSL_load_client_CA_file())”
+             is not called, so a list of CA names might not be passed to the
+             client during the TLS handshake.
+
+     --rr _C_R_L_f_i_l_e, ----ccrrll==_C_R_L_f_i_l_e
+             This option specifies a Certificate Revocation List (CRL) file
+             that is to be loaded into the verify certificate store and
+             checked during verification.  This option is only meaningful when
+             either the --ll or --pp have been specified.
+
+     --uu, ----cceerrttuusseerr
+             This option specifies that if the client provides a certificate
+             that both verifies and has a subjectAltName with an otherName
+             component of the form
+             “otherName:1.3.6.1.4.1.2238.1.1.1;UTF8:user@domain” where
+             “domain” matches the one for this server, then the daemon will
+             attempt to map “user” in the above to a user credential <uid,
+             gid_list>.  There should only be one of these otherName compo‐
+             nents for each “domain”.  If “user” is a valid username in the
+             password database, then the <uid, gid_list> for “user” will be
+             used for all RPCs on the mount instead of the credentials in the
+             RPC request header.  This option requires the --mm and either the
+             --ll or --pp options.  Use of this option might not conform to
+             RFC-9289, which does not allow certificates to be used for user
+             authentication.
+
+     --vv, ----vveerrbboossee
+             Run in verbose mode.  In this mode, rrppcc..ttllsssseerrvvdd will log activ‐
+             ity messages to syslogd(8) using LOG_INFO | LOG_DAEMON or to
+             stderr, if the --dd option has also been specified.
+
+     --WW, ----mmuullttiiwwiilldd
+             This option is used with the --hh option to allow use of a wildcard
+             “*” that matches multiple components of the reverse DNS name for
+             the client's IP address.  For example, the FQDN “*.uoguelph.ca”
+             would match both “laptop21.uoguelph.ca” and
+             “laptop3.cis.uoguelph.ca”.
+
+     --ww, ----ssiinngglleewwiilldd
+             Similar to --WW but allows the wildcard “*” to match a single com‐
+             ponent of the reverse DNS name.  For example, the FQDN
+             “*.uoguelph.ca” would match “laptop21.uoguelph.ca” but not
+             “laptop3.cis.uoguelph.ca”.  Only one of the --WW and --ww options is
+             allowed.
+
+EEXXIITT SSTTAATTUUSS
+     The rrppcc..ttllsssseerrvvdd utility exits 0 on success, and >0 if an error occurs.
+
+SSEEEE AALLSSOO
+     openssl(1), ktls(4), exports(5), ssl(7), mount_nfs(8), nfsuserd(8),
+     rpc.tlsclntd(8), syslogd(8)
+
+SSTTAANNDDAARRDDSS
+     The implementation is based on the specification in “Towards Remote
+     Procedure Call Encryption By Default”, _R_F_C _9_2_8_9.
+
+HHIISSTTOORRYY
+     The rrppcc..ttllsssseerrvvdd manual page first appeared in FreeBSD 13.0.
+
+BBUUGGSS
+     This daemon cannot be safely shut down and restarted if there are any ac‐
+     tive RPC-over-TLS connections.  Doing so will orphan the KERNEL_TLS con‐
+     nections, so that they can no longer do upcalls successfully, since the
+     “SSL *” structures in userspace have been lost.
+
+BSD                            November 10, 2022                           BSD

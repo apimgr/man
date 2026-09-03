@@ -1,0 +1,284 @@
+is  a  daemon  invoked at boot time to manage the network routing
+tables.  It uses Routing Information Protocol, RIPv1 (RFC  1058),
+RIPv2  (RFC  1723),  and  Internet Router Discovery Protocol (RFC
+1256) to maintain the kernel routing table.  The  RIPv1  protocol
+is  based  on the reference daemon.  It listens on the socket for
+the service (see for Routing Information  Protocol  packets.   It
+also sends and receives multicast Router Discovery ICMP messages.
+If  the  host  is  a  router, periodically supplies copies of its
+routing tables to any directly connected hosts and networks.   It
+also advertises or solicits default routes using Router Discovery
+ICMP  messages.   When  started  (or  when a network interface is
+later turned on), uses an AF_ROUTE  address  family  facility  to
+find those directly connected interfaces configured into the sys‐
+tem and marked "up".  It adds necessary routes for the interfaces
+to the kernel routing table.  Soon after being first started, and
+provided  there  is  at  least one interface on which RIP has not
+been disabled, deletes all pre‐existing non‐static routes in ker‐
+nel table.  Static routes in the kernel table are  preserved  and
+included in RIP responses if they have a valid RIP metric (see If
+more than one interface is present (not counting the loopback in‐
+terface),  it  is  assumed  that  the host should forward packets
+among the connected  networks.   After  transmitting  a  RIP  and
+Router  Discovery Advertisements or Solicitations on a new inter‐
+face, the daemon enters a loop, listening for RIP request and re‐
+sponse and Router Discovery packets from  other  hosts.   When  a
+packet  is  received, formulates a reply based on the information
+maintained in its internal tables.  The packet generated contains
+a list of known routes, each marked with a "hop count" metric  (a
+count of 16 or greater is considered "infinite").  The advertised
+metric  for  a  route reflects the metrics associated with inter‐
+faces (see through which it is received and sent, so setting  the
+metric on an interface is an effective way to steer traffic.  See
+also  and parameters below.  Responses do not include routes with
+a first hop on the requesting network to implement  in  part  Re‐
+quests from query programs such as are answered with the complete
+table.  The routing table maintained by the daemon includes space
+for  several gateways for each destination to speed recovery from
+a failing router.  RIP packets received are used  to  update  the
+routing  tables  provided  they  are from one of the several cur‐
+rently recognized gateways or advertise a better metric  than  at
+least  one  of the existing gateways.  When an update is applied,
+records the change in its own tables and updates the kernel rout‐
+ing table if the best route  to  the  destination  changes.   The
+change in the kernel routing table is reflected in the next batch
+of  packets  sent.   If  the next response is not scheduled for a
+while, a response containing  only  recently  changed  routes  is
+sent.   In addition to processing incoming packets, also periodi‐
+cally checks the routing table entries.  If an entry has not been
+updated for 3 minutes, the entry’s metric is set to infinity  and
+marked  for  deletion.  Deletions are delayed until the route has
+been advertised with an infinite metric to ensure  the  invalida‐
+tion is propagated throughout the local internet.  This is a form
+of  Routes in the kernel table that are added or changed as a re‐
+sult of ICMP Redirect messages are deleted after a while to mini‐
+mize When a TCP connection suffers a timeout,  the  kernel  tells
+which deletes all redirected routes through the gateway involved,
+advances  the  age of all RIP routes through the gateway to allow
+an alternate to be chosen, and advances of the age of  any  rele‐
+vant  Router  Discovery Protocol default routes.  Hosts acting as
+internetwork routers gratuitously  supply  their  routing  tables
+every  30  seconds  to all directly connected hosts and networks.
+These RIP responses are sent to the  broadcast  address  on  nets
+that  support  broadcasting, to the destination address on point‐
+to‐point links, and to the router’s own  address  on  other  net‐
+works.  If RIPv2 is enabled, multicast packets are sent on inter‐
+faces that support multicasting.  If no response is received on a
+remote interface, if there are errors while sending responses, or
+if there are more errors than input or output (see then the cable
+or some other part of the interface is assumed to be disconnected
+or broken, and routes are adjusted appropriately.  The is handled
+similarly.  When the daemon is supplying RIP routes, it also lis‐
+tens for Router Discovery Solicitations and sends Advertisements.
+When it is quiet and listening to other RIP routers, it sends So‐
+licitations  and  listens  for  Advertisements.  If it receives a
+good Advertisement and it is not multi‐homed, it stops  listening
+for  broadcast or multicast RIP responses.  It tracks several ad‐
+vertising routers to speed recovery  when  the  currently  chosen
+router dies.  If all discovered routers disappear, the daemon re‐
+sumes  listening to RIP responses.  It continues listening to RIP
+while using Router Discovery if multi‐homed to ensure all  inter‐
+faces  are used.  The Router Discovery standard requires that ad‐
+vertisements have a default "lifetime" of 30 minutes.  That means
+should something happen, a client can be without a good route for
+30 minutes.  It is a good idea to reduce the default to  45  sec‐
+onds  using  on  the  command  line  or in the file.  While using
+Router Discovery (which happens by default when the system has  a
+single  network  interface and a Router Discover Advertisement is
+received), there is a single default route and a variable  number
+of  redirected  host  routes in the kernel table.  On a host with
+more than one network interface, this default route will  be  via
+only one of the interfaces.  Thus, multi‐homed hosts running with
+might  need described below.  See the facility described below to
+support "legacy" systems that can handle neither RIPv2 nor Router
+Discovery.  By default, neither Router  Discovery  advertisements
+nor  solicitations are sent over point to point links (e.g. PPP).
+The netmask associated with point‐to‐point links (such as SLIP or
+PPP, with the IFF_POINTOPOINT flag) is used by to infer the  net‐
+mask used by the remote system when RIPv1 is used.  The following
+options are available: force to supply routing information.  This
+is  the  default  if  multiple  network interfaces are present on
+which RIP or Router Discovery have not been disabled, and if  the
+sysctl  net.inet.ip.forwarding=1.  is the opposite of the option.
+This is the default when only one  interface  is  present.   With
+this  explicit  option,  the daemon is always in "quiet‐mode" for
+RIP and does not supply routing information to  other  computers.
+do  not run in the background.  This option is meant for interac‐
+tive use.  used on internetwork routers to offer a route  to  the
+"default" destination.  It is equivalent to and is present mostly
+for  historical  reasons.  A better choice is on the command line
+or in the file.  since a larger metric will be used, reducing the
+spread of the potentially dangerous default route.  This is typi‐
+cally used on a gateway to the Internet, or  on  a  gateway  that
+uses  another  routing  protocol whose routes are not reported to
+other local routers.  Notice that because a metric of 1 is  used,
+this feature is dangerous.  It is more commonly accidentally used
+to  create  chaos  with  a  routing  loop than to solve problems.
+cause host or point‐to‐point routes to not  be  advertised,  pro‐
+vided there is a network route going the same direction.  That is
+a limited kind of aggregation.  This option is useful on gateways
+to  Ethernets  that  have  other  gateway machines connected with
+point‐to‐point links such as SLIP.  cause the machine  to  adver‐
+tise a host or point‐to‐point route to its primary interface.  It
+is  useful on multi‐homed machines such as NFS servers.  This op‐
+tion should not be used except when the cost of the  host  routes
+it generates is justified by the popularity of the server.  It is
+effective only when the machine is supplying routing information,
+because  there  is more than one interface.  The option overrides
+the option to the limited extent of advertising the  host  route.
+do  not ignore RIPv2 authentication if we do not care about RIPv2
+authentication.  This option is required for conformance with RFC
+1723.  However, it makes no sense and breaks using RIP as a  dis‐
+covery  protocol to ignore all RIPv2 packets that carry authenti‐
+cation when this machine does not care about authentication.  in‐
+crease the debugging level, which causes more information  to  be
+logged  on the tracefile specified with or standard out.  The de‐
+bugging level can be increased or decreased with the  or  signals
+or with the command.  increases the debugging level to at least 1
+and  causes  debugging  information  to  be appended to the trace
+file.  Note that because of security concerns, it  is  wisest  to
+not  run routinely with tracing directed to a file.  displays and
+logs the version of daemon.  minimize routes in transmissions via
+interfaces with addresses that match and  synthesizes  a  default
+route  to this machine with the The intent is to reduce RIP traf‐
+fic on slow, point‐to‐point links such as PPP links by  replacing
+many  large  UDP  packets of RIP information with a single, small
+packet containing a "fake" default route.  If is absent, a  value
+of 14 is assumed to limit the spread of the "fake" default route.
+This  is  a dangerous feature that when used carelessly can cause
+routing loops.  Notice also that  more  than  one  interface  can
+match the specified network number and mask.  See also is equiva‐
+lent  to  adding the parameter line to the file.  Any other argu‐
+ment supplied is interpreted as the name of a file in  which  the
+actions  of should be logged.  It is better to use instead of ap‐
+pending the name of the trace file to the command.  also supports
+the notion of "distant" or gateways.  When is started,  it  reads
+the  file  to find such distant gateways which may not be located
+using only information from a routing socket, to discover if some
+of the local gateways are and to obtain other parameters.   Gate‐
+ways  specified  in  this manner should be marked passive if they
+are not expected to exchange routing information, while  gateways
+marked  active should be willing to exchange RIP packets.  Routes
+through gateways are installed in  the  kernel’s  routing  tables
+once  upon  startup  and  are not included in transmitted RIP re‐
+sponses.  Distant active gateways are treated like network inter‐
+faces.  RIP responses are sent to the distant gateway.  If no re‐
+sponses are received, the associated route is  deleted  from  the
+kernel  table  and RIP responses advertised via other interfaces.
+If the distant gateway resumes sending RIP responses, the associ‐
+ated route is restored.  Such gateways can  be  useful  on  media
+that  do  not  support broadcasts or multicasts but otherwise act
+like classic shared media like Ethernets such as  some  ATM  net‐
+works.   One  can  list all RIP routers reachable on the HIPPI or
+ATM network in with a series of "host" lines.  Note  that  it  is
+usually desirable to use RIPv2 in such situations to avoid gener‐
+ating  lists  of  inferred host routes.  Gateways marked are also
+passive, but are not placed in the kernel routing table  nor  are
+they  included  in routing updates.  The function of external en‐
+tries is to indicate that another routing  process  will  install
+such a route if necessary, and that other routes to that destina‐
+tion  should  not  be installed by Such entries are only required
+when both routers may learn of routes to  the  same  destination.
+The  file  is  comprised of a series of lines, each in one of the
+following two formats or consist of parameters  described  later.
+Blank  lines and lines starting with ’#’ are comments.  or is the
+name of the destination network or host.  It may  be  a  symbolic
+network  name  or an Internet address specified in "dot" notation
+(see (If it is a name, then it must either be defined  in  or  or
+must have been started before is an optional number between 1 and
+32  indicating the netmask associated with is the name or address
+of the gateway to which RIP responses should  be  forwarded.   is
+the  hop count to the destination host or network.  is equivalent
+to One of the keywords or must be present to indicate whether the
+gateway should be treated as or (as described above), or  whether
+the  gateway is to the scope of the RIP protocol.  As can be seen
+when debugging is turned on with such lines create  pseudo‐inter‐
+faces.   To  set  parameters for remote or external interfaces, a
+line starting with etc. should be used.  Lines  that  start  with
+neither  "net" nor "host" must consist of one or more of the fol‐
+lowing parameter settings, separated by commas or  blanks:  indi‐
+cates  that  the other parameters on the line apply to the inter‐
+face name advertises a route to network with mask  and  the  sup‐
+plied  metric (default 1).  This is useful for filling "holes" in
+CIDR allocations.  This parameter must  appear  by  itself  on  a
+line.   The  network number must specify a full, 32‐bit value, as
+in 192.0.2.0 instead of 192.0.2.  Do not use this feature  unless
+necessary.   It is dangerous.  specifies that netmask of the net‐
+work  of  which  is  a  subnet  should  be  For   example   marks
+192.0.2.16/28   as   a   subnet   of   192.0.2.0/27   instead  of
+192.0.2.0/24.  It is better to turn on  RIPv2  instead  of  using
+this facility, for example with specifies a RIPv2 cleartext pass‐
+word  that  will  be  included  on  all RIPv2 responses sent, and
+checked on all RIPv2 responses received.  Any blanks, tab charac‐
+ters, commas, or ’#’, ’|’, or NULL  characters  in  the  password
+must  be  escaped  with  a  backslash (\).  The common escape se‐
+quences \n, \r, \t, \b, and \xxx have their usual meanings.   The
+must  be  unique  but  is  ignored  for  cleartext passwords.  If
+present,     and     are     timestamps     in      the      form
+year/month/day@hour:minute.   They  specify  when the password is
+valid.  The valid password with the most future is used on output
+packets, unless all passwords have expired,  in  which  case  the
+password  that  expired most recently is used, or unless no pass‐
+words are valid yet, in which case no password is output.  Incom‐
+ing packets can carry any password that is valid, will  be  valid
+within  the next 24 hours, or that was valid within the preceding
+24 hours.  To protect the secrets, the passwd settings are  valid
+only  in the file and only when that file is readable only by UID
+0.  specifies a RIPv2 MD5 password.  Except that a  is  required,
+this  keyword  is  similar to turns off aggregation of subnets in
+RIPv1 and RIPv2 responses.  turns  off  aggregation  of  networks
+into supernets in RIPv2 responses.  marks the interface to not be
+advertised  in  updates  sent via other interfaces, and turns off
+all RIP and router discovery through the interface.  disables all
+RIP processing on the specified interface.  If no interfaces  are
+allowed to process RIP packets, acts purely as a router discovery
+daemon.   Note that turning off RIP without explicitly turning on
+router discovery advertisements with or causes to act as a client
+router discovery daemon, not advertising.  causes  RIPv2  packets
+to  be broadcast instead of multicast.  causes RIPv1 received re‐
+sponses to be ignored.  causes RIPv2 received responses to be ig‐
+nored.  turns on RIPv2 output and causes RIPv2 advertisements  to
+be  multicast  when  possible.  is equivalent to and This enables
+RIPv2.  disables the Internet Router  Discovery  Protocol.   dis‐
+ables the transmission of Router Discovery Solicitations.  speci‐
+fies  that Router Discovery solicitations should be sent, even on
+point‐to‐point links, which by default only listen to Router Dis‐
+covery messages.  disables the transmission of  Router  Discovery
+Advertisements.   specifies  that Router Discovery Advertisements
+should be sent, even on point‐to‐point links,  which  by  default
+only  listen to Router Discovery messages.  specifies that Router
+Discovery packets should be broadcast instead of multicast.  sets
+the preference in Router Discovery Advertisements to the  option‐
+ally  signed integer The default preference is 0.  Default routes
+with larger preferences are preferred by clients.  sets the nomi‐
+nal interval  with  which  Router  Discovery  Advertisements  are
+transmitted to N seconds and their lifetime to 3*N.  has an iden‐
+tical  effect to with the network and mask coming from the speci‐
+fied interface.  is similar to When RIPv2 routes  are  multicast,
+so  that RIPv1 listeners cannot receive them, this feature causes
+a RIPv1 default route to be broadcast to RIPv1 listeners.  Unless
+modified with the default route is broadcast with a metric of 14.
+That serves as a "poor man’s router discovery" protocol.  adjusts
+the hop count or metric of received RIP routes by The  metric  of
+every  received  RIP  route is increased by the sum of two values
+associated with the interface.  One is the adj_inmetric value and
+the other is the interface metric set with adjusts the hop  count
+or  metric  of  advertised  RIP routes by The metric of every re‐
+ceived RIP route is increased by the metric associated  with  the
+interface by which it was received, or by 1 if the interface does
+not  have a non‐zero metric.  The metric of the received route is
+then increased by the adj_outmetric associated  with  the  inter‐
+face.   Every  advertised  route  is increased by a total of four
+values, the metric set for the interface by which it was received
+with the of the receiving interface, the metric set for  the  in‐
+terface  by which it is transmitted with and the of the transmit‐
+ting interface.  causes RIP packets from router and other routers
+named in other keywords to be accepted, and  packets  from  other
+routers to be ignored.  If networks are specified, then routes to
+other networks will be ignored from that router.  allows the ker‐
+nel to listen ICMP Redirect messages when the system is acting as
+a  router  and forwarding packets.  Otherwise, ICMP Redirect mes‐
+sages are overridden and deleted when the system is acting  as  a
+router.  for distant gateways The command appeared in It does not
+always  detect unidirectional failures in network interfaces, for
+example, when the output side fails.

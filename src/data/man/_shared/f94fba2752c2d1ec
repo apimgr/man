@@ -1,0 +1,69 @@
+RUNQUEUE(9)              BSD Kernel Developer's Manual             RUNQUEUE(9)
+
+NNAAMMEE
+     cchhoooosseetthhrreeaadd, pprrooccrruunnnnaabbllee, rreemmrruunnqquueeuuee, sseettrruunnqquueeuuee — manage the queue
+     of runnable processes
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//pprroocc..hh>>
+
+     _e_x_t_e_r_n _s_t_r_u_c_t _r_q _i_t_q_u_e_u_e_s_[_];
+     _e_x_t_e_r_n _s_t_r_u_c_t _r_q _r_t_q_u_e_u_e_s_[_];
+     _e_x_t_e_r_n _s_t_r_u_c_t _r_q _q_u_e_u_e_s_[_];
+     _e_x_t_e_r_n _s_t_r_u_c_t _r_q _i_d_q_u_e_u_e_s_[_];
+
+     _s_t_r_u_c_t _t_h_r_e_a_d _*
+     cchhoooosseetthhrreeaadd(_v_o_i_d);
+
+     _i_n_t
+     pprrooccrruunnnnaabbllee(_v_o_i_d);
+
+     _v_o_i_d
+     rreemmrruunnqquueeuuee(_s_t_r_u_c_t _t_h_r_e_a_d _*_t_d);
+
+     _v_o_i_d
+     sseettrruunnqquueeuuee(_s_t_r_u_c_t _t_h_r_e_a_d _*_t_d);
+
+DDEESSCCRRIIPPTTIIOONN
+     The run queue consists of four priority queues: _i_t_q_u_e_u_e_s for interrupt
+     threads, _r_t_q_u_e_u_e_s for realtime priority processes, _q_u_e_u_e_s for time shar‐
+     ing processes, and _i_d_q_u_e_u_e_s for idle priority processes.  Each priority
+     queue consists of an array of NQS queue header structures.  Each queue
+     header identifies a list of runnable processes of equal priority.  Each
+     queue also has a single word that contains a bit mask identifying non-
+     empty queues to assist in selecting a process quickly.  These are named
+     _i_t_q_u_e_u_e_b_i_t_s, _r_t_q_u_e_u_e_b_i_t_s, _q_u_e_u_e_b_i_t_s, and _i_d_q_u_e_u_e_b_i_t_s.  The run queues are
+     protected by the _s_c_h_e_d___l_o_c_k mutex.
+
+     pprrooccrruunnnnaabbllee() returns zero if there are no runnable processes other than
+     the idle process.  If there is at least one runnable process other than
+     the idle process, it will return a non-zero value.  Note that the
+     _s_c_h_e_d___l_o_c_k mutex does _n_o_t need to be held when this function is called.
+     There is a small race window where one CPU may place a process on the run
+     queue when there are currently no other runnable processes while another
+     CPU is calling this function.  In that case the second CPU will simply
+     travel through the idle loop one additional time before noticing that
+     there is a runnable process.  This works because idle CPUs are not halted
+     in SMP systems.  If idle CPUs are halted in SMP systems, then this race
+     condition might have more serious repercussions in the losing case, and
+     pprrooccrruunnnnaabbllee() may have to require that the _s_c_h_e_d___l_o_c_k mutex be acquired.
+
+     cchhoooosseetthhrreeaadd() returns the highest priority runnable thread.  If there
+     are no runnable threads, then the idle thread is returned.  This function
+     is called by ccppuu__sswwiittcchh() and ccppuu__tthhrrooww() to determine which thread to
+     switch to.  cchhoooosseetthhrreeaadd() must be called with the _s_c_h_e_d___l_o_c_k mutex held.
+
+     sseettrruunnqquueeuuee() adds the thread _t_d to the tail of the appropriate queue in
+     the proper priority queue.  The thread must be runnable, i.e. _p___s_t_a_t must
+     be set to SRUN.  This function must be called with the _s_c_h_e_d___l_o_c_k mutex
+     held.
+
+     rreemmrruunnqquueeuuee() removes thread _t_d from its run queue.  If _t_d is not on a
+     run queue, then the kernel will panic(9).  This function must be called
+     with the _s_c_h_e_d___l_o_c_k mutex held.
+
+SSEEEE AALLSSOO
+     cpu_switch(9), scheduler(9), sleepqueue(9)
+
+BSD                             August 15, 2010                            BSD

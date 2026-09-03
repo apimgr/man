@@ -1,0 +1,184 @@
+INETD(8)                  BSD System Manager's Manual                 INETD(8)
+
+NNAAMMEE
+     iinneettdd, iinneettdd..ccoonnff — internet super-server
+
+SSYYNNOOPPSSIISS
+     iinneettdd [--dd] [--RR _r_a_t_e] [_c_o_n_f_i_g_u_r_a_t_i_o_n___f_i_l_e]
+
+DDEESSCCRRIIPPTTIIOONN
+     iinneettdd should be run at boot time by _/_e_t_c_/_r_c (see rc(8)).  It then listens
+     for connections on certain internet sockets.  When a connection is found
+     on one of its sockets, it decides what service the socket corresponds to,
+     and invokes a program to service the request.  After the program is fin‐
+     ished, it continues to listen on the socket (except in some cases which
+     will be described below).  Essentially, iinneettdd allows running one daemon
+     to invoke several others, reducing load on the system.
+
+     The options are as follows:
+
+     --dd      Turns on debugging.
+
+     --RR _r_a_t_e
+             Specify the maximum number of times a service can be invoked in
+             one minute; the default is 256.  If a service exceeds this limit,
+             iinneettdd will log the problem and stop servicing requests for the
+             specific service for ten minutes.  See also the wait/nowait con‐
+             figuration fields below.
+
+     Upon execution, iinneettdd reads its configuration information from a configu‐
+     ration file which, by default, is _/_e_t_c_/_i_n_e_t_d_._c_o_n_f.  There must be an en‐
+     try for each field of the configuration file, with entries for each field
+     separated by a tab or a space.  Comments are denoted by a “#” at the be‐
+     ginning of a line.  The fields of the configuration file are as follows:
+
+           service name
+           socket type
+           protocol
+           wait/nowait[.max]
+           user[.group] or user[:group]
+           server program
+           server program arguments
+
+     To specify a Sun-RPC based service, the entry would contain these fields.
+
+           service name/version
+           socket type
+           rpc/protocol
+           wait/nowait[.max]
+           user[.group] or user[:group]
+           server program
+           server program arguments
+
+     For internet services, the first field of the line may also have a host
+     address specifier prefixed to it, separated from the service name by a
+     colon.  If this is done, the string before the colon in the first field
+     indicates what local address iinneettdd should use when listening for that
+     service.  Multiple local addresses can be specified on the same line,
+     separated by commas.  Numeric IP addresses in dotted-quad notation can be
+     used as well as symbolic hostnames.  Symbolic hostnames are looked up us‐
+     ing ggeettaaddddrriinnffoo().  If a hostname has multiple address mappings, inetd
+     creates a socket to listen on each address.
+
+     The single character “*” indicates INADDR_ANY, meaning “all local
+     addresses”.  To avoid repeating an address that occurs frequently, a line
+     with a host address specifier and colon, but no further fields, causes
+     the host address specifier to be remembered and used for all further
+     lines with no explicit host specifier (until another such line or the end
+     of the file).  A line
+           *:
+     is implicitly provided at the top of the file; thus, traditional configu‐
+     ration files (which have no host address specifiers) will be interpreted
+     in the traditional manner, with all services listened for on all local
+     addresses.  If the protocol is “unix”, this value is ignored.
+
+     The _s_e_r_v_i_c_e _n_a_m_e entry is the name of a valid service in the file
+     _/_e_t_c_/_s_e_r_v_i_c_e_s.  For “internal” services (discussed below), the service
+     name _m_u_s_t be the official name of the service (that is, the first entry
+     in _/_e_t_c_/_s_e_r_v_i_c_e_s).  When used to specify a Sun-RPC based service, this
+     field is a valid RPC service name in the file _/_e_t_c_/_r_p_c.  The part on the
+     right of the “/” is the RPC version number.  This can simply be a single
+     numeric argument or a range of versions.  A range is bounded by the low
+     version to the high version - “rusers/1-3”.  For UNIX-domain sockets this
+     field specifies the path name of the socket.
+
+     The _s_o_c_k_e_t _t_y_p_e should be one of “stream” or “dgram”, depending on
+     whether the socket is a stream or datagram socket.
+
+     The _p_r_o_t_o_c_o_l must be a valid protocol as given in _/_e_t_c_/_p_r_o_t_o_c_o_l_s.  Exam‐
+     ples might be “tcp” or “udp”.  RPC based services are specified with the
+     “rpc/tcp” or “rpc/udp” service type.  “tcp” and “udp” will be recognized
+     as “TCP or UDP over default IP version”.  This is currently IPv4, but in
+     the future it will be IPv6.  If you need to specify IPv4 or IPv6 explic‐
+     itly, use something like “tcp4” or “udp6”.  A _p_r_o_t_o_c_o_l of “unix” is used
+     to specify a socket in the UNIX-domain.
+
+     The _w_a_i_t_/_n_o_w_a_i_t entry is used to tell iinneettdd if it should wait for the
+     server program to return, or continue processing connections on the
+     socket.  If a datagram server connects to its peer, freeing the socket so
+     iinneettdd can receive further messages on the socket, it is said to be a
+     “multi-threaded” server, and should use the “nowait” entry.  For datagram
+     servers which process all incoming datagrams on a socket and eventually
+     time out, the server is said to be “single-threaded” and should use a
+     “wait” entry.  comsat(8) (biff(1)) and talkd(8) are both examples of the
+     latter type of datagram server.  The optional “max” suffix (separated
+     from “wait” or “nowait” by a dot) specifies the maximum number of times a
+     service can be invoked in one minute; the default is 256.  If a service
+     exceeds this limit, iinneettdd will log the problem and stop servicing re‐
+     quests for the specific service for ten minutes.  See also the --RR option
+     above.
+
+     Stream servers are usually marked as “nowait” but if a single server
+     process is to handle multiple connections, it may be marked as “wait”.
+     The master socket will then be passed as fd 0 to the server, which will
+     then need to accept the incoming connection.  The server should eventu‐
+     ally time out and exit when no more connections are active.  iinneettdd will
+     continue to listen on the master socket for connections, so the server
+     should not close it when it exits.
+
+     The _u_s_e_r entry should contain the user name of the user as whom the
+     server should run.  This allows for servers to be given less permission
+     than root.  An optional group name can be specified by appending a dot to
+     the user name followed by the group name.  This allows for servers to run
+     with a different (primary) group ID than specified in the password file.
+     If a group is specified and user is not root, the supplementary groups
+     associated with that user will still be set.
+
+     The _s_e_r_v_e_r _p_r_o_g_r_a_m entry should contain the pathname of the program which
+     is to be executed by iinneettdd when a request is found on its socket.  If
+     iinneettdd provides this service internally, this entry should be “internal”.
+
+     The _s_e_r_v_e_r _p_r_o_g_r_a_m _a_r_g_u_m_e_n_t_s should be just as arguments normally are,
+     starting with argv[0], which is the name of the program.  If the service
+     is provided internally, the word “internal” should take the place of this
+     entry.
+
+     iinneettdd provides several “trivial” services internally by use of routines
+     within itself.  These services are “echo”, “discard”, “chargen” (charac‐
+     ter generator), “daytime” (human readable time), and “time” (machine
+     readable time, in the form of the number of seconds since midnight, Janu‐
+     ary 1, 1900).  All of these services are TCP based.  For details of these
+     services, consult the appropriate RFC from the Network Information Cen‐
+     ter.
+
+     iinneettdd rereads its configuration file when it receives a hangup signal,
+     SIGHUP.  Services may be added, deleted or modified when the configura‐
+     tion file is reread.
+
+   IIPPvv66 TTCCPP//UUDDPP bbeehhaavviioorr
+     If you wish to run a server for IPv4 and IPv6 traffic, you'll need to run
+     two separate processes for the same server program, specified as two sep‐
+     arate lines in _i_n_e_t_d_._c_o_n_f, for “tcp4” and “tcp6”.
+
+     Under various combinations of IPv4/v6 daemon settings, iinneettdd will behave
+     as follows:
+     ••   If you have only one server on “tcp4”, IPv4 traffic will be routed to
+         the server.  IPv6 traffic will not be accepted.
+     ••   If you have two servers on “tcp4” and “tcp6”, IPv4 traffic will be
+         routed to the server on “tcp4”, and IPv6 traffic will go to server on
+         “tcp6”.
+     ••   If you have only one server on “tcp6”, only IPv6 traffic will be
+         routed to the server.
+
+FFIILLEESS
+     /etc/inetd.conf
+     /etc/examples/inetd.conf
+
+SSEEEE AALLSSOO
+     comsat(8), fingerd(8), ftp-proxy(8), ftpd(8), identd(8), talkd(8)
+
+HHIISSTTOORRYY
+     The iinneettdd command appeared in 4.3BSD.  Support for Sun-RPC based services
+     is modelled after that provided by SunOS 4.1.  IPv6 support was added by
+     the KAME project in 1999.
+
+BBUUGGSS
+     Host address specifiers, while they make conceptual sense for RPC ser‐
+     vices, do not work entirely correctly.  This is largely because the
+     portmapper interface does not provide a way to register different ports
+     for the same service on different local addresses.  Provided you never
+     have more than one entry for a given RPC service, everything should work
+     correctly.  (Note that default host address specifiers do apply to RPC
+     lines with no explicit specifier.)
+
+BSD                            February 10, 2020                           BSD

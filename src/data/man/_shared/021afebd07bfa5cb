@@ -1,0 +1,151 @@
+FRAME(4)                 BSD Kernel Interfaces Manual                 FRAME(4)
+
+NNAAMMEE
+     ffrraammee — frame protocol family
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee aaff__ffrraammee
+
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneett//ffrraammee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ffrraammee protocol family provides an interface for sending and receiving
+     low level network interface frames through the normal socket(2) mecha‐
+     nisms.
+
+     The ffrraammee protocol family supports the SOCK_DGRAM socket type.  Only root
+     may create ffrraammee protocol family sockets.
+
+     ffrraammee protocol family sockets are designed as an alternative to bpf(4)
+     for handling low data and packet rate communication protocols.  Rather
+     than filtering every frame entering the system before the network stack,
+     like bpf(4), processing of the ffrraammee protocol family runs after the built
+     in protocol handlers in the kernel, thus avoiding the overhead.  For this
+     reason, it is not possible to handle IPv4 or IPv6 packets with ffrraammee pro‐
+     tocol sockets because the kernel network stack consumes them before the
+     receive handling for ffrraammee sockets is run.
+
+     Sockets can be created in the ffrraammee protocol family by using AF_FRAME as
+     the _d_o_m_a_i_n argument to socket(2).  The type of interface, as per
+     <_n_e_t_/_i_f___t_y_p_e_s_._h>, is specified as the socket _p_r_o_t_o_c_o_l.  Currently only
+     Ethernet interfaces are supported.
+
+     Sockets bound to the ffrraammee family use the following address structure:
+
+           #define FRAME_ADDRLEN   8
+           #define FRAME_DATALEN   32
+
+           struct sockaddr_frame {
+                   uint8_t         sfrm_len;
+                   uint8_t         sfrm_family;
+                   uint16_t        sfrm_proto;
+                   unsigned int    sfrm_ifindex;
+                   uint8_t         sfrm_addr[FRAME_ADDRLEN];
+                   char            sfrm_ifname[IFNAMSIZ];
+                   uint8_t         sfrm_data[FRAME_DATALEN];
+           };
+
+     The interface used for transmitting or receiving frames with a ffrraammee do‐
+     main socket may be specified by using an interface index with
+     _s_f_r_m___i_f_i_n_d_e_x, or by name with _s_f_r_m___i_f_n_a_m_e.  The use of other _s_t_r_u_c_t
+     _s_o_c_k_a_d_d_r___f_r_a_m_e fields depends on the type of interface.
+
+   EEtthheerrnneett ffrraammee ssoocckkeettss
+     A ffrraammee socket for use with Ethernet interfaces can be created using
+     IFT_ETHER as the _p_r_o_t_o_c_o_l argument to socket(2):
+
+           int sock = socket(AF_FRAME, SOCK_DGRAM, IFT_ETHER);
+
+     The Ethernet protocol is specified with _s_f_r_m___p_r_o_t_o in network byte order.
+     Ethernet addresses are specified using the first 6 bytes of _s_f_r_m___a_d_d_r.
+
+     Ethernet ffrraammee sockets may receive frames on all interfaces by specifying
+     0 for _s_f_r_m___i_f_i_n_d_e_x when using bind(2).  Similarly, a “wildcard” local ad‐
+     dress of all zeros can be specified in _s_f_r_m___a_d_d_r.
+
+     An interface and address must be specified when sending Ethernet frames.
+
+     Ethernet sockets support the following ffrraammee socket options using
+     IFT_ETHER as the _l_e_v_e_l argument with setsockopt(2) and getsockopt(2):
+
+     FRAME_RECVDSTADDR _i_n_t
+             Enable or disable the reception of the Ethernet destination ad‐
+             dress as a _s_t_r_u_c_t _e_t_h_e_r___a_d_d_r control message for frames received
+             with recvmsg(2).
+
+     FRAME_RECVPRIO _i_n_t
+             Enable or disable the reception of the mbuf packet priority field
+             as an _i_n_t sized control message for frames received with
+             recvmsg(2).
+
+     FRAME_ADD_MEMBERSHIP _s_t_r_u_c_t _f_r_a_m_e___m_r_e_q
+             Configure an Ethernet interface to enable reception of frames
+             destined to the specified multicast Ethernet address.
+
+                   struct frame_mreq {
+                           unsigned int    fmr_ifindex;
+                           uint8_t         fmr_addr[FRAME_ADDRLEN];
+                           char            fmr_ifname[IFNAMSIZ];
+                   };
+
+             An interface must be specified using either _f_m_r___i_f_i_n_d_e_x or
+             _f_m_r___i_f_n_a_m_e.  The multicast Ethernet address is specified in the
+             first 6 bytes of _f_m_r___a_d_d_r.
+
+     FRAME_DEL_MEMBERSHIP _s_t_r_u_c_t _f_r_a_m_e___m_r_e_q
+             Configure an Ethernet interface to disable reception of frames
+             destined to the specified multicast Ethernet address.
+
+     FRAME_SENDPRIO _i_n_t
+             Specify an mbuf priority value between IF_HDRPRIO_MIN (0) and
+             IF_HDRPRIO_MAX (7) for frames sent with the Ethernet ffrraammee
+             socket, or IF_HDRPRIO_PACKET to use the existing mbuf priority
+             value.  The default is IF_HDRPRIO_PACKET.
+
+EEXXAAMMPPLLEESS
+     To receive LLDP frames on the em0 Ethernet interface:
+
+           struct sockaddr_frame sfrm = {
+                   .sfrm_family = AF_FRAME,
+                   .sfrm_ifname = "em0",
+                   .sfrm_proto = htons(ETHERTYPE_LLDP),
+           };
+           struct frame_mreq fmr = {
+                   .fmr_ifname = "em0",
+                   .fmr_addr = { 0x01, 0x80, 0xc2, 0x00, 0x00, 0x0e },
+           };
+           int sock;
+
+           sock = socket(AF_FRAME, SOCK_DGRAM, IFT_ETHER);
+           if (sock == -1)
+                   err(1, "ethernet frame socket");
+           if (bind(sock, (struct sockaddr *)&sfrm, sizeof(sfrm)) == -1)
+                   err(1, "bind");
+           if (setsockopt(sock, IFT_ETHER, FRAME_ADD_MEMBERSHIP,
+               &fmr, sizeof(fmr)) == -1)
+                   err(1, "join lldp multicast group");
+
+           for (;;) {
+                   socklen_t sfrmlen = sizeof(sfrm);
+                   uint8_t frame[2048];
+                   ssize_t rv;
+
+                   rv = recvfrom(sock, frame, sizeof(frame), 0,
+                       (struct sockaddr *)&sfrm, &sfrmlen);
+                   if (rv == -1)
+                           err(1, "lldp recv");
+                   printf("received %zd bytes from %s", rv,
+                       ether_ntoa((struct ether_addr *)sfrm.sfrm_addr));
+           }
+
+SSEEEE AALLSSOO
+     socket(2), netintro(4)
+
+HHIISSTTOORRYY
+     ffrraammee domain sockets appeared in OpenBSD 7.7.
+
+AAUUTTHHOORRSS
+     David Gwynne <_d_l_g_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BSD                              May 16, 2025                              BSD

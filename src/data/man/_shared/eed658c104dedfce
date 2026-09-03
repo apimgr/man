@@ -1,0 +1,260 @@
+VM_MAP(9)                BSD Kernel Developer's Manual               VM_MAP(9)
+
+NNAAMMEE
+     vvmm__mmaapp — virtual address space portion of virtual memory subsystem
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<vvmm//vvmm..hh>>
+     ##iinncclluuddee <<vvmm//vvmm__mmaapp..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The vvmm__mmaapp subsystem is used to manage virtual address spaces.  This sec‐
+     tion describes the main data structures used within the code.
+
+     The _s_t_r_u_c_t _v_m___m_a_p is a generic representation of an address space.  This
+     address space may belong to a user process or the kernel.  The kernel ac‐
+     tually uses several maps, which are maintained as subordinate maps, cre‐
+     ated using the vm_map_submap(9) function.
+
+           struct vm_map {
+                   struct vm_map_entry header;
+                   struct sx lock;
+                   struct mtx system_mtx;
+                   int nentries;
+                   vm_size_t size;
+                   u_int timestamp;
+                   u_char needs_wakeup;
+                   u_char system_map;
+                   vm_flags_t flags;
+                   vm_map_entry_t root;
+                   pmap_t pmap;
+                   int busy;
+           };
+
+     The fields of _s_t_r_u_c_t _v_m___m_a_p are as follows:
+
+     _h_e_a_d_e_r        Head node of a circular, doubly linked list of _s_t_r_u_c_t
+                   _v_m___m_a_p___e_n_t_r_y objects.  Each object defines a particular re‐
+                   gion within this map's address space.
+
+     _l_o_c_k          Used to serialize access to the structure.
+
+     _s_y_s_t_e_m___m_t_x    A mutex which is used if the map is a system map.
+
+     _n_e_n_t_r_i_e_s      A count of the members in use within the circular map entry
+                   list.
+
+     _s_i_z_e          Specifies the size of the virtual address space.
+
+     _t_i_m_e_s_t_a_m_p     Used to determine if the map has changed since its last ac‐
+                   cess.
+
+     _n_e_e_d_s___w_a_k_e_u_p  Indicates if a thread is waiting for an allocation within
+                   the map.  Used only by system maps.
+
+     _s_y_s_t_e_m___m_a_p    Set to TRUE to indicate that map is a system map; other‐
+                   wise, it belongs to a user process.
+
+     _f_l_a_g_s         Map flags, described below.
+
+     _r_o_o_t          Root node of a binary search tree used for fast lookup of
+                   map entries.
+
+     _p_m_a_p          Pointer to the underlying physical map with which this vir‐
+                   tual map is associated.
+
+     _b_u_s_y          Map busy counter, prevents forks.
+
+     Possible map flags:
+
+     MAP_WIREFUTURE        Wire all future pages in this map.
+
+     MAP_BUSY_WAKEUP       There are waiters for the map busy status.
+
+     The following flags can be passed to vm_map_find(9) and vm_map_insert(9)
+     to specify the copy-on-write properties of regions within the map:
+
+     MAP_COPY_ON_WRITE     The mapping is copy-on-write.
+
+     MAP_NOFAULT           The mapping should not generate page faults.
+
+     MAP_PREFAULT          The mapping should be prefaulted into physical mem‐
+                           ory.
+
+     MAP_PREFAULT_PARTIAL  The mapping should be partially prefaulted into
+                           physical memory.
+
+     MAP_DISABLE_SYNCER    Do not periodically flush dirty pages; only flush
+                           them when absolutely necessary.
+
+     MAP_DISABLE_COREDUMP  Do not include the mapping in a core dump.
+
+     MAP_PREFAULT_MADVISE  Specify that the request is from a user process
+                           calling madvise(2).
+
+     MAP_ACC_CHARGED       Region is already charged to the requestor by some
+                           means.
+
+     MAP_ACC_NO_CHARGE     Do not charge for allocated region.
+
+     The _s_t_r_u_c_t _v_m___m_a_p___e_n_t_r_y is a generic representation of a region.  The re‐
+     gion managed by each entry is associated with a _u_n_i_o_n _v_m___m_a_p___o_b_j_e_c_t, de‐
+     scribed below.
+
+           struct vm_map_entry {
+                   struct vm_map_entry *prev;
+                   struct vm_map_entry *next;
+                   struct vm_map_entry *left;
+                   struct vm_map_entry *right;
+                   vm_offset_t start;
+                   vm_offset_t end;
+                   vm_offset_t avail_ssize;
+                   vm_size_t adj_free;
+                   vm_size_t max_free;
+                   union vm_map_object object;
+                   vm_ooffset_t offset;
+                   vm_eflags_t eflags;
+                   /* Only in task maps: */
+                   vm_prot_t protection;
+                   vm_prot_t max_protection;
+                   vm_inherit_t inheritance;
+                   int wired_count;
+                   vm_pindex_t lastr;
+           };
+
+     The fields of _s_t_r_u_c_t _v_m___m_a_p___e_n_t_r_y are as follows:
+
+     _p_r_e_v         Pointer to the previous node in a doubly-linked, circular
+                  list.
+
+     _n_e_x_t         Pointer to the next node in a doubly-linked, circular list.
+
+     _l_e_f_t         Pointer to the left node in a binary search tree.
+
+     _r_i_g_h_t        Pointer to the right node in a binary search tree.
+
+     _s_t_a_r_t        Lower address bound of this entry's region.
+
+     _e_n_d          Upper address bound of this entry's region.
+
+     _a_v_a_i_l___s_s_i_z_e  If the entry is for a process stack, specifies how much the
+                  entry can grow.
+
+     _a_d_j___f_r_e_e     The amount of free, unmapped address space adjacent to and
+                  immediately following this map entry.
+
+     _m_a_x___f_r_e_e     The maximum amount of contiguous free space in this map en‐
+                  try's subtree.
+
+     _o_b_j_e_c_t       Pointer to the _s_t_r_u_c_t _v_m___m_a_p___o_b_j_e_c_t with which this entry is
+                  associated.
+
+     _o_f_f_s_e_t       Offset within the _o_b_j_e_c_t which is mapped from _s_t_a_r_t onwards.
+
+     _e_f_l_a_g_s       Flags applied to this entry, described below.
+
+     The following five members are only valid for entries forming part of a
+     user process's address space:
+
+     _p_r_o_t_e_c_t_i_o_n      Memory protection bits applied to this region.
+
+     _m_a_x___p_r_o_t_e_c_t_i_o_n  Mask for the memory protection bits which may be actually
+                     be applied to this region.
+
+     _i_n_h_e_r_i_t_a_n_c_e     Contains flags which specify how this entry should be
+                     treated during fork processing.
+
+     _w_i_r_e_d___c_o_u_n_t     Count of how many times this entry has been wired into
+                     physical memory.
+
+     _l_a_s_t_r           Contains the address of the last read which caused a page
+                     fault.
+
+     The following flags may be applied to each entry, by specifying them as a
+     mask within the _e_f_l_a_g_s member:
+
+     MAP_ENTRY_NOSYNC            The system should not flush the data associ‐
+                                 ated with this map periodically, but only
+                                 when it needs to.
+
+     MAP_ENTRY_IS_SUB_MAP        If set, then the _o_b_j_e_c_t member specifies a
+                                 subordinate map.
+
+     MAP_ENTRY_COW               Indicate that this is a copy-on-write region.
+
+     MAP_ENTRY_NEEDS_COPY        Indicate that a copy-on-write region needs to
+                                 be copied.
+
+     MAP_ENTRY_NOFAULT           Specifies that accesses within this region
+                                 should never cause a page fault.  If a page
+                                 fault occurs within this region, the system
+                                 will panic.
+
+     MAP_ENTRY_USER_WIRED        Indicate that this region was wired on behalf
+                                 of a user process.
+
+     MAP_ENTRY_BEHAV_NORMAL      The system should use the default paging be‐
+                                 haviour for this region.
+
+     MAP_ENTRY_BEHAV_SEQUENTIAL  The system should depress the priority of
+                                 pages immediately preceding each page within
+                                 this region when faulted in.
+
+     MAP_ENTRY_BEHAV_RANDOM      Is a hint that pages within this region will
+                                 be accessed randomly, and that prefetching is
+                                 likely not advantageous.
+
+     MAP_ENTRY_IN_TRANSITION     Indicate that wiring or unwiring of an entry
+                                 is in progress, and that other kernel threads
+                                 should not attempt to modify fields in the
+                                 structure.
+
+     MAP_ENTRY_NEEDS_WAKEUP      Indicate that there are kernel threads wait‐
+                                 ing for this region to become available.
+
+     MAP_ENTRY_NOCOREDUMP        The region should not be included in a core
+                                 dump.
+
+     The _i_n_h_e_r_i_t_a_n_c_e member has type _v_m___i_n_h_e_r_i_t___t.  This governs the inheri‐
+     tance behaviour for a map entry during fork processing.  The following
+     values are defined for _v_m___i_n_h_e_r_i_t___t:
+
+     VM_INHERIT_SHARE    The object associated with the entry should be cloned
+                         and shared with the new map.  A new _s_t_r_u_c_t _v_m___o_b_j_e_c_t
+                         will be created if necessary.
+
+     VM_INHERIT_COPY     The object associated with the entry should be copied
+                         to the new map.
+
+     VM_INHERIT_NONE     The entry should not be copied to the new map.
+
+     VM_INHERIT_DEFAULT  Specifies the default behaviour, VM_INHERIT_COPY.
+
+     The _u_n_i_o_n _v_m___m_a_p___o_b_j_e_c_t is used to specify the structure which a _s_t_r_u_c_t
+     _v_m___m_a_p___e_n_t_r_y is associated with.
+
+     The fields of _u_n_i_o_n _v_m___m_a_p___o_b_j_e_c_t are as follows:
+
+           union vm_map_object {
+                   struct vm_object *vm_object;
+                   struct vm_map *sub_map;
+           };
+
+     Normally, the _s_u_b___m_a_p member is only used by system maps to indicate that
+     a memory range is managed by a subordinate system map.  Within a user
+     process map, each _s_t_r_u_c_t _v_m___m_a_p___e_n_t_r_y is backed by a _s_t_r_u_c_t _v_m___o_b_j_e_c_t.
+
+SSEEEE AALLSSOO
+     pmap(9), vm_map_check_protection(9), vm_map_delete(9),
+     vm_map_entry_resize_free(9), vm_map_find(9), vm_map_findspace(9),
+     vm_map_inherit(9), vm_map_init(9), vm_map_insert(9), vm_map_lock(9),
+     vm_map_lookup(9), vm_map_madvise(9), vm_map_max(9), vm_map_min(9),
+     vm_map_pmap(9), vm_map_protect(9), vm_map_remove(9),
+     vm_map_simplify_entry(9), vm_map_stack(9), vm_map_submap(9),
+     vm_map_sync(9), vm_map_wire(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Bruce M Simpson <_b_m_s_@_s_p_c_._o_r_g>.
+
+BSD                              July 3, 2018                              BSD

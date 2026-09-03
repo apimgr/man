@@ -1,0 +1,151 @@
+_v_s_o_c_k(7)               Miscellaneous Information Manual               _v_s_o_c_k(7)
+
+NNAAMMEE
+       vsock - Linux VSOCK address family
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+       ##iinncclluuddee <<lliinnuuxx//vvmm__ssoocckkeettss..hh>>
+
+       _s_t_r_e_a_m___s_o_c_k_e_t == ssoocckkeett((AAFF__VVSSOOCCKK,, SSOOCCKK__SSTTRREEAAMM,, 00));;
+       _d_a_t_a_g_r_a_m___s_o_c_k_e_t == ssoocckkeett((AAFF__VVSSOOCCKK,, SSOOCCKK__DDGGRRAAMM,, 00));;
+
+DDEESSCCRRIIPPTTIIOONN
+       The  VSOCK address family facilitates communication between virtual ma‐
+       chines and the host they are running on.  This address family  is  used
+       by  guest  agents  and  hypervisor  services that need a communications
+       channel that is independent of virtual machine network configuration.
+
+       Valid socket types are SSOOCCKK__SSTTRREEAAMM and  SSOOCCKK__DDGGRRAAMM.   SSOOCCKK__SSTTRREEAAMM  pro‐
+       vides connection‐oriented byte streams with guaranteed, in‐order deliv‐
+       ery.  SSOOCCKK__DDGGRRAAMM provides a connectionless datagram packet service with
+       best‐effort  delivery  and best‐effort ordering.  Availability of these
+       socket types is dependent on the underlying hypervisor.
+
+       A new socket is created with
+
+           socket(AF_VSOCK, socket_type, 0);
+
+       When a process wants to establish a  connection,  it  calls  ccoonnnneecctt(2)
+       with  a  given destination socket address.  The socket is automatically
+       bound to a free port if unbound.
+
+       A process can listen for incoming connections by  first  binding  to  a
+       socket address using bbiinndd(2) and then calling lliisstteenn(2).
+
+       Data  is  transmitted  using the sseenndd(2) or wwrriittee(2) families of system
+       calls and data is received using the rreeccvv(2)  or  rreeaadd(2)  families  of
+       system calls.
+
+   AAddddrreessss ffoorrmmaatt
+       A  socket address is defined as a combination of a 32‐bit Context Iden‐
+       tifier (CID) and a 32‐bit port number.  The CID identifies  the  source
+       or  destination,  which  is  either a virtual machine or the host.  The
+       port number differentiates between multiple services running on a  sin‐
+       gle machine.
+
+           struct sockaddr_vm {
+               sa_family_t    svm_family;    /* Address family: AF_VSOCK */
+               unsigned short svm_reserved1;
+               unsigned int   svm_port;      /* Port # in host byte order */
+               unsigned int   svm_cid;       /* Address in host byte order */
+               unsigned char  svm_zero[sizeof(struct sockaddr) -
+                                       sizeof(sa_family_t) -
+                                       sizeof(unsigned short) -
+                                       sizeof(unsigned int) -
+                                       sizeof(unsigned int)];
+           };
+
+       _s_v_m___f_a_m_i_l_y  is  always set to AAFF__VVSSOOCCKK.  _s_v_m___r_e_s_e_r_v_e_d_1 is always set to
+       0.  _s_v_m___p_o_r_t contains the port number in host  byte  order.   The  port
+       numbers  below  1024  are called _p_r_i_v_i_l_e_g_e_d _p_o_r_t_s.  Only a process with
+       the CCAAPP__NNEETT__BBIINNDD__SSEERRVVIICCEE capability may bbiinndd(2) to these port  numbers.
+       _s_v_m___z_e_r_o must be zero‐filled.
+
+       There are several special addresses: VVMMAADDDDRR__CCIIDD__AANNYY (-1U) means any ad‐
+       dress  for  binding; VVMMAADDDDRR__CCIIDD__HHYYPPEERRVVIISSOORR (0) is reserved for services
+       built into the hypervisor; VVMMAADDDDRR__CCIIDD__LLOOCCAALL (1) is the  well‐known  ad‐
+       dress  for  local  communication (loopback); VVMMAADDDDRR__CCIIDD__HHOOSSTT (2) is the
+       well‐known address of the host.
+
+       The special constant VVMMAADDDDRR__PPOORRTT__AANNYY (-1U) means any  port  number  for
+       binding.
+
+   LLiivvee mmiiggrraattiioonn
+       Sockets  are affected by live migration of virtual machines.  Connected
+       SSOOCCKK__SSTTRREEAAMM sockets become disconnected when the  virtual  machine  mi‐
+       grates to a new host.  Applications must reconnect when this happens.
+
+       The  local  CID  may change across live migration if the old CID is not
+       available on the new host.  Bound sockets are automatically updated  to
+       the new CID.
+
+   IIooccttllss
+       The following ioctls are available on the _/_d_e_v_/_v_s_o_c_k device.
+
+       IIOOCCTTLL__VVMM__SSOOCCKKEETTSS__GGEETT__LLOOCCAALL__CCIIDD
+              Get  the CID of the local machine.  The argument is a pointer to
+              an _u_n_s_i_g_n_e_d _i_n_t.
+
+                  ioctl(fd, IOCTL_VM_SOCKETS_GET_LOCAL_CID, &cid);
+
+              Consider using VVMMAADDDDRR__CCIIDD__AANNYY when binding  instead  of  getting
+              the local CID with IIOOCCTTLL__VVMM__SSOOCCKKEETTSS__GGEETT__LLOOCCAALL__CCIIDD.
+
+   LLooccaall ccoommmmuunniiccaattiioonn
+       VVMMAADDDDRR__CCIIDD__LLOOCCAALL  (1)  directs  packets to the same host that generated
+       them.  This is useful for testing applications on a single host and for
+       debugging.
+
+       The local CID obtained with IIOOCCTTLL__VVMM__SSOOCCKKEETTSS__GGEETT__LLOOCCAALL__CCIIDD can be  used
+       for the same purpose, but it is preferable to use VVMMAADDDDRR__CCIIDD__LLOOCCAALL.
+
+EERRRROORRSS
+       EEAACCCCEESS Unable    to   bind   to   a   privileged   port   without   the
+              CCAAPP__NNEETT__BBIINNDD__SSEERRVVIICCEE capability.
+
+       EEAADDDDRRIINNUUSSEE
+              Unable to bind to a port that is already in use.
+
+       EEAADDDDRRNNOOTTAAVVAAIILL
+              Unable to find a free port for binding or unable to  bind  to  a
+              nonlocal CID.
+
+       EEIINNVVAALL Invalid  parameters.  This includes: attempting to bind a socket
+              that is already bound, providing an invalid struct  _s_o_c_k_a_d_d_r___v_m,
+              and other input validation errors.
+
+       EENNOOPPRROOTTOOOOPPTT
+              Invalid socket option in sseettssoocckkoopptt(2) or ggeettssoocckkoopptt(2).
+
+       EENNOOTTCCOONNNN
+              Unable to perform operation on an unconnected socket.
+
+       EEOOPPNNOOTTSSUUPPPP
+              Operation  not  supported.  This includes: the MMSSGG__OOOOBB flag that
+              is not implemented  for  the  sseenndd(2)  family  of  syscalls  and
+              MMSSGG__PPEEEEKK for the rreeccvv(2) family of syscalls.
+
+       EEPPRROOTTOONNOOSSUUPPPPOORRTT
+              Invalid  socket  protocol number.  The protocol should always be
+              0.
+
+       EESSOOCCKKTTNNOOSSUUPPPPOORRTT
+              Unsupported socket type  in  ssoocckkeett(2).   Only  SSOOCCKK__SSTTRREEAAMM  and
+              SSOOCCKK__DDGGRRAAMM are valid.
+
+VVEERRSSIIOONNSS
+       Support  for  VMware  (VMCI)  has  been available since Linux 3.9.  KVM
+       (virtio) is supported since Linux  4.8.   Hyper‐V  is  supported  since
+       Linux 4.14.
+
+       VVMMAADDDDRR__CCIIDD__LLOOCCAALL  is supported since Linux 5.6.  Local communication in
+       the guest and on the host is available since Linux 5.6.  Previous  ver‐
+       sions  supported  only  local  communication within a guest (not on the
+       host), and with only some transports (VMCI and virtio).
+
+SSEEEE AALLSSOO
+       bbiinndd(2), ccoonnnneecctt(2), lliisstteenn(2), rreeccvv(2), sseenndd(2), ssoocckkeett(2),  ccaappaabbiillii‐‐
+       ttiieess(7)
+
+Linux man‐pages (unreleased)      2025‐05‐17                          _v_s_o_c_k(7)

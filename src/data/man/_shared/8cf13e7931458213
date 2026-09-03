@@ -1,0 +1,122 @@
+The  interface encapsulates packets inside Ethernet frames as de‐
+fined by This is often used to connect a router via a  DSL  modem
+to  an  access  concentrator.   The  interface does not by itself
+transmit or receive frames, but needs an Ethernet interface to do
+so.  This Ethernet interface is connected to  the  interface  via
+The  Ethernet  interface needs to be marked UP, but does not need
+to have an IP address.  There are two basic modes  of  operation,
+controlled  via  the  switch.   The  default mode, not being set,
+tries to keep the configured session open all the time.   If  the
+session  is disconnected, a new connection attempt is started im‐
+mediately.  The mode, selected by setting only establishes a con‐
+nection when data is being sent to the interface.  If the  kernel
+is  compiled with options there are two modes of connection, con‐
+trolled via the switch.  The default  mode,  not  being  set,  is
+client mode.  The mode, selected by setting is to wait for incom‐
+ing  PPPoE session.  Before a interface is usable, it needs to be
+configured.  The following steps are necessary: Create the inter‐
+face.  Connect an Ethernet interface.  This interface is used for
+the physical communication.  As noted above it must be marked UP,
+but need not have an IP address.  Configure authentication.   The
+PPP  session  needs to identify the client to the peer.  For more
+details on the available options see This all is typically accom‐
+plished using an file.  If you are using a  interface,  you  will
+have  an unusually low MTU for today’s Internet.  Combined with a
+lot of misconfigured sites (host using path MTU discovery  behind
+a  router  blocking all ICMP traffic) this will often cause prob‐
+lems.  Connections to these servers will only work if your system
+advertises the right MSS in the TCP three way handshake.  To  get
+the  right MSS, you need to set # Obey interface MTUs when calcu‐
+lating MSS net.inet.tcp.mss_ifmtu=1 in your  file.   This  causes
+the  calculated  MSS  to be based on the MTU of the interface via
+which the packet is sent.  This is always the right value if  you
+are  sure  the answer to this packet will be received on the same
+interface (i.e., you only have one interface connected to the In‐
+ternet.)  Unfortunately this sysctl does not fix the  MSS  adver‐
+tised  by hosts in the network behind a connected router.  To fix
+this you need explained below.  Some systems behind misconfigured
+firewalls try to use  Path‐MTU‐Discovery,  while  their  firewall
+blocks  all ICMP messages.  This is an illegal, but not uncommon,
+setup.  Typically you will have no chance to  fix  this  (remote,
+outside  of  your control) setup.  And sometimes you will have to
+use such remote systems (to download data from  them,  or  to  do
+your  online banking).  Without special care systems as described
+above will not be able to send larger chunks of data to a  system
+connected  via But there is a workaround (some may call it cheat‐
+ing): pretend to not be able to handle large packets, by  sending
+a  small  MSS  (maximum  segment  size) option during initial TCP
+handshake.  For connections originating from your  connected  ma‐
+chines,  this is accomplished by setting the sysctl variable to 1
+(see above).  For connections  originating  from  systems  behind
+your  router, you need to set the options in your NAT rules, like
+in this example of map  pppoe0  192.168.1.0/24  ‐>  0/32  portmap
+tcp/udp  44000:49999  mssclamp  1440 map pppoe0 192.168.1.0/24 ‐>
+0/32 mssclamp 1440 If you do not use NAT, you need to  set  up  a
+1:1  NAT rule, just to get the clamping: map pppoe0 x.x.x.x/24 ‐>
+0/0 mssclamp 1440 The above examples assume a MTU of 1492  bytes.
+If  the  MTU on your PPPoE connection is smaller use the MTU - 52
+bytes for clamping e.g. 1408 bytes for a MTU of 1460 bytes.   The
+theoretically  correct  value for the above example would be 1452
+bytes (it accounts for the smaller PPPoE MTU, the TCP header  and
+the  maximum of 0x40 bytes of TCP options) but it seems to not be
+sufficient in some cases.  Experiments conducted by various  peo‐
+ple  have  shown  that clamping to the MSS values suggested above
+works best.  A typical file looks like this: create  !  /sbin/if‐
+config  ne0 up ! /sbin/pppoectl ‐e ne0 $int ! /sbin/pppoectl $int
+myauthproto=pap myauthname=testcaller myauthsecret=donttell  inet
+0.0.0.0  0.0.0.1  netmask  0xffffffff  #! /sbin/route add default
+‐iface 0.0.0.1 up The commented out call to may  be  omitted  and
+the  route  added  in the ip‐up script called by when the real IP
+address is known.  This is easy in the mode (link1 not set),  but
+hard  to  accomplish in the mode (link1 set).  In the latter case
+adding an iface route is an easy workaround.  The interfaces  op‐
+erate completely inside the kernel, without any userland support.
+Because  of  this, a special daemon is used to fire ip‐up or down
+scripts to execute arbitrary code when the PPP session is  estab‐
+lished  and  addresses of the interface become available.  To en‐
+able the usage of and for this purpose, simply  add  ifwatchd=YES
+to See for details and parameters passed to these scripts.  Since
+this  is a PPP interface, the addresses assigned to the interface
+may change during PPP negotiation.  There is no fine grained con‐
+trol available for deciding which addresses  are  acceptable  and
+which  are  not.  For the local side and the remote address there
+is exactly one choice: hard coded address or wildcard.  If a real
+address is assigned to one side of the connection,  PPP  negotia‐
+tion  will  only  agree  to exactly this address.  If one side is
+wildcarded, every address suggested by the peer will be accepted.
+To wildcard the local address set it to 0.0.0.0, to wildcard  the
+remote  address  set it to 0.0.0.1.  Wildcarding is not available
+(nor necessary) for IPv6 operation.  A enabled  kernel  will  not
+interfere with other implementations running on the same machine.
+Under  special  circumstances  (details below) this is not desir‐
+able, so the driver can be told to kill all unknown sessions  re‐
+ceived by the Ethernet interface used for a configured interface.
+To do this, add the following to your kernel config file: and set
+the  value  of  variable  to true.  Note that this will break all
+userland implementations using the same Ethernet interface!  This
+option is only useful if you have a static  IP  address  assigned
+and  your  ISP does not use LCP echo requests to monitor the link
+status.  After a crash or power failure  the  peer  device  still
+tries  to  send data to the no longer active session on your com‐
+puter, and might refuse to reestablish a new connection,  because
+there  already  is  an open session.  On receipt of such packets,
+the driver with this option set will send a PADT packet  (request
+to  terminate the session).  The peer will immediately disconnect
+the orphaned session and allow a new one to be  established.   To
+enable server support in the kernel, use As described above, this
+allows  interfaces to be created and configured for incoming con‐
+nections by setting the flag with  The  device  appeared  in  The
+original  PPPoE  standard, requires a maximal MTU of 1492 octets.
+This value is the maximum conservative value possible,  based  on
+the  PPPoE header size and the minimum frame size Ethernet inter‐
+faces are required to support.  In practice most modern  Ethernet
+interfaces  support  bigger frames, and many PPPoE services allow
+the use of (slightly) larger MTUs,  to  avoid  the  problems  de‐
+scribed above.  This implementation allows MTU values as large as
+possible  with  the actual MTU of the used Ethernet interface and
+conforms to the enhancement to the PPPoE standard, to request the
+use of this larger MTU value with the PPPoE server.   When  using
+the wildcard address 0.0.0.0 (as described above) it is important
+to specify the proper to in most setups If the netmask is unspec‐
+ified,  it will be set to 8 when 0.0.0.0 is configured to the in‐
+terface, and it will persist after negotiation.

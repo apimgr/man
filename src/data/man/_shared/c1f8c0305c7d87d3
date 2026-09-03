@@ -1,0 +1,331 @@
+RC(8)                     BSD System Manager's Manual                    RC(8)
+
+NNAAMMEE
+     rrcc — command scripts for auto-reboot and daemon startup
+
+SSYYNNOOPPSSIISS
+     rrcc
+     rrcc..ccoonnff
+     rrcc..ccoonnff..llooccaall
+     rrcc..dd//
+     rrcc..ffiirreewwaallll
+     rrcc..llooccaall
+     rrcc..rreessuummee
+     rrcc..sshhuuttddoowwnn
+     rrcc..ssuubbrr
+
+DDEESSCCRRIIPPTTIIOONN
+     The rrcc utility is the command script which controls the automatic boot
+     process after being called by init(8).  The rrcc..llooccaall script contains com‐
+     mands which are pertinent only to a specific site.  Typically, the
+     _/_u_s_r_/_l_o_c_a_l_/_e_t_c_/_r_c_._d_/ mechanism is used instead of rrcc..llooccaall these days but
+     if you want to use rrcc..llooccaall, it is still supported.  In this case, it
+     should source _/_e_t_c_/_r_c_._c_o_n_f and contain additional custom startup code for
+     your system.  The best way to handle rrcc..llooccaall, however, is to separate it
+     out into rrcc..dd// style scripts and place them under _/_u_s_r_/_l_o_c_a_l_/_e_t_c_/_r_c_._d_/.
+     The rrcc..ccoonnff file contains the global system configuration information
+     referenced by the startup scripts, while rrcc..ccoonnff..llooccaall contains the local
+     system configuration.  See rc.conf(5) for more information.
+
+     The rrcc..dd// directories contain scripts which will be automatically exe‐
+     cuted at boot time and shutdown time.
+
+     The service(8) command provides a convenient interface to manage rc.d
+     services.
+
+     The sysrc(8) command provides a scripting interface to modify system con‐
+     fig files.
+
+   OOppeerraattiioonn ooff rrcc
+     1.   If autobooting, set _a_u_t_o_b_o_o_t=yes and enable a flag (_r_c___f_a_s_t=yes),
+          which prevents the rrcc..dd// scripts from performing the check for al‐
+          ready running processes (thus speeding up the boot process).  This
+          _r_c___f_a_s_t=yes speedup will not occur when rrcc is started up after exit‐
+          ing the single-user shell.
+
+     2.   Determine whether the system is booting diskless, and if so run the
+          _/_e_t_c_/_r_c_._i_n_i_t_d_i_s_k_l_e_s_s script.
+
+     3.   Source _/_e_t_c_/_r_c_._s_u_b_r to load various rc.subr(8) shell functions to
+          use.
+
+     4.   Load the configuration files (see below for reloading).
+
+     5.   Determine if booting in a jail, and add “nojail” (no jails allowed)
+          or “nojailvnet” (only allow vnet-enabled jails) to the list of KEY‐
+          WORDS to skip in rcorder(8).
+
+     6.   If the file _$_{_f_i_r_s_t_b_o_o_t___s_e_n_t_i_n_e_l_} does not exist, add “firstboot” to
+          the list of KEYWORDS to skip in rcorder(8).
+
+     7.   Invoke rcorder(8) to order the files in _/_e_t_c_/_r_c_._d_/ that do not have
+          a “nostart” KEYWORD (refer to rcorder(8)'s --ss flag).
+
+     8.   Call each script in turn using rruunn__rrcc__ssccrriipptt() (from rc.subr(8)),
+          which sets _$_1 to “start”, and sources the script in a subshell.
+          Stop processing when the script that is the value of the
+          _$_e_a_r_l_y___l_a_t_e___d_i_v_i_d_e_r has been run.
+
+     9.   Check again to see if the file _$_{_f_i_r_s_t_b_o_o_t___s_e_n_t_i_n_e_l_} exists (in case
+          it is located on a newly mounted file system) and adjust the list of
+          KEYWORDs to skip appropriately.
+
+     10.  Re-run rcorder(8), this time including the scripts in the
+          _$_l_o_c_a_l___s_t_a_r_t_u_p directories.  Ignore everything up to the
+          _$_e_a_r_l_y___l_a_t_e___d_i_v_i_d_e_r, then start executing the scripts as described
+          above.
+
+     11.  If the file _$_{_f_i_r_s_t_b_o_o_t___s_e_n_t_i_n_e_l_} exists, delete it.  If the file
+          _$_{_f_i_r_s_t_b_o_o_t___s_e_n_t_i_n_e_l_}_-_r_e_b_o_o_t also exists (because it was created by
+          a script), then delete it and reboot.
+
+   OOppeerraattiioonn ooff rrcc..sshhuuttddoowwnn
+     1.   Set _r_c___s_h_u_t_d_o_w_n to the value of the first argument passed to
+          rrcc..sshhuuttddoowwnn or to “unspecified” if no argument was passed.
+
+     2.   Source _/_e_t_c_/_r_c_._s_u_b_r to load various rc.subr(8) shell functions to
+          use.
+
+     3.   Load the configuration files.
+
+     4.   Invoke rcorder(8) to order the files in _/_e_t_c_/_r_c_._d_/ and the
+          _$_l_o_c_a_l___s_t_a_r_t_u_p directories that have a “shutdown” KEYWORD (refer to
+          rcorder(8)'s --kk flag), reverse that order, and assign the result to
+          a variable.
+
+     5.   Call each script in turn using rruunn__rrcc__ssccrriipptt() (from rc.subr(8)),
+          which sets _$_1 to “faststop”, and sources the script in a subshell.
+
+   CCoonntteennttss ooff rrcc..dd//
+     rrcc..dd// is located in _/_e_t_c_/_r_c_._d_/.  The following file naming conventions
+     are currently used in rrcc..dd//:
+
+           _A_L_L_U_P_P_E_R_C_A_S_E  Scripts that are “placeholders” to ensure that cer‐
+                         tain operations are performed before others.  In or‐
+                         der of startup, these are:
+
+                         _F_I_L_E_S_Y_S_T_E_M_S  Ensure that root and other critical file
+                                      systems are mounted.  This is the de‐
+                                      fault _$_e_a_r_l_y___l_a_t_e___d_i_v_i_d_e_r.
+
+                         _N_E_T_W_O_R_K_I_N_G   Ensure basic network services are run‐
+                                      ning, including general network configu‐
+                                      ration.
+
+                         _S_E_R_V_E_R_S      Ensure basic services exist for services
+                                      that start early (such as _n_i_s_d_o_m_a_i_n),
+                                      because they are required by _D_A_E_M_O_N be‐
+                                      low.
+
+                         _D_A_E_M_O_N       Check-point before all general purpose
+                                      daemons such as _l_p_d and _n_t_p_d.
+
+                         _L_O_G_I_N        Check-point before user login services
+                                      (_i_n_e_t_d and _s_s_h_d), as well as services
+                                      which might run commands as users (_c_r_o_n
+                                      and _s_e_n_d_m_a_i_l).
+
+           _b_a_r           Scripts that are sourced in a subshell.  The boot
+                         does not stop if such a script terminates with a non-
+                         zero status, but a script can stop the boot if neces‐
+                         sary by invoking the ssttoopp__bboooott() function (from
+                         rc.subr(8)).
+
+     Each script should contain rcorder(8) keywords, especially an appropriate
+     “PROVIDE” entry, and if necessary “REQUIRE” and “BEFORE” keywords.
+
+     Each script is expected to support at least the following arguments,
+     which are automatically supported if it uses the rruunn__rrcc__ccoommmmaanndd() func‐
+     tion:
+
+           ssttaarrtt    Start the service.  This should check that the service is
+                    to be started as specified by rc.conf(5).  Also checks if
+                    the service is already running and refuses to start if it
+                    is.  This latter check is not performed by standard
+                    FreeBSD scripts if the system is starting directly to
+                    multi-user mode, to speed up the boot process.  If
+                    ffoorrcceessttaarrtt is given, ignore the rc.conf(5) check and start
+                    anyway.
+
+           ssttoopp     If the service is to be started as specified by
+                    rc.conf(5), stop the service.  This should check that the
+                    service is running and complain if it is not.  If
+                    ffoorrcceessttoopp is given, ignore the rc.conf(5) check and at‐
+                    tempt to stop.
+
+           rreessttaarrtt  Perform a ssttoopp then a ssttaarrtt.
+
+           ssttaattuuss   If the script starts a process (rather than performing a
+                    one-off operation), show the status of the process.  Oth‐
+                    erwise it is not necessary to support this argument.  De‐
+                    faults to displaying the process ID of the program (if
+                    running).
+
+           eennaabbllee   Enable the service in rc.conf(5).
+
+           ddiissaabbllee  Disable the service in rc.conf(5).
+
+           ddeelleettee   Remove the service from rc.conf(5).  If
+                    ‘service_delete_empty’ is set to “YES”,
+                    _/_e_t_c_/_r_c_._c_o_n_f_._d_/_$_s_e_r_v_i_c_e_n_a_m_e will be deleted if empty after
+                    modification.
+
+           ddeessccrriibbee
+                    Print a short description of what the script does.
+
+           eexxttrraaccoommmmaannddss
+                    Print the script's non-standard commands.
+
+           ppoollll     If the script starts a process (rather than performing a
+                    one-off operation), wait for the command to exit.  Other‐
+                    wise it is not necessary to support this argument.
+
+           eennaabblleedd  Return 0 if the service is enabled and 1 if it is not.
+                    This command does not print anything.
+
+           rrccvvaarr    Display which rc.conf(5) variables are used to control the
+                    startup of the service (if any).
+
+     If a script must implement additional commands it can list them in the
+     _e_x_t_r_a___c_o_m_m_a_n_d_s variable, and define their actions in a variable construc‐
+     ted from the command name (see the _E_X_A_M_P_L_E_S section).
+
+     The configuration files are normally read only once at the start of a
+     boot sequence; if a script needs to eennaabbllee or ddiissaabbllee any other script
+     that would run later in the sequence, it must send a SIGALRM to the rc
+     process (identified by $RC_PID) to have it re-read the files.
+
+     The following key points apply to old-style scripts in
+     _/_u_s_r_/_l_o_c_a_l_/_e_t_c_/_r_c_._d_/:
+
+     ••   Scripts are only executed if their basename(1) matches the shell
+         globbing pattern _*_._s_h, and they are executable.  Any other files or
+         directories present within the directory are silently ignored.
+
+     ••   When a script is executed at boot time, it is passed the string
+         “start” as its first and only argument.  At shutdown time, it is
+         passed the string “stop” as its first and only argument.  All rrcc..dd//
+         scripts are expected to handle these arguments appropriately.  If no
+         action needs to be taken at a given time (either boot time or shut‐
+         down time), the script should exit successfully and without producing
+         an error message.
+
+     ••   The scripts within each directory are executed in lexicographical or‐
+         der.  If a specific order is required, numbers may be used as a pre‐
+         fix to the existing filenames, so for example _1_0_0_._f_o_o would be exe‐
+         cuted before _2_0_0_._b_a_r; without the numeric prefixes the opposite would
+         be true.
+
+     ••   The output from each script is traditionally a space character, fol‐
+         lowed by the name of the software package being started or shut down,
+         _w_i_t_h_o_u_t a trailing newline character.
+
+SSCCRRIIPPTTSS OOFF IINNTTEERREESSTT
+     When an automatic reboot is in progress, rrcc is invoked with the argument
+     aauuttoobboooott.  One of the scripts run from _/_e_t_c_/_r_c_._d_/ is _/_e_t_c_/_r_c_._d_/_f_s_c_k.
+     This script runs fsck(8) with option --pp and --FF to “preen” all the disks
+     of minor inconsistencies resulting from the last system shutdown.  If
+     this fails, then checks/repairs of serious inconsistencies caused by
+     hardware or software failure will be performed in the background at the
+     end of the booting process.  If aauuttoobboooott is not set, when going from sin‐
+     gle-user to multi-user mode for example, the script does not do anything.
+
+     The _/_e_t_c_/_r_c_._d_/_s_e_r_i_a_l script is used to set any special configurations for
+     serial devices.
+
+     The rrcc..ffiirreewwaallll script is used to configure rules for the kernel based
+     firewall service.  It has several possible options:
+
+           ooppeenn      will allow anyone in
+           cclliieenntt    will try to protect just this machine
+           ssiimmppllee    will try to protect a whole network
+           cclloosseedd    totally disables IP services except via _l_o_0 interface
+           UUNNKKNNOOWWNN   disables the loading of firewall rules
+           _f_i_l_e_n_a_m_e  will load the rules in the given filename (full path re‐
+                     quired).
+
+     Most daemons, including network related daemons, have their own script in
+     _/_e_t_c_/_r_c_._d_/, which can be used to start, stop, and check the status of the
+     service.
+
+     Any architecture specific scripts, such as _/_e_t_c_/_r_c_._d_/_a_p_m for example,
+     specifically check that they are on that architecture before starting the
+     daemon.
+
+     Following tradition, all startup files reside in _/_e_t_c.
+
+FFIILLEESS
+     /etc/rc
+     /etc/rc.conf
+     /etc/rc.conf.local
+     /etc/rc.d/
+     /etc/rc.firewall
+     /etc/rc.local
+     /etc/rc.shutdown
+     /etc/rc.subr
+     /var/run/dmesg.boot               dmesg(8) results soon after the rrcc
+                                       process begins.  Useful when dmesg(8)
+                                       buffer in the kernel no longer has this
+                                       information.
+
+EEXXAAMMPPLLEESS
+     The following is a minimal rrcc..dd// style script.  Most scripts require lit‐
+     tle more than the following.
+
+           #!/bin/sh
+           #
+
+           # PROVIDE: foo
+           # REQUIRE: bar_service_required_to_precede_foo
+
+           . /etc/rc.subr
+
+           name="foo"
+           rcvar=foo_enable
+           command="/usr/local/bin/foo"
+
+           load_rc_config $name
+           run_rc_command "$1"
+
+     Certain scripts may want to provide enhanced functionality.  The user may
+     access this functionality through additional commands.  The script may
+     list and define as many commands at it needs.
+
+           #!/bin/sh
+           #
+
+           # PROVIDE: foo
+           # REQUIRE: bar_service_required_to_precede_foo
+           # BEFORE:  baz_service_requiring_foo_to_precede_it
+
+           . /etc/rc.subr
+
+           name="foo"
+           rcvar=foo_enable
+           command="/usr/local/bin/foo"
+           extra_commands="nop hello"
+           hello_cmd="echo Hello World."
+           nop_cmd="do_nop"
+
+           do_nop()
+           {
+                   echo "I do nothing."
+           }
+
+           load_rc_config $name
+           run_rc_command "$1"
+
+     As all processes are killed by init(8) at shutdown, the explicit kill(1)
+     is unnecessary, but is often included.
+
+SSEEEE AALLSSOO
+     kill(1), rc.conf(5), init(8), rc.resume(8), rc.subr(8), rcorder(8),
+     reboot(8), savecore(8), service(8), sysrc(8)
+
+     _P_r_a_c_t_i_c_a_l _r_c_._d _s_c_r_i_p_t_i_n_g _i_n _B_S_D, https://docs.freebsd.org/en/articles/rc-
+     scripting/.
+
+HHIISSTTOORRYY
+     The rrcc utility appeared in 4.0BSD.
+
+BSD                           September 20, 2024                           BSD

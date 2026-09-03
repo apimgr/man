@@ -1,0 +1,169 @@
+SMR(9)                   BSD Kernel Developer's Manual                  SMR(9)
+
+NNAAMMEE
+     ssmmrr — safe memory reclamation for lock-free data structures
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ssmmrr..hh>>
+
+     _s_m_r___s_e_q___t
+     ssmmrr__aaddvvaannccee(_s_m_r___t _s_m_r);
+
+     _s_m_r___t
+     ssmmrr__ccrreeaattee(_c_o_n_s_t _c_h_a_r _*_n_a_m_e);
+
+     _v_o_i_d
+     ssmmrr__ddeessttrrooyy(_s_m_r___t _s_m_r);
+
+     _v_o_i_d
+     ssmmrr__eenntteerr(_s_m_r___t _s_m_r);
+
+     _v_o_i_d
+     ssmmrr__eexxiitt(_s_m_r___t _s_m_r);
+
+     _b_o_o_l
+     ssmmrr__ppoollll(_s_m_r___t _s_m_r, _s_m_r___s_e_q___t _g_o_a_l, _b_o_o_l _w_a_i_t);
+
+     _v_o_i_d
+     ssmmrr__ssyynncchhrroonniizzee(_s_m_r___t _s_m_r);
+
+     _v_o_i_d
+     ssmmrr__wwaaiitt(_s_m_r___t _s_m_r, _s_m_r___s_e_q___t _g_o_a_l);
+
+DDEESSCCRRIIPPTTIIOONN
+     Safe Memory Reclamation (SMR) is a facility which enables the implementa‐
+     tion of memory-safe lock-free data structures.  In typical usage, read
+     accesses to an SMR-protected data structure, such as a hash table or
+     tree, are performed in a “read section” consisting of code bracketed by
+     ssmmrr__eenntteerr() and ssmmrr__eexxiitt() calls, while mutations of the data structure
+     are serialized by a traditional mutex such as mutex(9).  In contrast with
+     reader-writer locks such as rwlock(9), rmlock(9), and sx(9), SMR allows
+     readers and writers to access the data structure concurrently.  Readers
+     can always enter a read section immediately (ssmmrr__eenntteerr() never blocks),
+     so mutations do not introduce read latency.  Furthermore, ssmmrr__eenntteerr() and
+     ssmmrr__eexxiitt() operate only on per-CPU data and thus avoid some of the per‐
+     formance problems inherent in the implementation of traditional reader-
+     writer mutexes.  SMR can therefore be a useful building block for data
+     structures which are accessed frequently but are only rarely modified.
+
+     Note that any SMR-protected data structure must be implemented carefully
+     such that operations behave correctly in the absence of mutual exclusion
+     between readers and writers.  The data structure must be designed to be
+     lock-free; SMR merely facilitates the implementation, for example by mak‐
+     ing it safe to follow dangling pointers and by helping avoid the ABA
+     problem.
+
+     When shared accesses to and mutations of a data structure can proceed
+     concurrently, writers must take care to ensure that any items removed
+     from the structure are not freed and recycled while readers are accessing
+     them in parallel.  This requirement results in a two-phase approach to
+     the removal of items: first, the item is unlinked such that all pointers
+     to the item are removed from the structure, preventing any new readers
+     from observing the item.  Then, the writer waits until some mechanism
+     guarantees that no existing readers are still accessing the item.  At
+     that point the memory for that item can be freed and reused safely.  SMR
+     provides this mechanism: readers may access a lock-free data structure in
+     between calls to the ssmmrr__eenntteerr() and ssmmrr__eexxiitt() functions, which together
+     create a read section, and the ssmmrr__aaddvvaannccee(), ssmmrr__ppoollll(), ssmmrr__wwaaiitt(), and
+     ssmmrr__ssyynncchhrroonniizzee() functions can be used to wait for threads in read sec‐
+     tions to finish.  All of these functions operate on a _s_m_r___t state block
+     which holds both per-CPU and global state.  Readers load global state and
+     modify per-CPU state, while writers must scan all per-CPU states to de‐
+     tect active readers.  SMR is designed to amortize this cost by batching
+     to give acceptable performance in write-heavy workloads.
+
+   RReeaaddeerrss
+     Threads enter a read section by calling ssmmrr__eenntteerr().  Read sections
+     should be short, and many operations are not permitted while in a read
+     section.  Specifically, context switching is disabled, and thus readers
+     may not acquire blocking mutexes such as mutex(9).  Another consequence
+     of this is that the thread is pinned to the current CPU for the duration
+     of the read section.  Furthermore, read sections may not be nested: it is
+     incorrect to call ssmmrr__eenntteerr() with a given _s_m_r___t state block when already
+     in a read section for that state block.
+
+   UUMMAA IInntteeggrraattiioonn
+     To simplify the integration of SMR into consumers, the uma(9) kernel mem‐
+     ory allocator provides some SMR-specified facilities.  This eliminates a
+     good deal of complexity from the implementation of consumers and automat‐
+     ically batches write operations.
+
+     In typical usage, a UMA zone (created with the UMA_ZONE_SMR flag or ini‐
+     tialized with the uummaa__zzoonnee__sseett__ssmmrr() function) is coupled with a _s_m_r___t
+     state block.  To insert an item into an SMR-protected data structure,
+     memory is allocated from the zone using the uummaa__zzaalllloocc__ssmmrr() function.
+     Insertions and removals are serialized using traditional mutual exclusion
+     and items are freed using the uummaa__zzffrreeee__ssmmrr() function.  Read-only lookup
+     operations are performed in SMR read sections.  uummaa__zzffrreeee__ssmmrr() waits for
+     all active readers which may be accessing the freed item to finish their
+     read sections before recycling that item's memory.
+
+     If the zone has an associated per-item destructor, it will be invoked at
+     some point when no readers can be accessing a given item.  The destructor
+     can be used to release additional resources associated with the item.
+     Note however that there is no guarantee that the destructor will be in‐
+     voked in a bounded time period.
+
+   WWrriitteerrss
+     Consumers are expected to use SMR in conjunction with UMA and thus need
+     only make use of the ssmmrr__eenntteerr() and ssmmrr__eexxiitt() functions, and the SMR
+     helper macros defined in _s_y_s_/_s_m_r___t_y_p_e_s_._h.  However, an introduction to
+     the write-side interface of SMR can be useful.
+
+     Internally, SMR maintains a global ‘write sequence’ number.  When enter‐
+     ing a read section, ssmmrr__eenntteerr() loads a copy of the write sequence and
+     stores it in per-CPU memory, hence ‘observing’ that value.  To exit a
+     read section, this per-CPU memory is overwritten with an invalid value,
+     making the CPU inactive.  Writers perform two operations: advancing the
+     write sequence number, and polling all CPUs to see whether active readers
+     have observed a given sequence number.  These operations are performed by
+     ssmmrr__aaddvvaannccee() and ssmmrr__ppoollll(), respectively, which do not require serial‐
+     ization between multiple writers.
+
+     After a writer unlinks an item from a data structure, it increments the
+     write sequence number and tags the item with the new value returned by
+     ssmmrr__aaddvvaannccee().  Once all CPUs have observed the new value, the writer can
+     use ssmmrr__ppoollll() to deduce that no active readers have access to the un‐
+     linked item, and thus the item is safe to recycle.  Because this pair of
+     operations is relatively expensive, it is generally a good idea to amor‐
+     tize this cost by accumulating a collection of multiple unlinked items
+     and tagging the entire batch with a target write sequence number.
+
+     ssmmrr__ppoollll() is a non-blocking operation and returns true only if all ac‐
+     tive readers are guaranteed to have observed the target sequence number
+     value.  ssmmrr__wwaaiitt() is a variant of ssmmrr__ppoollll() which waits until all CPUs
+     have observed the target sequence number value.  ssmmrr__ssyynncchhrroonniizzee() com‐
+     bines ssmmrr__aaddvvaannccee() with ssmmrr__wwaaiitt() to wait for all CPUs to observe a new
+     write sequence number.  This is an expensive operation and should only be
+     used if polling cannot be deferred in some way.
+
+   MMeemmoorryy OOrrddeerriinngg
+     The ssmmrr__eenntteerr() function has acquire semantics, and the ssmmrr__eexxiitt() func‐
+     tion has release semantics.  The ssmmrr__aaddvvaannccee(), ssmmrr__ppoollll(), ssmmrr__wwaaiitt(),
+     and ssmmrr__ssyynncchhrroonniizzee() functions should not be assumed to have any guaran‐
+     tees with respect to memory ordering.  In practice, some of these func‐
+     tions have stronger ordering semantics than is stated here, but this is
+     specific to the implementation and should not be relied upon.  See
+     atomic(9) for more details.
+
+NNOOTTEESS
+     Outside of FreeBSD the acronym SMR typically refers to a family of algo‐
+     rithms which enable memory-safe read-only access to a data structure con‐
+     current with modifications to that data structure.  Here, SMR refers to a
+     particular algorithm belonging to this family, as well as its implementa‐
+     tion in FreeBSD.  See _s_y_s_/_s_y_s_/_s_m_r_._h and _s_y_s_/_k_e_r_n_/_s_u_b_r___s_m_r_._c in the
+     FreeBSD source tree for further details on the algorithm and the context.
+
+     The acronym SMR is also used to mean "shingled magnetic recording", a
+     technology used to store data on hard disk drives which requires operat‐
+     ing system support.  These two uses of the acronym are unrelated.
+
+SSEEEE AALLSSOO
+     atomic(9), locking(9), uma(9)
+
+AAUUTTHHOORRSS
+     The SMR algorithm and its implementation were provided by Jeff Roberson
+     <_j_e_f_f_@_F_r_e_e_B_S_D_._o_r_g>.  This manual page was written by
+     Mark Johnston <_m_a_r_k_j_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            January 17, 2023                            BSD

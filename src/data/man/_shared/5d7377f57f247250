@@ -1,0 +1,223 @@
+LIBTHR(3)                BSD Library Functions Manual                LIBTHR(3)
+
+NNAAMMEE
+     lliibbtthhrr — 1:1 POSIX threads library
+
+LLIIBBRRAARRYY
+     1:1 Threading Library (libthr, -lthr)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<pptthhrreeaadd..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The lliibbtthhrr library provides a 1:1 implementation of the pthread(3) li‐
+     brary interfaces for application threading.  It has been optimized for
+     use by applications expecting system scope thread semantics.
+
+     The library is tightly integrated with the run-time link editor
+     ld-elf.so.1(1) and Standard C Library (libc, -lc); all three components
+     must be built from the same source tree.  Mixing libc and lliibbtthhrr li‐
+     braries from different versions of FreeBSD is not supported.  The run-
+     time linker ld-elf.so.1(1) has some code to ensure backward-compatibility
+     with older versions of lliibbtthhrr.
+
+     The man page documents the quirks and tunables of the lliibbtthhrr.  When link‐
+     ing with -lpthread, the run-time dependency libthr.so.3 is recorded in
+     the produced object.
+
+MMUUTTEEXX AACCQQUUIISSIITTIIOONN
+     A locked mutex (see pthread_mutex_lock(3)) is represented by a volatile
+     variable of type lwpid_t, which records the global system identifier of
+     the thread owning the lock.  lliibbtthhrr performs a contested mutex acquisi‐
+     tion in three stages, each of which is more resource-consuming than the
+     previous.  The first two stages are only applied for a mutex of
+     PTHREAD_MUTEX_ADAPTIVE_NP type and PTHREAD_PRIO_NONE protocol (see
+     pthread_mutexattr(3)).
+
+     First, on SMP systems, a spin loop is performed, where the library at‐
+     tempts to acquire the lock by atomic(9) operations.  The loop count is
+     controlled by the LIBPTHREAD_SPINLOOPS environment variable, with a de‐
+     fault value of 2000.
+
+     If the spin loop was unable to acquire the mutex, a yield loop is exe‐
+     cuted, performing the same atomic(9) acquisition attempts as the spin
+     loop, but each attempt is followed by a yield of the CPU time of the
+     thread using the sched_yield(2) syscall.  By default, the yield loop is
+     not executed.  This is controlled by the LIBPTHREAD_YIELDLOOPS environ‐
+     ment variable.
+
+     If both the spin and yield loops failed to acquire the lock, the thread
+     is taken off the CPU and put to sleep in the kernel with the _umtx_op(2)
+     syscall.  The kernel wakes up a thread and hands the ownership of the
+     lock to the woken thread when the lock becomes available.
+
+TTHHRREEAADD SSTTAACCKKSS
+     Each thread is provided with a private user-mode stack area used by the C
+     runtime.  The size of the main (initial) thread stack is set by the ker‐
+     nel, and is controlled by the RLIMIT_STACK process resource limit (see
+     getrlimit(2)).
+
+     By default, the main thread's stack size is equal to the value of
+     RLIMIT_STACK for the process.  If the LIBPTHREAD_SPLITSTACK_MAIN environ‐
+     ment variable is present in the process environment (its value does not
+     matter), the main thread's stack is reduced to 4MB on 64bit architec‐
+     tures, and to 2MB on 32bit architectures, when the threading library is
+     initialized.  The rest of the address space area which has been reserved
+     by the kernel for the initial process stack is used for non-initial
+     thread stacks in this case.  The presence of the LIBPTHREAD_BIGSTACK_MAIN
+     environment variable overrides LIBPTHREAD_SPLITSTACK_MAIN; it is kept for
+     backward-compatibility.
+
+     The size of stacks for threads created by the process at run-time with
+     the pthread_create(3) call is controlled by thread attributes: see
+     pthread_attr(3), in particular, the pthread_attr_setstacksize(3),
+     pthread_attr_setguardsize(3) and pthread_attr_setstackaddr(3) functions.
+     If no attributes for the thread stack size are specified, the default
+     non-initial thread stack size is 2MB for 64bit architectures, and 1MB for
+     32bit architectures.
+
+RRUUNN--TTIIMMEE SSEETTTTIINNGGSS
+     The following environment variables are recognized by lliibbtthhrr and adjust
+     the operation of the library at run-time:
+
+     LIBPTHREAD_BIGSTACK_MAIN       Disables the reduction of the initial
+                                    thread stack enabled by
+                                    LIBPTHREAD_SPLITSTACK_MAIN.
+
+     LIBPTHREAD_SPLITSTACK_MAIN     Causes a reduction of the initial thread
+                                    stack, as described in the section _T_H_R_E_A_D
+                                    _S_T_A_C_K_S.  This was the default behaviour of
+                                    lliibbtthhrr before FreeBSD 11.0.
+
+     LIBPTHREAD_SPINLOOPS           The integer value of the variable over‐
+                                    rides the default count of iterations in
+                                    the spin loop of the mutex acquisition.
+                                    The default count is 2000, set by the
+                                    MUTEX_ADAPTIVE_SPINS constant in the
+                                    lliibbtthhrr sources.
+
+     LIBPTHREAD_YIELDLOOPS          A non-zero integer value enables the yield
+                                    loop in the process of the mutex acquisi‐
+                                    tion.  The value is the count of loop op‐
+                                    erations.
+
+     LIBPTHREAD_QUEUE_FIFO          The integer value of the variable speci‐
+                                    fies how often blocked threads are in‐
+                                    serted at the head of the sleep queue, in‐
+                                    stead of its tail.  Bigger values reduce
+                                    the frequency of the FIFO discipline.  The
+                                    value must be between 0 and 255.
+
+     LIBPTHREAD_UMTX_MIN_TIMEOUT    The minimal amount of time, in nanosec‐
+                                    onds, the thread is required to sleep for
+                                    pthread operations specifying a timeout.
+                                    If the operation requests a timeout less
+                                    than the value provided, it is silently
+                                    increased to the value.  The value of zero
+                                    means no minimum (default).
+
+     The following sysctl MIBs affect the operation of the library:
+
+     kern.ipc.umtx_vnode_persistent       By default, a shared lock backed by
+                                          a mapped file in memory is automati‐
+                                          cally destroyed on the last unmap of
+                                          the corresponding file's page, which
+                                          is allowed by POSIX.  Setting the
+                                          sysctl to 1 makes such a shared lock
+                                          object persist until the vnode is
+                                          recycled by the Virtual File System.
+                                          Note that in case file is not opened
+                                          and not mapped, the kernel might re‐
+                                          cycle it at any moment, making this
+                                          sysctl less useful than it sounds.
+
+     kern.ipc.umtx_max_robust             The maximal number of robust mutexes
+                                          allowed for one thread.  The kernel
+                                          will not unlock more mutexes than
+                                          specified, see _umtx_op(2) for more
+                                          details.  The default value is large
+                                          enough for most useful applications.
+
+     debug.umtx.robust_faults_verbose     A non zero value makes kernel emit
+                                          some diagnostic when the robust mu‐
+                                          texes unlock was prematurely aborted
+                                          after detecting some inconsistency,
+                                          as a measure to prevent memory cor‐
+                                          ruption.
+
+     The RLIMIT_UMTXP limit (see getrlimit(2)) defines how many shared locks a
+     given user may create simultaneously.
+
+IINNTTEERRAACCTTIIOONN WWIITTHH RRUUNN--TTIIMMEE LLIINNKKEERR
+     On load, lliibbtthhrr installs interposing handlers into the hooks exported by
+     libc.  The interposers provide real locking implementation instead of the
+     stubs for single-threaded processes in libc, cancellation support and
+     some modifications to the signal operations.
+
+     lliibbtthhrr cannot be unloaded; the dlclose(3) function does not perform any
+     action when called with a handle for lliibbtthhrr.  One of the reasons is that
+     the internal interposing of libc functions cannot be undone.
+
+SSIIGGNNAALLSS
+     The implementation interposes the user-installed signal(3) handlers.
+     This interposing is done to postpone signal delivery to threads which en‐
+     tered (libthr-internal) critical sections, where the calling of the user-
+     provided signal handler is unsafe.  An example of such a situation is
+     owning the internal library lock.  When a signal is delivered while the
+     signal handler cannot be safely called, the call is postponed and per‐
+     formed until after the exit from the critical section.  This should be
+     taken into account when interpreting ktrace(1) logs.
+
+PPRROOCCEESSSS--SSHHAARREEDD SSYYNNCCHHRROONNIIZZAATTIIOONN OOBBJJEECCTTSS
+     In the libthr implementation, user-visible types for all synchronization
+     objects (e.g. pthread_mutex_t) are pointers to internal structures, allo‐
+     cated either by the corresponding pptthhrreeaadd__<<oobbjjttyyppee>>__iinniitt() method call,
+     or implicitly on first use when a static initializer was specified.  The
+     initial implementation of process-private locking object used this model
+     with internal allocation, and the addition of process-shared objects was
+     done in a way that did not break the application binary interface.
+
+     For process-private objects, the internal structure is allocated using
+     either malloc(3) or, for pthread_mutex_init(3), an internal memory allo‐
+     cator implemented in lliibbtthhrr.  The internal allocator for mutexes is used
+     to avoid bootstrap issues with many malloc(3) implementations which need
+     working mutexes to function.  The same allocator is used for thread-spe‐
+     cific data, see pthread_setspecific(3), for the same reason.
+
+     For process-shared objects, the internal structure is created by first
+     allocating a shared memory segment using _umtx_op(2) operation
+     UMTX_OP_SHM, and then mapping it into process address space with mmap(2)
+     with the MAP_SHARED flag.  The POSIX standard requires that:
+
+     only the process-shared synchronization object itself can be used for
+     performing synchronization.  It need not be referenced at the address
+     used to initialize it (that is, another mapping of the same object can
+     be used).
+
+     With the FreeBSD implementation, process-shared objects require initial‐
+     ization in each process that use them.  In particular, if you map the
+     shared memory containing the user portion of a process-shared object al‐
+     ready initialized in different process, locking functions do not work on
+     it.
+
+     Another broken case is a forked child creating the object in memory
+     shared with the parent, which cannot be used from parent.  Note that pro‐
+     cesses should not use non-async-signal safe functions after fork(2) any‐
+     way.
+
+SSEEEE AALLSSOO
+     ktrace(1), ld-elf.so.1(1), _umtx_op(2), errno(2), getrlimit(2),
+     thr_exit(2), thr_kill(2), thr_kill2(2), thr_new(2), thr_self(2),
+     thr_set_name(2), dlclose(3), dlopen(3), getenv(3), pthread_attr(3),
+     pthread_attr_setstacksize(3), pthread_create(3), signal(3), atomic(9)
+
+HHIISSTTOORRYY
+     The lliibbtthhrr library first appeared in FreeBSD 5.2.
+
+AAUUTTHHOORRSS
+     The lliibbtthhrr library was originally created by Jeff Roberson
+     <_j_e_f_f_@_F_r_e_e_B_S_D_._o_r_g>, and enhanced by Jonathan Mini <_m_i_n_i_@_F_r_e_e_B_S_D_._o_r_g> and
+     Mike Makonnen <_m_t_m_@_F_r_e_e_B_S_D_._o_r_g>.  It has been substantially rewritten and
+     optimized by David Xu <_d_a_v_i_d_x_u_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             October 1, 2021                            BSD

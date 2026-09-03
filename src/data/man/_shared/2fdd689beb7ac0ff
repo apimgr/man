@@ -1,0 +1,121 @@
+VM_MAP_ENTRY_RESIZE_F... BSD Kernel Developer's ManualVM_MAP_ENTRY_RESIZE_F...
+
+NNAAMMEE
+     vvmm__mmaapp__eennttrryy__rreessiizzee__ffrreeee — vm map free space algorithm
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<vvmm//vvmm..hh>>
+     ##iinncclluuddee <<vvmm//vvmm__mmaapp..hh>>
+
+     _v_o_i_d
+     vvmm__mmaapp__eennttrryy__rreessiizzee__ffrreeee(_v_m___m_a_p___t _m_a_p, _v_m___m_a_p___e_n_t_r_y___t _e_n_t_r_y);
+
+DDEESSCCRRIIPPTTIIOONN
+     This manual page describes the _v_m___m_a_p___e_n_t_r_y fields used in the VM map
+     free space algorithm, how to maintain consistency of these variables, and
+     the vvmm__mmaapp__eennttrryy__rreessiizzee__ffrreeee() function.
+
+     VM map entries are organized as both a doubly-linked list (_p_r_e_v and _n_e_x_t
+     pointers) and as a binary search tree (_l_e_f_t and _r_i_g_h_t pointers).  The
+     search tree is organized as a Sleator and Tarjan splay tree, also known
+     as a “self-adjusting tree”.
+
+           struct vm_map_entry {
+                   struct vm_map_entry *prev;
+                   struct vm_map_entry *next;
+                   struct vm_map_entry *left;
+                   struct vm_map_entry *right;
+                   vm_offset_t start;
+                   vm_offset_t end;
+                   vm_offset_t avail_ssize;
+                   vm_size_t adj_free;
+                   vm_size_t max_free;
+                   ...
+           };
+
+     The free space algorithm adds two fields to _s_t_r_u_c_t _v_m___m_a_p___e_n_t_r_y: _a_d_j___f_r_e_e
+     and _m_a_x___f_r_e_e.  The _a_d_j___f_r_e_e field is the amount of free address space ad‐
+     jacent to and immediately following (higher address) the map entry.  This
+     field is unused in the map header.  Note that _a_d_j___f_r_e_e depends on the
+     linked list, not the splay tree and that _a_d_j___f_r_e_e can be computed as:
+
+           entry->adj_free = (entry->next == &map->header ?
+               map->max_offset : entry->next->start) - entry->end;
+
+     The _m_a_x___f_r_e_e field is the maximum amount of contiguous free space in the
+     entry's subtree.  Note that _m_a_x___f_r_e_e depends on the splay tree, not the
+     linked list and that _m_a_x___f_r_e_e is computed by taking the maximum of its
+     own _a_d_j___f_r_e_e and the _m_a_x___f_r_e_e of its left and right subtrees.  Again,
+     _m_a_x___f_r_e_e is unused in the map header.
+
+     These fields allow for an OO(_l_o_g _n) implementation of vvmm__mmaapp__ffiinnddssppaaccee().
+     Using _m_a_x___f_r_e_e, we can immediately test for a sufficiently large free re‐
+     gion in an entire subtree.  This makes it possible to find a first-fit
+     free region of a given size in one pass down the tree, so OO(_l_o_g _n) amor‐
+     tized using splay trees.
+
+     When a free region changes size, we must update _a_d_j___f_r_e_e and _m_a_x___f_r_e_e in
+     the preceding map entry and propagate _m_a_x___f_r_e_e up the tree.  This is han‐
+     dled in vvmm__mmaapp__eennttrryy__lliinnkk() and vvmm__mmaapp__eennttrryy__uunnlliinnkk() for the cases of
+     inserting and deleting an entry.  Note that vvmm__mmaapp__eennttrryy__lliinnkk() updates
+     both the new entry and the previous entry, and that vvmm__mmaapp__eennttrryy__uunnlliinnkk()
+     updates the previous entry.  Also note that _m_a_x___f_r_e_e is not actually
+     propagated up the tree.  Instead, that entry is first splayed to the root
+     and then the change is made there.  This is a common technique in splay
+     trees and is also how map entries are linked and unlinked into the tree.
+
+     The vvmm__mmaapp__eennttrryy__rreessiizzee__ffrreeee() function updates the free space variables
+     in the given _e_n_t_r_y and propagates those values up the tree.  This func‐
+     tion should be called whenever a map entry is resized in-place, that is,
+     by modifying its _s_t_a_r_t or _e_n_d values.  Note that if you change _e_n_d, then
+     you should resize that entry, but if you change _s_t_a_r_t, then you should
+     resize the previous entry.  The map must be locked before calling this
+     function, and again, propagating _m_a_x___f_r_e_e is performed by splaying that
+     entry to the root.
+
+EEXXAAMMPPLLEESS
+     Consider adding a map entry with vvmm__mmaapp__iinnsseerrtt().
+
+           ret = vm_map_insert(map, object, offset, start, end, prot,
+               max_prot, cow);
+
+     In this case, no further action is required to maintain consistency of
+     the free space variables.  The vvmm__mmaapp__iinnsseerrtt() function calls
+     vvmm__mmaapp__eennttrryy__lliinnkk() which updates both the new entry and the previous en‐
+     try.  The same would be true for vvmm__mmaapp__ddeelleettee() and for calling
+     vvmm__mmaapp__eennttrryy__lliinnkk() or vvmm__mmaapp__eennttrryy__uunnlliinnkk() directly.
+
+     Now consider resizing an entry in-place without a call to
+     vvmm__mmaapp__eennttrryy__lliinnkk() or vvmm__mmaapp__eennttrryy__uunnlliinnkk().
+
+           entry->start = new_start;
+           if (entry->prev != &map->header)
+                   vm_map_entry_resize_free(map, entry->prev);
+
+     In this case, resetting _s_t_a_r_t changes the amount of free space following
+     the previous entry, so we use vvmm__mmaapp__eennttrryy__rreessiizzee__ffrreeee() to update the
+     previous entry.
+
+     Finally, suppose we change an entry's _e_n_d address.
+
+           entry->end = new_end;
+           vm_map_entry_resize_free(map, entry);
+
+     Here, we call vvmm__mmaapp__eennttrryy__rreessiizzee__ffrreeee() on the entry itself.
+
+SSEEEE AALLSSOO
+     vm_map(9), vm_map_findspace(9)
+
+     Daniel D. Sleator and Robert E. Tarjan, “Self-Adjusting Binary Search
+     Trees”, _J_A_C_M, vol. 32(3), pp. 652-686, July 1985.
+
+HHIISSTTOORRYY
+     Splay trees were added to the VM map in FreeBSD 5.0, and the OO(_l_o_g _n)
+     tree-based free space algorithm was added in FreeBSD 5.3.
+
+AAUUTTHHOORRSS
+     The tree-based free space algorithm and this manual page were written by
+     Mark W. Krentel <_k_r_e_n_t_e_l_@_d_r_e_a_m_s_c_a_p_e_._c_o_m>.
+
+BSD                             August 17, 2004                            BSD

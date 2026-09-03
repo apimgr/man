@@ -1,0 +1,87 @@
+IEEE80211_VAP(9)         BSD Kernel Developer's Manual        IEEE80211_VAP(9)
+
+NNAAMMEE
+     nneett8800221111__vvaapp — 802.11 network layer virtual radio support
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<nneett8800221111//iieeeeee8800221111__vvaarr..hh>>
+
+     _i_n_t
+     iieeeeee8800221111__vvaapp__sseettuupp(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_c_o_m _*, _s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_v_a_p _*,
+         _c_o_n_s_t _c_h_a_r _n_a_m_e_[_I_F_N_A_M_S_I_Z_], _i_n_t _u_n_i_t, _i_n_t _o_p_m_o_d_e, _i_n_t _f_l_a_g_s,
+         _c_o_n_s_t _u_i_n_t_8___t _b_s_s_i_d_[_I_E_E_E_8_0_2_1_1___A_D_D_R___L_E_N_],
+         _c_o_n_s_t _u_i_n_t_8___t _m_a_c_a_d_d_r_[_I_E_E_E_8_0_2_1_1___A_D_D_R___L_E_N_]);
+
+     _i_n_t
+     iieeeeee8800221111__vvaapp__aattttaacchh(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_v_a_p _*, _i_f_m___c_h_a_n_g_e___c_b___t _m_e_d_i_a___c_h_a_n_g_e,
+         _i_f_m___s_t_a_t___c_b___t _m_e_d_i_a___s_t_a_t);
+
+     _v_o_i_d
+     iieeeeee8800221111__vvaapp__ddeettaacchh(_s_t_r_u_c_t _i_e_e_e_8_0_2_1_1_v_a_p _*);
+
+DDEESSCCRRIIPPTTIIOONN
+     The nneett8800221111 software layer provides a support framework for drivers that
+     includes a virtual radio API that is exported to users through network
+     interfaces (aka vaps) that are cloned from the underlying device.  These
+     interfaces have an operating mode (station, adhoc, hostap, wds, monitor,
+     etc.) that is fixed for the lifetime of the interface.  Devices that can
+     support multiple concurrent interfaces allow multiple vaps to be cloned.
+
+     The virtual radio interface defined by the nneett8800221111 layer means that
+     drivers must be structured to follow specific rules.  Drivers that sup‐
+     port only a single interface at any time must still follow these rules.
+
+     The virtual radio architecture splits state between a single per-device
+     _i_e_e_e_8_0_2_1_1_c_o_m structure and one or more _i_e_e_e_8_0_2_1_1_v_a_p structures.  Vaps are
+     created with the SIOCIFCREATE2 request.  This results in a call into the
+     driver's _i_c___v_a_p___c_r_e_a_t_e method where the driver can decide if the request
+     should be accepted.
+
+     The vap creation process is done in three steps.  First the driver allo‐
+     cates the data structure with malloc(9).  This data structure must have
+     an _i_e_e_e_8_0_2_1_1_v_a_p structure at the front but is usually extended with
+     driver-private state.  Next the vap is setup with a call to
+     iieeeeee8800221111__vvaapp__sseettuupp().  This request initializes nneett8800221111 state but does
+     not activate the interface.  The driver can then override methods setup
+     by nneett8800221111 and setup driver resources before finally calling
+     iieeeeee8800221111__vvaapp__aattttaacchh() to complete the process.  Both these calls must be
+     done without holding any driver locks as work may require the process
+     block/sleep.
+
+     A vap is deleted when an SIOCIFDESTROY ioctl request is made or when the
+     device detaches (causing all associated vaps to automatically be
+     deleted).  Delete requests cause the _i_c___v_a_p___d_e_l_e_t_e method to be called.
+     Drivers must quiesce the device before calling iieeeeee8800221111__vvaapp__ddeettaacchh() to
+     deactivate the vap and isolate it from activities such as requests from
+     user applications.  The driver can then reclaim resources held by the vap
+     and re-enable device operation.  The exact procedure for quiescing a de‐
+     vice is unspecified but typically it involves blocking interrupts and
+     stopping transmit and receive processing.
+
+MMUULLTTII--VVAAPP OOPPEERRAATTIIOONN
+     Drivers are responsible for deciding if multiple vaps can be created and
+     how to manage them.  Whether or not multiple concurrent vaps can be sup‐
+     ported depends on a device's capabilities.  For example, multiple hostap
+     vaps can usually be supported but many devices do not support assigning
+     each vap a unique BSSID.  If a device supports hostap operation it can
+     usually support concurrent station mode vaps but possibly with limita‐
+     tions such as losing support for hardware beacon miss support.  Devices
+     that are capable of hostap operation and can send and receive 4-address
+     frames should be able to support WDS vaps together with an ap vap.  But
+     in contrast some devices cannot support WDS vaps without at least one ap
+     vap (this however can be finessed by forcing the ap vap to not transmit
+     beacon frames).  All devices should support the creation of any number of
+     monitor mode vaps concurrent with other vaps but it is the responsibility
+     of the driver to allow this.
+
+     An important consequence of supporting multiple concurrent vaps is that a
+     driver's _i_v___n_e_w_s_t_a_t_e method must be written to handle being called for
+     each vap.  Where necessary, drivers must track private state for all vaps
+     and not just the one whose state is being changed (e.g. for handling bea‐
+     con timers the driver may need to know if all vaps that beacon are
+     stopped before stopping the hardware timers).
+
+SSEEEE AALLSSOO
+     ieee80211(9), ifnet(9), malloc(9)
+
+BSD                             August 4, 2009                             BSD

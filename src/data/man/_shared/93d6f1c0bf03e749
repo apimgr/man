@@ -1,0 +1,461 @@
+ROUTED(8)                 BSD System Manager's Manual                ROUTED(8)
+
+NNAAMMEE
+     rroouutteedd, rrddiisscc — network RIP and router discovery routing daemon
+
+SSYYNNOOPPSSIISS
+     rroouutteedd [--iissqqddgghhmmppAAttvv] [--TT _t_r_a_c_e_f_i_l_e] [--FF _n_e_t[/mask[,metric]]] [--PP _p_a_r_m_s]
+
+DDEESSCCRRIIPPTTIIOONN
+     The rroouutteedd utility is a daemon invoked at boot time to manage the network
+     routing tables.  It uses Routing Information Protocol, RIPv1 (RFC 1058),
+     RIPv2 (RFC 1723), and Internet Router Discovery Protocol (RFC 1256) to
+     maintain the kernel routing table.  The RIPv1 protocol is based on the
+     reference 4.3BSD daemon.
+
+     It listens on the udp(4) socket for the route(8) service (see
+     services(5)) for Routing Information Protocol packets.  It also sends and
+     receives multicast Router Discovery ICMP messages.  If the host is a
+     router, rroouutteedd periodically supplies copies of its routing tables to any
+     directly connected hosts and networks.  It also advertises or solicits
+     default routes using Router Discovery ICMP messages.
+
+     When started (or when a network interface is later turned on), rroouutteedd
+     uses an AF_ROUTE address family facility to find those directly connected
+     interfaces configured into the system and marked "up".  It adds necessary
+     routes for the interfaces to the kernel routing table.  Soon after being
+     first started, and provided there is at least one interface on which RIP
+     has not been disabled, rroouutteedd deletes all pre-existing non-static routes
+     in kernel table.  Static routes in the kernel table are preserved and in‐
+     cluded in RIP responses if they have a valid RIP -hopcount (see
+     route(8)).
+
+     If more than one interface is present (not counting the loopback inter‐
+     face), it is assumed that the host should forward packets among the con‐
+     nected networks.  After transmitting a RIP _r_e_q_u_e_s_t and Router Discovery
+     Advertisements or Solicitations on a new interface, the daemon enters a
+     loop, listening for RIP request and response and Router Discovery packets
+     from other hosts.
+
+     When a _r_e_q_u_e_s_t packet is received, rroouutteedd formulates a reply based on the
+     information maintained in its internal tables.  The _r_e_s_p_o_n_s_e packet gen‐
+     erated contains a list of known routes, each marked with a "hop count"
+     metric (a count of 16 or greater is considered "infinite").  The adver‐
+     tised metric for a route reflects the metrics associated with interfaces
+     (see ifconfig(8)) though which it is received and sent, so setting the
+     metric on an interface is an effective way to steer traffic.  See also
+     aaddjj__iinnmmeettrriicc and aaddjj__oouuttmmeettrriicc parameters below.
+
+     Responses do not include routes with a first hop on the requesting net‐
+     work to implement in part _s_p_l_i_t_-_h_o_r_i_z_o_n.  Requests from query programs
+     such as rtquery(8) are answered with the complete table.
+
+     The routing table maintained by the daemon includes space for several
+     gateways for each destination to speed recovery from a failing router.
+     RIP _r_e_s_p_o_n_s_e packets received are used to update the routing tables pro‐
+     vided they are from one of the several currently recognized gateways or
+     advertise a better metric than at least one of the existing gateways.
+
+     When an update is applied, rroouutteedd records the change in its own tables
+     and updates the kernel routing table if the best route to the destination
+     changes.  The change in the kernel routing table is reflected in the next
+     batch of _r_e_s_p_o_n_s_e packets sent.  If the next response is not scheduled
+     for a while, a _f_l_a_s_h _u_p_d_a_t_e response containing only recently changed
+     routes is sent.
+
+     In addition to processing incoming packets, rroouutteedd also periodically
+     checks the routing table entries.  If an entry has not been updated for 3
+     minutes, the entry's metric is set to infinity and marked for deletion.
+     Deletions are delayed until the route has been advertised with an infi‐
+     nite metric to ensure the invalidation is propagated throughout the local
+     internet.  This is a form of _p_o_i_s_o_n _r_e_v_e_r_s_e.
+
+     Routes in the kernel table that are added or changed as a result of ICMP
+     Redirect messages are deleted after a while to minimize _b_l_a_c_k_-_h_o_l_e_s.
+     When a TCP connection suffers a timeout, the kernel tells rroouutteedd, which
+     deletes all redirected routes through the gateway involved, advances the
+     age of all RIP routes through the gateway to allow an alternate to be
+     chosen, and advances of the age of any relevant Router Discovery Protocol
+     default routes.
+
+     Hosts acting as internetwork routers gratuitously supply their routing
+     tables every 30 seconds to all directly connected hosts and networks.
+     These RIP responses are sent to the broadcast address on nets that sup‐
+     port broadcasting, to the destination address on point-to-point links,
+     and to the router's own address on other networks.  If RIPv2 is enabled,
+     multicast packets are sent on interfaces that support multicasting.
+
+     If no response is received on a remote interface, if there are errors
+     while sending responses, or if there are more errors than input or output
+     (see netstat(1)), then the cable or some other part of the interface is
+     assumed to be disconnected or broken, and routes are adjusted appropri‐
+     ately.
+
+     The _I_n_t_e_r_n_e_t _R_o_u_t_e_r _D_i_s_c_o_v_e_r_y _P_r_o_t_o_c_o_l is handled similarly.  When the
+     daemon is supplying RIP routes, it also listens for Router Discovery So‐
+     licitations and sends Advertisements.  When it is quiet and listening to
+     other RIP routers, it sends Solicitations and listens for Advertisements.
+     If it receives a good Advertisement and it is not multi-homed, it stops
+     listening for broadcast or multicast RIP responses.  It tracks several
+     advertising routers to speed recovery when the currently chosen router
+     dies.  If all discovered routers disappear, the daemon resumes listening
+     to RIP responses.  It continues listening to RIP while using Router Dis‐
+     covery if multi-homed to ensure all interfaces are used.
+
+     The Router Discovery standard requires that advertisements have a default
+     "lifetime" of 30 minutes.  That means should something happen, a client
+     can be without a good route for 30 minutes.  It is a good idea to reduce
+     the default to 45 seconds using --PP rrddiisscc__iinntteerrvvaall==4455 on the command line
+     or rrddiisscc__iinntteerrvvaall==4455 in the _/_e_t_c_/_g_a_t_e_w_a_y_s file.
+
+     While using Router Discovery (which happens by default when the system
+     has a single network interface and a Router Discover Advertisement is re‐
+     ceived), there is a single default route and a variable number of redi‐
+     rected host routes in the kernel table.  On a host with more than one
+     network interface, this default route will be via only one of the inter‐
+     faces.  Thus, multi-homed hosts running with --qq might need nnoo__rrddiisscc de‐
+     scribed below.
+
+     See the ppmm__rrddiisscc facility described below to support "legacy" systems
+     that can handle neither RIPv2 nor Router Discovery.
+
+     By default, neither Router Discovery advertisements nor solicitations are
+     sent over point to point links (e.g. PPP).  The netmask associated with
+     point-to-point links (such as SLIP or PPP, with the IFF_POINTOPOINT flag)
+     is used by rroouutteedd to infer the netmask used by the remote system when
+     RIPv1 is used.
+
+     The following options are available:
+
+     --ii      allow rroouutteedd to accept a RIP request from non-router node.  When
+             specified once, rroouutteedd replies to a route information query from
+             neighbor nodes.  When specified twice, it replies to a query from
+             remote nodes in addition.  rtquery(8) utility can be used to send
+             a request.
+
+             This feature is disabled by default because of a risk of reflec‐
+             tion attack though it is useful for debugging purpose.
+
+     --ss      force rroouutteedd to supply routing information.  This is the default
+             if multiple network interfaces are present on which RIP or Router
+             Discovery have not been disabled, and if the kernel switch ipfor‐
+             warding=1.
+
+     --qq      is the opposite of the --ss option.  This is the default when only
+             one interface is present.  With this explicit option, the daemon
+             is always in "quiet-mode" for RIP and does not supply routing in‐
+             formation to other computers.
+
+     --dd      do not run in the background.  This option is meant for interac‐
+             tive use.
+
+     --gg      used on internetwork routers to offer a route to the "default"
+             destination.  It is equivalent to --FF 00//00,,11 and is present mostly
+             for historical reasons.  A better choice is --PP ppmm__rrddiisscc on the
+             command line or ppmm__rrddiisscc in the _/_e_t_c_/_g_a_t_e_w_a_y_s file, since a
+             larger metric will be used, reducing the spread of the poten‐
+             tially dangerous default route.  This is typically used on a
+             gateway to the Internet, or on a gateway that uses another rout‐
+             ing protocol whose routes are not reported to other local
+             routers.  Notice that because a metric of 1 is used, this feature
+             is dangerous.  It is more commonly accidentally used to create
+             chaos with a routing loop than to solve problems.
+
+     --hh      cause host or point-to-point routes to not be advertised, pro‐
+             vided there is a network route going the same direction.  That is
+             a limited kind of aggregation.  This option is useful on gateways
+             to Ethernets that have other gateway machines connected with
+             point-to-point links such as SLIP.
+
+     --mm      cause the machine to advertise a host or point-to-point route to
+             its primary interface.  It is useful on multi-homed machines such
+             as NFS servers.  This option should not be used except when the
+             cost of the host routes it generates is justified by the popular‐
+             ity of the server.  It is effective only when the machine is sup‐
+             plying routing information, because there is more than one inter‐
+             face.  The --mm option overrides the --qq option to the limited ex‐
+             tent of advertising the host route.
+
+     --AA      do not ignore RIPv2 authentication if we do not care about RIPv2
+             authentication.  This option is required for conformance with RFC
+             1723.  However, it makes no sense and breaks using RIP as a dis‐
+             covery protocol to ignore all RIPv2 packets that carry authenti‐
+             cation when this machine does not care about authentication.
+
+     --tt      increase the debugging level, which causes more information to be
+             logged on the tracefile specified with --TT or standard out.  The
+             debugging level can be increased or decreased with the _S_I_G_U_S_R_1 or
+             _S_I_G_U_S_R_2 signals or with the rtquery(8) command.
+
+     --TT _t_r_a_c_e_f_i_l_e
+             increases the debugging level to at least 1 and causes debugging
+             information to be appended to the trace file.  Note that because
+             of security concerns, it is wisest to not run rroouutteedd routinely
+             with tracing directed to a file.
+
+     --vv      display and logs the version of daemon.
+
+     --FF _n_e_t_[_/_m_a_s_k_]_[_,_m_e_t_r_i_c_]
+             minimize routes in transmissions via interfaces with addresses
+             that match _n_e_t_/_m_a_s_k, and synthesizes a default route to this ma‐
+             chine with the _m_e_t_r_i_c.  The intent is to reduce RIP traffic on
+             slow, point-to-point links such as PPP links by replacing many
+             large UDP packets of RIP information with a single, small packet
+             containing a "fake" default route.  If _m_e_t_r_i_c is absent, a value
+             of 14 is assumed to limit the spread of the "fake" default route.
+             This is a dangerous feature that when used carelessly can cause
+             routing loops.  Notice also that more than one interface can
+             match the specified network number and mask.  See also --gg.
+
+     --PP _p_a_r_m_s
+             is equivalent to adding the parameter line _p_a_r_m_s to the
+             _/_e_t_c_/_g_a_t_e_w_a_y_s file.
+
+     Any other argument supplied is interpreted as the name of a file in which
+     the actions of rroouutteedd should be logged.  It is better to use --TT instead
+     of appending the name of the trace file to the command.
+
+     The rroouutteedd utility also supports the notion of "distant" _p_a_s_s_i_v_e or
+     _a_c_t_i_v_e gateways.  When rroouutteedd is started, it reads the file _/_e_t_c_/_g_a_t_e_w_a_y_s
+     to find such distant gateways which may not be located using only infor‐
+     mation from a routing socket, to discover if some of the local gateways
+     are _p_a_s_s_i_v_e, and to obtain other parameters.  Gateways specified in this
+     manner should be marked passive if they are not expected to exchange
+     routing information, while gateways marked active should be willing to
+     exchange RIP packets.  Routes through _p_a_s_s_i_v_e gateways are installed in
+     the kernel's routing tables once upon startup and are not included in
+     transmitted RIP responses.
+
+     Distant active gateways are treated like network interfaces.  RIP re‐
+     sponses are sent to the distant _a_c_t_i_v_e gateway.  If no responses are re‐
+     ceived, the associated route is deleted from the kernel table and RIP re‐
+     sponses advertised via other interfaces.  If the distant gateway resumes
+     sending RIP responses, the associated route is restored.
+
+     Such gateways can be useful on media that do not support broadcasts or
+     multicasts but otherwise act like classic shared media like Ethernets
+     such as some ATM networks.  One can list all RIP routers reachable on the
+     HIPPI or ATM network in _/_e_t_c_/_g_a_t_e_w_a_y_s with a series of "host" lines.
+     Note that it is usually desirable to use RIPv2 in such situations to
+     avoid generating lists of inferred host routes.
+
+     Gateways marked _e_x_t_e_r_n_a_l are also passive, but are not placed in the ker‐
+     nel routing table nor are they included in routing updates.  The function
+     of external entries is to indicate that another routing process will in‐
+     stall such a route if necessary, and that other routes to that destina‐
+     tion should not be installed by rroouutteedd.  Such entries are only required
+     when both routers may learn of routes to the same destination.
+
+     The _/_e_t_c_/_g_a_t_e_w_a_y_s file is comprised of a series of lines, each in one of
+     the following two formats or consist of parameters described later.
+     Blank lines and lines starting with '#' are comments.
+
+     nneett _N_n_a_m_e_[_/_m_a_s_k_] ggaatteewwaayy _G_n_a_m_e mmeettrriicc _v_a_l_u_e <ppaassssiivvee | aaccttiivvee | eexxtteerrnn>
+
+     hhoosstt _H_n_a_m_e ggaatteewwaayy _G_n_a_m_e mmeettrriicc _v_a_l_u_e <ppaassssiivvee | aaccttiivvee | eexxtteerrnn>
+
+     _N_n_a_m_e or _H_n_a_m_e is the name of the destination network or host.  It may be
+     a symbolic network name or an Internet address specified in "dot" nota‐
+     tion (see inet(3)).  (If it is a name, then it must either be defined in
+     _/_e_t_c_/_n_e_t_w_o_r_k_s or _/_e_t_c_/_h_o_s_t_s, or a method in nsswitch.conf(5) must be able
+     to resolve it.)
+
+     _M_a_s_k is an optional number between 1 and 32 indicating the netmask asso‐
+     ciated with _N_n_a_m_e.
+
+     _G_n_a_m_e is the name or address of the gateway to which RIP responses should
+     be forwarded.
+
+     _V_a_l_u_e is the hop count to the destination host or network.
+
+     HHoosstt _h_n_a_m_e is equivalent to nneett _n_n_a_m_e_/_3_2.
+
+     One of the keywords ppaassssiivvee, aaccttiivvee or eexxtteerrnnaall must be present to indi‐
+     cate whether the gateway should be treated as ppaassssiivvee or aaccttiivvee (as de‐
+     scribed above), or whether the gateway is eexxtteerrnnaall to the scope of the
+     RIP protocol.
+
+     As can be seen when debugging is turned on with --tt, such lines create
+     pseudo-interfaces.  To set parameters for remote or external interfaces,
+     a line starting with iiff==aalliiaass((HHnnaammee)), iiff==rreemmoottee((HHnnaammee)), etc. should be
+     used.
+
+   PPaarraammeetteerrss
+     Lines that start with neither "net" nor "host" must consist of one or
+     more of the following parameter settings, separated by commas or blanks:
+
+     iiff=_i_f_n_a_m_e
+             indicates that the other parameters on the line apply to the in‐
+             terface name _i_f_n_a_m_e.
+
+     ssuubbnneett=_n_n_a_m_e[/_m_a_s_k][,_m_e_t_r_i_c]
+             advertises a route to network _n_n_a_m_e with mask _m_a_s_k and the sup‐
+             plied metric (default 1).  This is useful for filling "holes" in
+             CIDR allocations.  This parameter must appear by itself on a
+             line.  The network number must specify a full, 32-bit value, as
+             in 192.0.2.0 instead of 192.0.2.
+
+             Do not use this feature unless necessary.  It is dangerous.
+
+     rriippvv11__mmaasskk=_n_n_a_m_e/_m_a_s_k_1,_m_a_s_k_2
+             specifies that netmask of the network of which _n_n_a_m_e/_m_a_s_k_1 is a
+             subnet should be _m_a_s_k_2.  For example,
+             “ripv1_mask=192.0.2.16/28,27” marks 192.0.2.16/28 as a subnet of
+             192.0.2.0/27 instead of 192.0.2.0/24.  It is better to turn on
+             RIPv2 instead of using this facility, for example with rriippvv22__oouutt.
+
+     ppaasssswwdd=_X_X_X_[_|_K_e_y_I_D_[_s_t_a_r_t_|_s_t_o_p_]_]
+             specifies a RIPv2 cleartext password that will be included on all
+             RIPv2 responses sent, and checked on all RIPv2 responses re‐
+             ceived.  Any blanks, tab characters, commas, or '#', '|', or NULL
+             characters in the password must be escaped with a backslash (\).
+             The common escape sequences \n, \r, \t, \b, and \xxx have their
+             usual meanings.  The KKeeyyIIDD must be unique but is ignored for
+             cleartext passwords.  If present, ssttaarrtt and ssttoopp are timestamps
+             in the form year/month/day@hour:minute.  They specify when the
+             password is valid.  The valid password with the most future is
+             used on output packets, unless all passwords have expired, in
+             which case the password that expired most recently is used, or
+             unless no passwords are valid yet, in which case no password is
+             output.  Incoming packets can carry any password that is valid,
+             will be valid within the next 24 hours, or that was valid within
+             the preceding 24 hours.  To protect the secrets, the passwd set‐
+             tings are valid only in the _/_e_t_c_/_g_a_t_e_w_a_y_s file and only when that
+             file is readable only by UID 0.
+
+     mmdd55__ppaasssswwdd=_X_X_X_|_K_e_y_I_D_[_s_t_a_r_t_|_s_t_o_p_]
+             specifies a RIPv2 MD5 password.  Except that a KKeeyyIIDD is required,
+             this keyword is similar to ppaasssswwdd.
+
+     nnoo__aagg   turns off aggregation of subnets in RIPv1 and RIPv2 responses.
+
+     nnoo__ssuuppeerr__aagg
+             turns off aggregation of networks into supernets in RIPv2 re‐
+             sponses.
+
+     ppaassssiivvee
+             marks the interface to not be advertised in updates sent via
+             other interfaces, and turns off all RIP and router discovery
+             through the interface.
+
+     nnoo__rriipp  disables all RIP processing on the specified interface.  If no
+             interfaces are allowed to process RIP packets, rroouutteedd acts purely
+             as a router discovery daemon.
+
+             Note that turning off RIP without explicitly turning on router
+             discovery advertisements with rrddiisscc__aaddvv or --ss causes rroouutteedd to
+             act as a client router discovery daemon, not advertising.
+
+     nnoo__rriipp__mmccaasstt
+             causes RIPv2 packets to be broadcast instead of multicast.
+
+     nnoo__rriipp__oouutt
+             causes no RIP updates to be sent.
+
+     nnoo__rriippvv11__iinn
+             causes RIPv1 received responses to be ignored.
+
+     nnoo__rriippvv22__iinn
+             causes RIPv2 received responses to be ignored.
+
+     rriippvv22__oouutt
+             turns on RIPv2 output and causes RIPv2 advertisements to be mul‐
+             ticast when possible.
+
+     rriippvv22   is equivalent to nnoo__rriippvv11__iinn and nnoo__rriippvv11__oouutt.  This enables
+             RIPv2.
+
+     nnoo__rrddiisscc
+             disables the Internet Router Discovery Protocol.
+
+     nnoo__ssoolliicciitt
+             disables the transmission of Router Discovery Solicitations.
+
+     sseenndd__ssoolliicciitt
+             specifies that Router Discovery solicitations should be sent,
+             even on point-to-point links, which by default only listen to
+             Router Discovery messages.
+
+     nnoo__rrddiisscc__aaddvv
+             disables the transmission of Router Discovery Advertisements.
+
+     rrddiisscc__aaddvv
+             specifies that Router Discovery Advertisements should be sent,
+             even on point-to-point links, which by default only listen to
+             Router Discovery messages.
+
+     bbccaasstt__rrddiisscc
+             specifies that Router Discovery packets should be broadcast in‐
+             stead of multicast.
+
+     rrddiisscc__pprreeff=_N
+             sets the preference in Router Discovery Advertisements to the op‐
+             tionally signed integer _N.  The default preference is 0.  Default
+             routes with smaller or more negative preferences are preferred by
+             clients.
+
+     rrddiisscc__iinntteerrvvaall=_N
+             sets the nominal interval with which Router Discovery Advertise‐
+             ments are transmitted to N seconds and their lifetime to 3*N.
+
+     ffaakkee__ddeeffaauulltt=_m_e_t_r_i_c
+             has an identical effect to --FF _n_e_t_[_/_m_a_s_k_]_[_=_m_e_t_r_i_c_] with the net‐
+             work and mask coming from the specified interface.
+
+     ppmm__rrddiisscc
+             is similar to ffaakkee__ddeeffaauulltt.  When RIPv2 routes are multicast, so
+             that RIPv1 listeners cannot receive them, this feature causes a
+             RIPv1 default route to be broadcast to RIPv1 listeners.  Unless
+             modified with ffaakkee__ddeeffaauulltt, the default route is broadcast with a
+             metric of 14.  That serves as a "poor man's router discovery"
+             protocol.
+
+     aaddjj__iinnmmeettrriicc=_d_e_l_t_a
+             adjusts the hop count or metric of received RIP routes by _d_e_l_t_a.
+             The metric of every received RIP route is increased by the sum of
+             two values associated with the interface.  One is the adj_in‐
+             metric value and the other is the interface metric set with
+             ifconfig(8).
+
+     aaddjj__oouuttmmeettrriicc=_d_e_l_t_a
+             adjusts the hop count or metric of advertised RIP routes by
+             _d_e_l_t_a.  The metric of every received RIP route is increased by
+             the metric associated with the interface by which it was re‐
+             ceived, or by 1 if the interface does not have a non-zero metric.
+             The metric of the received route is then increased by the
+             adj_outmetric associated with the interface.  Every advertised
+             route is increased by a total of four values, the metric set for
+             the interface by which it was received with ifconfig(8), the
+             aaddjj__iinnmmeettrriicc _d_e_l_t_a of the receiving interface, the metric set for
+             the interface by which it is transmitted with ifconfig(8), and
+             the aaddjj__oouuttmmeettrriicc _d_e_l_t_a of the transmitting interface.
+
+     ttrruusstt__ggaatteewwaayy=_r_n_a_m_e_[_|_n_e_t_1_/_m_a_s_k_1_|_n_e_t_2_/_m_a_s_k_2_|_._._._]
+             causes RIP packets from router _r_n_a_m_e and other routers named in
+             other ttrruusstt__ggaatteewwaayy keywords to be accepted, and packets from
+             other routers to be ignored.  If networks are specified, then
+             routes to other networks will be ignored from that router.
+
+     rreeddiirreecctt__ookk
+             allows the kernel to listen ICMP Redirect messages when the sys‐
+             tem is acting as a router and forwarding packets.  Otherwise,
+             ICMP Redirect messages are overridden and deleted when the system
+             is acting as a router.
+
+FFIILLEESS
+     /etc/gateways  for distant gateways
+
+SSEEEE AALLSSOO
+     icmp(4), udp(4), rtquery(8)
+
+     _I_n_t_e_r_n_e_t _T_r_a_n_s_p_o_r_t _P_r_o_t_o_c_o_l_s, XSIS 028112, Xerox System Integration
+     Standard.
+
+HHIISSTTOORRYY
+     The rroouutteedd utility appeared in 4.2BSD.
+
+BBUUGGSS
+     It does not always detect unidirectional failures in network interfaces,
+     for example, when the output side fails.
+
+BSD                              June 27, 2022                             BSD

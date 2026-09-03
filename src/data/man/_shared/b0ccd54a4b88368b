@@ -1,0 +1,110 @@
+NG_MPPC(4)               BSD Kernel Interfaces Manual               NG_MPPC(4)
+
+NNAAMMEE
+     nngg__mmppppcc — Microsoft MPPC/MPPE compression and encryption netgraph node
+     type
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//nngg__mmppppcc..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The mmppppcc node type implements the Microsoft Point-to-Point Compression
+     (MPPC) and Microsoft Point-to-Point Encryption (MPPE) sub-protocols of
+     the PPP protocol.  These protocols are often used in conjunction with the
+     Point-to-Point Tunneling Protocol (PPTP).
+
+     The node has two hooks, comp for compression and decomp for decompres‐
+     sion.  Typically one or both of these hooks would be connected to the
+     ng_ppp(4) node type hook of the same name.  Each direction of traffic
+     flow is independent of the other.
+
+HHOOOOKKSS
+     This node type supports the following hooks:
+
+     _c_o_m_p    Connection to ng_ppp(4) comp hook.  Incoming frames are com‐
+             pressed and/or encrypted, and sent back out the same hook.
+
+     _d_e_c_o_m_p  Connection to ng_ppp(4) decomp hook.  Incoming frames are decom‐
+             pressed and/or decrypted, and sent back out the same hook.
+
+CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_MPPC_CONFIG_COMP
+          This command resets and configures the node for a session in the
+          outgoing traffic direction (i.e., for compression and/or encryp‐
+          tion).  This command takes a struct ng_mppc_config as an argument:
+
+          /* Length of MPPE key */
+          #define MPPE_KEY_LEN      16
+
+          /* MPPC/MPPE PPP negotiation bits */
+          #define MPPC_BIT          0x00000001      /* mppc compression bits */
+          #define MPPE_40           0x00000020      /* use 40 bit key */
+          #define MPPE_56           0x00000080      /* use 56 bit key */
+          #define MPPE_128          0x00000040      /* use 128 bit key */
+          #define MPPE_BITS         0x000000e0      /* mppe encryption bits */
+          #define MPPE_STATELESS    0x01000000      /* use stateless mode */
+          #define MPPC_VALID_BITS   0x010000e1      /* possibly valid bits */
+
+          /* Configuration for a session */
+          struct ng_mppc_config {
+              u_char    enable;                 /* enable */
+              uint32_t  bits;                   /* config bits */
+              u_char    startkey[MPPE_KEY_LEN]; /* start key */
+          };
+
+          The enabled field enables traffic flow through the node.  The bits
+          field contains the bits as negotiated by the Compression Control
+          Protocol (CCP) in PPP.  The startkey is only necessary if MPPE was
+          negotiated, and must be equal to the session start key as defined
+          for MPPE.  This key is based on the MS-CHAP credentials used at link
+          authentication time.
+
+     NGM_MPPC_CONFIG_DECOMP
+          This command resets and configures the node for a session in the in‐
+          coming traffic direction (i.e., for decompression and/or decryp‐
+          tion).  This command takes a struct ng_mppc_config as an argument.
+
+     NGM_MPPC_RESETREQ
+          This message contains no arguments, and is bi-directional.  If an
+          error is detected during decompression, this message is sent by the
+          node to the originator of the NGM_MPPC_CONFIG_DECOMP message that
+          initiated the session.  The receiver should respond by sending a PPP
+          CCP Reset-Request to the peer.
+
+          This message may also be received by this node type when a CCP Re‐
+          set-Request is received by the local PPP entity.  The node will re‐
+          spond by flushing its outgoing compression and encryption state so
+          the remote side can resynchronize.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of a NGM_SHUTDOWN control message, or
+     when both hooks have been disconnected.
+
+CCOOMMPPIILLAATTIIOONN
+     The kernel options NETGRAPH_MPPC_COMPRESSION and NETGRAPH_MPPC_ENCRYPTION
+     are supplied to selectively compile in either or both capabilities.  At
+     least one of these must be defined, or else this node type is useless.
+
+SSEEEE AALLSSOO
+     netgraph(4), ng_ppp(4), ngctl(8)
+
+     G. Pall, _M_i_c_r_o_s_o_f_t _P_o_i_n_t_-_T_o_-_P_o_i_n_t _C_o_m_p_r_e_s_s_i_o_n _(_M_P_P_C_) _P_r_o_t_o_c_o_l, RFC 2118.
+
+     G. S. Pall and G. Zorn, _M_i_c_r_o_s_o_f_t _P_o_i_n_t_-_T_o_-_P_o_i_n_t _E_n_c_r_y_p_t_i_o_n _(_M_P_P_E_)
+     _P_r_o_t_o_c_o_l, draft-ietf-pppext-mppe-04.txt.
+
+     K. Hamzeh, G. Pall, W. Verthein, J. Taarud, W. Little, and G. Zorn,
+     _P_o_i_n_t_-_t_o_-_P_o_i_n_t _T_u_n_n_e_l_i_n_g _P_r_o_t_o_c_o_l _(_P_P_T_P_), RFC 2637.
+
+AAUUTTHHOORRSS
+     Archie Cobbs <_a_r_c_h_i_e_@_F_r_e_e_B_S_D_._o_r_g>
+
+BBUUGGSS
+     In PPP, encryption should be handled by the Encryption Control Protocol
+     (ECP) rather than CCP.  However, Microsoft combined both compression and
+     encryption into their ``compression'' algorithm, which is confusing.
+
+BSD                              June 7, 2016                              BSD

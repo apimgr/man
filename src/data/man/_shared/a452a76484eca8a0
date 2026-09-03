@@ -1,0 +1,182 @@
+The  driver  provides support for and Advanced Technology Attach‐
+ment Packet Interface tape drives.  It allows a tape drive to  be
+run  in  several  different  modes depending on minor numbers and
+supports several different The device can have both  a  interface
+and  a interface; however, only the raw interface is usually used
+(or recommended).  and devices have a relatively high  level  in‐
+terface  and talk to the system via a or adapter and a or adapter
+driver (e.g.  A or adapter must  also  be  separately  configured
+into  the  system  before a or tape can be configured.  As the or
+adapter is probed during boot, the or bus is scanned for devices.
+Any devices found which answer as type devices will  be  attached
+to the driver.  The driver is based around the concept of a which
+is defined as the period between the time that a tape is mounted,
+and  the  time when it is unmounted.  Any parameters set during a
+mount session remain in effect for the remainder of  the  session
+or  until replaced.  The tape can be unmounted, bringing the ses‐
+sion to a close in several ways.  These include: Closing  an  re‐
+ferred to as sub‐mode 00 below.  An example is Using the command,
+reachable  through  the  command of Opening a different mode will
+implicitly unmount the tape, thereby closing off  the  mode  that
+was  previously  mounted.   All parameters will be loaded freshly
+from the new mode (See below for more on modes).  There are  sev‐
+eral  different  modes.   These are controlled by bits 2 and 3 of
+the minor number and are designed to allow users to  easily  read
+and  write different formats of tape on devices that allow multi‐
+ple formats.  The parameters for each mode can be  set  individu‐
+ally  by hand with the command.  When a device corresponding to a
+particular mode is first mounted, The  operating  parameters  for
+that mount session are copied from that mode.  Further changes to
+the parameters during the session will change those in effect for
+the  session  but not those set in the operation mode.  To change
+the parameters for an operation mode, one must compile them  into
+the  table in the driver’s source code.  In addition to the oper‐
+ating modes mentioned above, bits 0 and 1 of the minor number are
+interpreted as The sub‐modes differ in the action taken when  the
+device is closed: A close will rewind the device; if the tape has
+been  written, then a file mark will be written before the rewind
+is requested.  The device is unmounted.  A close will  leave  the
+tape  mounted.   If  the tape was written to, a file mark will be
+written.  No other head positioning  takes  place.   Any  further
+reads  or  writes will occur directly after the last read, or the
+written file mark.  A close will rewind the device.  If the  tape
+has  been  written,  then  a file mark will be written before the
+rewind is requested.  On completion of the rewind an unload  com‐
+mand  will  be issued.  The device is unmounted.  This is Control
+mode, which  allows the tape driver to be opened without  a  tape
+inserted  to  allow  various ioctls (e.g. MTIOCGET or MTIOCTOP to
+set density or blocksize) and raw SCSI command  on  through.  I/O
+can  be done in this mode, if desired, with the same rewind/eject
+behaviour as mode 01. This  isn’t  really  an  ’action  taken  on
+close’ type of distinction, but this seems to be the place to put
+this  mode.   tapes  may run in either or block‐size modes.  Most
+devices run in fixed block‐size mode, where most nine‐track tapes
+and many new cartridge formats allow  variable  block‐size.   The
+difference  between the two is as follows: Each write made to the
+device results in a single logical record written  to  the  tape.
+One can never read or write of a record from tape (though you may
+request  a  larger  block and read a smaller record); nor can one
+read multiple blocks.  Data from a single write is therefore read
+by a single read.  The block size used may be any value supported
+by the device, the adapter and the system (usually between 1 byte
+and  64  Kbytes,  sometimes  more).   When  reading  a   variable
+record/block  from  the tape, the head is logically considered to
+be immediately after the last item read, and before the next item
+after that.  If the next item is a file mark, but  it  was  never
+read, then the next process to read will immediately hit the file
+mark  and  receive  an end‐of‐file notification.  Data written by
+the user is passed to the tape as  a  succession  of  fixed  size
+blocks.   It may be contiguous in memory, but it is considered to
+be a series of independent blocks.  One may never write an amount
+of data that is not an exact multiple of the blocksize.  One  may
+read  and  write  the same data as a different set of records, In
+other words, blocks that were written together may be read  sepa‐
+rately,  and vice‐versa.  If one requests more blocks than remain
+in the file, the drive will encounter  the  file  mark.   Because
+there is some data to return (unless there were no records before
+the  file mark), the read will succeed, returning that data.  The
+next read will return immediately with an EOF (as above,  if  the
+file  mark is never read, it remains for the next process to read
+if in no‐rewind mode).  The handling of file marks  on  write  is
+automatic.  If the user has written to the tape, and has not done
+a  read since the last write, then a file mark will be written to
+the tape when the device is closed.  If a rewind is requested af‐
+ter a write, then the driver assumes that the last  file  on  the
+tape  has been written, and ensures that there are two file marks
+written to the tape.  The exception to this is that  there  seems
+to be a standard (which we follow, but don’t understand why) that
+certain  types  of  tape  do not actually write two file marks to
+tape, but when read, report a file mark when  the  last  file  is
+read.   These devices include the QIC family of devices (it might
+be that this set of devices is the same  set  as  that  of  fixed
+block  devices.   This  has not been determined yet, and they are
+treated as separate behaviors by the driver at this  time).   At‐
+tempts  to  write  past  EOM  and how EOM is reported are handled
+slightly differently based upon whether EARLY WARNING recognition
+is enabled in the driver.  If EARLY WARNING recognitions  is  en‐
+abled, then detection of EOM (as reported in SCSI Sense Data with
+an  EOM  indicator) causes the write operation to be flagged with
+I/O error (EIO).  This has the effect for the user application of
+not knowing actually how many bytes were read (since  the  return
+of  the  system call is set to −1).  If EARLY WARNING recognition
+enabled, then detection of EOM (as reported in  SCSI  Sense  Data
+with  an  EOM  indicator) has no immediate effect except that the
+driver notes that EOM has been detected. If the write  completing
+didn’t  transfer  all  data that was requested, then the residual
+count (counting bytes written) is returned to the  user  applica‐
+tion.  In  any  event,  the next attempt to write (if that is the
+next action the user application takes) is immediately  completed
+with no data transferred, and a residual returned to the user ap‐
+plication  indicating  that no data was transferred.  This is the
+traditional UNIX EOF indication. The state that EOM had been seen
+is then cleared.  In either mode of operation,  the  driver  does
+not  prohibit  the user application from writing more data, if it
+chooses to do so. This will continue up until the physical end of
+media, which is usually signalled internally to the driver  as  a
+CHECK  CONDITION  with the Sense Key set to VOLUME OVERFLOW. When
+this or any otherwise unhandled error occurs, an error return  of
+EIO  will  be transmitted to the user application.  This does in‐
+deed mean that if EARLY WARNING is enables and the device contin‐
+ues to set EOM indicators prior to hitting physical end of media,
+that an indeterminate number of  ’short  write  returns’  as  de‐
+scribed  in  the  previous paragraph will occur. However, the ex‐
+pected user application behaviour (in common with other  systems)
+is to close the tape and rewind and request another tape upon the
+receipt  of  the  first EOM indicator, possibly after writing one
+trailer record.  Because different  tape  drives  behave  differ‐
+ently,  there  is a mechanism within the source to to quickly and
+conveniently recognize and deal with brands and models  of  drive
+that  have special requirements.  There is a table (called the in
+which the identification strings of known errant  drives  can  be
+stored.  Alongside each is a set of flags that allows the setting
+of  densities  and blocksizes for each of the modes, along with a
+set of ‘QUIRK’ flags that can be used to enable or  disable  sec‐
+tions  of  code within the driver if a particular drive is recog‐
+nized.  The following calls apply to tapes.  Some also  apply  to
+other  tapes.   They  are defined in the header file Retrieve the
+status and parameters of the tape. Error status and  residual  is
+unlatched  and cleared by the driver when it receives this ioctl.
+Perform a multiplexed operation.  The argument  structure  is  as
+follows:      struct      mtop      {              short   mt_op;
+        daddr_t mt_count; }; The following operation  values  are
+defined for Write end of file marks at the present head position.
+Skip over file marks.  Leave the head on the EOM side of the last
+skipped  file mark.  Skip over file marks.  Leave the head on the
+BOM (beginning of media) side of  the  last  skipped  file  mark.
+Skip forwards over records.  Skip backwards over records.  Rewind
+the device to the beginning of the media.  Rewind the media (and,
+if  possible,  eject).  Even if the device cannot eject the media
+it will often no longer respond to normal requests.   No‐op;  set
+status only.  Erase the media from current position. If the field
+is nonzero, a full erase is done (from current position to end of
+media).  If  is zero, only an erase gap is written. It is hard to
+say which drives support only one but not the other option Enable
+controller buffering.  Disable  controller  buffering.   Set  the
+blocksize  to  use for the device/mode.  If the device is capable
+of variable blocksize operation, and the blocksize is set  to  0,
+then  the  drive will be driven in variable mode.  This parameter
+is in effect for the present mount session only, unless  the  de‐
+vice  was  opened  in  Control Mode (in which case this set value
+persists until a reboot).  Set the density value (see to use when
+running in the mode opened (minor bits 2 and 3).  This  parameter
+is  in  effect for the present mount session only, unless the de‐
+vice was opened in Control Mode (in which  case  this  set  value
+persists until a reboot).  Any byte sized value may be specified.
+Note that only a very small number of them will actually usefully
+work.  The  rest will cause the tape drive to spit up.  Enable or
+disable tape drive data compression.  Typically tape drives  will
+quite  contentedly  ignore  settings  on reads, and will probably
+keep you from changing density for writing anywhere but BOT.  En‐
+able or disable EARLY WARNING at EOM behaviour (using  the  count
+as  a  boolean  value).  Read device logical block position.  Not
+all drives support this option.  Read device hardware block posi‐
+tion.  Not all drives support this option.  Position the tape  to
+the  specified  device logical block position.  Position the tape
+to the specified hardware block position.  Not all drives support
+this option.  general form: Mode 0, Rewind on close  Mode  1,  No
+rewind  on close Mode 2, Eject on close (if capable) Mode 3, Con‐
+trol Mode (elsewise like mode 0) This driver was originally writ‐
+ten for 2.5 by Julian Elischer, and was ported to by Charles Han‐
+num.  This man page was edited for by Jon Buller.  The  selection
+of compression could possibly also be usefully done as with a mi‐
+nor device bit.

@@ -1,0 +1,488 @@
+WSDISPLAY(4)             BSD Kernel Interfaces Manual             WSDISPLAY(4)
+
+NNAAMMEE
+     wwssddiissppllaayy — generic display device support in wscons
+
+SSYYNNOOPPSSIISS
+     wwssddiissppllaayy** aatt ......
+     ooppttiioonn WWSSDDIISSPPLLAAYY__DDEEFFAAUULLTTSSCCRREEEENNSS==NN
+
+DDEESSCCRRIIPPTTIIOONN
+     The wwssddiissppllaayy driver is an abstraction layer for display devices within
+     the wscons(4) framework.  It attaches to the hardware specific display
+     device driver and makes it available as text terminal or graphics inter‐
+     face.
+
+     Display devices have the ability to display characters on them (without
+     help of an X server), either directly by hardware or through software
+     drawing pixel data into the display memory.  The wwssddiissppllaayy driver will
+     connect a terminal emulation module and provide a tty-like software in‐
+     terface.
+
+     The _c_o_n_s_o_l_e locator in the configuration line refers to the device's use
+     as output part of the operating system console.  A device specification
+     containing a positive value here will only match if the device is in use
+     as system console.  (The console device selection in early system startup
+     is not influenced.)  This way, the console device can be connected to a
+     known wwssddiissppllaayy device instance.
+
+     The _m_u_x locator in the configuration line refers to the wsmux(4) that
+     will be used to get keyboard events.  If this locator is -1, no mux will
+     be used.
+
+     The logical unit of an independent contents displayed on a display (some‐
+     times referred to as “virtual terminal”) is called a “screen” here.  If
+     the underlying device driver supports it, multiple screens can be used on
+     one display.  (As of this writing, only the lcd(4) and vga(4) display
+     drivers provide this ability.)  Screens have different minor device num‐
+     bers and separate tty instances.  One screen possesses the “focus”, this
+     means it is displayed on the display and its tty device will get the key‐
+     board input.  (In some cases, if no screen is set up or if a screen was
+     just deleted, it is possible that no focus is present at all.)  The focus
+     can be switched by either special keyboard input (typically CTL-ALT-Fn)
+     or an ioctl command issued by a user program.  Screens are set up or
+     deleted through the _/_d_e_v_/_t_t_y_C_c_f_g control device (preferably using the
+     wsconscfg(8) utility).  Alternatively, the compile-time ooppttiioonn
+     WWSSDDIISSPPLLAAYY__DDEEFFAAUULLTTSSCCRREEEENNSS==NN will set up N screens of the display driver's
+     default type and using the system's default terminal emulator at autocon‐
+     figuration time.
+
+     In addition and with help from backend drivers the following features are
+     also provided:
+
+     ••   Loading, deleting and listing the loaded fonts.
+
+     ••   Browsing backwards in the screen output, the size of the buffer for
+         saved text is defined by the particular hardware driver.
+
+     ••   Blanking the screen by timing out on inactivity in the screen holding
+         the input focus.  Awakening activities consist of:
+
+         ••   pressing any keys on the keyboard;
+         ••   moving or clicking the mouse;
+         ••   any output to the screen.
+
+         Blanking the screen is usually done by disabling the horizontal sync
+         signal on video output, but may also include blanking the vertical
+         sync in which case most monitors go into power saving mode.  See
+         wsconsctl(8) for controlling variables.
+
+     Consult the back-end drivers' documentation for which features are sup‐
+     ported for each particular hardware type.
+
+   IIOOCCTTLL IINNTTEERRFFAACCEE
+     The following ioctl(2) calls are provided by the wwssddiissppllaayy driver or by
+     devices which use it.  Their definitions are found in
+     <_d_e_v_/_w_s_c_o_n_s_/_w_s_c_o_n_s_i_o_._h>.
+
+     WSDISPLAYIO_GTYPE _u___i_n_t
+           Retrieve the type of the display.  The list of types is in
+           <_d_e_v_/_w_s_c_o_n_s_/_w_s_c_o_n_s_i_o_._h>.
+
+     WSDISPLAYIO_GINFO _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___f_b_i_n_f_o
+           Retrieve basic information about a framebuffer display.  The re‐
+           turned structure is as follows:
+
+                 struct wsdisplay_fbinfo {
+                         u_int   height;
+                         u_int   width;
+                         u_int   depth;
+                         u_int   cmsize;
+                 };
+
+           The _h_e_i_g_h_t and _w_i_d_t_h members are counted in pixels.  The _d_e_p_t_h mem‐
+           ber indicates the number of bits per pixel, and _c_m_s_i_z_e indicates
+           the number of color map entries accessible through
+           WSDISPLAYIO_GETCMAP and WSDISPLAYIO_PUTCMAP.  This call is likely
+           to be unavailable on text-only displays.
+
+     WSDISPLAYIO_GETSCREENTYPE _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___s_c_r_e_e_n_t_y_p_e
+           Retrieve basic information about a screen.  The returned structure
+           is as follows:
+
+                 struct wsdisplay_screentype {
+                         int idx;
+                         int nidx;
+                         char name[WSSCREEN_NAME_SIZE];
+                         int ncols, nrows;
+                         int fontwidth, fontheight;
+                 };
+
+           The _i_d_x field indicates the index of the screen.  The _n_i_d_x field
+           indicates the number of screens.  The _n_a_m_e field contains a human
+           readable string used to identify the screen.  The _n_c_o_l_s and _n_r_o_w_s
+           fields indicate the available number of columns and rows.  The
+           _f_o_n_t_w_i_d_t_h and _f_o_n_t_h_e_i_g_h_t fields indicate the dimensions of a char‐
+           acter cell, in pixels.
+
+     WSDISPLAYIO_GETCMAP _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_m_a_p
+           Retrieve the current color map from the display.  This call needs
+           the following structure set up beforehand:
+
+                 struct wsdisplay_cmap {
+                         u_int   index;
+                         u_int   count;
+                         u_char  *red;
+                         u_char  *green;
+                         u_char  *blue;
+                 };
+
+           The _i_n_d_e_x and _c_o_u_n_t members specify the range of color map entries
+           to retrieve.  The _r_e_d, _g_r_e_e_n, and _b_l_u_e members should each point to
+           an array of _c_o_u_n_t _u___c_h_a_rs.  On return, these will be filled in with
+           the appropriate entries from the color map.  On all displays that
+           support this call, values range from 0 for minimum intensity to 255
+           for maximum intensity, even if the display does not use eight bits
+           internally to represent intensity.
+
+     WSDISPLAYIO_PUTCMAP _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_m_a_p
+           Change the display's color map.  The argument structure is the same
+           as for WSDISPLAYIO_GETCMAP, but _r_e_d, _g_r_e_e_n, and _b_l_u_e are taken as
+           pointers to the values to use to set the color map.  This call is
+           not available on displays with fixed color maps.
+
+     WSDISPLAYIO_GVIDEO _u___i_n_t
+           Get the current state of the display's video output.  Possible val‐
+           ues are:
+
+           WSDISPLAYIO_VIDEO_OFF  The display is blanked.
+
+           WSDISPLAYIO_VIDEO_ON   The display is enabled.
+
+     WSDISPLAYIO_SVIDEO _u___i_n_t
+           Set the state of the display's video output.  See
+           WSDISPLAYIO_GVIDEO above for possible values.
+
+     WSDISPLAYIO_GCURPOS _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_u_r_p_o_s
+           Retrieve the current position of the hardware cursor.  The returned
+           structure is as follows:
+
+                 struct wsdisplay_curpos {
+                         u_int x, y;
+                 };
+
+           The _x and _y members count the number of pixels right and down, re‐
+           spectively, from the top-left corner of the display to the hot spot
+           of the cursor.  This call is not available on displays without a
+           hardware cursor.
+
+     WSDISPLAYIO_SCURPOS _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_u_r_p_o_s
+           Set the current cursor position.  The argument structure, and its
+           semantics, are the same as for WSDISPLAYIO_GCURPOS.  This call is
+           not available on displays without a hardware cursor.
+
+     WSDISPLAYIO_GCURMAX _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_u_r_p_o_s
+           Retrieve the maximum size of cursor supported by the display.  The
+           _x and _y members of the returned structure indicate the maximum num‐
+           ber of pixel rows and columns, respectively, in a hardware cursor
+           on this display.  This call is not available on displays without a
+           hardware cursor.
+
+     WSDISPLAYIO_GCURSOR _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_u_r_s_o_r
+           Retrieve some or all of the hardware cursor's attributes.  The ar‐
+           gument structure is as follows:
+
+                 struct wsdisplay_cursor {
+                         u_int   which;
+                         u_int   enable;
+                         struct wsdisplay_curpos pos;
+                         struct wsdisplay_curpos hot;
+                         struct wsdisplay_cmap cmap;
+                         struct wsdisplay_curpos size;
+                         u_char *image;
+                         u_char *mask;
+                 };
+
+           The _w_h_i_c_h member indicates which of the values the application re‐
+           quires to be returned.  It should contain the logical OR of the
+           following flags:
+
+           WSDISPLAY_CURSOR_DOCUR
+                 Get _e_n_a_b_l_e, which indicates whether the cursor is currently
+                 displayed (non-zero) or not (zero).
+
+           WSDISPLAY_CURSOR_DOPOS
+                 Get _p_o_s, which indicates the current position of the cursor
+                 on the display, as would be returned by WSDISPLAYIO_GCURPOS.
+
+           WSDISPLAY_CURSOR_DOHOT
+                 Get _h_o_t, which indicates the location of the “hot spot”
+                 within the cursor.  This is the point on the cursor whose po‐
+                 sition on the display is treated as being the position of the
+                 cursor by other calls.  Its location is counted in pixels
+                 from the top-left corner of the cursor.
+
+           WSDISPLAY_CURSOR_DOCMAP
+                 Get _c_m_a_p, which indicates the current cursor color map.  Un‐
+                 like in a call to WSDISPLAYIO_GETCMAP, _c_m_a_p here need not
+                 have its _i_n_d_e_x and _c_o_u_n_t members initialized.  They will be
+                 set to 0 and 2 respectively by the call.  This means that
+                 _c_m_a_p._r_e_d, _c_m_a_p._g_r_e_e_n, and _c_m_a_p._b_l_u_e must each point to at
+                 least enough space to hold two _u___c_h_a_rs.
+
+           WSDISPLAY_CURSOR_DOSHAPE
+                 Get _s_i_z_e, _i_m_a_g_e, and _m_a_s_k.  These are, respectively, the di‐
+                 mensions of the cursor in pixels, the bitmap of set pixels in
+                 the cursor and the bitmap of opaque pixels in the cursor.
+                 The format in which these bitmaps are returned, and hence the
+                 amount of space that must be provided by the application, are
+                 device-dependent.
+
+           WSDISPLAY_CURSOR_DOALL
+                 Get all of the above.
+
+           The device may elect to return information that was not requested
+           by the user, so those elements of _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_u_r_s_o_r which are
+           pointers should be initialized to NULL if not otherwise used.  This
+           call is not available on displays without a hardware cursor.
+
+     WSDISPLAYIO_SCURSOR _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___c_u_r_s_o_r
+           Set some or all of the hardware cursor's attributes.  The argument
+           structure is the same as for WSDISPLAYIO_GCURSOR.  The _w_h_i_c_h member
+           specifies which attributes of the cursor are to be changed.  It
+           should contain the logical OR of the following flags:
+
+           WSDISPLAY_CURSOR_DOCUR
+                 If _e_n_a_b_l_e is zero, hide the cursor.  Otherwise, display it.
+
+           WSDISPLAY_CURSOR_DOPOS
+                 Set the cursor's position on the display to _p_o_s, the same as
+                 WSDISPLAYIO_SCURPOS.
+
+           WSDISPLAY_CURSOR_DOHOT
+                 Set the “hot spot” of the cursor, as defined above, to _h_o_t.
+
+           WSDISPLAY_CURSOR_DOCMAP
+                 Set some or all of the cursor color map based on _c_m_a_p.  The
+                 _i_n_d_e_x and _c_o_u_n_t elements of _c_m_a_p indicate which color map en‐
+                 tries to set, and the entries themselves come from _c_m_a_p._r_e_d,
+                 _c_m_a_p._g_r_e_e_n, and _c_m_a_p._b_l_u_e.
+
+           WSDISPLAY_CURSOR_DOSHAPE
+                 Set the cursor shape from _s_i_z_e, _i_m_a_g_e, _m_a_s_k.  See above for
+                 their meanings.
+
+           WSDISPLAY_CURSOR_DOALL
+                 Do all of the above.
+
+           This call is not available on displays without a hardware cursor.
+
+     WSDISPLAYIO_GMODE _u___i_n_t
+           Get the current mode of the display.  Possible results include:
+
+           WSDISPLAYIO_MODE_EMUL
+                 The display is in emulating (text) mode.
+
+           WSDISPLAYIO_MODE_MAPPED
+                 The display is in mapped (graphics) mode.
+
+           WSDISPLAYIO_MODE_DUMBFB
+                 The display is in mapped (frame buffer) mode.
+
+     WSDISPLAYIO_SMODE _u___i_n_t
+           Set the current mode of the display.  For possible arguments, see
+           WSDISPLAYIO_GMODE.
+
+     WSDISPLAYIO_LDFONT _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___f_o_n_t
+           Loads a font specified by the wsdisplay_font structure.
+
+                 struct wsdisplay_font {
+                         char name[WSFONT_NAME_SIZE];
+                         int index;
+                         int firstchar, numchars;
+                         int encoding;
+                         u_int fontwidth, fontheight, stride;
+                         int bitorder, byteorder;
+                         void *cookie;
+                         void *data;
+                 };
+
+           The _n_a_m_e field contains a human readable string used to identify
+           the font.  The _i_n_d_e_x field may be used to select a driver-specific
+           font resource (for non-raster frame buffers).  A value of -1 will
+           pick the first available slot.  The _f_i_r_s_t_c_h_a_r field contains the
+           index of the first character in the font, starting at zero.  The
+           _n_u_m_c_h_a_r_s field contains the number of characters in the font.  The
+           _e_n_c_o_d_i_n_g field describes the font character encoding, using one of
+           the following values:
+
+           WSDISPLAY_FONTENC_ISO
+                 ISO-8859-1 encoding (also known as Latin-1).  This is the
+                 preferred encoding for raster frame buffers.
+
+           WSDISPLAY_FONTENC_IBM
+                 IBM code page number 437.  This is the preferred encoding for
+                 text-mode displays.
+
+           The _f_o_n_t_w_i_d_t_h and _f_o_n_t_h_e_i_g_h_t fields specify the dimensions of a
+           character cell.  The _s_t_r_i_d_e field specify the number of bytes of
+           font data per character cell line (usually _f_o_n_t_w_i_d_t_h rounded up to
+           a byte boundary).  The _b_i_t_o_r_d_e_r and _b_y_t_e_o_r_d_e_r fields specify the
+           bit- and byte-ordering of the font data, using either one of the
+           following values:
+
+           WSDISPLAY_FONTORDER_L2R
+                 Leftmost data contained in the most significant bits (left-
+                 to-right ordering).  This is the most commonly encountered
+                 case.
+
+           WSDISPLAY_FONTORDER_R2L
+                 Leftmost data contained in the least significant bits (right-
+                 to-left ordering).
+
+           The _d_a_t_a field contains the font character data to be loaded.  The
+           _c_o_o_k_i_e field is reserved for internal purposes.
+
+     WSDISPLAYIO_LSFONT _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___f_o_n_t
+           Retrieves the data for a loaded font into the wsdisplay_font struc‐
+           ture.  The _i_n_d_e_x field is set to the font resource to query.  For
+           the argument structure, see WSDISPLAYIO_LDFONT.
+
+     WSDISPLAYIO_USEFONT _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___f_o_n_t
+           Selects the font specified in the _n_a_m_e field.  An empty _n_a_m_e se‐
+           lects the next available font.  For the argument structure, see
+           WSDISPLAYIO_LDFONT.
+
+     WSDISPLAYIO_GBURNER _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___b_u_r_n_e_r
+           Retrieves the state of the screen burner.  The returned structure
+           is as follows:
+
+                 struct wsdisplay_burner {
+                         u_int   off;
+                         u_int   on;
+                         u_int   flags;
+                 };
+
+           The _o_f_f member contains the inactivity time before the screen is
+           turned off, in milliseconds.  The _o_n member contains the time be‐
+           fore the screen is turned back on, in milliseconds.  The _f_l_a_g_s mem‐
+           ber contains a logical OR of the following flags:
+
+           WSDISPLAY_BURN_VBLANK
+                 When turning the display off, disable the vertical synchro‐
+                 nization signal.
+
+           WSDISPLAY_BURN_KBD
+                 Monitor keyboard activity.
+
+           WSDISPLAY_BURN_MOUSE
+                 Monitor mouse activity (this only works for mice using the
+                 wsmouse(4) driver).
+
+           WSDISPLAY_BURN_OUTPUT
+                 Monitor display output activity.
+
+           If none of the activity source flags are set, the screen burner is
+           disabled.
+
+     WSDISPLAYIO_SBURNER _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___b_u_r_n_e_r
+           Sets the state of the screen burner.  The argument structure, and
+           its semantics, are the same as for WSDISPLAYIO_GBURNER.
+
+     WSDISPLAYIO_ADDSCREEN _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___a_d_d_s_c_r_e_e_n_d_a_t_a
+           Creates a new screen.
+
+                 struct wsdisplay_addscreendata {
+                         int idx; /* screen index */
+                         char screentype[WSSCREEN_NAME_SIZE];
+                         char emul[WSEMUL_NAME_SIZE];
+                 };
+
+           The _i_d_x field is the index of the screen to be configured.  The
+           _s_c_r_e_e_n_t_y_p_e field is matched against builtin screen types, which
+           will be driver-dependent.  The _e_m_u_l field indicates the terminal
+           emulation type.  Available terminal emulations are:
+
+           sun    Sun terminal emulation.  This is the default on the sparc64
+                  architecture.
+
+           vt100  Dec VT100 terminal emulation, with some VT220 features.
+                  This is the default on all other architectures.
+
+           dumb   Dumb terminal.
+
+           An empty string will select the default emulation.
+
+     WSDISPLAYIO_DELSCREEN _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___d_e_l_s_c_r_e_e_n_d_a_t_a
+           Deletes an existing screen.
+
+                 struct wsdisplay_delscreendata {
+                         int idx; /* screen index */
+                         int flags;
+                 };
+
+           The _i_d_x field indicates the index of the screen to be deleted.  The
+           _f_l_a_g_s field is a logical OR of zero or more of the following:
+
+           WSDISPLAY_DELSCR_FORCE
+                 Force deletion of screen even if in use by a userspace pro‐
+                 gram.
+
+           WSDISPLAY_DELSCR_QUIET
+                 Don't report deletion to console.
+
+     WSDISPLAYIO_GETSCREEN _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___a_d_d_s_c_r_e_e_n_d_a_t_a
+           Returns information on the screen indicated by _i_d_x or the current
+           screen if _i_d_x is -1.  The screen and emulation types are returned
+           in the same structure (see WSDISPLAYIO_GETPARAM).
+
+     WSDISPLAYIO_SETSCREEN _u___i_n_t
+           Switch to the screen with the given index.
+
+     WSDISPLAYIO_WSMOUSED _s_t_r_u_c_t _w_s_c_o_n_s___e_v_e_n_t
+           This call is used by the wsmoused(8) daemon to inject mouse events
+           gathered from serial mice, as well as various control events.
+
+     WSDISPLAYIO_GETPARAM _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___p_a_r_a_m
+           Retrieves the state of a display parameter.  This call needs the
+           following structure set up beforehand:
+
+                 struct wsdisplay_param {
+                         int param;
+                         int min, max, curval;
+                         int reserved[4];
+                 };
+
+           The _p_a_r_a_m member should be set with the parameter to be returned.
+           The following parameters are supported:
+
+           WSDISPLAYIO_PARAM_BACKLIGHT
+                 The intensity of the display backlight (usually on laptop
+                 computers).
+
+           WSDISPLAYIO_PARAM_BRIGHTNESS
+                 The brightness level.
+
+           WSDISPLAYIO_PARAM_CONTRAST
+                 The contrast level.
+
+           On return, _m_i_n and _m_a_x specify the allowed range for the value,
+           while _c_u_r_v_a_l specifies the current setting.  Not all parameters are
+           supported by all display drivers.
+
+     WSDISPLAYIO_SETPARAM _s_t_r_u_c_t _w_s_d_i_s_p_l_a_y___p_a_r_a_m
+           Sets a display parameter.  The argument structure is the same as
+           for WSDISPLAYIO_GETPARAM, with the _p_a_r_a_m and _c_u_r_v_a_l members filled
+           in.  Not all parameters are supported by all display drivers.
+
+     WSDISPLAYIO_LINEBYTES _u___i_n_t
+           Get the number of bytes per row when the device is in
+           WSDISPLAYIO_MODE_DUMBFB mode.
+
+FFIILLEESS
+     /dev/tty[C-F]*                      terminal devices (per screen)
+     /dev/tty[C-F]cfg                    control device (per screen)
+     /usr/include/dev/wscons/wsconsio.h
+
+SSEEEE AALLSSOO
+     intro(4), tty(4), wscons(4), wsmux(4), wsconscfg(8), wsconsctl(8),
+     wsfontload(8)
+
+BBUUGGSS
+     The wwssddiissppllaayy code currently limits the number of screens on one display
+     to 12.
+
+     The terms “wscons” and “wsdisplay” are not cleanly distinguished in the
+     code and in manual pages.
+
+BSD                             March 31, 2022                             BSD

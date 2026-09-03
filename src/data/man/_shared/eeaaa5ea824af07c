@@ -1,0 +1,145 @@
+FILEMON(4)               BSD Kernel Interfaces Manual               FILEMON(4)
+
+NNAAMMEE
+     ffiilleemmoonn — the filemon device
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee ffiilleemmoonn
+
+     ##iinncclluuddee <<ddeevv//ffiilleemmoonn//ffiilleemmoonn..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ffiilleemmoonn device allows a process to collect file operations data of
+     its children.  The device _/_d_e_v_/_f_i_l_e_m_o_n responds to two ioctl(2) calls.
+
+     ffiilleemmoonn is not intended to be a security auditing tool.  Many system
+     calls are not tracked and binaries using a non-native ABI may not be
+     fully audited.  It is intended for auditing of processes for the purpose
+     of determining their dependencies using an efficient and easily parsable
+     format.  An example of this is make(1) which uses this module with
+     ..MMAAKKEE..MMOODDEE==mmeettaa to handle incremental builds more smartly.
+
+     System calls are denoted using the following single letters:
+
+     ‘A’     openat(2).  The next log entry may be lacking an absolute path or
+             be inaccurate.
+     ‘C’     chdir(2)
+     ‘D’     unlink(2)
+     ‘E’     exec(2)
+     ‘F’     fork(2), vfork(2)
+     ‘L’     link(2), linkat(2), symlink(2)
+     ‘M’     rename(2)
+     ‘R’     open(2) or openat(2) for read
+     ‘W’     open(2) or openat(2) for write
+     ‘X’     _exit(2)
+
+     Note that ‘R’ following ‘W’ records can represent a single open(2) for
+     R/W, or two separate open(2) calls, one for ‘R’ and one for ‘W’.  Note
+     that only successful system calls are captured.
+
+IIOOCCTTLLSS
+     User mode programs communicate with the ffiilleemmoonn driver through a number
+     of ioctls which are described below.  Each takes a single argument.
+
+     FILEMON_SET_FD   Write the internal tracing buffer to the supplied open
+                      file descriptor.
+
+     FILEMON_SET_PID  Child process ID to trace.  This should normally be done
+                      under the control of a parent in the child after fork(2)
+                      but before anything else.  See the example below.
+
+RREETTUURRNN VVAALLUUEESS
+     The iiooccttll() function returns the value 0 if successful; otherwise the
+     value -1 is returned and the global variable _e_r_r_n_o is set to indicate the
+     error.
+
+EERRRROORRSS
+     The iiooccttll() system call with FILEMON_SET_FD will fail if:
+
+     [EEXIST]           The ffiilleemmoonn handle is already associated with a file
+                        descriptor.
+
+     [EINVAL]           The file descriptor has an invalid type and cannot be
+                        used for tracing.
+
+     [EBADF]            The file descriptor is invalid or not opened for writ‐
+                        ing.
+
+     The iiooccttll() system call with FILEMON_SET_PID will fail if:
+
+     [ESRCH]            No process having the specified process ID exists.
+
+     [EBUSY]            The process ID specified is already being traced and
+                        was not the current process.
+
+     The cclloossee() system call on the filemon file descriptor may fail with the
+     errors from write(2) if any error is encountered while writing the log.
+     It may also fail if:
+
+     [EFAULT]           An invalid address was used for a traced system call
+                        argument, resulting in no log entry for the system
+                        call.
+
+     [ENAMETOOLONG]     An argument for a traced system call was too long, re‐
+                        sulting in no log entry for the system call.
+
+FFIILLEESS
+     /dev/filemon
+
+EEXXAAMMPPLLEESS
+     #include <sys/types.h>
+     #include <sys/stat.h>
+     #include <sys/wait.h>
+     #include <sys/ioctl.h>
+     #include <dev/filemon/filemon.h>
+     #include <fcntl.h>
+     #include <err.h>
+     #include <errno.h>
+     #include <unistd.h>
+
+     static void
+     open_filemon(void)
+     {
+             pid_t child, wait_rv;
+             int fm_fd, fm_log;
+
+             if ((fm_fd = open("/dev/filemon", O_RDWR | O_CLOEXEC)) == -1)
+                     err(1, "open(\"/dev/filemon\", O_RDWR)");
+             if ((fm_log = open("filemon.out",
+                 O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC, DEFFILEMODE)) == -1)
+                     err(1, "open(filemon.out)");
+
+             if (ioctl(fm_fd, FILEMON_SET_FD, &fm_log) == -1)
+                     err(1, "Cannot set filemon log file descriptor");
+
+             if ((child = fork()) == 0) {
+                     child = getpid();
+                     if (ioctl(fm_fd, FILEMON_SET_PID, &child) == -1)
+                             err(1, "Cannot set filemon PID");
+                     /* Do something here. */
+             } else if (child == -1)
+                     err(1, "Cannot fork child");
+             else {
+                     while ((wait_rv = wait(&child)) == -1 &&
+                         errno == EINTR)
+                             ;
+                     if (wait_rv == -1)
+                             err(1, "cannot wait for child");
+                     close(fm_fd);
+             }
+     }
+
+     Creates a file named _f_i_l_e_m_o_n_._o_u_t and configures the ffiilleemmoonn device to
+     write the ffiilleemmoonn buffer contents to it.
+
+SSEEEE AALLSSOO
+     dtrace(1), ktrace(1), script(1), truss(1), ioctl(2)
+
+HHIISSTTOORRYY
+     A ffiilleemmoonn device appeared in FreeBSD 9.1.
+
+BBUUGGSS
+     Unloading the module may panic the system, thus requires using kklldduunnllooaadd
+     --ff.
+
+BSD                              July 30, 2024                             BSD

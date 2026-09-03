@@ -1,0 +1,190 @@
+CPUSET(2)                   BSD System Calls Manual                  CPUSET(2)
+
+NNAAMMEE
+     ccppuusseett, ccppuusseett__ggeettiidd, ccppuusseett__sseettiidd — manage CPU affinity sets
+
+LLIIBBRRAARRYY
+     Standard C Library (libc, -lc)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ppaarraamm..hh>>
+     ##iinncclluuddee <<ssyyss//ccppuusseett..hh>>
+
+     _i_n_t
+     ccppuusseett(_c_p_u_s_e_t_i_d___t _*_s_e_t_i_d);
+
+     _i_n_t
+     ccppuusseett__sseettiidd(_c_p_u_w_h_i_c_h___t _w_h_i_c_h, _i_d___t _i_d, _c_p_u_s_e_t_i_d___t _s_e_t_i_d);
+
+     _i_n_t
+     ccppuusseett__ggeettiidd(_c_p_u_l_e_v_e_l___t _l_e_v_e_l, _c_p_u_w_h_i_c_h___t _w_h_i_c_h, _i_d___t _i_d,
+         _c_p_u_s_e_t_i_d___t _*_s_e_t_i_d);
+
+DDEESSCCRRIIPPTTIIOONN
+     The ccppuusseett family of system calls allow applications to control sets of
+     processors and memory domains and assign processes and threads to these
+     sets.  Processor sets contain lists of CPUs and domains that members may
+     run on and exist only as long as some process is a member of the set.
+     All processes in the system have an assigned set.  The default set for
+     all processes in the system is the set numbered 1.  Threads belong to the
+     same set as the process which contains them, however, they may further
+     restrict their set with the anonymous per-thread mask to bind to a spe‐
+     cific CPU or subset of CPUs and memory domains.
+
+     Sets are referenced by a number of type _c_p_u_s_e_t___i_d___t.  Each thread has a
+     root set, an assigned set, and an anonymous mask.  Only the root and as‐
+     signed sets are numbered.  The root set is the set of all CPUs and memory
+     domains available in the system or in the system partition the thread is
+     running in.  The assigned set is a subset of the root set and is adminis‐
+     tratively assignable on a per-process basis.  Many processes and threads
+     may be members of a numbered set.
+
+     The anonymous set is a further thread-specific refinement on the assigned
+     set.  It is intended that administrators will manipulate numbered sets
+     using cpuset(1) while application developers will manipulate anonymous
+     sets using cpuset_setaffinity(2) and cpuset_setdomain(2).
+
+     To select the correct set a value of type _c_p_u_l_e_v_e_l___t is used.  The fol‐
+     lowing values for _l_e_v_e_l are supported:
+
+           CPU_LEVEL_ROOT      Root set
+           CPU_LEVEL_CPUSET    Assigned set
+           CPU_LEVEL_WHICH     Set specified by which argument
+
+     The _w_h_i_c_h argument determines how the value of _i_d is interpreted and is
+     of type _c_p_u_w_h_i_c_h___t.  The _w_h_i_c_h argument may have the following values:
+
+           CPU_WHICH_TID            id is lwpid_t (thread id)
+           CPU_WHICH_PID            id is pid_t (process id)
+           CPU_WHICH_TIDPID         id is either a thread or process id
+           CPU_WHICH_JAIL           id is jid (jail id)
+           CPU_WHICH_CPUSET         id is a cpusetid_t (cpuset id)
+           CPU_WHICH_IRQ            id is an irq number
+           CPU_WHICH_INTRHANDLER    id is an irq number for an interrupt
+                                    handler
+           CPU_WHICH_ITHREAD        id is an irq number for an ithread
+           CPU_WHICH_DOMAIN         id is a NUMA domain
+
+     An _i_d of '-1' may be used with a _w_h_i_c_h of CPU_WHICH_TID, CPU_WHICH_PID,
+     CPU_WHICH_TIDPID, or CPU_WHICH_CPUSET to mean the current thread,
+     process, or current thread's cpuset.  All cpuset syscalls allow this us‐
+     age.
+
+     A _l_e_v_e_l argument of CPU_LEVEL_WHICH combined with a _w_h_i_c_h argument other
+     than CPU_WHICH_CPUSET refers to the anonymous mask of the object.  This
+     mask does not have an id and may only be manipulated with
+     cpuset_setaffinity(2).
+
+     ccppuusseett() creates a new set containing the same CPUs as the root set of
+     the current process and stores its id in the space provided by _s_e_t_i_d.  On
+     successful completion the calling process joins the set and is the only
+     member.  Children inherit this set after a call to fork(2).
+
+     ccppuusseett__sseettiidd() attempts to set the id of the object specified by the
+     _w_h_i_c_h argument.  Currently CPU_WHICH_PID is the only acceptable value for
+     which as threads do not have an id distinct from their process and the
+     API does not permit changing the id of an existing set.  Upon successful
+     completion all of the threads in the target process will be running on
+     CPUs permitted by the set.
+
+     ccppuusseett__ggeettiidd() retrieves a set id from the object indicated by _w_h_i_c_h and
+     stores it in the space pointed to by _s_e_t_i_d.  The retrieved id may be that
+     of either the root or assigned set depending on the value of _l_e_v_e_l.
+     _l_e_v_e_l should be CPU_LEVEL_CPUSET or CPU_LEVEL_ROOT to get the set id from
+     the process or thread specified by the _i_d argument.  Specifying
+     CPU_LEVEL_WHICH with a process or thread is unsupported since this refer‐
+     ences the unnumbered anonymous mask.
+
+     The actual contents of the sets may be retrieved or manipulated using
+     cpuset_getaffinity(2), cpuset_setaffinity(2), cpuset_getdomain(2), and
+     cpuset_setdomain(2).  The cpuset(9) macros may be used to manipulate
+     masks of type _c_p_u_s_e_t___t get and set using those APIs.  See those manual
+     pages for more detail.
+
+RREETTUURRNN VVAALLUUEESS
+     Upon successful completion, the value 0 is returned; otherwise the
+     value -1 is returned and the global variable _e_r_r_n_o is set to indicate the
+     error.
+
+EEXXAAMMPPLLEESS
+     In this example, a CPU set mask is configured to limit execution to the
+     first CPU using CPU_ZERO(9) and CPU_SET(9), members of the cpuset(9) pro‐
+     gramming interface.  Then, the mask is applied to a new anonymous CPU set
+     associated with the current process using cpuset_setaffinity(2).  This
+     mask will be used by the current process, and inherited by any new child
+     processes.
+
+           #include <sys/param.h>
+           #include <sys/cpuset.h>
+
+           #include <sysexits.h>
+
+           cpuset_t cpuset_mask;
+
+           /* Initialize a CPU mask and enable CPU 0. */
+           CPU_ZERO(&cpuset_mask);
+           CPU_SET(0, &cpuset_mask);
+
+           /* Set affinity for the CPU set for the current process. */
+           if (cpuset_setaffinity(CPU_LEVEL_WHICH, CPU_WHICH_PID, -1,
+               sizeof(cpuset_mask), &cpuset_mask) < 0)
+                   err(EX_OSERR, "cpuset_setaffinity");
+
+     In the next example, a named CPU set is created containing the current
+     process, and its affinity similarly configured.  The resulting CPU set ID
+     can then be used for further external management of the affinity of the
+     set.
+
+           #include <sys/param.h>
+           #include <sys/cpuset.h>
+
+           #include <sysexits.h>
+
+           cpusetid_t cpuset_id;
+           cpuset_t cpuset_mask;
+
+           /* Create new cpuset for the current process. */
+           if (cpuset(&cpuset_id) < 0)
+                   err(EX_OSERR, "cpuset");
+
+           /* Initialize a CPU mask and enable CPU 0. */
+           CPU_ZERO(&cpuset_mask);
+           CPU_SET(0, &cpuset_mask);
+
+           /* Set affinity for the CPU set for the current process. */
+           if (cpuset_setaffinity(CPU_LEVEL_SET, CPU_WHICH_CPUSET, cpuset_id,
+               sizeof(cpuset_mask), &cpuset_mask) < 0)
+                   err(EX_OSERR, "cpuset_setaffinity");
+
+EERRRROORRSS
+     The following error codes may be set in _e_r_r_n_o:
+
+     [EINVAL]           The _w_h_i_c_h or _l_e_v_e_l argument was not a valid value.
+
+     [EDEADLK]          The ccppuusseett__sseettiidd() call would leave a thread without a
+                        valid CPU to run on because the set does not overlap
+                        with the thread's anonymous mask.
+
+     [EFAULT]           The setid pointer passed to ccppuusseett__ggeettiidd() or ccppuusseett()
+                        was invalid.
+
+     [ESRCH]            The object specified by the _i_d and _w_h_i_c_h arguments
+                        could not be found.
+
+     [EPERM]            The calling process did not have the credentials re‐
+                        quired to complete the operation.
+
+     [ENFILE]           There was no free _c_p_u_s_e_t_i_d___t for allocation.
+
+SSEEEE AALLSSOO
+     cpuset(1), cpuset_getaffinity(2), cpuset_getdomain(2),
+     cpuset_setaffinity(2), cpuset_setdomain(2), pthread_affinity_np(3),
+     pthread_attr_affinity_np(3), CPU_SET(9), CPU_ZERO(9), cpuset(9)
+
+HHIISSTTOORRYY
+     The ccppuusseett family of system calls first appeared in FreeBSD 7.1.
+
+AAUUTTHHOORRSS
+     Jeffrey Roberson <_j_e_f_f_@_F_r_e_e_B_S_D_._o_r_g>
+
+BSD                            January 29, 2023                            BSD

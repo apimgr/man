@@ -1,0 +1,223 @@
+FSTAB(5)                    BSD File Formats Manual                   FSTAB(5)
+
+NNAAMMEE
+     ffssttaabb — static information about the file systems
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ffssttaabb..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The file ffssttaabb contains descriptive information about the various file
+     systems.  ffssttaabb is only read by programs, and not written; it is the duty
+     of the system administrator to properly create and maintain this file.
+     Each file system is described on a separate line; fields on each line are
+     separated by tabs or spaces.  The order of records in ffssttaabb is important
+     because fsck(8), mount(8), and umount(8) sequentially iterate through
+     ffssttaabb doing their thing.
+
+     The first field, (_f_s___s_p_e_c), describes the special device or remote file
+     system to be mounted.  The contents are decoded by the strunvis(3) func‐
+     tion.  This allows using spaces or tabs in the device name which would be
+     interpreted as field separators otherwise.
+
+     The second field, (_f_s___f_i_l_e), describes the mount point for the file sys‐
+     tem.  For swap partitions, this field should be specified as “none”.  The
+     contents are decoded by the strunvis(3) function, as above.
+
+     The third field, (_f_s___v_f_s_t_y_p_e), describes the type of the file system.
+     The system can support various file system types.  Only the root, /usr,
+     and /tmp file systems need be statically compiled into the kernel; every‐
+     thing else will be automatically loaded at mount time.  (Exception: the
+     FFS cannot currently be demand-loaded.)  Some people still prefer to
+     statically compile other file systems as well.
+
+     The fourth field, (_f_s___m_n_t_o_p_s), describes the mount options associated
+     with the file system.  It is formatted as a comma separated list of op‐
+     tions.  It contains at least the type of mount (see _f_s___t_y_p_e below) plus
+     any additional options appropriate to the file system type.  See the op‐
+     tions flag (--oo) in the mount(8) page and the file system specific page,
+     such as mount_nfs(8), for additional options that may be specified.  All
+     options that can be given to the file system specific mount commands can
+     be used in ffssttaabb as well.  They just need to be formatted a bit differ‐
+     ently.  The arguments of the --oo option can be used without the preceding
+     --oo flag.  Other options need both the file system specific flag and its
+     argument, separated by an equal sign.  For example, mounting an
+     msdosfs(5) filesystem, the options
+
+           -o sync -o noatime -m 644 -M 755 -u foo -g bar
+
+     should be written as
+
+           sync,noatime,-m=644,-M=755,-u=foo,-g=bar
+
+     in the option field of ffssttaabb.
+
+     If the options “userquota” and/or “groupquota” are specified, the file
+     system is automatically processed by the quotacheck(8) command, and user
+     and/or group disk quotas are enabled with quotaon(8).  By default, file
+     system quotas are maintained in files named _q_u_o_t_a_._u_s_e_r and _q_u_o_t_a_._g_r_o_u_p
+     which are located at the root of the associated file system.  These de‐
+     faults may be overridden by putting an equal sign and an alternative ab‐
+     solute pathname following the quota option.  Thus, if the user quota file
+     for _/_t_m_p is stored in _/_v_a_r_/_q_u_o_t_a_s_/_t_m_p_._u_s_e_r, this location can be speci‐
+     fied as:
+
+           userquota=/var/quotas/tmp.user
+
+     If the option “failok” is specified, the system will ignore any error
+     which happens during the mount of that filesystem, which would otherwise
+     cause the system to drop into single user mode.  This option is imple‐
+     mented by the mount(8) command and will not be passed to the kernel.
+
+     If the option “noauto” is specified, the file system will not be automat‐
+     ically mounted at system startup.  Note that, for network file systems of
+     third party types (i.e., types supported by additional software not in‐
+     cluded in the base system) to be automatically mounted at system startup,
+     the _e_x_t_r_a___n_e_t_f_s___t_y_p_e_s rc.conf(5) variable must be used to extend the
+     rc(8) startup script's list of network file system types.
+
+     If the option “late” is specified, the file system will be automatically
+     mounted at a stage of system startup after remote mount points are
+     mounted.  For more detail about this option, see the mount(8) manual
+     page.
+
+     If the option “update” is specified, it indicates that the status of an
+     already mounted file system should be changed accordingly.  This allows,
+     for example, file systems mounted read-only to be upgraded read-write and
+     vice-versa.  By default, an entry corresponding to a file systems that is
+     already mounted is going to be skipped over when processing ffssttaabb, unless
+     it's a root file system, in which case logic similar to “update” is ap‐
+     plied automatically.
+
+     The “update” option is typically used in conjunction with two ffssttaabb
+     files.  The first ffssttaabb file is used to set up the initial set of file
+     systems.  The second ffssttaabb file is then run to update the initial set of
+     file systems and to add additional file systems.
+
+     The type of the mount is extracted from the _f_s___m_n_t_o_p_s field and stored
+     separately in the _f_s___t_y_p_e field (it is not deleted from the _f_s___m_n_t_o_p_s
+     field).  If _f_s___t_y_p_e is “rw” or “ro” then the file system whose name is
+     given in the _f_s___f_i_l_e field is normally mounted read-write or read-only on
+     the specified special file.
+
+     If _f_s___t_y_p_e is “sw” then the special file is made available as a piece of
+     swap space by the swapon(8) command at the end of the system reboot pro‐
+     cedure.  For swap devices, the keyword “trimonce” triggers the delivery
+     of a BIO_DELETE command to the device.  This command marks the device's
+     blocks as unused, except those that might store a disk label.  This mark‐
+     ing can erase a crash dump.  To delay sswwaappoonn for a device until after
+     ssaavveeccoorree has copied the crash dump to another location, use the “late”
+     option.  For vnode-backed swap spaces, “file” is supported in the
+     _f_s___m_n_t_o_p_s field.  When _f_s___s_p_e_c is an md(4) device file (“md” or
+     “md[0-9]*”) and “file” is specified in _f_s___m_n_t_o_p_t_s, an md(4) device is
+     created with the specified file used as backing store, and then the new
+     device is used as swap space.  Swap entries on _._e_l_i devices will cause
+     automatic creation of encrypted devices.  The “ealgo”, “aalgo”, “keylen”,
+     “notrim”, and “sectorsize” options may be passed to control those geli(8)
+     parameters.  The fields other than _f_s___s_p_e_c and _f_s___t_y_p_e are unused.  If
+     _f_s___t_y_p_e is specified as “xx” the entry is ignored.  This is useful to
+     show disk partitions which are currently unused.
+
+     The fifth field, (_f_s___f_r_e_q), is used for these file systems by the dump(8)
+     command to determine which file systems need to be dumped.  If the fifth
+     field is not present, a value of zero is returned and dduummpp will assume
+     that the file system does not need to be dumped.  If the fifth field is
+     greater than 0, then it specifies the number of days between dumps for
+     this file system.
+
+     The sixth field, (_f_s___p_a_s_s_n_o), is used by the fsck(8) and quotacheck(8)
+     programs to determine the order in which file system and quota checks are
+     done at reboot time.  The _f_s___p_a_s_s_n_o field can be any value between 0 and
+     ‘INT_MAX-1’.
+
+     The root file system should be specified with a _f_s___p_a_s_s_n_o of 1, and other
+     file systems should have a _f_s___p_a_s_s_n_o of 2 or greater.  A file system with
+     a _f_s___p_a_s_s_n_o value of 1 is always checked sequentially and be completed
+     before another file system is processed, and it will be processed before
+     all file systems with a larger _f_s___p_a_s_s_n_o.
+
+     For any given value of _f_s___p_a_s_s_n_o, file systems within a drive will be
+     checked sequentially, but file systems on different drives will be
+     checked at the same time to utilize parallelism available in the hard‐
+     ware.  Once all file system checks are complete for the current
+     _f_s___p_a_s_s_n_o, the same process will start over for the next _f_s___p_a_s_s_n_o.
+
+     If the sixth field is not present or is zero, a value of zero is returned
+     and fsck(8) and quotacheck(8) will assume that the file system does not
+     need to be checked.
+
+     The _f_s___p_a_s_s_n_o field can be used to implement finer control when the sys‐
+     tem utilities may determine that the file system resides on a different
+     physical device, when it actually does not, as with a ccd(4) device.  All
+     file systems with a lower _f_s___p_a_s_s_n_o value will be completed before start‐
+     ing on file systems with a higher _f_s___p_a_s_s_n_o value.  E.g. all file systems
+     with a _f_s___p_a_s_s_n_o of 2 will be completed before any file systems with a
+     _f_s___p_a_s_s_n_o of 3 or greater are started.  Gaps are allowed between the dif‐
+     ferent _f_s___p_a_s_s_n_o values.  E.g. file systems listed in _/_e_t_c_/_f_s_t_a_b may have
+     _f_s___p_a_s_s_n_o values such as 0, 1, 2, 15, 100, 200, 300, and may appear in
+     any order within _/_e_t_c_/_f_s_t_a_b.
+
+     #define FSTAB_RW        "rw"    /* read/write device */
+     #define FSTAB_RQ        "rq"    /* read/write with quotas */
+     #define FSTAB_RO        "ro"    /* read-only device */
+     #define FSTAB_SW        "sw"    /* swap device */
+     #define FSTAB_XX        "xx"    /* ignore totally */
+
+     struct fstab {
+             char    *fs_spec;       /* block special device name */
+             char    *fs_file;       /* file system path prefix */
+             char    *fs_vfstype;    /* File system type, ufs, nfs */
+             char    *fs_mntops;     /* Mount options ala -o */
+             char    *fs_type;       /* FSTAB_* from fs_mntops */
+             int     fs_freq;        /* dump frequency, in days */
+             int     fs_passno;      /* pass number on parallel fsck */
+     };
+
+     The proper way to read records from _f_s_t_a_b is to use the routines
+     getfsent(3), getfsspec(3), getfstype(3), and getfsfile(3).
+
+FFIILLEESS
+     /etc/fstab  The file ffssttaabb resides in _/_e_t_c.
+
+EEXXAAMMPPLLEESS
+     # Device        Mountpoint      FStype  Options         Dump    Pass#
+     #
+     # UFS file system.
+     /dev/da0p2      /               ufs     rw              1       1
+     #
+     # Swap space on a block device.
+     /dev/da0p1      none            swap    sw              0       0
+     #
+     # Swap space using a block device with GBDE/GELI encryption.
+     # aalgo, ealgo, keylen, sectorsize options are available
+     # for .eli devices.
+     /dev/da1p1.bde  none            swap    sw              0       0
+     /dev/da1p2.eli  none            swap    sw              0       0
+     #
+     # tmpfs.
+     tmpfs           /tmp            tmpfs   rw,size=1g,mode=1777    0 0
+     #
+     # UFS file system on a swap-backed md(4).  /dev/md10 is
+     # automatically created.  If it is "md", a unit number
+     # will be automatically selected.
+     md10            /scratch        mfs     rw,-s1g         0       0
+     #
+     # Swap space on a vnode-backed md(4).
+     md11            none            swap    sw,file=/swapfile       0 0
+     #
+     # CDROM.  "noauto" option is typically used because the
+     # media is removable.
+     /dev/cd0        /cdrom          cd9660  ro,noauto       0       0
+     #
+     # NFS-exported file system.  "serv" is an NFS server name
+     # or IP address.
+     serv:/export    /nfs            nfs     rw,noinet6      0       0
+
+SSEEEE AALLSSOO
+     getfsent(3), getvfsbyname(3), strunvis(3), ccd(4), dump(8), fsck(8),
+     geli(8), mount(8), quotacheck(8), quotaon(8), swapon(8), umount(8)
+
+HHIISSTTOORRYY
+     The ffssttaabb file format appeared in 4.0BSD.
+
+BSD                             April 14, 2014                             BSD

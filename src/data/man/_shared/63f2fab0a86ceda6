@@ -1,0 +1,150 @@
+STARTTLS(8)               BSD System Manager's Manual              STARTTLS(8)
+
+NNAAMMEE
+     ssttaarrttttllss — ESMTP over TLS/SSL
+
+DDEESSCCRRIIPPTTIIOONN
+     STARTTLS is an ESMTP option, defined in RFC 3207, which is used to con‐
+     duct ESMTP transactions over TLS circuits.  This is used to increase the
+     security of mail server transactions.
+
+     STARTTLS allows for the combination of several security solutions for MTA
+     (mail transport agent) level services through the TLS suite.  These secu‐
+     rity features include:
+
+     Confidentiality
+             Encryption is used to protect data from passive monitoring.
+
+     Integrity
+             Hash algorithms are used to ensure the integrity of the transmit‐
+             ted data.  This protects data from modification in transit.
+
+     Authentication
+             The use of public key encryption allows for the strong authenti‐
+             cation of either, or both, communicating parties.  This can be
+             used to allow for select features, such as relaying, to be con‐
+             trolled more securely.
+
+     A new ESMTP option, STARTTLS, has been added.  This is presented by the
+     server when an ESMTP session is initiated.  The client then begins the
+     TLS portion of the ESMTP session by issuing the command “STARTTLS”.  The
+     remaining portion of the ESMTP session occurs over a TLS channel.
+
+   CCrreeaattiinngg aa pprriivvaattee kkeeyy aanndd cceerrttiiffiiccaattee ffoorr aann MMTTAA
+     This example assumes you are creating your own self-signed certificates
+     for use with smtpd(8) and STARTTLS.  If you have an existing private key
+     and you simply wish to generate a new certificate (for example, if your
+     old certificate has expired), see the section entitled _C_r_e_a_t_i_n_g _a
+     _c_e_r_t_i_f_i_c_a_t_e _w_i_t_h _a_n _e_x_i_s_t_i_n_g _p_r_i_v_a_t_e _k_e_y.
+
+     For the purposes of this example the certificates will be stored in
+     _/_e_t_c_/_s_s_l, though it is possible to use a different directory if needed.
+
+     Next, you must generate an _R_S_A private key:
+
+           # openssl genrsa -out /etc/ssl/private/mail.example.com.key 4096
+
+     This would generate a 4096-bit _R_S_A key stored in the file
+     _m_a_i_l_._e_x_a_m_p_l_e_._c_o_m_._k_e_y.
+
+     Once you have generated the _R_S_A key, you can generate a self-signed cer‐
+     tificate from it using the command:
+
+           # openssl req -x509 -new -key /etc/ssl/private/mail.example.com.key \
+             -out /etc/ssl/mail.example.com.crt -days 365
+
+     You may adjust the lifetime of the certificate via the --ddaayyss parameter
+     (one year in this example).
+
+     You can verify that the newly-generated certificate has correct informa‐
+     tion with the following command:
+
+           # openssl x509 -in /etc/ssl/mail.example.com.crt -text
+
+     It is better to configure and use acme-client(1) to obtain a signed cer‐
+     tificate.
+
+     Because the private key files are unencrypted, MTAs can be picky about
+     using tight permissions on those files.  The certificate directory and
+     the files therein should be readable and writable only by the owner
+     (root).  A simple way to ensure this is to run the following:
+
+           # chmod -R go-rwx /etc/ssl/private
+
+   CCrreeaattiinngg aa cceerrttiiffiiccaattee wwiitthh aann eexxiissttiinngg pprriivvaattee kkeeyy
+     This example assumes you already have an existing private key,
+     _/_e_t_c_/_s_s_l_/_p_r_i_v_a_t_e_/_m_a_i_l_._e_x_a_m_p_l_e_._c_o_m_._k_e_y.  You can generate a new certifi‐
+     cate based on this key using the command:
+
+           # openssl req -x509 -new -key /etc/ssl/private/mail.example.com.key \
+             -out /etc/ssl/mail.example.com.crt -days 365
+           # chmod 600 /etc/ssl/mail.example.com.crt
+
+     You may adjust the lifetime of the certificate via the --ddaayyss parameter
+     (one year in this example).
+
+     After having installed the certificates, the mail server needs to be con‐
+     figured to accept TLS sessions and use the key and certificate.  For
+     smtpd(8), it's as simple as adding pki configuration to smtpd.conf(5):
+
+           pki mail.example.com cert "/etc/ssl/mail.example.com.crt"
+           pki mail.example.com key "/etc/ssl/private/mail.example.com.key"
+
+           listen on [...] tls pki mail.example.com auth
+
+     After restarting the mail server, a new option should be presented for
+     ESMTP transactions, STARTTLS.  You can test this by connecting to the lo‐
+     cal host and issuing the “EHLO” command.
+
+           # telnet localhost 25
+           Trying 127.0.0.1...
+           Connected to localhost.
+           Escape character is '^]'.
+           220 localhost ESMTP OpenSMTPD
+           EHLO localhost
+
+     After typing _E_H_L_O _l_o_c_a_l_h_o_s_t, you should receive something like the fol‐
+     lowing back.
+
+           250-localhost Hello localhost [127.0.0.1], pleased to meet you
+           250-8BITMIME
+           250-ENHANCEDSTATUSCODES
+           250-SIZE 36700160
+           250-DSN
+           250-STARTTLS
+           250 HELP
+
+     You should see “STARTTLS” listed along with the other options.  If so,
+     congratulations, the MTA will now use TLS to encrypt your mail traffic
+     when the remote server supports it.  If not, check _/_v_a_r_/_l_o_g_/_m_a_i_l_l_o_g to
+     see whether the MTA has reported any security problems or other errors.
+
+   UUsseess ffoorr TTLLSS eeqquuiippppeedd MMTTAAss
+     The most obvious use of a cryptographically enabled MTA is for confiden‐
+     tiality of the electronic mail transaction and the integrity checking
+     provided by the cipher suite.  All traffic between the two mail servers
+     is encrypted, including the sender and recipient addresses.  TLS also al‐
+     lows for authentication of either or both systems in the transaction.
+
+     One use of public key cryptography is for strong authentication.  We can
+     use this authentication to selectively relay clients, including other
+     mail servers and mobile clients like laptops.  However, there have been
+     some problems getting some mail clients to work using certificate-based
+     authentication.  Clients will have to generate certificates and have them
+     signed (for trust validation) by a trusted CA (certificate authority).
+
+SSEEEE AALLSSOO
+     mail(1), openssl(1), smtpd(8), ssl(8)
+
+SSTTAANNDDAARRDDSS
+     P. Hoffman, _S_M_T_P _S_e_r_v_i_c_e _E_x_t_e_n_s_i_o_n _f_o_r _S_e_c_u_r_e _S_M_T_P _o_v_e_r _T_r_a_n_s_p_o_r_t _L_a_y_e_r
+     _S_e_c_u_r_i_t_y, RFC 3207, February 2002.
+
+CCAAVVEEAATTSS
+     Because TLS can only authenticate at the server level, true end-to-end
+     authentication of the mail message cannot be performed with only the use
+     of STARTTLS on the server.  The use of S/MIME or PGP email and trustwor‐
+     thy key hierarchies can guarantee full confidentiality and integrity of
+     the entire message path.
+
+BSD                               May 5, 2025                              BSD

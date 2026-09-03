@@ -1,0 +1,98 @@
+The  pseudo‐device  driver  provides an interface to hardware‐as‐
+sisted data movers, which the kernel supports using the facility.
+This can be used to copy data from one location in memory to  an‐
+other,  clear  a region of memory, fill a region of memory with a
+pattern, and perform simple operations  on  multiple  regions  of
+memory, such as an XOR, without intervention by the CPU.  A func‐
+tion  always  has one output region.  A function may have zero or
+more input regions, or may use an immediate value  as  an  input.
+For  functions which use input regions, the lengths of each input
+region and the output region must be  the  same.   All  functions
+with  the same name will have the same number of and type inputs.
+To use the client must first create a session.  This is  achieved
+by  performing  the  following  steps: Create a session handle by
+opening the device.  Select the function using  the  DMIO_SETFUNC
+ioctl, which takes the following argument: #define DMIO_MAX_FUNC‐
+NAME     64 struct dmio_setfunc {
+        char  dsf_name[DMIO_MAX_FUNCNAME];  };  If  the specified
+function is not available, the DMIO_SETFUNC ioctl will fail  with
+an error code of To submit a request for processing the following
+steps  must  be  performed:  Fill in a request structure: typedef
+struct {
+        struct iovec *dmbuf_iov;
+        u_int dmbuf_iovcnt; } dmio_buffer;
+
+struct dmio_usrreq {
+        /* Output buffer. */
+        dmio_buffer req_outbuf;
+
+        /* Input buffer. */
+        union {
+                uint8_t _immediate[8];
+                dmio_buffer *_inbuf;
+        } _req_inbuf_un;
+
+#define req_immediate           _req_inbuf_un._immediate  #define
+req_inbuf               _req_inbuf_un._inbuf
+
+        uint32_t req_id;        /* request ID; passed in response
+*/ }; For functions which use an immediate value as an input, the
+member is used to specify the value.  Values smaller than 8 bytes
+should  use  the  least‐significant  bytes first.  For example, a
+32‐bit integer would occupy bytes 0, 1, 2, and 3.  For  functions
+which  use  input regions, should point to an array of The should
+be a unique value for each request submitted by the  client.   It
+will  be passed back unchanged in the response when processing of
+the request has completed.  Write the request  structure  to  the
+session  handle  using the system call.  Multiple requests may be
+written to the session in  a  single  call.   Read  the  response
+structure  back  from  the  session handle using the system call.
+The response structure is defined as follows: struct dmio_usrresp
+{
+        uint32_t resp_id;
+        int resp_error; }; The corresponds to the in the request.
+contains 0 if the request succeeded or an  value  indicating  why
+the  request  failed.   Multiple  responses may be read back in a
+single call.  Note that responses may not be received in the same
+order as requests were written.  When a client is finished  using
+a session, the session is destroyed by closing the session handle
+using  The following is an example of a client using to zero‐fill
+a region of memory.  In this example, the  application  would  be
+able to perform other work while the hardware‐assisted data mover
+clears  the  specified  block of memory.  int hw_bzero(void *buf,
+size_t len) {         static uint32_t reqid;
+
+        struct  dmio_setfunc  dsf;          struct   iovec   iov;
+        struct dmio_usrreq req;         struct dmio_usrresp resp;
+        int fd;
+
+        fd  = open("/dev/dmoverio", O_RDWR, 0666);         if (fd
+== ‐1)                 return (‐1);
+
+        strcpy(dsf.dsf_name, "zero");
+
+        if   (ioctl(fd,   DMIO_SETFUNC,   &dsf)    ==    ‐1)    {
+                close(fd);                 return (‐1);         }
+
+        iov.iov_base = buf;         iov.iov_len = len;
+
+        req.req_outbuf.dmbuf_iov   =  &iov;          req.req_out‐
+buf.dmbuf_iovcnt = 1;         req.req_id = reqid++;
+
+        if  (write(fd,  &req,  sizeof(req))  !=  sizeof(req))   {
+                close(fd);                 return (‐1);         }
+
+        /* Application can do other work here. */
+
+        if  (read(fd,  &resp,  sizeof(resp))  !=  sizeof(resp)) {
+                close(fd);                 return (‐1);         }
+
+        if       (resp.resp_id       !=       req.req_id)       {
+                close(fd);                 return (‐1);         }
+
+        if  (resp.resp_error  !=  0) {                 close(fd);
+                return (‐1);         }
+
+        close(fd);         return (0); }  The  device  first  ap‐
+peared  in  The  device  was designed and implemented by and con‐
+tributed by Wasabi Systems, Inc.

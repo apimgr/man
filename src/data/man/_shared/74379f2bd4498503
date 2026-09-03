@@ -1,0 +1,130 @@
+SYNCACHE(4)              BSD Kernel Interfaces Manual              SYNCACHE(4)
+
+NNAAMMEE
+     ssyynnccaacchhee, ssyynnccooookkiieess — sysctl(8) MIBs for controlling TCP SYN caching
+
+SSYYNNOOPPSSIISS
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccooookkiieess
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccooookkiieess__oonnllyy
+
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccaacchhee..hhaasshhssiizzee
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccaacchhee..bbuucckkeettlliimmiitt
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccaacchhee..ccaacchheelliimmiitt
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccaacchhee..rreexxmmttlliimmiitt
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccaacchhee..ccoouunntt
+     ssyyssccttll nneett..iinneett..ttccpp..ssyynnccaacchhee..sseeee__ootthheerr
+
+DDEESSCCRRIIPPTTIIOONN
+     The ssyynnccaacchhee sysctl(8) MIB is used to control the TCP SYN caching in the
+     system, which is intended to handle SYN flood Denial of Service attacks.
+
+     When a TCP SYN segment is received on a port corresponding to a listen
+     socket, an entry is made in the ssyynnccaacchhee, and a SYN,ACK segment is re‐
+     turned to the peer.  The ssyynnccaacchhee entry holds the TCP options from the
+     initial SYN, enough state to perform a SYN,ACK retransmission, and takes
+     up less space than a TCP control block endpoint.  An incoming segment
+     which contains an ACK for the SYN,ACK and matches a ssyynnccaacchhee entry will
+     cause the system to create a TCP control block with the options stored in
+     the ssyynnccaacchhee entry, which is then released.
+
+     The ssyynnccaacchhee protects the system from SYN flood DoS attacks by minimizing
+     the amount of state kept on the server, and by limiting the overall size
+     of the ssyynnccaacchhee.
+
+     SSyynnccooookkiieess provides a way to virtually expand the size of the ssyynnccaacchhee by
+     keeping state regarding the initial SYN in the network.  Enabling
+     ssyynnccooookkiieess sends a cryptographic value in the SYN,ACK reply to the client
+     machine, which is then returned in the client's ACK.  If the correspond‐
+     ing entry is not found in the ssyynnccaacchhee, but the value passes specific se‐
+     curity checks, the connection will be accepted.  This is only used if the
+     ssyynnccaacchhee is unable to handle the volume of incoming connections, and a
+     prior entry has been evicted from the cache.
+
+     SSyynnccooookkiieess have a certain number of disadvantages that a paranoid admin‐
+     istrator may wish to take note of.  Since the TCP options from the ini‐
+     tial SYN are not saved, they are not applied to the connection, preclud‐
+     ing use of features like window scale, timestamps, or exact MSS sizing.
+     As the returning ACK establishes the connection, it may be possible for
+     an attacker to ACK flood a machine in an attempt to create a connection.
+     While steps have been taken to mitigate this risk, this may provide a way
+     to bypass firewalls which filter incoming segments with the SYN bit set.
+
+     To disable the ssyynnccaacchhee and run only with ssyynnccooookkiieess, set
+     _n_e_t_._i_n_e_t_._t_c_p_._s_y_n_c_o_o_k_i_e_s___o_n_l_y to 1.
+
+     The ssyynnccaacchhee implements a number of variables in the
+     _n_e_t_._i_n_e_t_._t_c_p_._s_y_n_c_a_c_h_e branch of the sysctl(3) MIB.  Several of these may
+     be tuned by setting the corresponding variable in the loader(8).
+
+     _h_a_s_h_s_i_z_e     Size of the ssyynnccaacchhee hash table, must be a power of 2.
+                  Read-only, tunable via loader(8).
+
+     _b_u_c_k_e_t_l_i_m_i_t  Limit on the number of entries permitted in each bucket of
+                  the hash table.  This should be left at a low value to mini‐
+                  mize search time.  Read-only, tunable via loader(8).
+
+     _c_a_c_h_e_l_i_m_i_t   Limit on the total number of entries in the ssyynnccaacchhee.  De‐
+                  faults to (_h_a_s_h_s_i_z_e × _b_u_c_k_e_t_l_i_m_i_t), may be set lower to min‐
+                  imize memory consumption.  Read-only, tunable via loader(8).
+
+     _r_e_x_m_t_l_i_m_i_t   Maximum number of times a SYN,ACK is retransmitted before
+                  being discarded.  The default of 3 retransmits corresponds
+                  to a 45 second timeout, this value may be increased depend‐
+                  ing on the RTT to client machines.  Tunable via sysctl(3).
+
+     _c_o_u_n_t        Number of entries present in the ssyynnccaacchhee (read-only).
+
+     _s_e_e___o_t_h_e_r    If set to true value, all ssyynnccaacchhee entries will be visible
+                  via _n_e_t_._i_n_e_t_._t_c_p_._p_c_b_l_i_s_t sysctl, or via netstat(1), ignoring
+                  all of security(7) UID/GID, jail(2) and mac(4) checks.  If
+                  turned off, the visibility checks are enforced.  However,
+                  extra ucred(9) referencing is required on every incoming SYN
+                  packet processed.  The default is off.
+
+     Statistics on the performance of the ssyynnccaacchhee may be obtained via
+     netstat(1), which provides the following counts:
+
+     syncache entries added
+                       Entries successfully inserted in the ssyynnccaacchhee.
+
+     retransmitted     SYN,ACK retransmissions due to a timeout expiring.
+
+     dupsyn            Incoming SYN segment matching an existing entry.
+
+     dropped           SYNs dropped because SYN,ACK could not be sent.
+
+     completed         Successfully completed connections.
+
+     bucket overflow   Entries dropped for exceeding per-bucket size.
+
+     cache overflow    Entries dropped for exceeding overall cache size.
+
+     reset             RST segment received.
+
+     stale             Entries dropped due to maximum retransmissions or lis‐
+                       ten socket disappearance.
+
+     aborted           New socket allocation failures.
+
+     badack            Entries dropped due to bad ACK reply.
+
+     unreach           Entries dropped due to ICMP unreachable messages.
+
+     zone failures     Failures to allocate new ssyynnccaacchhee entry.
+
+     cookies received  Connections created from segment containing ACK.
+
+SSEEEE AALLSSOO
+     netstat(1), jail(2), mac(4), tcp(4), security(7), loader(8), sysctl(8),
+     ucred(9)
+
+HHIISSTTOORRYY
+     The existing ssyynnccaacchhee implementation first appeared in FreeBSD 4.5.  The
+     original concept of a ssyynnccaacchhee originally appeared in BSD/OS, and was
+     later modified by NetBSD, then further extended here.
+
+AAUUTTHHOORRSS
+     The ssyynnccaacchhee code and manual page were written by Jonathan Lemon
+     <_j_l_e_m_o_n_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             April 12, 2021                             BSD

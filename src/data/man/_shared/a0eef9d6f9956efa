@@ -1,0 +1,130 @@
+The  driver provides machine‐independent support for the acceler‐
+ated graphics port (AGP) found on many PC‐based and PCI  systems.
+The  AGP specification was designed by Intel.  The AGP chipset is
+positioned between the PCI‐Host bridge and the graphics accelera‐
+tor to provide a high‐performance dedicated graphics bus for mov‐
+ing large amounts of data directly from host memory to the graph‐
+ics accelerator.  The specification  currently  supports  a  peak
+bandwidth of 528 MB/s.  AGP uses a Graphics Address Remapping Ta‐
+ble  (GART)  to provide a physically‐contiguous view of scattered
+pages in host memory for DMA transfers.  The driver supports  the
+following  chipsets: ALI M1541 host‐to‐AGP bridge AMD 751 and 761
+host‐to‐AGP bridges Intel 82810, 82810‐DC100, 82810E,  and  82815
+SVGA  controllers SiS 5591 host‐to‐AGP bridge VIA The driver also
+provides an interface to user processes for use by X servers.   A
+user  process  communicates  to  the device initially by means of
+calls.  The calls supported are: Get AGP information, setting the
+members in the structure as  defined  in  <sys/agpio.h>:  typedef
+struct _agp_info {
+        agp_version   version;      /*   version  of  the  driver
+*/
+        uint32_t   bridge_id;       /*    bridge    vendor/device
+*/
+        uint32_t   agp_mode;        /*   mode   info   of  bridge
+*/
+        off_t   aper_base;           /*    base    of    aperture
+*/
+        size_t    aper_size;          /*    size    of   aperture
+*/
+        size_t pg_total;        /*  max  pages  (swap  +  system)
+*/
+        size_t    pg_system;          /*   max   pages   (system)
+*/
+        size_t   pg_used;           /*   current    pages    used
+*/  } agp_info; Acquire AGP.  Release AGP.  Set up AGP, using the
+members in the structure as  defined  in  <sys/agpio.h>:  typedef
+struct _agp_setup {
+        uint32_t   agp_mode;        /*   mode   info   of  bridge
+*/ } agp_setup; Allocate AGP space, using and setting the members
+in the structure as  defined  in  <sys/agpio.h>:  typedef  struct
+_agp_allocate {
+        int    key;                   /*    tag   of   allocation
+*/
+        size_t    pg_count;           /*    number    of    pages
+*/
+        uint32_t  type;           /*  0  == normal, other devspec
+*/
+        uint32_t physical;      /* device specific (some devices
+                                 * need a phys address of the
+                                 * actual page behind the gatt
+                                 *                         table)
+*/  }  agp_allocate; Deallocate AGP space.  Bind AGP space, using
+the members in the structure as defined in <sys/agpio.h>: typedef
+struct _agp_bind {
+        int   key;                  /*    tag    of    allocation
+*/
+        off_t  pg_start;          /*  starting  page  to populate
+*/ } agp_bind; Unbind AGP space, using the members in the  struc‐
+ture as defined in <sys/agpio.h>: typedef struct _agp_unbind {
+        int    key;                   /*    tag   of   allocation
+*/
+        uint32_t  priority;       /*  priority  for  paging   out
+*/  }  agp_unbind;  AGP GART device special files AGP GART device
+special file This short code fragment is an  example  of  opening
+the  AGP  device  and  performing some basic operations: #include
+<sys/types.h> #include <sys/ioctl.h> #include <sys/agpio.h>  #in‐
+clude <fcntl.h> #include <err.h>
+
+int    main(int    argc,   char   **argv)   {           int   fd;
+        agp_info      info;              agp_allocate      alloc;
+        agp_setup  setup;          agp_bind bind;         agp_un‐
+bind unbind;
+
+        fd =  open("/dev/agp0",  O_RDWR);          if  (fd  <  0)
+                err(1, "open");
+
+        if     (ioctl(fd,     AGPIOC_INFO,     &info)     <    0)
+                err(2, "ioctl AGPIOC_INFO");
+
+        printf("version:        %u.%u\n",     info.version.major,
+            info.version.minor);
+
+        printf("id:             %x\n",           info.bridge_id);
+        printf("mode:           %x\n",            info.agp_mode);
+        printf("base:           %x\n",           info.aper_base);
+        printf("size:           %uM\n",          info.aper_size);
+        printf("total       mem:      %u\n",      info.pg_total);
+        printf("system       mem:   %u\n",       info.pg_system);
+        printf("used mem:    %u\n\n", info.pg_used);
+
+        setup.agp_mode = info.agp_mode;
+
+        if     (ioctl(fd,     AGPIOC_SETUP,    &setup)    <    0)
+                err(3, "ioctl AGPIOC_SETUP");
+
+        if     (ioctl(fd,     AGPIOC_ACQUIRE,     0)     <     0)
+                err(3, "ioctl AGPIOC_ACQUIRE");
+
+        alloc.type = 0;         alloc.pg_count = 64;
+
+        if    (ioctl(fd,    AGPIOC_ALLOCATE,    &alloc)    <   0)
+                err(4, "ioctl AGPIOC_ALLOCATE");
+
+        printf("alloc key %d, paddr %x\n", alloc.key, alloc.phys‐
+ical);           if   (ioctl(fd,   AGPIOC_INFO,   &info)   <   0)
+                err(5, "ioctl AGPIOC_INFO");
+
+        bind.key = alloc.key;         bind.pg_start = 0x1000;
+
+        if     (ioctl(fd,     AGPIOC_BIND,     &bind)     <    0)
+                err(6, "ioctl AGPIOC_BIND");
+
+        printf("used mem now:   %u\n\n", info.pg_used);
+
+        unbind.key = alloc.key;         unbind.priority = 0;
+
+        if    (ioctl(fd,    AGPIOC_UNBIND,    &unbind)    <    0)
+                err(6, "ioctl AGPIOC_BIND");
+
+        if   (ioctl(fd,   AGPIOC_DEALLOCATE,   &alloc.key)  <  0)
+                err(6, "ioctl AGPIOC_DEALLOCATE");
+
+        if     (ioctl(fd,     AGPIOC_RELEASE,     0)     <     0)
+                err(7, "ioctl AGPIOC_RELEASE");
+
+        close(fd);
+
+        printf("agp test successful\n");
+
+        return  0;  } The driver first appeared in It was adopted
+in

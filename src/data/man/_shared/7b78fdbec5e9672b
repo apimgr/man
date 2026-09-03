@@ -1,0 +1,164 @@
+WG(4)                    BSD Kernel Interfaces Manual                    WG(4)
+
+NNAAMMEE
+     wwgg — WireGuard protocol driver
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following lines in your
+     kernel configuration file:
+
+           ddeevviiccee wwgg
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           if_wg_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The wwgg driver provides Virtual Private Network (VPN) interfaces for the
+     secure exchange of layer 3 traffic with other WireGuard peers using the
+     WireGuard protocol.
+
+     A wwgg interface recognizes one or more peers, establishes a secure tunnel
+     with each on demand, and tracks each peer's UDP endpoint for exchanging
+     encrypted traffic with.
+
+     The interfaces can be created at runtime using the iiffccoonnffiigg wwgg_N ccrreeaattee
+     command.  The interface itself can be configured with wg(8).
+
+     The following glossary provides a brief overview of WireGuard terminol‐
+     ogy:
+
+        Peer    Peers exchange IPv4 or IPv6 traffic over secure tunnels.  Each
+                wwgg interface may be configured to recognise one or more peers.
+
+        Key     Each peer uses its private key and corresponding public key to
+                identify itself to others.  A peer configures a wwgg interface
+                with its own private key and with the public keys of its
+                peers.
+
+        Pre-shared key
+                In addition to the public keys, each peer pair may be config‐
+                ured with a unique pre-shared symmetric key.  This is used in
+                their handshake to guard against future compromise of the
+                peers' encrypted tunnel if an attack on their Diffie-Hellman
+                exchange becomes feasible.  It is optional, but recommended.
+
+        Allowed IP addresses
+                A single wwgg interface may maintain concurrent tunnels connect‐
+                ing diverse networks.  The interface therefore implements
+                rudimentary routing and reverse-path filtering functions for
+                its tunneled traffic.  These functions reference a set of al‐
+                lowed IP address ranges configured against each peer.
+
+                The interface will route outbound tunneled traffic to the peer
+                configured with the most specific matching allowed IP address
+                range, or drop it if no such match exists.
+
+                The interface will accept tunneled traffic only from the peer
+                configured with the most specific matching allowed IP address
+                range for the incoming traffic, or drop it if no such match
+                exists.  That is, tunneled traffic routed to a given peer can‐
+                not return through another peer of the same wwgg interface.
+                This ensures that peers cannot spoof one another's traffic.
+
+        Handshake
+                Two peers handshake to mutually authenticate each other and to
+                establish a shared series of secret ephemeral encryption keys.
+                Either peer may initiate a handshake.  Handshakes occur only
+                when there is traffic to send, and recur every two minutes
+                during transfers.
+
+        Connectionless
+                Due to the handshake behavior, there is no connected or dis‐
+                connected state.
+
+   KKeeyyss
+     Private keys for WireGuard can be generated from any sufficiently secure
+     random source.  The Curve25519 keys and the pre-shared keys are both 32
+     bytes long and are commonly encoded in base64 for ease of use.
+
+     Keys can be generated with wg(8) as follows:
+
+           $ wg genkey
+
+     Although a valid Curve25519 key must have 5 bits set to specific values,
+     this is done by the interface and so it will accept any random 32-byte
+     base64 string.
+
+NNEETTMMAAPP
+     netmap(4) applications may open a WireGuard interface in emulated mode.
+     The netmap application will receive decrypted, unencapsulated packets
+     prepended by a dummy Ethernet header.  The Ethertype field will be one of
+     ETHERTYPE_IP or ETHERTYPE_IPV6 depending on the address family of the
+     packet.  Packets transmitted by the application should similarly begin
+     with a dummy Ethernet header; this header will be stripped before the
+     packet is encrypted and tunneled.
+
+EEXXAAMMPPLLEESS
+     Create a wwgg interface and set random private key.
+
+           # ifconfig wg0 create
+           # wg genkey | wg set wg0 listen-port 54321 private-key /dev/stdin
+
+     Retrieve the associated public key from a wwgg interface.
+
+           $ wg show wg0 public-key
+
+     Connect to a specific endpoint using its public-key and set the allowed
+     IP address
+
+           # wg set wg0 peer '7lWtsDdqaGB3EY9WNxRN3hVaHMtu1zXw71+bOjNOVUw=' endpoint 10.0.1.100:54321 allowed-ips 192.168.2.100/32
+
+     Remove a peer
+
+           # wg set wg0 peer '7lWtsDdqaGB3EY9WNxRN3hVaHMtu1zXw71+bOjNOVUw=' remove
+
+DDIIAAGGNNOOSSTTIICCSS
+     The wwgg interface supports runtime debugging, which can be enabled with:
+
+           iiffccoonnffiigg wwgg_N ddeebbuugg
+
+     Some common error messages include:
+
+     HHaannddsshhaakkee ffoorr ppeeeerr XX ddiidd nnoott ccoommpplleettee aafftteerr 55 sseeccoonnddss,, rreettrryyiinngg  Peer X
+     did not reply to our initiation packet, for example because:
+
+     ••   The peer does not have the local interface configured as a peer.
+         Peers must be able to mutually authenticate each other.
+
+     ••   The peer endpoint IP address is incorrectly configured.
+
+     ••   There are firewall rules preventing communication between hosts.
+
+     IInnvvaalliidd hhaannddsshhaakkee iinniittiiaattiioonn  The incoming handshake packet could not be
+     processed.  This is likely due to the local interface not containing the
+     correct public key for the peer.
+
+     IInnvvaalliidd iinniittiiaattiioonn MMAACC  The incoming handshake initiation packet had an
+     invalid MAC.  This is likely because the initiation sender has the wrong
+     public key for the handshake receiver.
+
+     PPaacckkeett hhaass uunnaalllloowweedd ssrrcc IIPP ffrroomm ppeeeerr XX  After decryption, an incoming
+     data packet has a source IP address that is not assigned to the allowed
+     IPs of Peer X.
+
+SSEEEE AALLSSOO
+     inet(4), ip(4), ipsec(4), netintro(4), netmap(4), ovpn(4), ipf(5),
+     pf.conf(5), ifconfig(8), ipfw(8), wg(8)
+
+     _W_i_r_e_G_u_a_r_d _w_h_i_t_e_p_a_p_e_r, https://www.wireguard.com/papers/wireguard.pdf.
+
+HHIISSTTOORRYY
+     The wwgg device driver first appeared in FreeBSD 13.2.
+
+AAUUTTHHOORRSS
+     The wwgg device driver was written by Jason A. Donenfeld <_J_a_s_o_n_@_z_x_2_c_4_._c_o_m>,
+     Matt Dunwoodie <_n_c_o_n_@_n_c_o_n_r_o_y_._n_e_t>, Kyle Evans <_k_e_v_a_n_s_@_F_r_e_e_B_S_D_._o_r_g>, and
+     Matt Macy <_m_m_a_c_y_@_F_r_e_e_B_S_D_._o_r_g>.
+
+     This manual page was written by Gordon Bergling <_g_b_e_@_F_r_e_e_B_S_D_._o_r_g> and is
+     based on the OpenBSD manual page written by David Gwynne
+     <_d_l_g_@_o_p_e_n_b_s_d_._o_r_g>.
+
+BSD                            February 12, 2025                           BSD

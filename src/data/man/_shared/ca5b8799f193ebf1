@@ -1,0 +1,233 @@
+_S_Q_L_I_T_E___T_A_B_L_E(5)               File Formats Manual              _S_Q_L_I_T_E___T_A_B_L_E(5)
+
+NNAAMMEE
+       sqlite_table - Postfix SQLite configuration
+
+SSYYNNOOPPSSIISS
+       ppoossttmmaapp --qq ""_s_t_r_i_n_g"" ssqqlliittee:://eettcc//ppoossttffiixx//_f_i_l_e_n_a_m_e
+
+       ppoossttmmaapp --qq -- ssqqlliittee:://eettcc//ppoossttffiixx//_f_i_l_e_n_a_m_e <<_i_n_p_u_t_f_i_l_e
+
+DDEESSCCRRIIPPTTIIOONN
+       The  Postfix  mail system uses optional tables for address rewriting or
+       mail routing. These tables are usually in ddbbmm or ddbb format.
+
+       Alternatively, lookup tables can be specified as SQLite databases.   In
+       order  to use SQLite lookups, define an SQLite source as a lookup table
+       in main.cf, for example:
+           alias_maps = sqlite:/etc/postfix/sqlite-aliases.cf
+
+       The file /etc/postfix/sqlite-aliases.cf has  the  same  format  as  the
+       Postfix main.cf file, and can specify the parameters described below.
+
+LLIISSTT MMEEMMBBEERRSSHHIIPP
+       When using SQL to store lists such as $mynetworks, $mydestination, $re‐
+       lay_domains, $local_recipient_maps, etc., it is important to understand
+       that the table must store each list member as a separate key. The table
+       lookup  verifies  the *existence* of the key. See "Postfix lists versus
+       tables" in the DATABASE_README document for a discussion.
+
+       Do NOT create tables that return the full list of domains in  $mydesti‐
+       nation or $relay_domains etc., or IP addresses in $mynetworks.
+
+       DO create tables with each matching item as a key and with an arbitrary
+       value.  With  SQL databases it is not uncommon to return the key itself
+       or a constant value.
+
+SSQQLLIITTEE PPAARRAAMMEETTEERRSS
+       ddbbppaatthh The SQLite database file location. Example:
+                  dbpath = customer_database
+
+       qquueerryy  The SQL query template used to search the database, where %%ss  is
+              a substitute for the address Postfix is trying to resolve, e.g.
+                  query = SELECT replacement FROM aliases WHERE mailbox = ’%s’
+
+              This parameter supports the following ’%’ expansions:
+
+              %%%%     This is replaced by a literal ’%’ character.
+
+              %%ss     This  is  replaced by the input key.  SQL quoting is used
+                     to make sure that the input key does not  add  unexpected
+                     metacharacters.
+
+              %%uu     When the input key is an address of the form user@domain,
+                     %%uu  is  replaced  by the SQL quoted local part of the ad‐
+                     dress.  Otherwise, %%uu is replaced by  the  entire  search
+                     string.   If  the  localpart  is empty, the query is sup‐
+                     pressed and returns no results.
+
+              %%dd     When the input key is an address of the form user@domain,
+                     %%dd is replaced by the SQL quoted domain part of  the  ad‐
+                     dress.  Otherwise, the query is suppressed and returns no
+                     results.
+
+              %%[[SSUUDD]] The upper-case equivalents of the above expansions behave
+                     in  the  qquueerryy  parameter identically to their lower-case
+                     counter-parts.  With the rreessuulltt__ffoorrmmaatt parameter (see be‐
+                     low), they expand the input key rather  than  the  result
+                     value.
+
+              %%[[11--99]] The  patterns  %1,  %2, ... %9 are replaced by the corre‐
+                     sponding most significant component of  the  input  key’s
+                     domain.  If  the input key is _u_s_e_r_@_m_a_i_l_._e_x_a_m_p_l_e_._c_o_m, then
+                     %1 is ccoomm, %2 is eexxaammppllee and %3 is mmaaiill. If the input key
+                     is unqualified or does not have enough domain  components
+                     to  satisfy all the specified patterns, the query is sup‐
+                     pressed and returns no results.
+
+              The ddoommaaiinn parameter described below limits the  input  keys  to
+              addresses  in  matching  domains.  When  the ddoommaaiinn parameter is
+              non-empty, SQL queries for unqualified addresses or addresses in
+              non-matching domains are suppressed and return no results.
+
+              This parameter is available with Postfix 2.2. In prior  releases
+              the  SQL  query  was  built  from  the  separate parameters: ssee‐‐
+              lleecctt__ffiieelldd, ttaabbllee, wwhheerree__ffiieelldd  and  aaddddiittiioonnaall__ccoonnddiittiioonnss.  The
+              mapping from the old parameters to the equivalent query is:
+
+                  SELECT [sseelleecctt__ffiieelldd]
+                  FROM [ttaabbllee]
+                  WHERE [wwhheerree__ffiieelldd] = ’%s’
+                        [aaddddiittiioonnaall__ccoonnddiittiioonnss]
+
+              The  ’%s’  in  the  WWHHEERREE  clause  expands to the escaped search
+              string.  With Postfix 2.2 these legacy parameters  are  used  if
+              the qquueerryy parameter is not specified.
+
+              NOTE: DO NOT put quotes around the query parameter.
+
+       rreessuulltt__ffoorrmmaatt ((ddeeffaauulltt:: %%ss)
+              Format template applied to result attributes. Most commonly used
+              to  append  (or prepend) text to the result. This parameter sup‐
+              ports the following ’%’ expansions:
+
+              %%%%     This is replaced by a literal ’%’ character.
+
+              %%ss     This is replaced by the value of  the  result  attribute.
+                     When result is empty it is skipped.
+
+              %%uu     When the result attribute value is an address of the form
+                     user@domain,  %%uu is replaced by the local part of the ad‐
+                     dress. When the result  has  an  empty  localpart  it  is
+                     skipped.
+
+              %%dd     When  a  result attribute value is an address of the form
+                     user@domain, %%dd is replaced by the domain part of the at‐
+                     tribute value. When  the  result  is  unqualified  it  is
+                     skipped.
+
+              %%[[SSUUDD11--99]]
+                     The  upper-case  and decimal digit expansions interpolate
+                     the parts of the input key rather than the result.  Their
+                     behavior  is  identical to that described with qquueerryy, and
+                     in fact because  the  input  key  is  known  in  advance,
+                     queries  whose  key  does not contain all the information
+                     specified in the result template are suppressed  and  re‐
+                     turn no results.
+
+              For example, using "result_format = smtp:[%s]" allows one to use
+              a mailHost attribute as the basis of a transport(5) table. After
+              applying  the result format, multiple values are concatenated as
+              comma separated strings. The expansion_limit and  parameter  ex‐
+              plained below allows one to restrict the number of values in the
+              result,  which is especially useful for maps that must return at
+              most one value.
+
+              The default value %%ss specifies that each result value should  be
+              used as is.
+
+              This parameter is available with Postfix 2.2 and later.
+
+              NOTE: DO NOT put quotes around the result format!
+
+       ddoommaaiinn ((ddeeffaauulltt:: nnoo ddoommaaiinn lliisstt))
+              This  is a list of domain names, paths to files, or "type:table"
+              databases. When specified, only fully qualified search keys with
+              a *non-empty* localpart and a matching domain are  eligible  for
+              lookup:  ’user’  lookups,  bare  domain  lookups  and  "@domain"
+              lookups are not performed. This  can  significantly  reduce  the
+              query load on the SQLite server.
+                  domain = postfix.org, hash:/etc/postfix/searchdomains
+
+              It  is best not to use SQL to store the domains eligible for SQL
+              lookups.
+
+              This parameter is available with Postfix 2.2 and later.
+
+              NOTE: DO NOT define this parameter for local(8) aliases, because
+              the input keys are always unqualified.
+
+       eexxppaannssiioonn__lliimmiitt ((ddeeffaauulltt:: 00))
+              A limit on the total number of result elements  returned  (as  a
+              comma separated list) by a lookup against the map.  A setting of
+              zero  disables the limit. Lookups fail with a temporary error if
+              the limit is exceeded.  Setting the  limit  to  1  ensures  that
+              lookups do not return multiple values.
+
+OOBBSSOOLLEETTEE MMAAIINN..CCFF PPAARRAAMMEETTEERRSS
+       For  compatibility  with other Postfix lookup tables, SQLite parameters
+       can also be defined in main.cf.  In order to do that, specify as SQLite
+       source a name that doesn’t begin with a slash or a dot.  The SQLite pa‐
+       rameters will then be accessible as the name you’ve given the source in
+       its definition, an underscore, and the name of the parameter.  For  ex‐
+       ample,  if  the  map is specified as "sqlite:_s_q_l_i_t_e_n_a_m_e", the parameter
+       "query" would be defined in main.cf as "_s_q_l_i_t_e_n_a_m_e_query".
+
+OOBBSSOOLLEETTEE QQUUEERRYY IINNTTEERRFFAACCEE
+       This section describes an interface that is deprecated  as  of  Postfix
+       2.2.  It  is  replaced  by  the  more general qquueerryy interface described
+       above.  If the qquueerryy parameter is defined, the  legacy  parameters  de‐
+       scribed  here  ignored.   Please  migrate  to  the new interface as the
+       legacy interface may be removed in a future release.
+
+       The following parameters can be used  to  fill  in  a  SELECT  template
+       statement of the form:
+
+           SELECT [sseelleecctt__ffiieelldd]
+           FROM [ttaabbllee]
+           WHERE [wwhheerree__ffiieelldd] = ’%s’
+                 [aaddddiittiioonnaall__ccoonnddiittiioonnss]
+
+       The specifier %s is replaced by the search string, and is escaped so if
+       it  contains single quotes or other odd characters, it will not cause a
+       parse error, or worse, a security problem.
+
+       sseelleecctt__ffiieelldd
+              The SQL "select" parameter. Example:
+                  sseelleecctt__ffiieelldd = forw_addr
+
+       ttaabbllee  The SQL "select .. from" table name. Example:
+                  ttaabbllee = mxaliases
+
+       wwhheerree__ffiieelldd
+              The SQL "select .. where" parameter. Example:
+                  wwhheerree__ffiieelldd = alias
+
+       aaddddiittiioonnaall__ccoonnddiittiioonnss
+              Additional conditions to the SQL query. Example:
+                  aaddddiittiioonnaall__ccoonnddiittiioonnss = AND status = ’paid’
+
+SSEEEE AALLSSOO
+       postmap(1), Postfix lookup table maintenance
+       postconf(5), configuration parameters
+       ldap_table(5), LDAP lookup tables
+       mysql_table(5), MySQL lookup tables
+       pgsql_table(5), PostgreSQL lookup tables
+
+RREEAADDMMEE FFIILLEESS
+       Use "ppoossttccoonnff rreeaaddmmee__ddiirreeccttoorryy" or "ppoossttccoonnff hhttmmll__ddiirreeccttoorryy" to  locate
+       this information.
+       DATABASE_README, Postfix lookup table overview
+       SQLITE_README, Postfix SQLITE howto
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+HHIISSTTOORRYY
+       SQLite support was introduced with Postfix version 2.8.
+
+AAUUTTHHOORR((SS))
+       Original implementation by:
+       Axel Steiner
+
+                                                               _S_Q_L_I_T_E___T_A_B_L_E(5)

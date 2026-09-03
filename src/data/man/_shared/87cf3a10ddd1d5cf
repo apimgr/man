@@ -1,0 +1,778 @@
+_s_e_c_c_o_m_p(2)                    System Calls Manual                   _s_e_c_c_o_m_p(2)
+
+NNAAMMEE
+       seccomp - operate on Secure Computing state of the process
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<lliinnuuxx//sseeccccoommpp..hh>>  /* Definition of SSEECCCCOOMMPP__** constants */
+       ##iinncclluuddee <<lliinnuuxx//ffiilltteerr..hh>>   /* Definition of ssttrruucctt ssoocckk__ffpprroogg */
+       ##iinncclluuddee <<lliinnuuxx//aauuddiitt..hh>>    /* Definition of AAUUDDIITT__** constants */
+       ##iinncclluuddee <<lliinnuuxx//ssiiggnnaall..hh>>   /* Definition of SSIIGG** constants */
+       ##iinncclluuddee <<ssyyss//ppttrraaccee..hh>>     /* Definition of PPTTRRAACCEE__** constants */
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>    /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__sseeccccoommpp,, uunnssiiggnneedd iinntt _o_p_e_r_a_t_i_o_n,, uunnssiiggnneedd iinntt _f_l_a_g_s,,
+                   vvooiidd **_a_r_g_s));;
+
+       _N_o_t_e: glibc provides no wrapper for sseeccccoommpp(), necessitating the use of
+       ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       The  sseeccccoommpp()  system  call operates on the Secure Computing (seccomp)
+       state of the calling process.
+
+       Currently, Linux supports the following _o_p_e_r_a_t_i_o_n values:
+
+       SSEECCCCOOMMPP__SSEETT__MMOODDEE__SSTTRRIICCTT
+              The only system calls that the calling thread  is  permitted  to
+              make  are  rreeaadd(2),  wwrriittee(2), __eexxiitt(2) (but not eexxiitt__ggrroouupp(2)),
+              and ssiiggrreettuurrnn(2).  Other system calls result in the  termination
+              of the calling thread, or termination of the entire process with
+              the SSIIGGKKIILLLL signal when there is only one thread.  Strict secure
+              computing  mode is useful for number‐crunching applications that
+              may need to execute untrusted byte  code,  perhaps  obtained  by
+              reading from a pipe or socket.
+
+              Note  that  although  the calling thread can no longer call ssiigg‐‐
+              pprrooccmmaasskk(2), it can use ssiiggrreettuurrnn(2) to block all signals  apart
+              from  SSIIGGKKIILLLL  and SSIIGGSSTTOOPP.  This means that aallaarrmm(2) (for exam‐
+              ple) is not sufficient for restricting the  process’s  execution
+              time.   Instead, to reliably terminate the process, SSIIGGKKIILLLL must
+              be used.   This  can  be  done  by  using  ttiimmeerr__ccrreeaattee(2)  with
+              SSIIGGEEVV__SSIIGGNNAALL  and  _s_i_g_e_v___s_i_g_n_o set to SSIIGGKKIILLLL, or by using sseettrr‐‐
+              lliimmiitt(2) to set the hard limit for RRLLIIMMIITT__CCPPUU.
+
+              This operation is available only if  the  kernel  is  configured
+              with CCOONNFFIIGG__SSEECCCCOOMMPP enabled.
+
+              The value of _f_l_a_g_s must be 0, and _a_r_g_s must be NULL.
+
+              This operation is functionally identical to the call:
+
+                  prctl(PR_SET_SECCOMP, SECCOMP_MODE_STRICT);
+
+       SSEECCCCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR
+              The  system calls allowed are defined by a pointer to a Berkeley
+              Packet Filter (BPF) passed via _a_r_g_s.  This argument is a pointer
+              to a _s_t_r_u_c_t _s_o_c_k___f_p_r_o_g; it can be designed to  filter  arbitrary
+              system  calls  and  system call arguments.  If the filter is in‐
+              valid, sseeccccoommpp() fails, returning EEIINNVVAALL in _e_r_r_n_o.
+
+              If ffoorrkk(2) or cclloonnee(2) is  allowed  by  the  filter,  any  child
+              processes will be constrained to the same system call filters as
+              the  parent.  If eexxeeccvvee(2) is allowed, the existing filters will
+              be preserved across a call to eexxeeccvvee(2).
+
+              In order to use the  SSEECCCCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR  operation,  either
+              the calling thread must have the CCAAPP__SSYYSS__AADDMMIINN capability in its
+              user namespace, or the thread must already have the _n_o___n_e_w___p_r_i_v_s
+              bit set.  If that bit was not already set by an ancestor of this
+              thread, the thread must make the following call:
+
+                  prctl(PR_SET_NO_NEW_PRIVS, 1);
+
+              Otherwise,  the  SSEECCCCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR operation fails and re‐
+              turns EEAACCCCEESS in _e_r_r_n_o.  This requirement ensures that an unpriv‐
+              ileged process cannot apply a malicious filter and then invoke a
+              set‐user‐ID or other privileged program  using  eexxeeccvvee(2),  thus
+              potentially compromising that program.  (Such a malicious filter
+              might, for example, cause an attempt to use sseettuuiidd(2) to set the
+              caller’s  user IDs to nonzero values to instead return 0 without
+              actually making the system call.  Thus,  the  program  might  be
+              tricked  into  retaining  superuser  privileges in circumstances
+              where it is possible to influence it to do dangerous things  be‐
+              cause it did not actually drop privileges.)
+
+              If pprrccttll(2) or sseeccccoommpp() is allowed by the attached filter, fur‐
+              ther  filters may be added.  This will increase evaluation time,
+              but allows for further reduction of the  attack  surface  during
+              execution of a thread.
+
+              The  SSEECCCCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR  operation is available only if the
+              kernel is configured with CCOONNFFIIGG__SSEECCCCOOMMPP__FFIILLTTEERR enabled.
+
+              When _f_l_a_g_s is 0, this operation is functionally identical to the
+              call:
+
+                  prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, args);
+
+              The recognized _f_l_a_g_s are:
+
+              SSEECCCCOOMMPP__FFIILLTTEERR__FFLLAAGG__LLOOGG (since Linux 4.14)
+                     All filter return actions except SSEECCCCOOMMPP__RREETT__AALLLLOOWW should
+                     be logged.  An administrator  may  override  this  filter
+                     flag by preventing specific actions from being logged via
+                     the _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_s_e_c_c_o_m_p_/_a_c_t_i_o_n_s___l_o_g_g_e_d file.
+
+              SSEECCCCOOMMPP__FFIILLTTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR (since Linux 5.0)
+                     After  successfully installing the filter program, return
+                     a new  user‐space  notification  file  descriptor.   (The
+                     close‐on‐exec flag is set for the file descriptor.)  When
+                     the  filter returns SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF a notification
+                     will be sent to this file descriptor.
+
+                     At  most  one  seccomp  filter  using  the   SSEECCCCOOMMPP__FFIILL‐‐
+                     TTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR flag can be installed for a thread.
+
+                     See sseeccccoommpp__uunnoottiiffyy(2) for further details.
+
+              SSEECCCCOOMMPP__FFIILLTTEERR__FFLLAAGG__SSPPEECC__AALLLLOOWW (since Linux 4.17)
+                     Disable Speculative Store Bypass mitigation.
+
+              SSEECCCCOOMMPP__FFIILLTTEERR__FFLLAAGG__TTSSYYNNCC
+                     When  adding  a new filter, synchronize all other threads
+                     of the calling process to the same seccomp  filter  tree.
+                     A  "filter  tree" is the ordered list of filters attached
+                     to a thread.  (Attaching identical  filters  in  separate
+                     sseeccccoommpp()  calls  results  in different filters from this
+                     perspective.)
+
+                     If any thread cannot synchronize to the same filter tree,
+                     the call will not attach the new seccomp filter, and will
+                     fail, returning the first thread  ID  found  that  cannot
+                     synchronize.  Synchronization will fail if another thread
+                     in  the  same  process is in SSEECCCCOOMMPP__MMOODDEE__SSTTRRIICCTT or if it
+                     has attached new seccomp  filters  to  itself,  diverging
+                     from the calling thread’s filter tree.
+
+       SSEECCCCOOMMPP__GGEETT__AACCTTIIOONN__AAVVAAIILL (since Linux 4.14)
+              Test to see if an action is supported by the kernel.  This oper‐
+              ation  is helpful to confirm that the kernel knows of a more re‐
+              cently added filter return action since the  kernel  treats  all
+              unknown actions as SSEECCCCOOMMPP__RREETT__KKIILLLL__PPRROOCCEESSSS.
+
+              The  value  of _f_l_a_g_s must be 0, and _a_r_g_s must be a pointer to an
+              unsigned 32‐bit filter return action.
+
+       SSEECCCCOOMMPP__GGEETT__NNOOTTIIFF__SSIIZZEESS (since Linux 5.0)
+              Get the sizes of the seccomp user‐space notification structures.
+              Since these structures may evolve and grow over time, this  com‐
+              mand  can  be  used to determine how much memory to allocate for
+              sending and receiving notifications.
+
+              The value of _f_l_a_g_s must be 0, and _a_r_g_s must be a  pointer  to  a
+              _s_t_r_u_c_t _s_e_c_c_o_m_p___n_o_t_i_f___s_i_z_e_s, which has the following form:
+
+              struct seccomp_notif_sizes
+                  __u16 seccomp_notif;      /* Size of notification structure */
+                  __u16 seccomp_notif_resp; /* Size of response structure */
+                  __u16 seccomp_data;       /* Size of 'struct seccomp_data' */
+              };
+
+              See sseeccccoommpp__uunnoottiiffyy(2) for further details.
+
+   FFiilltteerrss
+       When  adding filters via SSEECCCCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR, _a_r_g_s points to a fil‐
+       ter program:
+
+           struct sock_fprog {
+               unsigned short      len;    /* Number of BPF instructions */
+               struct sock_filter *filter; /* Pointer to array of
+                                              BPF instructions */
+           };
+
+       Each program must contain one or more BPF instructions:
+
+           struct sock_filter {            /* Filter block */
+               __u16 code;                 /* Actual filter code */
+               __u8  jt;                   /* Jump true */
+               __u8  jf;                   /* Jump false */
+               __u32 k;                    /* Generic multiuse field */
+           };
+
+       When executing the instructions, the BPF program operates on the system
+       call information made available (i.e., use the BBPPFF__AABBSS addressing mode)
+       as a (read‐only) buffer of the following form:
+
+           struct seccomp_data {
+               int   nr;                   /* System call number */
+               __u32 arch;                 /* AUDIT_ARCH_* value
+                                              (see <linux/audit.h>) */
+               __u64 instruction_pointer;  /* CPU instruction pointer */
+               __u64 args[6];              /* Up to 6 system call arguments */
+           };
+
+       Because numbering of system calls varies between architectures and some
+       architectures (e.g., x86‐64) allow user‐space code to use  the  calling
+       conventions  of  multiple  architectures (and the convention being used
+       may vary over the life of a process that uses eexxeeccvvee(2) to execute  bi‐
+       naries  that employ the different conventions), it is usually necessary
+       to verify the value of the _a_r_c_h field.
+
+       It is strongly recommended to use an allow‐list approach whenever  pos‐
+       sible  because such an approach is more robust and simple.  A deny‐list
+       will have to be updated whenever a potentially dangerous system call is
+       added (or a dangerous flag or option if those are deny‐listed), and  it
+       is often possible to alter the representation of a value without alter‐
+       ing  its  meaning, leading to a deny‐list bypass.  See also _C_a_v_e_a_t_s be‐
+       low.
+
+       The _a_r_c_h field is not unique for all calling conventions.   The  x86‐64
+       ABI and the x32 ABI both use AAUUDDIITT__AARRCCHH__XX8866__6644 as _a_r_c_h, and they run on
+       the  same  processors.   Instead, the mask ____XX3322__SSYYSSCCAALLLL__BBIITT is used on
+       the system call number to tell the two ABIs apart.
+
+       This  means  that  a  policy  must  either  deny  all   syscalls   with
+       ____XX3322__SSYYSSCCAALLLL__BBIITT  or  it  must  recognize  syscalls  with  and without
+       ____XX3322__SSYYSSCCAALLLL__BBIITT set.  A list of system calls to be denied based on _n_r
+       that does not also contain _n_r values with ____XX3322__SSYYSSCCAALLLL__BBIITT set can  be
+       bypassed by a malicious program that sets ____XX3322__SSYYSSCCAALLLL__BBIITT.
+
+       Additionally,  kernels  prior  to Linux 5.4 incorrectly permitted _n_r in
+       the ranges 512‐547 as well as the corresponding non‐x32  syscalls  ORed
+       with  ____XX3322__SSYYSSCCAALLLL__BBIITT.   For  example,  _n_r  ==  521  and _n_r == (101 |
+       ____XX3322__SSYYSSCCAALLLL__BBIITT) would result in invocations of ppttrraaccee(2) with poten‐
+       tially confused x32‐vs‐x86_64 semantics in the  kernel.   Policies  in‐
+       tended  to  work on kernels before Linux 5.4 must ensure that they deny
+       or otherwise correctly handle these system calls.   On  Linux  5.4  and
+       newer, such system calls will fail with the error EENNOOSSYYSS, without doing
+       anything.
+
+       The  _i_n_s_t_r_u_c_t_i_o_n___p_o_i_n_t_e_r field provides the address of the machine‐lan‐
+       guage instruction that performed the system call.  This might be useful
+       in conjunction with the use of _/_p_r_o_c_/pid_/_m_a_p_s to perform  checks  based
+       on which region (mapping) of the program made the system call.  (Proba‐
+       bly,  it  is wise to lock down the mmmmaapp(2) and mmpprrootteecctt(2) system calls
+       to prevent the program from subverting such checks.)
+
+       When checking values from _a_r_g_s, keep in mind that arguments  are  often
+       silently truncated before being processed, but after the seccomp check.
+       For  example, this happens if the i386 ABI is used on an x86‐64 kernel:
+       although the kernel will normally not look beyond the 32 lowest bits of
+       the arguments, the values of the full 64‐bit registers will be  present
+       in  the  seccomp data.  A less surprising example is that if the x86‐64
+       ABI is used to perform a system call that takes  an  argument  of  type
+       _i_n_t,  the  more‐significant half of the argument register is ignored by
+       the system call, but visible in the seccomp data.
+
+       A seccomp filter returns a 32‐bit value consisting of  two  parts:  the
+       most significant 16 bits (corresponding to the mask defined by the con‐
+       stant  SSEECCCCOOMMPP__RREETT__AACCTTIIOONN__FFUULLLL)  contain  one  of  the  "action" values
+       listed below; the least significant 16‐bits (defined  by  the  constant
+       SSEECCCCOOMMPP__RREETT__DDAATTAA) are "data" to be associated with this return value.
+
+       If  multiple  filters exist, they are _a_l_l executed, in reverse order of
+       their addition to the filter tree—that is, the most recently  installed
+       filter  is  executed first.  (Note that all filters will be called even
+       if one of the earlier filters returns SSEECCCCOOMMPP__RREETT__KKIILLLL.  This  is  done
+       to  simplify the kernel code and to provide a tiny speed‐up in the exe‐
+       cution of sets of filters by avoiding a check for this uncommon  case.)
+       The  return  value  for  the  evaluation  of a given system call is the
+       first‐seen action value of highest precedence (along with its  accompa‐
+       nying data) returned by execution of all of the filters.
+
+       In  decreasing  order  of precedence, the action values that may be re‐
+       turned by a seccomp filter are:
+
+       SSEECCCCOOMMPP__RREETT__KKIILLLL__PPRROOCCEESSSS (since Linux 4.14)
+              This value results in immediate termination of the process, with
+              a core dump.  The system call is not executed.  By contrast with
+              SSEECCCCOOMMPP__RREETT__KKIILLLL__TTHHRREEAADD below, all threads in the  thread  group
+              are terminated.  (For a discussion of thread groups, see the de‐
+              scription of the CCLLOONNEE__TTHHRREEAADD flag in cclloonnee(2).)
+
+              The  process  terminates  _a_s  _t_h_o_u_g_h  killed by a SSIIGGSSYYSS signal.
+              Even if a signal handler has been  registered  for  SSIIGGSSYYSS,  the
+              handler will be ignored in this case and the process always ter‐
+              minates.   To  a  parent process that is waiting on this process
+              (using wwaaiittppiidd(2) or similar), the returned _w_s_t_a_t_u_s  will  indi‐
+              cate that its child was terminated as though by a SSIIGGSSYYSS signal.
+
+       SSEECCCCOOMMPP__RREETT__KKIILLLL__TTHHRREEAADD (or SSEECCCCOOMMPP__RREETT__KKIILLLL)
+              This  value  results in immediate termination of the thread that
+              made the system call.  The system call is not  executed.   Other
+              threads in the same thread group will continue to execute.
+
+              The  thread terminates _a_s _t_h_o_u_g_h killed by a SSIIGGSSYYSS signal.  See
+              SSEECCCCOOMMPP__RREETT__KKIILLLL__PPRROOCCEESSSS above.
+
+              Before Linux 4.11, any process terminated in this way would  not
+              trigger  a  coredump  (even  though SSIIGGSSYYSS is documented in ssiigg‐‐
+              nnaall(7) as having a default action of  termination  with  a  core
+              dump).   Since  Linux  4.11, a single‐threaded process will dump
+              core if terminated in this way.
+
+              With the addition of  SSEECCCCOOMMPP__RREETT__KKIILLLL__PPRROOCCEESSSS  in  Linux  4.14,
+              SSEECCCCOOMMPP__RREETT__KKIILLLL__TTHHRREEAADD   was   added  as  a  synonym  for  SSEECC‐‐
+              CCOOMMPP__RREETT__KKIILLLL, in order to more clearly distinguish the two  ac‐
+              tions.
+
+              NNoottee: the use of SSEECCCCOOMMPP__RREETT__KKIILLLL__TTHHRREEAADD to kill a single thread
+              in  a  multithreaded process is likely to leave the process in a
+              permanently inconsistent and possibly corrupt state.
+
+       SSEECCCCOOMMPP__RREETT__TTRRAAPP
+              This value results  in  the  kernel  sending  a  thread‐directed
+              SSIIGGSSYYSS signal to the triggering thread.  (The system call is not
+              executed.)   Various  fields will be set in the _s_i_g_i_n_f_o___t struc‐
+              ture (see ssiiggaaccttiioonn(2)) associated with signal:
+
+              •  _s_i___s_i_g_n_o will contain SSIIGGSSYYSS.
+
+              •  _s_i___c_a_l_l___a_d_d_r will show the address of  the  system  call  in‐
+                 struction.
+
+              •  _s_i___s_y_s_c_a_l_l  and  _s_i___a_r_c_h  will indicate which system call was
+                 attempted.
+
+              •  _s_i___c_o_d_e will contain SSYYSS__SSEECCCCOOMMPP.
+
+              •  _s_i___e_r_r_n_o will contain the  SSEECCCCOOMMPP__RREETT__DDAATTAA  portion  of  the
+                 filter return value.
+
+              The  program  counter will be as though the system call happened
+              (i.e., the program counter will not point to the system call in‐
+              struction).  The return value register will contain an architec‐
+              ture-dependent value; if resuming execution, set it to something
+              appropriate for the system call.  (The  architecture  dependency
+              is  because replacing it with EENNOOSSYYSS could overwrite some useful
+              information.)
+
+       SSEECCCCOOMMPP__RREETT__EERRRRNNOO
+              This value results in the SSEECCCCOOMMPP__RREETT__DDAATTAA portion of  the  fil‐
+              ter’s return value being passed to user space as the _e_r_r_n_o value
+              without executing the system call.
+
+       SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF (since Linux 5.0)
+              Forward  the  system  call  to an attached user‐space supervisor
+              process to allow that process to decide what to do with the sys‐
+              tem call.  If there is no attached  supervisor  (either  because
+              the   filter   was   not   installed   with   the   SSEECCCCOOMMPP__FFIILL‐‐
+              TTEERR__FFLLAAGG__NNEEWW__LLIISSTTEENNEERR flag or because the  file  descriptor  was
+              closed), the filter returns EENNOOSSYYSS (similar to what happens when
+              a filter returns SSEECCCCOOMMPP__RREETT__TTRRAACCEE and there is no tracer).  See
+              sseeccccoommpp__uunnoottiiffyy(2) for further details.
+
+              Note that the supervisor process will not be notified if another
+              filter  returns  an  action value with a precedence greater than
+              SSEECCCCOOMMPP__RREETT__UUSSEERR__NNOOTTIIFF.
+
+       SSEECCCCOOMMPP__RREETT__TTRRAACCEE
+              When returned, this value will cause the kernel  to  attempt  to
+              notify  a  ppttrraaccee(2)‐based  tracer prior to executing the system
+              call.  If there is no tracer present, the system call is not ex‐
+              ecuted and returns a failure status with _e_r_r_n_o set to EENNOOSSYYSS.
+
+              A tracer will be notified if it  requests  PPTTRRAACCEE__OO__TTRRAACCEESSEECCCCOOMMPP
+              using _p_t_r_a_c_e_(_P_T_R_A_C_E___S_E_T_O_P_T_I_O_N_S_).  The tracer will be notified of
+              a  PPTTRRAACCEE__EEVVEENNTT__SSEECCCCOOMMPP  and the SSEECCCCOOMMPP__RREETT__DDAATTAA portion of the
+              filter’s return value  will  be  available  to  the  tracer  via
+              PPTTRRAACCEE__GGEETTEEVVEENNTTMMSSGG.
+
+              The  tracer can skip the system call by changing the system call
+              number to -1.  Alternatively, the tracer can change  the  system
+              call  requested  by  changing  the system call to a valid system
+              call number.  If the tracer asks to skip the system  call,  then
+              the  system call will appear to return the value that the tracer
+              puts in the return value register.
+
+              Before Linux 4.8, the seccomp check will not be run again  after
+              the  tracer  is  notified.   (This means that, on older kernels,
+              seccomp‐based sandboxes mmuusstt nnoott allow use of ppttrraaccee(2)—even  of
+              other sandboxed processes—without extreme care; ptracers can use
+              this mechanism to escape from the seccomp sandbox.)
+
+              Note  that a tracer process will not be notified if another fil‐
+              ter returns an action value with a precedence greater than  SSEECC‐‐
+              CCOOMMPP__RREETT__TTRRAACCEE.
+
+       SSEECCCCOOMMPP__RREETT__LLOOGG (since Linux 4.14)
+              This  value  results in the system call being executed after the
+              filter return action is logged.  An administrator  may  override
+              the  logging of this action via the _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_s_e_c_c_o_m_p_/_a_c_‐
+              _t_i_o_n_s___l_o_g_g_e_d file.
+
+       SSEECCCCOOMMPP__RREETT__AALLLLOOWW
+              This value results in the system call being executed.
+
+       If an action value other than one of the above is specified,  then  the
+       filter  action  is  treated  as  either SSEECCCCOOMMPP__RREETT__KKIILLLL__PPRROOCCEESSSS (since
+       Linux 4.14) or SSEECCCCOOMMPP__RREETT__KKIILLLL__TTHHRREEAADD (in Linux 4.13 and earlier).
+
+   //pprroocc iinntteerrffaacceess
+       The files in the directory _/_p_r_o_c_/_s_y_s_/_k_e_r_n_e_l_/_s_e_c_c_o_m_p provide  additional
+       seccomp information and configuration:
+
+       _a_c_t_i_o_n_s___a_v_a_i_l (since Linux 4.14)
+              A  read‐only  ordered  list  of seccomp filter return actions in
+              string form.  The ordering, from left‐to‐right, is in decreasing
+              order of precedence.  The list represents  the  set  of  seccomp
+              filter return actions supported by the kernel.
+
+       _a_c_t_i_o_n_s___l_o_g_g_e_d (since Linux 4.14)
+              A  read‐write ordered list of seccomp filter return actions that
+              are allowed to be logged.  Writes to the file do not need to  be
+              in  ordered  form but reads from the file will be ordered in the
+              same way as the _a_c_t_i_o_n_s___a_v_a_i_l file.
+
+              It is important to note that the value  of  _a_c_t_i_o_n_s___l_o_g_g_e_d  does
+              not prevent certain filter return actions from being logged when
+              the  audit  subsystem is configured to audit a task.  If the ac‐
+              tion is not found in the _a_c_t_i_o_n_s___l_o_g_g_e_d file, the final decision
+              on whether to audit the action for that task is ultimately  left
+              up  to  the  audit subsystem to decide for all filter return ac‐
+              tions other than SSEECCCCOOMMPP__RREETT__AALLLLOOWW.
+
+              The "allow" string is not accepted in the _a_c_t_i_o_n_s___l_o_g_g_e_d file as
+              it is not possible to log SSEECCCCOOMMPP__RREETT__AALLLLOOWW actions.  Attempting
+              to write "allow" to the file will fail with the error EEIINNVVAALL.
+
+   AAuuddiitt llooggggiinngg ooff sseeccccoommpp aaccttiioonnss
+       Since Linux 4.14, the kernel provides the facility to log  the  actions
+       returned by seccomp filters in the audit log.  The kernel makes the de‐
+       cision  to  log an action based on the action type,  whether or not the
+       action is present in the _a_c_t_i_o_n_s___l_o_g_g_e_d file, and whether kernel audit‐
+       ing is enabled (e.g., via the kernel boot option _a_u_d_i_t_=_1).   The  rules
+       are as follows:
+
+       •  If the action is SSEECCCCOOMMPP__RREETT__AALLLLOOWW, the action is not logged.
+
+       •  Otherwise,  if the action is either SSEECCCCOOMMPP__RREETT__KKIILLLL__PPRROOCCEESSSS or SSEECC‐‐
+          CCOOMMPP__RREETT__KKIILLLL__TTHHRREEAADD, and that action appears in the  _a_c_t_i_o_n_s___l_o_g_g_e_d
+          file, the action is logged.
+
+       •  Otherwise,  if  the  filter  has requested logging (the SSEECCCCOOMMPP__FFIILL‐‐
+          TTEERR__FFLLAAGG__LLOOGG flag) and the  action  appears  in  the  _a_c_t_i_o_n_s___l_o_g_g_e_d
+          file, the action is logged.
+
+       •  Otherwise,  if  kernel  auditing is enabled and the process is being
+          audited (aauuttrraaccee(8)), the action is logged.
+
+       •  Otherwise, the action is not logged.
+
+RREETTUURRNN VVAALLUUEE
+       On  success,  sseeccccoommpp()  returns  0.    On   error,   if   SSEECCCCOOMMPP__FFIILL‐‐
+       TTEERR__FFLLAAGG__TTSSYYNNCC  was used, the return value is the ID of the thread that
+       caused the synchronization failure.  (This ID is a kernel thread ID  of
+       the  type  returned by cclloonnee(2) and ggeettttiidd(2).)  On other errors, -1 is
+       returned, and _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       sseeccccoommpp() can fail for the following reasons:
+
+       EEAACCCCEESS The caller did not have the CCAAPP__SSYYSS__AADDMMIINN capability in its user
+              namespace,  or  had  not  set  _n_o___n_e_w___p_r_i_v_s  before  using  SSEECC‐‐
+              CCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR.
+
+       EEBBUUSSYY  While  installing a new filter, the SSEECCCCOOMMPP__FFIILLTTEERR__FFLLAAGG__NNEEWW__LLIISS‐‐
+              TTEENNEERR flag was specified, but a previous filter had already been
+              installed with that flag.
+
+       EEFFAAUULLTT _a_r_g_s was not a valid address.
+
+       EEIINNVVAALL _o_p_e_r_a_t_i_o_n is unknown or is not supported by this kernel  version
+              or configuration.
+
+       EEIINNVVAALL The specified _f_l_a_g_s are invalid for the given _o_p_e_r_a_t_i_o_n.
+
+       EEIINNVVAALL _o_p_e_r_a_t_i_o_n  included  BBPPFF__AABBSS,  but  the specified offset was not
+              aligned to a 32‐bit  boundary  or  exceeded  _s_i_z_e_o_f_(_s_t_r_u_c_t  _s_e_c_‐
+              _c_o_m_p___d_a_t_a_).
+
+       EEIINNVVAALL A secure computing mode has already been set, and _o_p_e_r_a_t_i_o_n dif‐
+              fers from the existing setting.
+
+       EEIINNVVAALL _o_p_e_r_a_t_i_o_n specified SSEECCCCOOMMPP__SSEETT__MMOODDEE__FFIILLTTEERR, but the filter pro‐
+              gram  pointed to by _a_r_g_s was not valid or the length of the fil‐
+              ter program was zero or exceeded  BBPPFF__MMAAXXIINNSSNNSS  (4096)  instruc‐
+              tions.
+
+       EENNOOMMEEMM Out of memory.
+
+       EENNOOMMEEMM The  total length of all filter programs attached to the calling
+              thread would  exceed  MMAAXX__IINNSSNNSS__PPEERR__PPAATTHH  (32768)  instructions.
+              Note  that  for the purposes of calculating this limit, each al‐
+              ready existing filter program incurs an overhead  penalty  of  4
+              instructions.
+
+       EEOOPPNNOOTTSSUUPPPP
+              _o_p_e_r_a_t_i_o_n  specified  SSEECCCCOOMMPP__GGEETT__AACCTTIIOONN__AAVVAAIILL,  but  the kernel
+              does not support the filter return action specified by _a_r_g_s.
+
+       EESSRRCCHH  Another thread caused a failure during thread sync, but  its  ID
+              could not be determined.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 3.17.
+
+NNOOTTEESS
+       Rather  than hand‐coding seccomp filters as shown in the example below,
+       you may prefer to employ  the  _l_i_b_s_e_c_c_o_m_p  library,  which  provides  a
+       front‐end for generating seccomp filters.
+
+       The  _S_e_c_c_o_m_p  field  of  the _/_p_r_o_c_/pid_/_s_t_a_t_u_s file provides a method of
+       viewing the seccomp mode of a process; see pprroocc(5).
+
+       sseeccccoommpp() provides a superset of  the  functionality  provided  by  the
+       pprrccttll(2) PPRR__SSEETT__SSEECCCCOOMMPP operation (which does not support _f_l_a_g_s).
+
+       Since  Linux 4.4, the ppttrraaccee(2) PPTTRRAACCEE__SSEECCCCOOMMPP__GGEETT__FFIILLTTEERR operation can
+       be used to dump a process’s seccomp filters.
+
+   AArrcchhiitteeccttuurree ssuuppppoorrtt ffoorr sseeccccoommpp BBPPFF
+       Architecture support for seccomp BPF filtering is available on the fol‐
+       lowing architectures:
+
+       •  x86‐64, i386, x32 (since Linux 3.5)
+       •  ARM (since Linux 3.8)
+       •  s390 (since Linux 3.8)
+       •  MIPS (since Linux 3.16)
+       •  ARM‐64 (since Linux 3.19)
+       •  PowerPC (since Linux 4.3)
+       •  Tile (since Linux 4.3)
+       •  PA‐RISC (since Linux 4.6)
+
+   CCaavveeaattss
+       There are various subtleties to consider when applying seccomp  filters
+       to a program, including the following:
+
+       •  Some traditional system calls have user‐space implementations in the
+          vvddssoo(7)  on many architectures.  Notable examples include cclloocckk__ggeett‐‐
+          ttiimmee(2), ggeettttiimmeeooffddaayy(2), and ttiimmee(2).  On such architectures,  sec‐
+          comp  filtering  for  these system calls will have no effect.  (How‐
+          ever, there are cases where the  vvddssoo(7)  implementations  may  fall
+          back to invoking the true system call, in which case seccomp filters
+          would see the system call.)
+
+       •  Seccomp  filtering is based on system call numbers.  However, appli‐
+          cations typically do not directly invoke system calls,  but  instead
+          call  wrapper  functions  in  the C library which in turn invoke the
+          system calls.  Consequently, one must be aware of the following:
+
+          •  The glibc wrappers for some traditional system calls may actually
+             employ system calls with different names in the kernel.  For  ex‐
+             ample,   the   eexxiitt(2)  wrapper  function  actually  employs  the
+             eexxiitt__ggrroouupp(2) system call, and the ffoorrkk(2) wrapper function actu‐
+             ally calls cclloonnee(2).
+
+          •  The behavior of wrapper functions may vary across  architectures,
+             according  to  the range of system calls provided on those archi‐
+             tectures.  In other words, the same wrapper function  may  invoke
+             different system calls on different architectures.
+
+          •  Finally,  the  behavior  of  wrapper  functions can change across
+             glibc versions.  For example, in older versions, the glibc  wrap‐
+             per  function  for  ooppeenn(2)  invoked  the system call of the same
+             name, but starting in glibc 2.26, the implementation switched  to
+             calling ooppeennaatt(2) on all architectures.
+
+       The consequence of the above points is that it may be necessary to fil‐
+       ter  for  a  system  call other than might be expected.  Various manual
+       pages in Section 2 provide helpful details about  the  differences  be‐
+       tween  wrapper functions and the underlying system calls in subsections
+       entitled _C _l_i_b_r_a_r_y_/_k_e_r_n_e_l _d_i_f_f_e_r_e_n_c_e_s.
+
+       Furthermore, note that the application of seccomp  filters  even  risks
+       causing bugs in an application, when the filters cause unexpected fail‐
+       ures  for legitimate operations that the application might need to per‐
+       form.  Such bugs may not easily be discovered when testing the  seccomp
+       filters if the bugs occur in rarely used application code paths.
+
+   SSeeccccoommpp‐‐ssppeecciiffiicc BBPPFF ddeettaaiillss
+       Note the following BPF details specific to seccomp filters:
+
+       •  The BBPPFF__HH and BBPPFF__BB size modifiers are not supported: all operations
+          must load and store (4‐byte) words (BBPPFF__WW).
+
+       •  To  access  the contents of the _s_e_c_c_o_m_p___d_a_t_a buffer, use the BBPPFF__AABBSS
+          addressing mode modifier.
+
+       •  The BBPPFF__LLEENN  addressing  mode  modifier  yields  an  immediate  mode
+          operand whose value is the size of the _s_e_c_c_o_m_p___d_a_t_a buffer.
+
+EEXXAAMMPPLLEESS
+       The  program below accepts four or more arguments.  The first three ar‐
+       guments are a system call number, a  numeric  architecture  identifier,
+       and  an error number.  The program uses these values to construct a BPF
+       filter that is used at run time to perform the following checks:
+
+       •  If the program is not running on the specified architecture, the BPF
+          filter causes system calls to fail with the error EENNOOSSYYSS.
+
+       •  If the program attempts to execute the system call with  the  speci‐
+          fied number, the BPF filter causes the system call to fail, with _e_r_‐
+          _r_n_o being set to the specified error number.
+
+       The  remaining  command‐line  arguments  specify the pathname and addi‐
+       tional arguments of a program that the example program  should  attempt
+       to  execute  using  eexxeeccvv(3)  (a  library function that employs the eexx‐‐
+       eeccvvee(2) system call).  Some example runs of the program are  shown  be‐
+       low.
+
+       First,  we display the architecture that we are running on (x86‐64) and
+       then construct a shell function that looks up system  call  numbers  on
+       this architecture:
+
+           $ uunnaammee --mm;
+           x86_64
+           $ ssyyssccaallll__nnrr(()) {{
+               ccaatt //uussrr//ssrrcc//lliinnuuxx//aarrcchh//xx8866//ssyyssccaallllss//ssyyssccaallll__6644..ttbbll || \\
+               aawwkk ''$$22 !!== ""xx3322"" &&&& $$33 ==== ""''$$11''"" {{ pprriinntt $$11 }}''
+           }};
+
+       When  the  BPF filter rejects a system call (case [2] above), it causes
+       the system call to fail with the error number specified on the  command
+       line.  In the experiments shown here, we’ll use error number 99:
+
+           $ eerrrrnnoo 9999;
+           EADDRNOTAVAIL 99 Cannot assign requested address
+
+       In  the following example, we attempt to run the command wwhhooaammii(1), but
+       the BPF filter rejects the eexxeeccvvee(2) system call, so that  the  command
+       is not even executed:
+
+           $ ssyyssccaallll__nnrr eexxeeccvvee;
+           59
+           $ ..//aa..oouutt;
+           Usage: ./a.out <syscall_nr> <arch> <errno> <prog> [<args>]
+           Hint for <arch>: AUDIT_ARCH_I386: 0x40000003
+                            AUDIT_ARCH_X86_64: 0xC000003E
+           $ ..//aa..oouutt 5599 00xxCC000000000033EE 9999 //bbiinn//wwhhooaammii;
+           execv: Cannot assign requested address
+
+       In  the  next example, the BPF filter rejects the wwrriittee(2) system call,
+       so that, although it is successfully started, the wwhhooaammii(1) command  is
+       not able to write output:
+
+           $ ssyyssccaallll__nnrr wwrriittee;
+           1
+           $ ..//aa..oouutt 11 00xxCC000000000033EE 9999 //bbiinn//wwhhooaammii;
+
+       In  the final example, the BPF filter rejects a system call that is not
+       used by the wwhhooaammii(1) command, so it is able  to  successfully  execute
+       and produce output:
+
+           $ ssyyssccaallll__nnrr pprreeaaddvv;
+           295
+           $ ..//aa..oouutt 229955 00xxCC000000000033EE 9999 //bbiinn//wwhhooaammii;
+           cecilia
+
+   PPrrooggrraamm ssoouurrccee
+       #include <linux/audit.h>
+       #include <linux/filter.h>
+       #include <linux/seccomp.h>
+       #include <stddef.h>
+       #include <stdio.h>
+       #include <stdlib.h>
+       #include <sys/prctl.h>
+       #include <sys/syscall.h>
+       #include <unistd.h>
+
+       #define X32_SYSCALL_BIT 0x40000000
+       #define NITEMS(arr)  (sizeof(arr) / sizeof((arr)[0]))
+
+       static int
+       install_filter(int syscall_nr, unsigned int t_arch, int f_errno)
+       {
+           unsigned int upper_nr_limit = 0xffffffff;
+
+           /* Assume that AUDIT_ARCH_X86_64 means the normal x86-64 ABI
+              (in the x32 ABI, all system calls have bit 30 set in the
+              'nr' field, meaning the numbers are >= X32_SYSCALL_BIT).  */
+           if (t_arch == AUDIT_ARCH_X86_64)
+               upper_nr_limit = X32_SYSCALL_BIT - 1;
+
+           struct sock_filter filter[] = {
+               /* [0] Load architecture from 'seccomp_data' buffer into
+                      accumulator.  */
+               BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+                        (offsetof(struct seccomp_data, arch))),
+
+               /* [1] Jump forward 5 instructions if architecture does not
+                      match 't_arch'.  */
+               BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, t_arch, 0, 5),
+
+               /* [2] Load system call number from 'seccomp_data' buffer into
+                      accumulator.  */
+               BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+                        (offsetof(struct seccomp_data, nr))),
+
+               /* [3] Check ABI - only needed for x86-64 in deny-list use
+                      cases.  Use BPF_JGT instead of checking against the bit
+                      mask to avoid having to reload the syscall number.  */
+               BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, upper_nr_limit, 3, 0),
+
+               /* [4] Jump forward 1 instruction if system call number
+                      does not match 'syscall_nr'.  */
+               BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, syscall_nr, 0, 1),
+
+               /* [5] Matching architecture and system call: don't execute
+                  the system call, and return 'f_errno' in 'errno'.  */
+               BPF_STMT(BPF_RET | BPF_K,
+                        SECCOMP_RET_ERRNO | (f_errno & SECCOMP_RET_DATA)),
+
+               /* [6] Destination of system call number mismatch: allow other
+                      system calls.  */
+               BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+
+               /* [7] Destination of architecture mismatch: kill process.  */
+               BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+           };
+
+           struct sock_fprog prog = {
+               .len = NITEMS(filter),
+               .filter = filter,
+           };
+
+           if (syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &prog)) {
+               perror("seccomp");
+               return 1;
+           }
+
+           return 0;
+       }
+
+       int
+       main(int argc, char *argv[])
+       {
+           if (argc < 5) {
+               fprintf(stderr, "Usage: "
+                       "%s <syscall_nr> <arch> <errno> <prog> [<args>]\n"
+                       "Hint for <arch>: AUDIT_ARCH_I386: 0x%X\n"
+                       "                 AUDIT_ARCH_X86_64: 0x%X\n"
+                       "\n", argv[0], AUDIT_ARCH_I386, AUDIT_ARCH_X86_64);
+               exit(EXIT_FAILURE);
+           }
+
+           if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0)) {
+               perror("prctl");
+               exit(EXIT_FAILURE);
+           }
+
+           if (install_filter(strtol(argv[1], NULL, 0),
+                              strtoul(argv[2], NULL, 0),
+                              strtol(argv[3], NULL, 0)))
+               exit(EXIT_FAILURE);
+
+           execv(argv[4], &argv[4]);
+           perror("execv");
+           exit(EXIT_FAILURE);
+       }
+
+SSEEEE AALLSSOO
+       bbppffcc(1),  ssttrraaccee(1),  bbppff(2),  pprrccttll(2), ppttrraaccee(2), sseeccccoommpp__uunnoottiiffyy(2),
+       ssiiggaaccttiioonn(2), pprroocc(5), ssiiggnnaall(7), ssoocckkeett(7)
+
+       Various pages from  the  _l_i_b_s_e_c_c_o_m_p  library,  including:  ssccmmpp__ssyyss__rree‐‐
+       ssoollvveerr(1), sseeccccoommpp__eexxppoorrtt__bbppff(3), sseeccccoommpp__iinniitt(3), sseeccccoommpp__llooaadd(3), and
+       sseeccccoommpp__rruullee__aadddd(3).
+
+       The  kernel  source files _D_o_c_u_m_e_n_t_a_t_i_o_n_/_n_e_t_w_o_r_k_i_n_g_/_f_i_l_t_e_r_._t_x_t and _D_o_c_u_‐
+       _m_e_n_t_a_t_i_o_n_/_u_s_e_r_s_p_a_c_e_-_a_p_i_/_s_e_c_c_o_m_p___f_i_l_t_e_r_._r_s_t (or _D_o_c_u_m_e_n_t_a_t_i_o_n_/_p_r_c_t_l_/_s_e_c_‐
+       _c_o_m_p___f_i_l_t_e_r_._t_x_t before Linux 4.13).
+
+       McCanne, S. and Jacobson, V. (1992) _T_h_e _B_S_D _P_a_c_k_e_t _F_i_l_t_e_r_: _A _N_e_w _A_r_c_h_i_‐
+       _t_e_c_t_u_r_e _f_o_r _U_s_e_r_‐_l_e_v_e_l _P_a_c_k_e_t _C_a_p_t_u_r_e, Proceedings of the USENIX Winter
+       1993 Conference ⟨http://www.tcpdump.org/papers/bpf-usenix93.pdf⟩
+
+       Terence Kelly and Edison Fuh (2025)  Sandboxing:  Foolproof  Boundaries
+       vs. Unbounded Foolishness ⟨https://dl.acm.org/doi/pdf/10.1145/3733699⟩
+
+Linux man‐pages (unreleased)      2025‐09‐21                        _s_e_c_c_o_m_p(2)

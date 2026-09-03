@@ -1,0 +1,208 @@
+_u_t_m_p(5)                       File Formats Manual                      _u_t_m_p(5)
+
+NNAAMMEE
+       utmp, wtmp - login records
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<uuttmmpp..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+       The _u_t_m_p file allows one to discover information about who is currently
+       using  the system.  There may be more users currently using the system,
+       because not all programs use utmp logging.
+
+       WWaarrnniinngg:: _u_t_m_p must not be writable by the user class  "other",  because
+       many  system  programs  (foolishly)  depend on its integrity.  You risk
+       faked system logfiles and modifications of system files  if  you  leave
+       _u_t_m_p  writable  to any user other than the owner and group owner of the
+       file.
+
+       The file is a sequence of  _u_t_m_p  structures,  declared  as  follows  in
+       _<_u_t_m_p_._h_> (note that this is only one of several definitions around; de‐
+       tails depend on the version of libc):
+
+           /* Values for ut_type field, below */
+
+           #define EMPTY         0 /* Record does not contain valid info
+                                      (formerly known as UT_UNKNOWN on Linux) */
+           #define RUN_LVL       1 /* Change in system run-level (see
+                                      iinniitt(1)) */
+           #define BOOT_TIME     2 /* Time of system boot (in _u_t___t_v) */
+           #define NEW_TIME      3 /* Time after system clock change
+                                      (in _u_t___t_v) */
+           #define OLD_TIME      4 /* Time before system clock change
+                                      (in _u_t___t_v) */
+           #define INIT_PROCESS  5 /* Process spawned by iinniitt(1) */
+           #define LOGIN_PROCESS 6 /* Session leader process for user login */
+           #define USER_PROCESS  7 /* Normal process */
+           #define DEAD_PROCESS  8 /* Terminated process */
+           #define ACCOUNTING    9 /* Not implemented */
+
+           #define UT_LINESIZE      32
+           #define UT_NAMESIZE      32
+           #define UT_HOSTSIZE     256
+
+           struct exit_status {              /* Type for ut_exit, below */
+               short e_termination;          /* Process termination status */
+               short e_exit;                 /* Process exit status */
+           };
+
+           struct utmp {
+               short   ut_type;              /* Type of record */
+               pid_t   ut_pid;               /* PID of login process */
+               char    ut_line[UT_LINESIZE]; /* Device name of tty - "/dev/" */
+               char    ut_id[4];             /* Terminal name suffix,
+                                                or inittab(5) ID */
+               char    ut_user[UT_NAMESIZE]; /* Username */
+               char    ut_host[UT_HOSTSIZE]; /* Hostname for remote login, or
+                                                kernel version for run-level
+                                                messages */
+               struct  exit_status ut_exit;  /* Exit status of a process
+                                                marked as DEAD_PROCESS; not
+                                                used by Linux iinniitt(1) */
+               /* The ut_session and ut_tv fields must be the same size when
+                  compiled 32- and 64-bit.  This allows data files and shared
+                  memory to be shared between 32- and 64-bit applications.  */
+           #if __WORDSIZE == 64 && defined __WORDSIZE_COMPAT32
+               int32_t ut_session;           /* Session ID (ggeettssiidd(2)),
+                                                used for windowing */
+               struct {
+                   int32_t tv_sec;           /* Seconds */
+                   int32_t tv_usec;          /* Microseconds */
+               } ut_tv;                      /* Time entry was made */
+           #else
+                long   ut_session;           /* Session ID */
+                struct timeval ut_tv;        /* Time entry was made */
+           #endif
+
+               int32_t ut_addr_v6[4];        /* Internet address of remote
+                                                host; IPv4 address uses
+                                                just ut_addr_v6[0] */
+               char __unused[20];            /* Reserved for future use */
+           };
+
+           /* Backward compatibility hacks */
+           #define ut_name ut_user
+           #ifndef _NO_UT_TIME
+           #define ut_time ut_tv.tv_sec
+           #endif
+           #define ut_xtime ut_tv.tv_sec
+           #define ut_addr ut_addr_v6[0]
+
+       This  structure  gives the name of the special file associated with the
+       user’s terminal, the user’s login name, and the time of  login  in  the
+       form of ttiimmee(2).  String fields are terminated by a null byte ('\0') if
+       they are shorter than the size of the field.
+
+       The  first  entries  ever  created result from iinniitt(1) processing iinniitt‐‐
+       ttaabb(5).  Before an entry is processed, though, iinniitt(1) cleans  up  utmp
+       by  setting  _u_t___t_y_p_e  to  DDEEAADD__PPRROOCCEESSSS,  clearing _u_t___u_s_e_r, _u_t___h_o_s_t, and
+       _u_t___t_i_m_e  with  null  bytes  for  each  record  which  _u_t___t_y_p_e  is   not
+       DDEEAADD__PPRROOCCEESSSS  or  RRUUNN__LLVVLL  and where no process with PID _u_t___p_i_d exists.
+       If no empty record with the needed _u_t___i_d can be found, iinniitt(1)  creates
+       a  new  one.  It sets _u_t___i_d from the inittab, _u_t___p_i_d and _u_t___t_i_m_e to the
+       current values, and _u_t___t_y_p_e to IINNIITT__PPRROOCCEESSSS.
+
+       mmiinnggeettttyy(8) (or aaggeettttyy(8))  locates  the  entry  by  the  PID,  changes
+       _u_t___t_y_p_e  to LLOOGGIINN__PPRROOCCEESSSS, changes _u_t___t_i_m_e, sets _u_t___l_i_n_e, and waits for
+       connection to be established.  llooggiinn(1), after a user has been  authen‐
+       ticated,  changes  _u_t___t_y_p_e  to  UUSSEERR__PPRROOCCEESSSS, changes _u_t___t_i_m_e, and sets
+       _u_t___h_o_s_t and _u_t___a_d_d_r.  Depending on mmiinnggeettttyy(8) (or aaggeettttyy(8))  and  lloo‐‐
+       ggiinn(1),  records  may  be  located by _u_t___l_i_n_e instead of the preferable
+       _u_t___p_i_d.
+
+       When iinniitt(1) finds that a process has exited, it locates its utmp entry
+       by _u_t___p_i_d, sets _u_t___t_y_p_e to DDEEAADD__PPRROOCCEESSSS, and clears  _u_t___u_s_e_r,  _u_t___h_o_s_t,
+       and _u_t___t_i_m_e with null bytes.
+
+       xxtteerrmm(1)  and  other  terminal emulators directly create a UUSSEERR__PPRROOCCEESSSS
+       record and generate the _u_t___i_d by using the string that suffix  part  of
+       the terminal name (the characters following _/_d_e_v_/[pt]_t_y).  If they find
+       a  DDEEAADD__PPRROOCCEESSSS  for  this ID, they recycle it, otherwise they create a
+       new entry.  If they can, they will mark it as DDEEAADD__PPRROOCCEESSSS  on  exiting
+       and it is advised that they null _u_t___l_i_n_e, _u_t___t_i_m_e, _u_t___u_s_e_r, and _u_t___h_o_s_t
+       as well.
+
+       tteellnneettdd(8)  sets  up  a  LLOOGGIINN__PPRROOCCEESSSS entry and leaves the rest to lloo‐‐
+       ggiinn(1) as usual.  After the telnet session ends, tteellnneettdd(8)  cleans  up
+       utmp in the described way.
+
+       The  _w_t_m_p  file  records all logins and logouts.  Its format is exactly
+       like _u_t_m_p except that a null username indicates a logout on the associ‐
+       ated terminal.  Furthermore, the terminal name ~~ with username sshhuuttddoowwnn
+       or rreebboooott indicates a system shutdown or reboot and the pair of  termi‐
+       nal  names  ||/}}  logs  the old/new system time when ddaattee(1) changes it.
+       _w_t_m_p is maintained by llooggiinn(1), iinniitt(1), and some versions of  ggeettttyy(8)
+       (e.g.,  mmiinnggeettttyy(8)  or aaggeettttyy(8)).  None of these programs creates the
+       file, so if it is removed, record‐keeping is turned off.
+
+FFIILLEESS
+       _/_v_a_r_/_r_u_n_/_u_t_m_p
+       _/_v_a_r_/_l_o_g_/_w_t_m_p
+
+VVEERRSSIIOONNSS
+       POSIX.1 does not specify a _u_t_m_p structure, but rather one  named  _u_t_m_p_x
+       (as  part  of  the  XSI  extension), with specifications for the fields
+       _u_t___t_y_p_e, _u_t___p_i_d, _u_t___l_i_n_e, _u_t___i_d, _u_t___u_s_e_r, and _u_t___t_v.  POSIX.1 does  not
+       specify the lengths of the _u_t___l_i_n_e and _u_t___u_s_e_r fields.
+
+       Linux defines the _u_t_m_p_x structure to be the same as the _u_t_m_p structure.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux  utmp entries conform neither to v7/BSD nor to System V; they are
+       a mix of the two.
+
+       v7/BSD has fewer fields;  most  importantly  it  lacks  _u_t___t_y_p_e,  which
+       causes native v7/BSD‐like programs to display (for example) dead or lo‐
+       gin  entries.   Further, there is no configuration file which allocates
+       slots to sessions.  BSD does so because it lacks _u_t___i_d fields.
+
+       In Linux (as in System V), the _u_t___i_d  field  of  a  record  will  never
+       change once it has been set, which reserves that slot without needing a
+       configuration file.  Clearing _u_t___i_d may result in race conditions lead‐
+       ing  to  corrupted utmp entries and potential security holes.  Clearing
+       the abovementioned fields by filling them with null bytes  is  not  re‐
+       quired  by  System  V semantics, but makes it possible to run many pro‐
+       grams which assume BSD semantics and which do not modify  utmp.   Linux
+       uses the BSD conventions for line contents, as documented above.
+
+       System V has no _u_t___h_o_s_t or _u_t___a_d_d_r___v_6 fields.
+
+NNOOTTEESS
+       Unlike various other systems, where utmp logging can be disabled by re‐
+       moving  the file, utmp must always exist on Linux.  If you want to dis‐
+       able wwhhoo(1), then do not make utmp world readable.
+
+       The file format is machine‐dependent, so it is recommended that  it  be
+       processed only on the machine architecture where it was created.
+
+       Note  that  on  _b_i_a_r_c_h  platforms,  that is, systems which can run both
+       32‐bit and 64‐bit applications (x86‐64, ppc64, s390x, etc.),  _u_t___t_v  is
+       the  same  size  in  32‐bit  mode as in 64‐bit mode.  The same goes for
+       _u_t___s_e_s_s_i_o_n and _u_t___t_i_m_e if they are present.  This allows data files and
+       shared memory to be shared  between  32‐bit  and  64‐bit  applications.
+       This  is  achieved  by  changing the type of _u_t___s_e_s_s_i_o_n to _i_n_t_3_2___t, and
+       that of _u_t___t_v to a struct with two _i_n_t_3_2___t fields _t_v___s_e_c  and  _t_v___u_s_e_c.
+       Since  _u_t___t_v may not be the same as _s_t_r_u_c_t _t_i_m_e_v_a_l, then instead of the
+       call:
+
+           gettimeofday((struct timeval *) &ut.ut_tv, NULL);
+
+       the following method of setting this field is recommended:
+
+           struct utmp ut;
+           struct timeval tv;
+
+           gettimeofday(&tv, NULL);
+           ut.ut_tv.tv_sec = tv.tv_sec;
+           ut.ut_tv.tv_usec = tv.tv_usec;
+
+SSEEEE AALLSSOO
+       aacc(1), ddaattee(1), iinniitt(1), llaasstt(1),  llooggiinn(1),  llooggnnaammee(1),  llssllooggiinnss(1),
+       uusseerrss(1),  uuttmmppdduummpp(1),  wwhhoo(1), ggeettuutteenntt(3), ggeettuuttmmpp(3), llooggiinn(3), lloo‐‐
+       ggoouutt(3), llooggwwttmmpp(3), uuppddwwttmmpp(3)
+
+Linux man‐pages (unreleased)      2025‐09‐21                           _u_t_m_p(5)

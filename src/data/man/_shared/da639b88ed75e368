@@ -1,0 +1,107 @@
+The  device  driver  supports certain processor features that are
+either only available via or that require to  function  properly.
+Typically  the  processor functionality is grouped into so‐called
+C‐, P‐, and T‐states.  The processor power states,  or  C‐states,
+are  low‐power modes that can be used when the is idle.  The idea
+is not new: already in the processor a specific  instruction  was
+used  for  this purpose.  This was later accompanied by a pair of
+other instructions By default, may use either one; see the  vari‐
+able.  provides the latest amendment.  The following C‐states are
+typically  available.   Additional  processor  or vendor specific
+states (C4, ..., Cn) are handled internally by This is the normal
+state of a processor; the is busy executing  instructions.   This
+is the state that is typically reached via the mentioned instruc‐
+tions.   On  a  typical  processor,  turns  off the main internal
+clock, leaving running at full speed.  The is free to temporarily
+leave the state to deal with important requests.  The  main  dif‐
+ference between and lies in the internal hardware entry method of
+the  processor.  While less power is expected to be consumed than
+in the bus interface unit is still running.  But depending on the
+processor, the local timer may be stopped.   Like  with  entering
+and  exiting  the state are expected to be fast operations.  This
+is the deepest conventional state.  Parts  of  the  are  actively
+powered down.  The internal clock is stopped.  The local timer is
+stopped.   Depending  on the processor, additional timers such as
+may be stopped.  Processor caches may be flushed.  Entry and exit
+latencies are expected to be high; the can no longer  respond  to
+bus  activity  or  other interruptions.  Each state has a latency
+associated with entry and exit.  The higher the state, the  lower
+the  power  consumption, and the higher the potential performance
+costs.  The driver tries to balance the latency constraints  when
+choosing  the  appropriate state.  One of the checks involves bus
+master activity; if such activity is detected, a lower  state  is
+used.  It is known that particularly may cause high activity even
+when  not in use.  If maximum power savings are desirable, it may
+be necessary to use a custom kernel without support.  And  gener‐
+ally: to save power with C‐states, one should avoid polling, both
+in userland and in the kernel.  The processor performance states,
+or  P‐states, are used to control the clock frequencies and volt‐
+ages of a Underneath the abstractions of P‐states are  associated
+with  such technologies as and The P0‐state is always the highest
+operating frequency supported by the processor.   The  number  of
+additional P‐states may vary across processors and vendors.  Each
+higher  numbered  P‐state  represents lower clock frequencies and
+hence lower power consumption.  Note that while always  uses  the
+exact frequencies internally, the user‐visible values reported by
+may  be  rounded  or  approximated by the vendor.  Unlike conven‐
+tional frequency management, provides support for Dynamic Voltage
+and Frequency Scaling Among other things,  this  means  that  the
+firmware  may request the implementation to dynamically scale the
+presently supported maximum or minimum clock frequency.  For  ex‐
+ample, if is disconnected, the maximum available frequency may be
+lowered.   By default, the implementation may manipulate the fre‐
+quencies  according  to  the  notifications  from  the  firmware.
+Processor  T‐states, or can be used to actively modulate the time
+a processor is allowed to  execute.   Outside  the  nomenclature,
+throttling  and  T‐states may be known as The concept of is rele‐
+vant to T‐states.  It is generally defined to be  a  fraction  of
+time  that  a  system  is in an state.  The T0‐state has always a
+duty cycle of 100 %, and thus, comparable to  the  C0‐state,  the
+processor  is  fully  active.  Each additional higher‐numbered T‐
+state indicates lower duty cycles.  At most eight T‐states may be
+available, although also T‐states use The duty cycle does not re‐
+fer to the actual clock signal, but to the time period  in  which
+the clock signal is allowed to drive the processor chip.  For in‐
+stance,  if  a  T‐state has a duty cycle of 75 %, the runs at the
+same clock frequency and uses the same voltage, but 25 %  of  the
+time the is forced to idle.  Because of this, the use of T‐states
+may  severely  affect  system performance.  There are two typical
+situations for throttling: power management and thermal  control.
+As  a  technique  to save power, T‐states are largely an artifact
+from the past.  There was a short period in the x86 lineage  when
+P‐states  were not yet available and throttling was considered as
+an option to modulate the processor power consumption.   The  ap‐
+proach  was  however quickly abandoned.  In modern x86 systems P‐
+states should be preferred in all circumstances.  It is also more
+beneficial to move from the C0‐state to deeper C‐states  than  it
+is  to actively force down the duty cycle of a processor.  But T‐
+states have retained their use as a last line of defense  against
+critical thermal conditions.  Many x86 processors include a cata‐
+strophic  shutdown detector.  When the processor core temperature
+reaches this factory defined trip‐point, the processor  execution
+is halted without any software control.  Before this fatal condi‐
+tion, it is possible to use throttling for a short period of time
+in  order to force the temperatures to lower levels.  The thermal
+control modulation is typically started only when the  system  is
+in the highest‐power P‐state and a high temperature situation ex‐
+ists.   After the temperatures have returned to non‐critical lev‐
+els, the modulation ceases.  The driver uses  the  same  controls
+for  P‐states as the ones provided by and Please note that future
+versions of may however remove  these  system  control  variables
+without further notice.  In addition, the following two variables
+are  available.   A  boolean that controls whether the states are
+allowed to change dynamically.  When  enabled,  C‐,  P‐,  and  T‐
+states may all change at runtime, and may also take actions based
+on  requests  from  the firmware.  A boolean that enables or dis‐
+ables automatic processor thermal management via The driver  uses
+event counters to track the times a processor has entered a given
+state.   It is possible to view the statistics by using (with the
+flag).  The device driver appeared  in  At  least  the  following
+caveats  can  be  mentioned.  It is currently only safe to use on
+All other C‐states are disabled by  default.   Processor  thermal
+control  (see  is not yet supported.  Depending on the processor,
+changes in C‐, P‐, and T‐states may all skew timers and  counters
+such  as  This is neither handled by nor by or There is currently
+neither a well‐defined, machine‐independent for processor perfor‐
+mance management nor a for different policies.  It is only possi‐
+ble to control the frequencies from userland.

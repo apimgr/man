@@ -1,0 +1,176 @@
+ADS111x(4)               BSD Kernel Interfaces Manual               ADS111x(4)
+
+NNAAMMEE
+     aaddss111111xx — driver for ADS101x and ADS111x i2c analog to digital converters
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee aaddss111111xx
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           ads111x_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The aaddss111111xx driver provides support for the ADS101x/ADS111x family of
+     analog to digital converter (ADC) devices.  The supported devices are all
+     similar to each other, varying in features such as resolution and number
+     of input channels.  The devices offer a number of configuration options
+     which can be set via hints, FDT data, and sysctl(8).
+
+     The sysctl(8) utility provides access to the voltage measurements made by
+     the device.  Each time the _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._v_o_l_t_a_g_e variable
+     is accessed for a given channel, the driver switches the chip's internal
+     mux to choose the right input pins for that channel, directs it to make a
+     single measurement, and returns the measured value in microvolts.  The
+     amount of time required to make the measurement is a function of the sam‐
+     pling rate configured for the device.  While device is directed to make a
+     single measurement, it still averages the input values for the same
+     amount of time as it would to emit one sample if it were in continuous
+     mode.  For example, if the sample rate were configured as 125 samples per
+     second, a single measurement would require 8 milliseconds.
+
+     For devices that support multiple input pins, the device datasheet de‐
+     scribes mux settings to control how those pins are interpeted when making
+     either single-ended or differential measurements.  There are eight possi‐
+     ble ways to combine the inputs from the four pins.  The aaddss111111xx driver
+     models that by creating a separate output channel for each of the eight
+     combinations.  To make a measurement on a given pin or pair of pins, you
+     simply access the voltage variable for the channel number that corre‐
+     sponds the mux setting number (0 through 7) shown in the datasheet.  When
+     the driver is configured with hints or FDT data, it creates sysctl vari‐
+     ables for just the channels specified in the config data.  When there is
+     no channel config data, it creates all eight possible channels so that
+     you can access whichever one(s) you need.
+
+     For devices that include an _a_l_e_r_t output pin, the aaddss111111xx driver does not
+     directly support the pin in terms of sensing or acting on changes in the
+     pin state.  However, you may connect the pin to a gpio input or fan con‐
+     troller or other external device, and use the driver's sysctl variables
+     to configure behavior and threshold values for the pin.  The driver
+     avoids perturbing your settings as it does other manipulations to the
+     config register.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     Sysctl variables are used to access the voltage measurements, and to
+     change the configuration of the channels.  All writeable variables may
+     also be set as loader(8) tunables.  Channel numbers in these sysctl vari‐
+     ables range from 0 through 7.
+
+     _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._c_o_n_f_i_g
+             Provides access to the configuration register bits that control
+             the alert pin configuration.  Other bits which are controlled by
+             the driver are masked out, and cannot be viewed or changed using
+             this variable.
+
+     _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._l_o___t_h_r_e_s_h
+             Sets the low threshold for activating the alert pin.
+
+     _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._h_i___t_h_r_e_s_h
+             Sets the high threshold for activating the alert pin.
+
+     _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._r_a_t_e___i_n_d_e_x
+             Sets the sample rate for the channel.  The device datasheet docu‐
+             ments eight available sample rates, chosen by setting a value of
+             0 through 7 into the corresponding control register bits.  This
+             variable sets the value used for those bits when making a mea‐
+             surement on the given channel.
+
+             Because measurements are always made in single-shot mode, think
+             of this variable as controlling the averaging time for a single
+             sample; the time to make a measurement is 1 / samplerate.
+
+     _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._g_a_i_n___i_n_d_e_x
+             Sets the programmable gain amplifier for the channel on devices
+             which have an internal amplifier.  The device datasheet documents
+             eight available gain values, chosen by setting a value of 0
+             through 7 into the corresponding control register bits.  This
+             variable sets the value used for those bits when making a mea‐
+             surement on the given channel.
+
+     _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._v_o_l_t_a_g_e
+             Reading this variable causes the device to make a measurement on
+             the corresponding input pin(s) and return the voltage in micro‐
+             volts.
+
+             Note that this variable does not appear when you list multiple
+             sysctl variables -- you must access it specifically by name, be‐
+             cause accessing it triggers device I/O.
+
+HHAARRDDWWAARREE
+     The aaddss111111xx driver provides support for the following devices:
+
+           ADS1013     ADS1113
+           ADS1014     ADS1114
+           ADS1015     ADS1115
+
+FFDDTT CCOONNFFIIGGUURRAATTIIOONN
+     On an fdt(4) based system, the aaddss111111xx device is defined as a slave de‐
+     vice subnode of the i2c bus controller node.  All properties documented
+     in the _a_d_s_1_0_1_5_._t_x_t bindings document can be used with the aaddss111111xx device.
+
+     The following properties are required in the aaddss111111xx device subnode:
+
+     _c_o_m_p_a_t_i_b_l_e
+             One of the following:
+                   “ti,ads1013     “ti,ads1113””
+                   “ti,ads1014     “ti,ads1114””
+                   “ti,ads1015     “ti,ads1115””
+
+     _r_e_g     I2c slave address of device.
+
+     Specific channels can be configured by adding child nodes to the aaddss111111xx
+     node, as described in the standard ads1015.txt bindings document.  If no
+     channels are configured, sysctl variables will be created for all possi‐
+     ble channels supported by the device type, otherwise only the specified
+     channels are created.
+
+   EExxaammppllee iinncclluuddiinngg cchhaannnneell ccoonnffiigguurraattiioonn
+           adc@48 {
+               compatible = "ti,ads1115";
+               reg = <0x48>;
+               status = "okay";
+               #address-cells = <1>;
+               #size-cells = <0>;
+
+               channel@6 {
+                   reg = <6>;
+                   ti,gain = <3>;
+                   ti,datarate = <4>;
+               };
+               channel@7 {
+                   reg = <7>;
+                   ti,gain = <1>;
+                   ti,datarate = <7>;
+               };
+           };
+
+HHIINNTTSS CCOONNFFIIGGUURRAATTIIOONN
+     On a device.hints(5) based system, such as MIPS, these values are config‐
+     urable for aaddss111111xx:
+
+     _h_i_n_t_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._a_t
+             The iicbus instance the aaddss111111xx instance is attached to.
+
+     _h_i_n_t_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._g_a_i_n___i_n_d_e_x
+             The amplifier gain, as described above for the sysctl variable
+             _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._g_a_i_n___i_n_d_e_x.
+
+     _h_i_n_t_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._r_a_t_e___i_n_d_e_x
+             The sample rate, as described above for the sysctl variable
+             _d_e_v_._a_d_s_1_1_1_x_._<_u_n_i_t_>_._<_c_h_a_n_n_e_l_>_._r_a_t_e___i_n_d_e_x.
+
+     If no channels are configured, sysctl variables will be created for all
+     possible channels supported by the device type, otherwise only the speci‐
+     fied channels are created.
+
+SSEEEE AALLSSOO
+     fdt(4), sysctl(8)
+
+HHIISSTTOORRYY
+     The aaddss111111xx driver first appeared in FreeBSD 13.0.
+
+BSD                            September 2, 2019                           BSD

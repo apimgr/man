@@ -1,0 +1,253 @@
+FS(5)                       BSD File Formats Manual                      FS(5)
+
+NNAAMMEE
+     ffss, iinnooddee — format of file system volume
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<uuffss//ffffss//ffss..hh>>
+     ##iinncclluuddee <<uuffss//uuffss//iinnooddee..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The files <_u_f_s_/_f_f_s_/_f_s_._h> and <_u_f_s_/_u_f_s_/_i_n_o_d_e_._h> declare several structures
+     and define variables and macros which are used to create and manage the
+     underlying format of file system objects on random access devices
+     (disks).
+
+     The block size and number of blocks which comprise a file system are pa‐
+     rameters of the file system.  Sectors beginning at BBLOCK and continuing
+     for BBSIZE are used for a disklabel and for some hardware primary and
+     secondary bootstrapping programs.
+
+     The actual file system begins at sector SBLOCK with the _s_u_p_e_r_-_b_l_o_c_k that
+     is of size SBSIZE.  The following structure describes the super-block and
+     is from the file <_u_f_s_/_f_f_s_/_f_s_._h>:
+
+     #define FS_MAGIC 0x011954
+     struct fs {
+             int32_t  fs_firstfield; /* historic file system linked list, */
+             int32_t  fs_unused_1;   /*     used for incore super blocks */
+             int32_t  fs_sblkno;     /* addr of super-block / frags */
+             int32_t  fs_cblkno;     /* offset of cyl-block / frags */
+             int32_t  fs_iblkno;     /* offset of inode-blocks / frags */
+             int32_t  fs_dblkno;     /* offset of first data / frags */
+             int32_t  fs_cgoffset;   /* cylinder group offset in cylinder */
+             int32_t  fs_cgmask;     /* used to calc mod fs_ntrak */
+             int32_t  fs_ffs1_time;  /* last time written */
+             int32_t  fs_ffs1_size;  /* # of blocks in fs / frags */
+             int32_t  fs_ffs1_dsize; /* # of data blocks in fs */
+             int32_t  fs_ncg;        /* # of cylinder groups */
+             int32_t  fs_bsize;      /* size of basic blocks / bytes */
+             int32_t  fs_fsize;      /* size of frag blocks / bytes */
+             int32_t  fs_frag;       /* # of frags in a block in fs */
+     /* these are configuration parameters */
+             int32_t  fs_minfree;    /* minimum percentage of free blocks */
+             int32_t  fs_rotdelay;   /* # of ms for optimal next block */
+             int32_t  fs_rps;        /* disk revolutions per second */
+     /* these fields can be computed from the others */
+             int32_t  fs_bmask;      /* ``blkoff'' calc of blk offsets */
+             int32_t  fs_fmask;      /* ``fragoff'' calc of frag offsets */
+             int32_t  fs_bshift;     /* ``lblkno'' calc of logical blkno */
+             int32_t  fs_fshift;     /* ``numfrags'' calc # of frags */
+     /* these are configuration parameters */
+             int32_t  fs_maxcontig;  /* max # of contiguous blks */
+             int32_t  fs_maxbpg;     /* max # of blks per cyl group */
+     /* these fields can be computed from the others */
+             int32_t  fs_fragshift;  /* block to frag shift */
+             int32_t  fs_fsbtodb;    /* fsbtodb and dbtofsb shift constant */
+             int32_t  fs_sbsize;     /* actual size of super block */
+             int32_t  fs_csmask;     /* csum block offset (now unused) */
+             int32_t  fs_csshift;    /* csum block number (now unused) */
+             int32_t  fs_nindir;     /* value of NINDIR */
+             int32_t  fs_inopb;      /* inodes per file system block */
+             int32_t  fs_nspf;       /* DEV_BSIZE sectors per frag */
+     /* yet another configuration parameter */
+             int32_t  fs_optim;      /* optimization preference, see below */
+     /* these fields are derived from the hardware */
+             int32_t  fs_npsect;     /* DEV_BSIZE sectors/track + spares */
+             int32_t  fs_interleave; /* DEV_BSIZE sector interleave */
+             int32_t  fs_trackskew;  /* sector 0 skew, per track */
+     /* fs_id takes the space of unused fs_headswitch and fs_trkseek fields */
+             int32_t  fs_id[2];      /* unique filesystem id */
+     /* sizes determined by number of cylinder groups and their sizes */
+             int32_t  fs_ffs1_csaddr; /* blk addr of cyl grp summary area */
+             int32_t  fs_cssize;     /* cyl grp summary area size / bytes */
+             int32_t  fs_cgsize;     /* cyl grp block size / bytes */
+     /* these fields are derived from the hardware */
+             int32_t  fs_ntrak;      /* tracks per cylinder */
+             int32_t  fs_nsect;      /* DEV_BSIZE sectors per track */
+             int32_t  fs_spc;        /* DEV_BSIZE sectors per cylinder */
+     /* this comes from the disk driver partitioning */
+             int32_t  fs_ncyl;       /* cylinders in file system */
+     /* these fields can be computed from the others */
+             int32_t  fs_cpg;        /* cylinders per group */
+             int32_t  fs_ipg;        /* inodes per group */
+             int32_t  fs_fpg;        /* blocks per group * fs_frag */
+     /* this data must be re-computed after crashes */
+             struct  csum fs_ffs1_cstotal; /* cylinder summary information */
+     /* these fields are cleared at mount time */
+             int8_t   fs_fmod;       /* super block modified flag */
+             int8_t   fs_clean;      /* file system is clean flag */
+             int8_t   fs_ronly;      /* mounted read-only flag */
+             int8_t   fs_ffs1_flags; /* see FS_ below */
+             u_char   fs_fsmnt[MAXMNTLEN]; /* name mounted on */
+             u_char   fs_volname[MAXVOLLEN]; /* volume name */
+             u_int64_t fs_swuid;     /* system-wide uid */
+             int32_t  fs_pad;        /* due to alignment of fs_swuid */
+     /* these fields retain the current block allocation info */
+             int32_t  fs_cgrotor;     /* last cg searched */
+             void    *fs_ocsp[NOCSPTRS]; /* padding; was list of fs_cs bufs */
+             u_int8_t *fs_contigdirs; /* # of contiguously allocated dirs */
+             struct csum *fs_csp;     /* cg summary info buffer for fs_cs */
+             int32_t *fs_maxcluster;  /* max cluster in each cyl group */
+             u_char  *fs_active;      /* reserved for snapshots */
+             int32_t  fs_cpc;         /* cyl per cycle in postbl */
+     /* this area is only allocated if fs_ffs1_flags & FS_FLAGS_UPDATED */
+             int32_t  fs_maxbsize;   /* maximum blocking factor permitted */
+             int64_t  fs_spareconf64[17]; /* old rotation block list head */
+             int64_t  fs_sblockloc;  /* offset of standard super block */
+             struct csum_total fs_cstotal; /* cylinder summary information */
+             int64_t  fs_time;       /* time last written */
+             int64_t  fs_size;       /* number of blocks in fs */
+             int64_t  fs_dsize;      /* number of data blocks in fs */
+             int64_t  fs_csaddr;     /* blk addr of cyl grp summary area */
+             int64_t  fs_pendingblocks; /* blocks in process of being freed */
+             int32_t  fs_pendinginodes; /* inodes in process of being freed */
+             int32_t  fs_snapinum[FSMAXSNAP];/* space reserved for snapshots */
+     /* back to stuff that has been around a while */
+             int32_t  fs_avgfilesize; /* expected average file size */
+             int32_t  fs_avgfpdir;    /* expected # of files per directory */
+             int32_t  fs_sparecon[26];/* reserved for future constants */
+             u_int32_t fs_flags;     /* see FS_ flags below */
+             int32_t  fs_fscktime;    /* last time fsck(8)ed */
+             int32_t  fs_contigsumsize; /* size of cluster summary array */
+             int32_t  fs_maxsymlinklen; /* max length of an internal symlink */
+             int32_t  fs_inodefmt;    /* format of on-disk inodes */
+             u_int64_t fs_maxfilesize;/* maximum representable file size */
+             int64_t  fs_qbmask;      /* ~fs_bmask - for use with quad size */
+             int64_t  fs_qfmask;      /* ~fs_fmask - for use with quad size */
+             int32_t  fs_state;       /* validate fs_clean field */
+             int32_t  fs_postblformat;/* format of positional layout tables */
+             int32_t  fs_nrpos;       /* number of rotational positions */
+             int32_t  fs_postbloff;   /* (u_int16) rotation block list head */
+             int32_t  fs_rotbloff;    /* (u_int8) blocks for each rotation */
+             int32_t  fs_magic;       /* magic number */
+             u_int8_t fs_space[1];    /* list of blocks for each rotation */
+     /* actually longer */
+     };
+
+     Each disk drive contains some number of file systems.  A file system con‐
+     sists of a number of cylinder groups.  Each cylinder group has inodes and
+     data.
+
+     A file system is described by its super-block, which in turn describes
+     the cylinder groups.  The super-block is critical data and is replicated
+     in each cylinder group to protect against catastrophic loss.  This is
+     done at file system creation time and the critical super-block data does
+     not change, so the copies need not be referenced further unless disaster
+     strikes.
+
+     Addresses stored in inodes are capable of addressing fragments of
+     “blocks”.  File system blocks of at most size MAXBSIZE can be optionally
+     broken into 2, 4, or 8 pieces, each of which is addressable; these pieces
+     may be DEV_BSIZE, or some multiple of a DEV_BSIZE unit.
+
+     Large files consist of exclusively large data blocks.  To avoid undue
+     wasted disk space, the last data block of a small file is allocated only
+     as many fragments of a large block as are necessary.  The file system
+     format retains only a single pointer to such a fragment, which is a piece
+     of a single large block that has been divided.  The size of such a frag‐
+     ment is determinable from information in the inode, using the bbllkkssiizzee(_f_s,
+     _i_p, _l_b_n) macro.
+
+     The file system records space availability at the fragment level; to de‐
+     termine block availability, aligned fragments are examined.
+
+     The root inode is the root of the file system.  Inode 0 can't be used for
+     normal purposes and historically bad blocks were linked to inode 1 (inode
+     1 is no longer used for this purpose; however, numerous dump tapes make
+     this assumption, so we are stuck with it).  Thus the root inode is 2.
+
+     The _f_s___m_i_n_f_r_e_e element gives the minimum acceptable percentage of file
+     system blocks that may be free.  If the freelist drops below this level,
+     only the superuser may continue to allocate blocks.  The _f_s___m_i_n_f_r_e_e ele‐
+     ment may be set to 0 if no reserve of free blocks is deemed necessary,
+     although severe performance degradations will be observed if the file
+     system is run at greater than 95% full; thus the default value of
+     _f_s___m_i_n_f_r_e_e is 5%.
+
+     Empirically the best trade-off between block fragmentation and overall
+     disk utilization at a loading of 95% comes with a fragmentation of 8;
+     thus the default fragment size is an eighth of the block size.
+
+     The element _f_s___o_p_t_i_m specifies whether the file system should try to min‐
+     imize the time spent allocating blocks (FS_OPTTIME), or if it should at‐
+     tempt to minimize the space fragmentation on the disk (FS_OPTSPACE).  If
+     the value of _f_s___m_i_n_f_r_e_e (see above) is less than 5%, then the file system
+     defaults to optimizing for space to avoid running out of full sized
+     blocks.  If the value of _f_s___m_i_n_f_r_e_e is greater than or equal to 5%, frag‐
+     mentation is unlikely to be problematical, and the file system defaults
+     to optimizing for time.
+
+     The _f_s___f_l_a_g_s element specifies how the filesystem was mounted:
+
+        FS_UNCLEAN  The filesystem was mounted uncleanly.
+
+   CCyylliinnddeerr ggrroouupp rreellaatteedd lliimmiittss
+     Each cylinder keeps track of the availability of blocks at different ro‐
+     tational positions, so that sequential blocks can be laid out with mini‐
+     mum rotational latency.  With the default of 1 distinct rotational posi‐
+     tion, the resolution of the summary information is 16ms for a typical
+     3600 RPM drive.
+
+     The element _f_s___r_o_t_d_e_l_a_y was once used to tweak block layout.
+
+     Each file system has a statically allocated number of inodes, determined
+     by its size and the desired number of file data bytes per inode at the
+     time it was created.  See newfs(8) for details on how to set this (and
+     other) filesystem parameters.  By default, the inode allocation strategy
+     is extremely conservative.
+
+     MINBSIZE is the smallest allowable block size.  With a MINBSIZE of 4096
+     it is possible to create files of size 2^32 with only two levels of indi‐
+     rection.  MINBSIZE must be big enough to hold a cylinder group block,
+     thus changes to _s_t_r_u_c_t _c_g must keep its size within MINBSIZE.  Note that
+     super-blocks are never more than size SBSIZE.
+
+     The path name on which the file system is mounted is maintained in
+     _f_s___f_s_m_n_t.  MAXMNTLEN defines the amount of space allocated in the super-
+     block for this name.
+
+     Per cylinder group information is summarized in blocks allocated from the
+     first cylinder group's data blocks.  These blocks are read in from
+     _f_s___c_s_a_d_d_r (of size _f_s___c_s_s_i_z_e) in addition to the super-block.
+
+     Note that ssiizzeeooff(_s_t_r_u_c_t _c_s_u_m) must be a power of two in order for the
+     ffss__ccss() macro to work.
+
+   SSuuppeerr--bblloocckk ffoorr aa ffiillee ssyysstteemm
+     The size of the rotational layout tables is limited by the fact that the
+     super-block is of size SBSIZE.  The size of these tables is inversely
+     proportional to the block size of the file system.  The size of the ta‐
+     bles is increased when sector sizes are not powers of two, as this in‐
+     creases the number of cylinders included before the rotational pattern
+     repeats (_f_s___c_p_c).  The size of the rotational layout tables is derived
+     from the number of bytes remaining in _s_t_r_u_c_t _f_s.
+
+     The number of blocks of data per cylinder group is limited because cylin‐
+     der groups are at most one block.  The inode and free block tables must
+     fit into a single block after deducting space for the cylinder group
+     structure _s_t_r_u_c_t _c_g.
+
+   IInnooddeess
+     The _i_n_o_d_e is the focus of all file activity in the UNIX file system.
+     There is a unique inode allocated for each active file, each current di‐
+     rectory, each mounted-on file, text file, and the root.  An inode is
+     “named” by its device/i-number pair.  For further information, see the
+     include file <_u_f_s_/_u_f_s_/_i_n_o_d_e_._h>.
+
+HHIISSTTOORRYY
+     A super-block structure named _f_i_l_s_y_s appeared in Version 6 AT&T UNIX.
+     The file system described in this manual appeared in 4.2BSD.
+
+BSD                            February 3, 2024                            BSD

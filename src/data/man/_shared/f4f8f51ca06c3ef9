@@ -1,0 +1,361 @@
+_m_e_m_b_a_r_r_i_e_r(2)                 System Calls Manual                _m_e_m_b_a_r_r_i_e_r(2)
+
+NNAAMMEE
+       membarrier - issue memory barriers on a set of threads
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<lliinnuuxx//mmeemmbbaarrrriieerr..hh>> /* Definition of MMEEMMBBAARRRRIIEERR__** constants */
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       iinntt ssyyssccaallll((SSYYSS__mmeemmbbaarrrriieerr,, iinntt _c_m_d,, uunnssiiggnneedd iinntt _f_l_a_g_s,, iinntt _c_p_u___i_d));;
+
+       _N_o_t_e: glibc provides no wrapper for mmeemmbbaarrrriieerr(), necessitating the use
+       of ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       The  mmeemmbbaarrrriieerr() system call helps reducing the overhead of the memory
+       barrier instructions required to order memory  accesses  on  multi‐core
+       systems.   However,  this system call is heavier than a memory barrier,
+       so using it effectively is _n_o_t as simple as replacing  memory  barriers
+       with this system call, but requires understanding of the details below.
+
+       Use of memory barriers needs to be done taking into account that a mem‐
+       ory  barrier  always needs to be either matched with its memory barrier
+       counterparts, or that the architecture’s memory model  doesn’t  require
+       the matching barriers.
+
+       There  are cases where one side of the matching barriers (which we will
+       refer to as "fast side") is executed much more  often  than  the  other
+       (which  we  will  refer to as "slow side").  This is a prime target for
+       the use of mmeemmbbaarrrriieerr().  The key idea is to replace, for these  match‐
+       ing  barriers,  the fast‐side memory barriers by simple compiler barri‐
+       ers, for example:
+
+           asm volatile ("" : : : "memory")
+
+       and replace the slow‐side memory barriers by calls to mmeemmbbaarrrriieerr().
+
+       This will add overhead to the slow side, and remove overhead  from  the
+       fast side, thus resulting in an overall performance increase as long as
+       the  slow  side  is  infrequent enough that the overhead of the mmeemmbbaarr‐‐
+       rriieerr() calls does not outweigh the performance gain on the fast side.
+
+       The _c_m_d argument is one of the following:
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__QQUUEERRYY (since Linux 4.3)
+              Query the set of supported commands.  The return  value  of  the
+              call is a bit mask of supported commands.  MMEEMMBBAARRRRIIEERR__CCMMDD__QQUUEERRYY,
+              which  has the value 0, is not itself included in this bit mask.
+              This command is always supported (on kernels where  mmeemmbbaarrrriieerr()
+              is provided).
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__GGLLOOBBAALL (since Linux 4.16)
+              Ensure  that  all  threads from all processes on the system pass
+              through a state where all  memory  accesses  to  user‐space  ad‐
+              dresses match program order between entry to and return from the
+              mmeemmbbaarrrriieerr()  system  call.   All threads on the system are tar‐
+              geted by this command.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD (since Linux 4.16)
+              Execute a memory barrier on all running threads of all processes
+              that   previously    registered    with    MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISS‐‐
+              TTEERR__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD.
+
+              Upon return from the system call, the calling thread has a guar‐
+              antee that all running threads have passed through a state where
+              all  memory accesses to user‐space addresses match program order
+              between entry to and return from the  system  call  (non‐running
+              threads  are  de facto in such a state).  This guarantee is pro‐
+              vided only for the threads of processes that  previously  regis‐
+              tered with MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD.
+
+              Given  that registration is about the intent to receive the bar‐
+              riers, it is  valid  to  invoke  MMEEMMBBAARRRRIIEERR__CCMMDD__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD
+              from  a  process  that  has  not  employed MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISS‐‐
+              TTEERR__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD.
+
+              The "expedited" commands complete faster than the  non‐expedited
+              ones;  they  never block, but have the downside of causing extra
+              overhead.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD (since Linux 4.16)
+              Register   the   process’s    intent    to    receive    MMEEMMBBAARR‐‐
+              RRIIEERR__CCMMDD__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD memory barriers.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD (since Linux 4.14)
+              Execute a memory barrier on each running thread belonging to the
+              same process as the calling thread.
+
+              Upon return from the system call, the calling thread has a guar‐
+              antee that all its running thread siblings have passed through a
+              state  where  all  memory accesses to user‐space addresses match
+              program order between entry to and return from the  system  call
+              (non‐running  threads are de facto in such a state).  This guar‐
+              antee is provided only for threads in the same  process  as  the
+              calling thread.
+
+              The  "expedited" commands complete faster than the non‐expedited
+              ones; they never block, but have the downside of  causing  extra
+              overhead.
+
+              A  process must register its intent to use the private expedited
+              command prior to using it.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD (since Linux 4.14)
+              Register the process’s intent to use  MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXX‐‐
+              PPEEDDIITTEEDD.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__SSYYNNCC__CCOORREE (since Linux 4.16)
+              In  addition  to  providing  the  memory ordering guarantees de‐
+              scribed in MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD,  upon  return  from
+              system call the calling thread has a guarantee that all its run‐
+              ning  thread  siblings have executed a core serializing instruc‐
+              tion.  This guarantee is provided only for threads in  the  same
+              process as the calling thread.
+
+              The  "expedited" commands complete faster than the non‐expedited
+              ones, they never block, but have the downside of  causing  extra
+              overhead.
+
+              A  process must register its intent to use the private expedited
+              sync core command prior to using it.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__SSYYNNCC__CCOORREE (since Linux 4.16)
+              Register the process’s intent to use  MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXX‐‐
+              PPEEDDIITTEEDD__SSYYNNCC__CCOORREE.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__RRSSEEQQ (since Linux 5.10)
+              Ensure the caller thread, upon return from system call, that all
+              its  running  thread  siblings  have  any currently running rseq
+              critical sections restarted if _f_l_a_g_s parameter is  0;  if  _f_l_a_g_s
+              parameter  is  MMEEMMBBAARRRRIIEERR__CCMMDD__FFLLAAGG__CCPPUU,  then  this operation is
+              performed only on CPU indicated by _c_p_u___i_d.   This  guarantee  is
+              provided  only  for  threads  in the same process as the calling
+              thread.
+
+              RSEQ membarrier is only available  in  the  "private  expedited"
+              form.
+
+              A  process must register its intent to use the private expedited
+              rseq command prior to using it.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__RRSSEEQQ (since Linux 5.10)
+              Register the process’s intent to use  MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXX‐‐
+              PPEEDDIITTEEDD__RRSSEEQQ.
+
+       MMEEMMBBAARRRRIIEERR__CCMMDD__SSHHAARREEDD (since Linux 4.3)
+              This  is  an  alias  for  MMEEMMBBAARRRRIIEERR__CCMMDD__GGLLOOBBAALL  that exists for
+              header backward compatibility.
+
+       The _f_l_a_g_s argument must be specified as 0 unless the command is MMEEMMBBAARR‐‐
+       RRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__RRSSEEQQ, in which case _f_l_a_g_s can be either 0 or
+       MMEEMMBBAARRRRIIEERR__CCMMDD__FFLLAAGG__CCPPUU.
+
+       The _c_p_u___i_d argument is ignored unless _f_l_a_g_s is MMEEMMBBAARRRRIIEERR__CCMMDD__FFLLAAGG__CCPPUU,
+       in which case it must specify the CPU targeted by this membarrier  com‐
+       mand.
+
+       All  memory  accesses  performed  in  program  order from each targeted
+       thread are guaranteed to be ordered with respect to mmeemmbbaarrrriieerr().
+
+       If we use the semantic _b_a_r_r_i_e_r_(_) to represent a compiler barrier  forc‐
+       ing  memory  accesses  to be performed in program order across the bar‐
+       rier, and _s_m_p___m_b_(_) to represent explicit memory barriers  forcing  full
+       memory  ordering across the barrier, we have the following ordering ta‐
+       ble for each pairing of _b_a_r_r_i_e_r_(_),  mmeemmbbaarrrriieerr(),  and  _s_m_p___m_b_(_).   The
+       pair ordering is detailed as (O: ordered, X: not ordered):
+
+              l    c    c   c.         barrier() smp_mb()  membarrier()   bar‐
+              rier() X    X    O         smp_mb()  X    O    O         membar‐
+              rier()   O    O    O
+
+RREETTUURRNN VVAALLUUEE
+       On  success,  the  MMEEMMBBAARRRRIIEERR__CCMMDD__QQUUEERRYY operation returns a bit mask of
+       supported   commands,   and    the    MMEEMMBBAARRRRIIEERR__CCMMDD__GGLLOOBBAALL,    MMEEMMBBAARR‐‐
+       RRIIEERR__CCMMDD__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD,    MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__GGLLOOBBAALL__EEXXPPEEDDIITTEEDD,
+       MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD, MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__PPRRIIVVAATTEE__EEXXPPEE‐‐
+       DDIITTEEDD,    MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__SSYYNNCC__CCOORREE,    and    MMEEMMBBAARR‐‐
+       RRIIEERR__CCMMDD__RREEGGIISSTTEERR__PPRRIIVVAATTEE__EEXXPPEEDDIITTEEDD__SSYYNNCC__CCOORREE  operations  return zero.
+       On error, -1 is returned, and _e_r_r_n_o is set to indicate the error.
+
+       For a given command, with _f_l_a_g_s set to 0, this system call  is  guaran‐
+       teed  to always return the same value until reboot.  Further calls with
+       the same arguments will lead to the same result.  Therefore, with _f_l_a_g_s
+       set to 0, error handling is required only for the first call to mmeemmbbaarr‐‐
+       rriieerr().
+
+EERRRROORRSS
+       EEIINNVVAALL _c_m_d  is  invalid,  or  _f_l_a_g_s  is   nonzero,   or   the   MMEEMMBBAARR‐‐
+              RRIIEERR__CCMMDD__GGLLOOBBAALL  command  is  disabled because the _n_o_h_z___f_u_l_l CPU
+              parameter has  been  set,  or  the  MMEEMMBBAARRRRIIEERR__CCMMDD__PPRRIIVVAATTEE__EEXXPPEE‐‐
+              DDIITTEEDD__SSYYNNCC__CCOORREE     and    MMEEMMBBAARRRRIIEERR__CCMMDD__RREEGGIISSTTEERR__PPRRIIVVAATTEE__EEXXPPEE‐‐
+              DDIITTEEDD__SSYYNNCC__CCOORREE commands are not implemented  by  the  architec‐
+              ture.
+
+       EENNOOSSYYSS The mmeemmbbaarrrriieerr() system call is not implemented by this kernel.
+
+       EEPPEERRMM  The  current  process  was not registered prior to using private
+              expedited commands.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       Linux 4.3.
+
+       Before Linux 5.10, the prototype was:
+
+           iinntt mmeemmbbaarrrriieerr((iinntt _c_m_d,, iinntt _f_l_a_g_s));;
+
+NNOOTTEESS
+       A memory barrier instruction is part of the instruction set  of  archi‐
+       tectures  with weakly ordered memory models.  It orders memory accesses
+       prior to the barrier and after the barrier  with  respect  to  matching
+       barriers  on  other  cores.  For instance, a load fence can order loads
+       prior to and following that fence with respect  to  stores  ordered  by
+       store fences.
+
+       Program  order  is  the  order in which instructions are ordered in the
+       program assembly code.
+
+       Examples where mmeemmbbaarrrriieerr() can be useful  include  implementations  of
+       Read‐Copy‐Update libraries and garbage collectors.
+
+EEXXAAMMPPLLEESS
+       Assuming  a  multithreaded  application where "fast_path()" is executed
+       very frequently, and where "slow_path()" is executed infrequently,  the
+       following code (x86) can be transformed using mmeemmbbaarrrriieerr():
+
+           #include <stdlib.h>
+
+           static volatile int a, b;
+
+           static void
+           fast_path(int *read_b)
+           {
+               a = 1;
+               asm volatile ("mfence" : : : "memory");
+               *read_b = b;
+           }
+
+           static void
+           slow_path(int *read_a)
+           {
+               b = 1;
+               asm volatile ("mfence" : : : "memory");
+               *read_a = a;
+           }
+
+           int
+           main(void)
+           {
+               int read_a, read_b;
+
+               /*
+                * Real applications would call fast_path() and slow_path()
+                * from different threads.  Call those from main() to keep
+                * this example short.
+                */
+
+               slow_path(&read_a);
+               fast_path(&read_b);
+
+               /*
+                * read_b == 0 implies read_a == 1 and
+                * read_a == 0 implies read_b == 1.
+                */
+
+               if (read_b == 0 && read_a == 0)
+                   abort();
+
+               exit(EXIT_SUCCESS);
+           }
+
+       The code above transformed to use mmeemmbbaarrrriieerr() becomes:
+
+           #define _GNU_SOURCE
+           #include <stdlib.h>
+           #include <stdio.h>
+           #include <unistd.h>
+           #include <sys/syscall.h>
+           #include <linux/membarrier.h>
+
+           static volatile int a, b;
+
+           static int
+           membarrier(int cmd, unsigned int flags, int cpu_id)
+           {
+               return syscall(__NR_membarrier, cmd, flags, cpu_id);
+           }
+
+           static int
+           init_membarrier(void)
+           {
+               int ret;
+
+               /* Check that membarrier() is supported.  */
+
+               ret = membarrier(MEMBARRIER_CMD_QUERY, 0, 0);
+               if (ret < 0) {
+                   perror("membarrier");
+                   return -1;
+               }
+
+               if (!(ret & MEMBARRIER_CMD_GLOBAL)) {
+                   fprintf(stderr,
+                       "membarrier does not support MEMBARRIER_CMD_GLOBAL\n");
+                   return -1;
+               }
+
+               return 0;
+           }
+
+           static void
+           fast_path(int *read_b)
+           {
+               a = 1;
+               asm volatile ("" : : : "memory");
+               *read_b = b;
+           }
+
+           static void
+           slow_path(int *read_a)
+           {
+               b = 1;
+               membarrier(MEMBARRIER_CMD_GLOBAL, 0, 0);
+               *read_a = a;
+           }
+
+           int
+           main(int argc, char *argv[])
+           {
+               int read_a, read_b;
+
+               if (init_membarrier())
+                   exit(EXIT_FAILURE);
+
+               /*
+                * Real applications would call fast_path() and slow_path()
+                * from different threads.  Call those from main() to keep
+                * this example short.
+                */
+
+               slow_path(&read_a);
+               fast_path(&read_b);
+
+               /*
+                * read_b == 0 implies read_a == 1 and
+                * read_a == 0 implies read_b == 1.
+                */
+
+               if (read_b == 0 && read_a == 0)
+                   abort();
+
+               exit(EXIT_SUCCESS);
+           }
+
+Linux man‐pages (unreleased)      2025‐09‐21                     _m_e_m_b_a_r_r_i_e_r(2)

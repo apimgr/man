@@ -1,0 +1,310 @@
+_P_O_S_T_S_U_P_E_R(1)                General Commands Manual               _P_O_S_T_S_U_P_E_R(1)
+
+NNAAMMEE
+       postsuper - Postfix superintendent
+
+SSYYNNOOPPSSIISS
+       ppoossttssuuppeerr [--ppssSSvv]
+               [--cc _c_o_n_f_i_g___d_i_r] [--dd _q_u_e_u_e___i_d]
+               [--ee _q_u_e_u_e___i_d] [--ff _q_u_e_u_e___i_d]
+               [--hh _q_u_e_u_e___i_d] [--HH _q_u_e_u_e___i_d]
+               [--rr _q_u_e_u_e___i_d] [_d_i_r_e_c_t_o_r_y _._._.]
+
+DDEESSCCRRIIPPTTIIOONN
+       The  ppoossttssuuppeerr(1)  command  does maintenance jobs on the Postfix queue.
+       Use  of  the  command  is  restricted  to  the  superuser.    See   the
+       ppoossttqquueeuuee(1)  command for unprivileged queue operations such as listing
+       or flushing the mail queue.
+
+       By default, ppoossttssuuppeerr(1) performs the operations requested with the  --ss
+       and --pp command-line options on all Postfix queue directories - this in‐
+       cludes  the  iinnccoommiinngg, aaccttiivvee, ddeeffeerrrreedd, and hhoolldd directories with mes‐
+       sage files and the bboouunnccee, ddeeffeerr, ttrraaccee and fflluusshh directories with  log
+       files.
+
+       Options:
+
+       --cc _c_o_n_f_i_g___d_i_r
+              The mmaaiinn..ccff configuration file is in the named directory instead
+              of the default configuration directory. See also the MAIL_CONFIG
+              environment setting below.
+
+       --dd _q_u_e_u_e___i_d
+              Delete  one  message with the named queue ID from the named mail
+              queue(s) (default: hhoolldd, iinnccoommiinngg, aaccttiivvee and ddeeffeerrrreedd).
+
+              To delete multiple files, specify the --dd option multiple  times,
+              or  specify  a _q_u_e_u_e___i_d of -- to read queue IDs from standard in‐
+              put. For example, to delete all mail with exactly one  recipient
+              uusseerr@@eexxaammppllee..ccoomm:
+
+              postqueue -j | jq ‐r ’
+                  # See JSON OBJECT FORMAT section in the postqueue(1) manpage
+                  select(.recipients[0].address == "user@example.com")
+                  | select(.recipients[1].address == null)
+                  | .queue_id
+               ’ | postsuper -d -
+
+              (note the "jq ‐r" option), or the historical form:
+
+              mailq | tail -n +2 | grep -v ’ˆ *(’ | awk  ’BEGIN { RS = "" }
+                  # $7=sender, $8=recipient1, $9=recipient2
+                  { if ($8 == "user@example.com" && $9 == "")
+                        print $1 }
+               ’ | tr -d ’*!’ | postsuper -d -
+
+              Specify  "--dd  AALLLL"  to remove all messages; for example, specify
+              "--dd AALLLL ddeeffeerrrreedd" to delete all mail in the ddeeffeerrrreedd queue.   As
+              a safety measure, the word AALLLL must be specified in upper case.
+
+              Warning:  Postfix  queue  IDs are reused (always with Postfix <=
+              2.8; and with Postfix  >=  2.9  when  enable_long_queue_ids=no).
+              There  is  a  very  small possibility that postsuper deletes the
+              wrong message file when it is executed while  the  Postfix  mail
+              system is delivering mail.
+
+              The scenario is as follows:
+
+              1)     The  Postfix queue manager deletes the message that ppoosstt‐‐
+                     ssuuppeerr(1) is asked to delete, because Postfix is  finished
+                     with  the  message (it is delivered, or it is returned to
+                     the sender).
+
+              2)     New mail arrives, and the new message is given  the  same
+                     queue  ID as the message that ppoossttssuuppeerr(1) is supposed to
+                     delete.  The probability for reusing a deleted  queue  ID
+                     is  about 1 in 2**15 (the number of different microsecond
+                     values that the system clock  can  distinguish  within  a
+                     second).
+
+              3)     ppoossttssuuppeerr(1)  deletes the new message, instead of the old
+                     message that it should have deleted.
+
+       --ee _q_u_e_u_e___i_d
+
+       --ff _q_u_e_u_e___i_d
+              Request forced expiration for one message with the  named  queue
+              ID  in  the named mail queue(s) (default: hhoolldd, iinnccoommiinngg, aaccttiivvee
+              and ddeeffeerrrreedd).
+
+              •      The message will be returned to the sender when the queue
+                     manager attempts to deliver that message (note that Post‐
+                     fix will never deliver messages in the hhoolldd queue).
+
+              •      The --ee and --ff options both request forced expiration. The
+                     difference is that --ff will also release a message  if  it
+                     is  in  the hhoolldd queue. With --ee, such a message would not
+                     be returned to the sender until it is released with --ff or
+                     --HH.
+
+              •      When a deferred message is force-expired, the return mes‐
+                     sage will state the reason for the delay. Otherwise,  the
+                     reason will be "message is administratively expired".
+
+              To  expire  multiple files, specify the --ee or --ff option multiple
+              times, or specify a _q_u_e_u_e___i_d of -- to read queue IDs  from  stan‐
+              dard  input (see the --dd option above for an example, but be sure
+              to replace --dd in the example).
+
+              Specify "--ee AALLLL" or "--ff AALLLL" to expire all messages;  for  exam‐
+              ple,  specify  "--ee  AALLLL  ddeeffeerrrreedd" to expire all mail in the ddee‐‐
+              ffeerrrreedd queue.  As a safety measure, the word AALLLL must be  speci‐
+              fied in upper case.
+
+              These features are available in Postfix 3.5 and later.
+
+       --hh _q_u_e_u_e___i_d
+              Put  mail  "on  hold"  so that no attempt is made to deliver it.
+              Move one message with the named queue ID  from  the  named  mail
+              queue(s)  (default:  iinnccoommiinngg,  aaccttiivvee and ddeeffeerrrreedd) to the hhoolldd
+              queue.
+
+              To hold multiple files, specify the --hh option multiple times, or
+              specify a _q_u_e_u_e___i_d of -- to read queue IDs from standard input.
+
+              Specify "--hh AALLLL" to hold all messages; for example, specify  "--hh
+              AALLLL  ddeeffeerrrreedd"  to  hold  all  mail in the ddeeffeerrrreedd queue.  As a
+              safety measure, the word AALLLL must be specified in upper case.
+
+              Note: while mail is "on hold" it will not expire when  its  time
+              in    the    queue   exceeds   the   mmaaxxiimmaall__qquueeuuee__lliiffeettiimmee   or
+              bboouunnccee__qquueeuuee__lliiffeettiimmee setting. It becomes subject to  expiration
+              after it is released from "hold".
+
+              This feature is available in Postfix 2.0 and later.
+
+       --HH _q_u_e_u_e___i_d
+              Release  mail that was put "on hold".  Move one message with the
+              named queue ID from the named mail queue(s) (default:  hhoolldd)  to
+              the ddeeffeerrrreedd queue.
+
+              To release multiple files, specify the --HH option multiple times,
+              or  specify  a _q_u_e_u_e___i_d of -- to read queue IDs from standard in‐
+              put.
+
+              Note: specify "ppoossttssuuppeerr --rr" to release mail that  was  kept  on
+              hold  for  a  significant fraction of $$mmaaxxiimmaall__qquueeuuee__lliiffeettiimmee or
+              $$bboouunnccee__qquueeuuee__lliiffeettiimmee, or longer.
+
+              Specify "--HH AALLLL" to release all mail that is "on  hold".   As  a
+              safety measure, the word AALLLL must be specified in upper case.
+
+              This feature is available in Postfix 2.0 and later.
+
+       --pp     Purge  old  temporary  files  that are left over after system or
+              software crashes.  The --pp, --ss, and --SS operations are done before
+              other operations.
+
+       --rr _q_u_e_u_e___i_d
+              Requeue the message with the named queue ID from the named  mail
+              queue(s) (default: hhoolldd, iinnccoommiinngg, aaccttiivvee and ddeeffeerrrreedd).
+
+              To requeue multiple files, specify the --rr option multiple times,
+              or  specify  a _q_u_e_u_e___i_d of -- to read queue IDs from standard in‐
+              put.
+
+              Specify "--rr AALLLL" to requeue all messages. As a  safety  measure,
+              the word AALLLL must be specified in upper case.
+
+              A requeued message is moved to the mmaaiillddrroopp queue, from where it
+              is copied by the ppiicckkuupp(8) and cclleeaannuupp(8) daemons to a new queue
+              file.  In  many respects its handling differs from that of a new
+              local submission.
+
+              •      The message is not  subjected  to  the  smtpd_milters  or
+                     non_smtpd_milters settings.  When mail has passed through
+                     an  external content filter, this would produce incorrect
+                     results with Milter applications that depend on  original
+                     SMTP connection state information.
+
+              •      The  message is subjected again to mail address rewriting
+                     and substitution.  This is useful when rewriting rules or
+                     virtual mappings have changed.
+
+                     The address rewriting context (local or  remote)  is  the
+                     same as when the message was received.
+
+              •      The  message is subjected to the same content_filter set‐
+                     tings (if any) as used for new  local  mail  submissions.
+                     This is useful when content_filter settings have changed.
+
+              Warning:  Postfix  queue  IDs are reused (always with Postfix <=
+              2.8; and with Postfix  >=  2.9  when  enable_long_queue_ids=no).
+              There is a very small possibility that ppoossttssuuppeerr(1) requeues the
+              wrong  message  file  when it is executed while the Postfix mail
+              system is running, but no harm should be done.
+
+              This feature is available in Postfix 1.1 and later.
+
+       --ss     Structure check and structure repair.  This should be done  once
+              before  Postfix startup.  The --pp, --ss, and --SS operations are done
+              before other operations.
+
+              •      Rename files whose name does not match the  message  file
+                     inode number. This operation is necessary after restoring
+                     a  mail  queue  from  a different machine or from backup,
+                     when queue files were created with Postfix <= 2.8 or with
+                     "enable_long_queue_ids = no".
+
+              •      Move queue files that are in the wrong place in the  file
+                     system  hierarchy  and  remove subdirectories that are no
+                     longer needed.  File position rearrangements  are  neces‐
+                     sary  after  a  change  in  the  hhaasshh__qquueeuuee__nnaammeess  and/or
+                     hhaasshh__qquueeuuee__ddeepptthh configuration parameters.
+
+              •      Rename queue files created with "enable_long_queue_ids  =
+                     yes"  to  short  names,  for migration to Postfix <= 2.8.
+                     The procedure is as follows:
+
+                     # postfix stop
+                     # postconf enable_long_queue_ids=no
+                     # postsuper
+
+                     Run ppoossttssuuppeerr(1) repeatedly until it stops reporting file
+                     name changes.
+
+       --SS     A redundant version of --ss that requires  that  long  file  names
+              also match the message file inode number. This option exists for
+              testing  purposes,  and is available with Postfix 2.9 and later.
+              The --pp, --ss, and --SS operations are done before other operations.
+
+       --vv     Enable verbose logging for debugging purposes. Multiple  --vv  op‐
+              tions make the software increasingly verbose.
+
+DDIIAAGGNNOOSSTTIICCSS
+       Problems are reported to the standard error stream and to ssyyssllooggdd(8) or
+       ppoossttllooggdd(8).
+
+       ppoossttssuuppeerr(1) reports the number of messages deleted with --dd, the number
+       of messages expired with --ee, the number of messages expired or released
+       with  --ff,  the  number  of messages held or released with --hh or --HH, the
+       number of messages requeued with --rr, and the number of  messages  whose
+       queue  file  name was fixed with --ss. The report is written to the stan‐
+       dard error stream and to ssyyssllooggdd(8) or ppoossttllooggdd(8).
+
+EENNVVIIRROONNMMEENNTT
+       MAIL_CONFIG
+              Directory with the mmaaiinn..ccff file.
+
+BBUUGGSS
+       Mail that is not sanitized by Postfix (i.e. mail in the mmaaiillddrroopp queue)
+       cannot be placed "on hold".
+
+CCOONNFFIIGGUURRAATTIIOONN PPAARRAAMMEETTEERRSS
+       The following mmaaiinn..ccff parameters are especially relevant to  this  pro‐
+       gram.   The  text  below  provides  only a parameter summary. See ppoosstt‐‐
+       ccoonnff(5) for more details including examples.
+
+       ccoonnffiigg__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The default location of the Postfix main.cf and  master.cf  con‐
+              figuration files.
+
+       hhaasshh__qquueeuuee__ddeepptthh ((11))
+              The  number  of subdirectory levels for queue directories listed
+              with the hash_queue_names parameter.
+
+       hhaasshh__qquueeuuee__nnaammeess ((ddeeffeerrrreedd,, ddeeffeerr))
+              The names of queue directories that are  split  across  multiple
+              subdirectory levels.
+
+       iimmppoorrtt__eennvviirroonnmmeenntt ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The  list  of  environment  parameters that a privileged Postfix
+              process will  import  from  a  non-Postfix  parent  process,  or
+              name=value environment overrides.
+
+       qquueeuuee__ddiirreeccttoorryy ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              The location of the Postfix top-level queue directory.
+
+       ssyysslloogg__ffaacciilliittyy ((mmaaiill))
+              The syslog facility of Postfix logging.
+
+       ssyysslloogg__nnaammee ((sseeee ’’ppoossttccoonnff ‐‐dd’’ oouuttppuutt))
+              A  prefix  that  is  prepended  to  the  process  name in syslog
+              records, so that, for example, "smtpd" becomes "prefix/smtpd".
+
+       Available in Postfix version 2.9 and later:
+
+       eennaabbllee__lloonngg__qquueeuuee__iiddss ((nnoo))
+              Enable long, non-repeating, queue IDs (queue file names).
+
+SSEEEE AALLSSOO
+       sendmail(1), Sendmail-compatible user interface
+       postqueue(1), unprivileged queue operations
+       postlogd(8), Postfix logging
+       syslogd(8), system logging
+
+LLIICCEENNSSEE
+       The Secure Mailer license must be distributed with this software.
+
+AAUUTTHHOORR((SS))
+       Wietse Venema
+       IBM T.J. Watson Research
+       P.O. Box 704
+       Yorktown Heights, NY 10598, USA
+
+       Wietse Venema
+       Google, Inc.
+       111 8th Avenue
+       New York, NY 10011, USA
+
+                                                                  _P_O_S_T_S_U_P_E_R(1)

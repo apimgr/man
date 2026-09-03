@@ -1,0 +1,143 @@
+DTRACE_UDP(4)            BSD Kernel Interfaces Manual            DTRACE_UDP(4)
+
+NNAAMMEE
+     ddttrraaccee__uuddpp — a DTrace provider for tracing events related to the UDP pro‐
+     tocol
+
+SSYYNNOOPPSSIISS
+     uuddpp::::::rreecceeiivvee(_p_k_t_i_n_f_o___t _*, _c_s_i_n_f_o___t _*, _i_p_i_n_f_o___t _*, _u_d_p_s_i_n_f_o___t _*,
+         _u_d_p_i_n_f_o___t _*);
+
+     uuddpp::::::sseenndd(_p_k_t_i_n_f_o___t _*, _c_s_i_n_f_o___t _*, _i_p_i_n_f_o___t _*, _u_d_p_s_i_n_f_o___t _*,
+         _u_d_p_i_n_f_o___t _*);
+
+DDEESSCCRRIIPPTTIIOONN
+     The DTrace uuddpp provider allows users to trace events in the udp(4) proto‐
+     col implementation.  The uuddpp::::::sseenndd() probe fires whenever the kernel
+     prepares to transmit a UDP packet, and the uuddpp::::::rreecceeiivvee() probe fires
+     whenever the kernel receives a UDP packet, unless the UDP header is in‐
+     complete, the destination port is 0, the length field is invalid, or the
+     checksum is wrong.  The arguments to these probes can be used to obtain
+     detailed information about the IP and UDP headers of the corresponding
+     packet.
+
+AARRGGUUMMEENNTTSS
+     The _p_k_t_i_n_f_o___t argument is currently unimplemented and is included for
+     compatibility with other implementations of this provider.  Its fields
+     are:
+
+           _u_i_n_t_p_t_r___t _p_k_t___a_d_d_r  Always set to 0.
+
+     The _c_s_i_n_f_o___t argument is currently unimplemented and is included for com‐
+     patibility with other implementations of this provider.  Its fields are:
+
+           _u_i_n_t_p_t_r___t _c_s___a_d_d_r  Always set to 0.
+
+           _u_i_n_t_6_4___t _c_s___c_i_d    A pointer to the _s_t_r_u_c_t _i_n_p_c_b for this packet,
+                              or NULL.
+
+           _p_i_d___t _c_s___p_i_d       Always set to 0.
+
+     The _i_p_i_n_f_o___t argument contains IP fields common to both IPv4 and IPv6
+     packets.  Its fields are:
+
+           _u_i_n_t_8___t _i_p___v_e_r       IP version of the packet, 4 for IPv4 packets
+                                and 6 for IPv6 packets.
+
+           _u_i_n_t_3_2___t _i_p___p_l_e_n_g_t_h  IP payload size.  This does not include the
+                                size of the IP header or IPv6 option headers.
+
+           _s_t_r_i_n_g _i_p___s_a_d_d_r      IP source address.
+
+           _s_t_r_i_n_g _i_p___d_a_d_d_r      IP destination address.
+
+     The _u_d_p_s_i_n_f_o___t argument contains the state of the UDP connection associ‐
+     ated with the packet.  Its fields are:
+
+           _u_i_n_t_p_t_r___t _u_d_p_s___a_d_d_r  Pointer to the _s_t_r_u_c_t _i_n_p_c_b containing the IP
+                                state for the associated socket.
+
+           _u_i_n_t_1_6___t _u_d_p_s___l_p_o_r_t  Local UDP port.
+
+           _u_i_n_t_1_6___t _u_d_p_s___r_p_o_r_t  Remote UDP port.
+
+           _s_t_r_i_n_g _u_d_p_s___l_a_d_d_r    Local IPv4 or IPv6 address.
+
+           _s_t_r_i_n_g _u_d_p_s___r_a_d_d_r    Remote IPv4 or IPv6 address.
+
+     The _u_d_p_i_n_f_o___t argument is the raw UDP header of the packet, with all
+     fields in host order.  Its fields are:
+
+           _u_i_n_t_1_6___t _u_d_p___s_p_o_r_t      Source UDP port.
+
+           _u_i_n_t_1_6___t _u_d_p___d_p_o_r_t      Destination UDP port.
+
+           _u_i_n_t_1_6___t _u_d_p___l_e_n_g_t_h     Length of the UDP header and payload, in
+                                   bytes.
+
+           _u_i_n_t_1_6___t _u_d_p___c_h_e_c_k_s_u_m   A checksum of the UDP header and payload,
+                                   or 0 if no checksum was calculated.
+
+           _s_t_r_u_c_t _u_d_p_h_d_r _*_u_d_p___h_d_r  A pointer to the raw UDP header.
+
+FFIILLEESS
+     /usr/lib/dtrace/udp.d  DTrace type and translator definitions for the uuddpp
+                            provider.
+
+EEXXAAMMPPLLEESS
+     The following script counts transmitted packets by destination port.
+
+           udp:::send
+           {
+                   @num[args[4]->udp_dport] = count();
+           }
+
+     This script will print some details of each UDP packet as it is sent or
+     received by the kernel:
+
+           #pragma D option quiet
+           #pragma D option switchrate=10Hz
+
+           dtrace:::BEGIN
+           {
+                   printf(" %10s %36s    %-36s %6s\n", "DELTA(us)", "SOURCE",
+                       "DEST", "BYTES");
+                   last = timestamp;
+           }
+
+           udp:::send
+           {
+                   this->elapsed = (timestamp - last) / 1000;
+                   self->dest = strjoin(strjoin(args[2]->ip_daddr, ":"),
+                        lltostr(args[4]->udp_dport));
+                   printf(" %10d %30s:%-5d -> %-36s %6d\n", this->elapsed,
+                       args[2]->ip_saddr, args[4]->udp_sport,
+                       self->dest, args[4]->udp_length);
+                   last = timestamp;
+           }
+
+           udp:::receive
+           {
+                   this->elapsed = (timestamp - last) / 1000;
+                   self->dest = strjoin(strjoin(args[2]->ip_saddr, ":"),
+                        lltostr(args[4]->udp_sport));
+                   printf(" %10d %30s:%-5d <- %-36s %6d\n", this->elapsed,
+                       args[2]->ip_daddr, args[4]->udp_dport,
+                       self->dest, args[4]->udp_length);
+                   last = timestamp;
+           }
+
+CCOOMMPPAATTIIBBIILLIITTYY
+     This provider is compatible with the uuddpp provider in Solaris.
+
+SSEEEE AALLSSOO
+     dtrace(1), dtrace_ip(4), dtrace_sctp(4), dtrace_tcp(4),
+     dtrace_udplite(4), udp(4), SDT(9)
+
+HHIISSTTOORRYY
+     The uuddpp provider first appeared in FreeBSD 10.0.
+
+AAUUTTHHOORRSS
+     This manual page was written by Mark Johnston <_m_a_r_k_j_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                             August 1, 2018                             BSD

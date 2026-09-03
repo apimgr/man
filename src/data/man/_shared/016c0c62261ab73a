@@ -1,0 +1,110 @@
+G_ACCESS(9)              BSD Kernel Developer's Manual             G_ACCESS(9)
+
+NNAAMMEE
+     gg__aacccceessss — control access to GEOM consumers and their providers
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ggeeoomm//ggeeoomm..hh>>
+
+     _i_n_t
+     gg__aacccceessss(_s_t_r_u_c_t _g___c_o_n_s_u_m_e_r _*_c_p, _i_n_t _d_c_r, _i_n_t _d_c_w, _i_n_t _d_c_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     The gg__aacccceessss() function allows to open, close, and generally change ac‐
+     cess to the provider which is attached to the given consumer _c_p.  The ar‐
+     guments _d_c_r, _d_c_w, and _d_c_e represent relative read, write, and exclusive
+     access count changes.  Read and write access counts are self explanatory,
+     and exclusive access counts deny write access to other interested par‐
+     ties.  A provider's access count is the sum of the access counts of all
+     attached consumers.
+
+     After attaching a consumer to a provider with g_attach(9), the gg__aacccceessss()
+     function has to be called on the consumer before starting I/O requests.
+
+RREESSTTRRIICCTTIIOONNSS//CCOONNDDIITTIIOONNSS
+     The consumer has to be attached to a provider.
+
+     The intended change must not result in a negative access count.
+
+     No-operation is not permitted (_d_c_r = _d_c_w = _d_c_e = 0).
+
+     The provider's geom must have an access method defined (e.g.,
+     _g_p_-_>_a_c_c_e_s_s).
+
+     The topology lock has to be held.
+
+RREETTUURRNN VVAALLUUEESS
+     The gg__aacccceessss() function returns 0 if successful; otherwise an error code
+     is returned.  Note that gg__aacccceessss() cannot fail when the arguments _d_c_r,
+     _d_c_w, and _d_c_e are less than or equal to 0.
+
+EEXXAAMMPPLLEESS
+     Create a consumer, attach it to a given provider, gain read access and
+     read first sector.
+
+           void
+           some_function(struct g_geom *mygeom, struct g_provider *pp)
+           {
+                   struct g_consumer *cp;
+                   void *ptr;
+                   int error;
+
+                   g_topology_assert();
+
+                   /* Create new consumer on 'mygeom' geom. */
+                   cp = g_new_consumer(mygeom);
+                   /* Attach newly created consumer to given provider. */
+                   if (g_attach(cp, pp) != 0) {
+                           g_destroy_consumer(cp);
+                           return;
+                   }
+                   /* Open provider for reading through our consumer. */
+                   error = g_access(cp, 1, 0, 0);
+                   if (error != 0) {
+                           printf("Cannot access provider: %s\n", error);
+                           g_detach(cp);
+                           g_destroy_consumer(cp);
+                           return;
+                   }
+
+                   /*
+                    * Don't hold topology lock while reading.
+                    */
+                   g_topology_unlock();
+                   ptr = g_read_data(cp, 0, pp->sectorsize, &error);
+                   if (ptr == NULL)
+                           printf("Error while reading: %d\n", error);
+                   /*
+                    * Do something useful with data.
+                    */
+                   g_topology_lock();
+
+                   /* Disconnect from provider (release access count). */
+                   g_access(cp, -1, 0, 0);
+                   /* Detach from provider. */
+                   g_detach(cp);
+                   /* Destroy consumer. */
+                   g_destroy_consumer(cp);
+           }
+
+EERRRROORRSS
+     Possible errors:
+
+     [EPERM]            The function is trying to open a provider with an ex‐
+                        clusive access count, but it is already open for writ‐
+                        ing.
+
+     [EPERM]            The function is trying to open a provider for writing,
+                        but it is already exclusively open.
+
+     Any other error that can be returned by the provider's access method.
+
+SSEEEE AALLSSOO
+     geom(4), DECLARE_GEOM_CLASS(9), g_attach(9), g_bio(9), g_consumer(9),
+     g_data(9), g_event(9), g_geom(9), g_provider(9), g_provider_by_name(9),
+     g_wither_geom(9)
+
+AAUUTTHHOORRSS
+     This manual page was written by Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            January 16, 2004                            BSD

@@ -1,0 +1,332 @@
+HAST.CONF(5)                BSD File Formats Manual               HAST.CONF(5)
+
+NNAAMMEE
+     hhaasstt..ccoonnff — configuration file for the hastd(8) daemon and the hastctl(8)
+     utility
+
+DDEESSCCRRIIPPTTIIOONN
+     The hhaasstt..ccoonnff file is used by both hastd(8) daemon and hastctl(8) control
+     utility.  Configuration file is designed in a way that exactly the same
+     file can be (and should be) used on both HAST nodes.  Every line starting
+     with # is treated as comment and ignored.
+
+CCOONNFFIIGGUURRAATTIIOONN FFIILLEE SSYYNNTTAAXX
+     General syntax of the hhaasstt..ccoonnff file is following:
+
+           # Global section
+           control <addr>
+           listen <addr>
+           replication <mode>
+           checksum <algorithm>
+           compression <algorithm>
+           timeout <seconds>
+           exec <path>
+           metaflush on | off
+           pidfile <path>
+
+           on <node> {
+                   # Node section
+                   control <addr>
+                   listen <addr>
+                   pidfile <path>
+           }
+
+           on <node> {
+                   # Node section
+                   control <addr>
+                   listen <addr>
+                   pidfile <path>
+           }
+
+           resource <name> {
+                   # Resource section
+                   replication <mode>
+                   checksum <algorithm>
+                   compression <algorithm>
+                   name <name>
+                   local <path>
+                   timeout <seconds>
+                   exec <path>
+                   metaflush on | off
+
+                   on <node> {
+                           # Resource-node section
+                           name <name>
+                           # Required
+                           local <path>
+                           metaflush on | off
+                           # Required
+                           remote <addr>
+                           source <addr>
+                   }
+                   on <node> {
+                           # Resource-node section
+                           name <name>
+                           # Required
+                           local <path>
+                           metaflush on | off
+                           # Required
+                           remote <addr>
+                           source <addr>
+                   }
+           }
+
+     Most of the various available configuration parameters are optional.  If
+     parameter is not defined in the particular section, it will be inherited
+     from the parent section.  For example, if the lliisstteenn parameter is not de‐
+     fined in the node section, it will be inherited from the global section.
+     In case the global section does not define the lliisstteenn parameter at all,
+     the default value will be used.
+
+CCOONNFFIIGGUURRAATTIIOONN FFIILLEE DDEESSCCRRIIPPTTIIOONN
+     The ⟨node⟩ argument can be replaced either by a full hostname as obtained
+     by gethostname(3), only first part of the hostname, by node's UUID as
+     found in the _k_e_r_n_._h_o_s_t_u_u_i_d sysctl(8) variable or by node's hostid as
+     found in the _k_e_r_n_._h_o_s_t_i_d sysctl(8) variable.
+
+     The following statements are available:
+
+     ccoonnttrrooll ⟨addr⟩
+
+           Address for communication with hastctl(8).  Each of the following
+           examples defines the same control address:
+
+                 uds:///var/run/hastctl
+                 unix:///var/run/hastctl
+                 /var/run/hastctl
+
+           The default value is _u_d_s_:_/_/_/_v_a_r_/_r_u_n_/_h_a_s_t_c_t_l.
+
+     ppiiddffiillee ⟨path⟩
+
+           File in which to store the process ID of the main hastd(8) process.
+
+           The default value is _/_v_a_r_/_r_u_n_/_h_a_s_t_d_._p_i_d.
+
+     lliisstteenn ⟨addr⟩
+
+           Address to listen on in form of:
+
+                 protocol://protocol-specific-address
+
+           Each of the following examples defines the same listen address:
+
+                 0.0.0.0
+                 0.0.0.0:8457
+                 tcp://0.0.0.0
+                 tcp://0.0.0.0:8457
+                 tcp4://0.0.0.0
+                 tcp4://0.0.0.0:8457
+
+           Multiple listen addresses can be specified.  By default hhaassttdd lis‐
+           tens on _t_c_p_4_:_/_/_0_._0_._0_._0_:_8_4_5_7 and _t_c_p_6_:_/_/_[_:_:_]_:_8_4_5_7 if kernel supports
+           IPv4 and IPv6 respectively.
+
+     rreepplliiccaattiioonn ⟨mode⟩
+
+           Replication mode should be one of the following:
+
+           mmeemmssyynncc
+
+                 Report the write operation as completed when local write com‐
+                 pletes and when the remote node acknowledges the data re‐
+                 ceipt, but before it actually stores the data.  The data on
+                 remote node will be stored directly after sending acknowl‐
+                 edgement.  This mode is intended to reduce latency, but still
+                 provides a very good reliability.  The only situation where
+                 some small amount of data could be lost is when the data is
+                 stored on primary node and sent to the secondary.  Secondary
+                 node then acknowledges data receipt and primary reports suc‐
+                 cess to an application.  However, it may happen that the sec‐
+                 ondary goes down before the received data is really stored
+                 locally.  Before secondary node returns, primary node dies
+                 entirely.  When the secondary node comes back to life it be‐
+                 comes the new primary.  Unfortunately some small amount of
+                 data which was confirmed to be stored to the application was
+                 lost.  The risk of such a situation is very small.  The
+                 mmeemmssyynncc replication mode is the default.
+
+           ffuullllssyynncc
+
+                 Mark the write operation as completed when local as well as
+                 remote write completes.  This is the safest and the slowest
+                 replication mode.
+
+           aassyynncc
+
+                 The write operation is reported as complete right after the
+                 local write completes.  This is the fastest and the most dan‐
+                 gerous replication mode.  This mode should be used when
+                 replicating to a distant node where latency is too high for
+                 other modes.
+
+     cchheecckkssuumm ⟨algorithm⟩
+
+           Checksum algorithm should be one of the following:
+
+           nnoonnee    No checksum will be calculated for the data being send over
+                   the network.  This is the default setting.
+
+           ccrrcc3322   CRC32 checksum will be calculated.
+
+           sshhaa225566  SHA256 checksum will be calculated.
+
+     ccoommpprreessssiioonn ⟨algorithm⟩
+
+           Compression algorithm should be one of the following:
+
+           nnoonnee  Data send over the network will not be compressed.
+
+           hhoollee  Only blocks that contain all zeros will be compressed.  This
+                 is very useful for initial synchronization where potentially
+                 many blocks are still all zeros.  There should be no measur‐
+                 able performance overhead when this algorithm is being used.
+                 This is the default setting.
+
+           llzzff   The LZF algorithm by Marc Alexander Lehmann will be used to
+                 compress the data send over the network.  LZF is very fast,
+                 general purpose compression algorithm.
+
+     ttiimmeeoouutt ⟨seconds⟩
+
+           Connection timeout in seconds.  The default value is _2_0.
+
+     eexxeecc ⟨path⟩
+
+           Execute the given program on various HAST events.  Below is the
+           list of currently implemented events and arguments the given pro‐
+           gram is executed with:
+
+           <<ppaatthh>> rroollee <<rreessoouurrccee>> <<oollddrroollee>> <<nneewwrroollee>>
+
+                 Executed on both primary and secondary nodes when resource
+                 role is changed.
+
+           <<ppaatthh>> ccoonnnneecctt <<rreessoouurrccee>>
+
+                 Executed on both primary and secondary nodes when connection
+                 for the given resource between the nodes is established.
+
+           <<ppaatthh>> ddiissccoonnnneecctt <<rreessoouurrccee>>
+
+                 Executed on both primary and secondary nodes when connection
+                 for the given resource between the nodes is lost.
+
+           <<ppaatthh>> ssyynnccssttaarrtt <<rreessoouurrccee>>
+
+                 Executed on primary node when synchronization process of sec‐
+                 ondary node is started.
+
+           <<ppaatthh>> ssyynnccddoonnee <<rreessoouurrccee>>
+
+                 Executed on primary node when synchronization process of sec‐
+                 ondary node is completed successfully.
+
+           <<ppaatthh>> ssyynncciinnttrr <<rreessoouurrccee>>
+
+                 Executed on primary node when synchronization process of sec‐
+                 ondary node is interrupted, most likely due to secondary node
+                 outage or connection failure between the nodes.
+
+           <<ppaatthh>> sspplliitt--bbrraaiinn <<rreessoouurrccee>>
+
+                 Executed on both primary and secondary nodes when split-brain
+                 condition is detected.
+
+           The ⟨path⟩ argument should contain full path to executable program.
+           If the given program exits with code different than _0, hhaassttdd will
+           log it as an error.
+
+           The ⟨resource⟩ argument is resource name from the configuration
+           file.
+
+           The ⟨oldrole⟩ argument is previous resource role (before the
+           change).  It can be one of: _i_n_i_t, _s_e_c_o_n_d_a_r_y, _p_r_i_m_a_r_y.
+
+           The ⟨newrole⟩ argument is current resource role (after the change).
+           It can be one of: _i_n_i_t, _s_e_c_o_n_d_a_r_y, _p_r_i_m_a_r_y.
+
+     mmeettaafflluusshh oonn | ooffff
+
+           When set to _o_n, flush write cache of the local provider after every
+           metadata (activemap) update.  Flushing write cache ensures that
+           provider will not reorder writes and that metadata will be properly
+           updated before real data is stored.  If the local provider does not
+           support flushing write cache (it returns EOPNOTSUPP on the
+           BBIIOO__FFLLUUSSHH request), hhaassttdd will disable mmeettaafflluusshh automatically.
+           The default value is _o_n.
+
+     nnaammee ⟨name⟩
+
+           GEOM provider name that will appear as _/_d_e_v_/_h_a_s_t_/_<_n_a_m_e_>.  If name
+           is not defined, resource name will be used as provider name.
+
+     llooccaall ⟨path⟩
+
+           Path to the local component which will be used as backend provider
+           for the resource.  This can be either GEOM provider or regular
+           file.
+
+     rreemmoottee ⟨addr⟩
+
+           Address of the remote hhaassttdd daemon.  Format is the same as for the
+           lliisstteenn statement.  When operating as a primary node this address
+           will be used to connect to the secondary node.  When operating as a
+           secondary node only connections from this address will be accepted.
+
+           A special value of _n_o_n_e can be used when the remote address is not
+           yet known (eg. the other node is not set up yet).
+
+     ssoouurrccee ⟨addr⟩
+
+           Local address to bind to before connecting to the remote hhaassttdd dae‐
+           mon.  Format is the same as for the lliisstteenn statement.
+
+FFIILLEESS
+     /etc/hast.conf    The default hastctl(8) and hastd(8) configuration file.
+     /var/run/hastctl  Control socket used by the hastctl(8) control utility
+                       to communicate with the hastd(8) daemon.
+
+EEXXAAMMPPLLEESS
+     The example configuration file can look as follows:
+
+           listen tcp://0.0.0.0
+
+           on hasta {
+                   listen tcp://2001:db8::1/64
+           }
+           on hastb {
+                   listen tcp://2001:db8::2/64
+           }
+
+           resource shared {
+                   local /dev/da0
+
+                   on hasta {
+                           remote tcp://10.0.0.2
+                   }
+                   on hastb {
+                           remote tcp://10.0.0.1
+                   }
+           }
+           resource tank {
+                   on hasta {
+                           local /dev/mirror/tanka
+                           source tcp://10.0.0.1
+                           remote tcp://10.0.0.2
+                   }
+                   on hastb {
+                           local /dev/mirror/tankb
+                           source tcp://10.0.0.2
+                           remote tcp://10.0.0.1
+                   }
+           }
+
+SSEEEE AALLSSOO
+     gethostname(3), geom(4), hastctl(8), hastd(8)
+
+AAUUTTHHOORRSS
+     The hhaasstt..ccoonnff was written by Pawel Jakub Dawidek <_p_j_d_@_F_r_e_e_B_S_D_._o_r_g> under
+     sponsorship of the FreeBSD Foundation.
+
+BSD                            January 25, 2012                            BSD

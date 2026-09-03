@@ -1,0 +1,195 @@
+_k_e_x_e_c___l_o_a_d(2)                 System Calls Manual                _k_e_x_e_c___l_o_a_d(2)
+
+NNAAMMEE
+       kexec_load, kexec_file_load - load a new kernel for later execution
+
+LLIIBBRRAARRYY
+       Standard C library (_l_i_b_c, _-_l_c)
+
+SSYYNNOOPPSSIISS
+       ##iinncclluuddee <<lliinnuuxx//kkeexxeecc..hh>>      /* Definition of KKEEXXEECC__** constants */
+       ##iinncclluuddee <<ssyyss//ssyyssccaallll..hh>>      /* Definition of SSYYSS__** constants */
+       ##iinncclluuddee <<uunniissttdd..hh>>
+
+       lloonngg ssyyssccaallll((SSYYSS__kkeexxeecc__llooaadd,, uunnssiiggnneedd lloonngg _e_n_t_r_y,,
+                    uunnssiiggnneedd lloonngg _n_r___s_e_g_m_e_n_t_s,,
+                    ssttrruucctt kkeexxeecc__sseeggmmeenntt _s_e_g_m_e_n_t_s[[_n_r___s_e_g_m_e_n_t_s]],,
+                    uunnssiiggnneedd lloonngg _f_l_a_g_s));;
+       lloonngg ssyyssccaallll((SSYYSS__kkeexxeecc__ffiillee__llooaadd,, iinntt _k_e_r_n_e_l___f_d,, iinntt _i_n_i_t_r_d___f_d,,
+                    uunnssiiggnneedd lloonngg _c_m_d_l_i_n_e___l_e_n,, ccoonnsstt cchhaarr _c_m_d_l_i_n_e[[_c_m_d_l_i_n_e___l_e_n]],,
+                    uunnssiiggnneedd lloonngg _f_l_a_g_s));;
+
+       _N_o_t_e:  glibc provides no wrappers for these system calls, necessitating
+       the use of ssyyssccaallll(2).
+
+DDEESSCCRRIIPPTTIIOONN
+       The kkeexxeecc__llooaadd() system call loads a new kernel that  can  be  executed
+       later by rreebboooott(2).
+
+       The  _f_l_a_g_s  argument  is  a bit mask that controls the operation of the
+       call.  The following values can be specified in _f_l_a_g_s:
+
+       KKEEXXEECC__OONN__CCRRAASSHH (since Linux 2.6.13)
+              Execute the new kernel automatically on a  system  crash.   This
+              "crash kernel" is loaded into an area of reserved memory that is
+              determined  at  boot  time using the _c_r_a_s_h_k_e_r_n_e_l kernel command‐
+              line parameter.  The location of this  reserved  memory  is  ex‐
+              ported  to  user space via the _/_p_r_o_c_/_i_o_m_e_m file, in an entry la‐
+              beled "Crash kernel".  A user‐space application can  parse  this
+              file  and  prepare  a  list of segments (see below) that specify
+              this reserved memory as destination.  If this flag is specified,
+              the kernel checks that the target segments specified in _s_e_g_m_e_n_t_s
+              fall within the reserved region.
+
+       KKEEXXEECC__PPRREESSEERRVVEE__CCOONNTTEEXXTT (since Linux 2.6.27)
+              Preserve the system hardware and software states before  execut‐
+              ing  the  new  kernel.   This  could be used for system suspend.
+              This flag is available only if the kernel  was  configured  with
+              CCOONNFFIIGG__KKEEXXEECC__JJUUMMPP,  and  is  effective  only  if  _n_r___s_e_g_m_e_n_t_s is
+              greater than 0.
+
+       The high‐order bits (corresponding to the  mask  0xffff0000)  of  _f_l_a_g_s
+       contain  the  architecture  of the to‐be‐executed kernel.  Specify (OR)
+       the constant KKEEXXEECC__AARRCCHH__DDEEFFAAUULLTT to use the current architecture, or one
+       of the following architecture constants KKEEXXEECC__AARRCCHH__338866, KKEEXXEECC__AARRCCHH__6688KK,
+       KKEEXXEECC__AARRCCHH__XX8866__6644, KKEEXXEECC__AARRCCHH__PPPPCC, KKEEXXEECC__AARRCCHH__PPPPCC6644,  KKEEXXEECC__AARRCCHH__IIAA__6644,
+       KKEEXXEECC__AARRCCHH__AARRMM,  KKEEXXEECC__AARRCCHH__SS339900,  KKEEXXEECC__AARRCCHH__SSHH,  KKEEXXEECC__AARRCCHH__MMIIPPSS, and
+       KKEEXXEECC__AARRCCHH__MMIIPPSS__LLEE.  The architecture must be executable on the CPU  of
+       the system.
+
+       The  _e_n_t_r_y  argument is the physical entry address in the kernel image.
+       The _n_r___s_e_g_m_e_n_t_s argument is the number of segments pointed  to  by  the
+       _s_e_g_m_e_n_t_s  pointer; the kernel imposes an (arbitrary) limit of 16 on the
+       number of segments.  The _s_e_g_m_e_n_t_s argument is an array of _k_e_x_e_c___s_e_g_m_e_n_t
+       structures which define the kernel layout:
+
+           struct kexec_segment {
+               void   *buf;        /* Buffer in user space */
+               size_t  bufsz;      /* Buffer length in user space */
+               void   *mem;        /* Physical address of kernel */
+               size_t  memsz;      /* Physical address length */
+           };
+
+       The kernel image defined by _s_e_g_m_e_n_t_s is copied from the calling process
+       into the kernel either in regular memory  or  in  reserved  memory  (if
+       KKEEXXEECC__OONN__CCRRAASSHH  is  set).   The  kernel  first  performs various sanity
+       checks on the information passed in _s_e_g_m_e_n_t_s.  If  these  checks  pass,
+       the  kernel  copies  the  segment  data to kernel memory.  Each segment
+       specified in _s_e_g_m_e_n_t_s is copied as follows:
+
+       •  _b_u_f and _b_u_f_s_z identify a memory region in the caller’s  virtual  ad‐
+          dress  space that is the source of the copy.  The value in _b_u_f_s_z may
+          not exceed the value in the _m_e_m_s_z field.
+
+       •  _m_e_m and _m_e_m_s_z specify a physical address range that is the target of
+          the copy.  The values specified in both fields must be multiples  of
+          the system page size.
+
+       •  _b_u_f_s_z  bytes  are copied from the source buffer to the target kernel
+          buffer.  If _b_u_f_s_z is less than _m_e_m_s_z, then the excess bytes  in  the
+          kernel buffer are zeroed out.
+
+       In  case  of a normal kexec (i.e., the KKEEXXEECC__OONN__CCRRAASSHH flag is not set),
+       the segment data is loaded in any available memory and is moved to  the
+       final destination at kexec reboot time (e.g., when the kkeexxeecc(8) command
+       is executed with the _-_e option).
+
+       In  case  of kexec on panic (i.e., the KKEEXXEECC__OONN__CCRRAASSHH flag is set), the
+       segment data is loaded to reserved memory at the time of the call, and,
+       after a crash, the kexec mechanism simply passes control to  that  ker‐
+       nel.
+
+       The  kkeexxeecc__llooaadd()  system call is available only if the kernel was con‐
+       figured with CCOONNFFIIGG__KKEEXXEECC.
+
+   kkeexxeecc__ffiillee__llooaadd(())
+       The kkeexxeecc__ffiillee__llooaadd() system call is similar to  kkeexxeecc__llooaadd(),  but  it
+       takes  a  different set of arguments.  It reads the kernel to be loaded
+       from the file referred to by the file  descriptor  _k_e_r_n_e_l___f_d,  and  the
+       initrd  (initial  RAM  disk)  to be loaded from file referred to by the
+       file descriptor _i_n_i_t_r_d___f_d.  The _c_m_d_l_i_n_e argument  is  a  pointer  to  a
+       buffer containing the command line for the new kernel.  The _c_m_d_l_i_n_e___l_e_n
+       argument  specifies  size  of  the buffer.  The last byte in the buffer
+       must be a null byte ('\0').
+
+       The _f_l_a_g_s argument is a bit mask which modifies  the  behavior  of  the
+       call.  The following values can be specified in _f_l_a_g_s:
+
+       KKEEXXEECC__FFIILLEE__UUNNLLOOAADD
+              Unload the currently loaded kernel.
+
+       KKEEXXEECC__FFIILLEE__OONN__CCRRAASSHH
+              Load  the new kernel in the memory region reserved for the crash
+              kernel (as for KKEEXXEECC__OONN__CCRRAASSHH).  This kernel is  booted  if  the
+              currently running kernel crashes.
+
+       KKEEXXEECC__FFIILLEE__NNOO__IINNIITTRRAAMMFFSS
+              Loading  initrd/initramfs  is optional.  Specify this flag if no
+              initramfs is being loaded.  If  this  flag  is  set,  the  value
+              passed in _i_n_i_t_r_d___f_d is ignored.
+
+       The kkeexxeecc__ffiillee__llooaadd() system call was added to provide support for sys‐
+       tems  where  "kexec"  loading should be restricted to only kernels that
+       are signed.  This system call is available only if the kernel was  con‐
+       figured with CCOONNFFIIGG__KKEEXXEECC__FFIILLEE.
+
+RREETTUURRNN VVAALLUUEE
+       On success, these system calls returns 0.  On error, -1 is returned and
+       _e_r_r_n_o is set to indicate the error.
+
+EERRRROORRSS
+       EEAADDDDRRNNOOTTAAVVAAIILL
+              The KKEEXXEECC__OONN__CCRRAASSHH flags was specified, but the region specified
+              by  the _m_e_m and _m_e_m_s_z fields of one of the _s_e_g_m_e_n_t_s entries lies
+              outside the range of memory reserved for the crash kernel.
+
+       EEAADDDDRRNNOOTTAAVVAAIILL
+              The value in a _m_e_m or _m_e_m_s_z field in one of the _s_e_g_m_e_n_t_s entries
+              is not a multiple of the system page size.
+
+       EEBBAADDFF  _k_e_r_n_e_l___f_d or _i_n_i_t_r_d___f_d is not a valid file descriptor.
+
+       EEBBUUSSYY  Another crash kernel is already being loaded or a  crash  kernel
+              is already in use.
+
+       EEIINNVVAALL _f_l_a_g_s is invalid.
+
+       EEIINNVVAALL The  value  of  a _b_u_f_s_z field in one of the _s_e_g_m_e_n_t_s entries ex‐
+              ceeds the value in the corresponding _m_e_m_s_z field.
+
+       EEIINNVVAALL _n_r___s_e_g_m_e_n_t_s exceeds KKEEXXEECC__SSEEGGMMEENNTT__MMAAXX (16).
+
+       EEIINNVVAALL Two or more of the kernel target buffers overlap.
+
+       EEIINNVVAALL The value in _c_m_d_l_i_n_e_[_c_m_d_l_i_n_e___l_e_n_-_1_] is not '\0'.
+
+       EEIINNVVAALL The file referred to by _k_e_r_n_e_l___f_d or _i_n_i_t_r_d___f_d is empty  (length
+              zero).
+
+       EENNOOEEXXEECC
+              _k_e_r_n_e_l___f_d  does  not  refer to an open file, or the kernel can’t
+              load this file.  Currently, the file must be a bzImage and  con‐
+              tain  an  x86 kernel that is loadable above 4 GiB in memory (see
+              the kernel source file _D_o_c_u_m_e_n_t_a_t_i_o_n_/_x_8_6_/_b_o_o_t_._t_x_t).
+
+       EENNOOMMEEMM Could not allocate memory.
+
+       EEPPEERRMM  The caller does not have the CCAAPP__SSYYSS__BBOOOOTT capability.
+
+SSTTAANNDDAARRDDSS
+       Linux.
+
+HHIISSTTOORRYY
+       kkeexxeecc__llooaadd()
+              Linux 2.6.13.
+
+       kkeexxeecc__ffiillee__llooaadd()
+              Linux 3.17.
+
+SSEEEE AALLSSOO
+       rreebboooott(2), ssyyssccaallll(2), kkeexxeecc(8)
+
+       The kernel source files  _D_o_c_u_m_e_n_t_a_t_i_o_n_/_k_d_u_m_p_/_k_d_u_m_p_._t_x_t  and  _D_o_c_u_m_e_n_t_a_‐
+       _t_i_o_n_/_a_d_m_i_n_-_g_u_i_d_e_/_k_e_r_n_e_l_-_p_a_r_a_m_e_t_e_r_s_._t_x_t
+
+Linux man‐pages (unreleased)      2025‐06‐05                     _k_e_x_e_c___l_o_a_d(2)

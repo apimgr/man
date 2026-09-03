@@ -1,0 +1,254 @@
+ACPI_BATTERY(4)          BSD Kernel Interfaces Manual          ACPI_BATTERY(4)
+
+NNAAMMEE
+     aaccppii__bbaatttteerryy — ACPI battery management subsystem
+
+SSYYNNOOPPSSIISS
+     ddeevviiccee aaccppii
+
+DDEESSCCRRIIPPTTIIOONN
+     The aaccppii__bbaatttteerryy is a driver for battery management features of the ACPI
+     module.
+
+     An ACPI-compatible battery device supports either a Control Method Bat‐
+     tery interface or a Smart Battery subsystem interface.  The former is ac‐
+     cessed by the AML (ACPI Machine Language) code control methods, and the
+     latter is controlled directly through the ACPI EC (Embedded Controller)
+     typically via an SMBus interface.
+
+     This driver supports the sysctl(8) and ioctl(2) interfaces as well as the
+     devd(8) event notification interface.
+
+IIOOCCTTLLSS
+     Every ioctl for the aaccppii__bbaatttteerryy driver takes a single integer value for
+     the battery unit number as an argument, and returns a specific structure
+     for each request.  A special unit number ACPI_BATTERY_ALL_UNITS specifies
+     all of the attached units and reports accumulated information.
+
+     ACPIIO_BATT_GET_UNITS _i_n_t
+             Returns the number of battery units in the system.  The unit num‐
+             ber argument will be ignored.
+
+     ACPIIO_BATT_GET_BATTINFO _s_t_r_u_c_t _a_c_p_i___b_a_t_t_i_n_f_o
+             Returns the following:
+
+             _c_a_p     Battery capacity in percent,
+
+             _m_i_n     Remaining battery life in minutes,
+
+             _s_t_a_t_e   Current status of the battery encoded in the following:
+
+                     ACPI_BATT_STAT_DISCHARG (0x0001)
+                             Battery is discharging,
+
+                     ACPI_BATT_STAT_CHARGING (0x0002)
+                             Battery is being charged, or
+
+                     ACPI_BATT_STAT_CRITICAL (0x0004)
+                             Remaining battery life is critically low.
+
+                     Note that the status bits of each battery will be consol‐
+                     idated when ACPI_BATTERY_ALL_UNITS is specified.
+
+             _r_a_t_e    Current battery discharging rate in mW.  -1 means not
+                     discharging right now.
+
+     ACPIIO_BATT_GET_BIX _s_t_r_u_c_t _a_c_p_i___b_i_x
+             Returns battery information given by the ACPI _BIX (Battery
+             Information) object, which is the static portion of the Control
+             Method Battery information.  In the case of a Smart Battery at‐
+             tached to SMBus or a Control Method Battery with a _BIF object,
+             this ioctl will build a _s_t_r_u_c_t _a_c_p_i___b_i_x structure based on the
+             obtained information and return it.
+
+             _r_e_v     Revision number of the object.  There are the following
+                     well-known values:
+
+                     ACPI_BIX_REV_0 (0x0000)
+                             A _BIX object in ACPI 4.0.
+
+                     ACPI_BIX_REV_1 (0x0001)
+                             A _BIX object in ACPI 6.0.
+
+                     ACPI_BIX_REV_BIF (0xffff)
+                             A _BIX object built from the _BIF object found on
+                             the system.
+
+                     Note that this field should be checked by using
+                     AACCPPII__BBIIXX__RREEVV__MMIINN__CCHHEECCKK(_v_a_r, _r_e_v) macro when checking the
+                     minimum revision number.
+
+             _u_n_i_t_s   Indicates the units used by the battery to report its ca‐
+                     pacity and charge rate encoded in the following:
+
+                     ACPI_BIX_UNITS_MW (0x00000000)
+                             in mW (power)
+
+                     ACPI_BIX_UNITS_MA (0x00000001)
+                             in mA (current)
+
+                     Note that capacity is expressed in mWh or mAh, and rate
+                     is expressed in mW or mA, respectively.
+
+             _d_c_a_p    The Battery's design capacity, which is the nominal ca‐
+                     pacity of a new battery.  This is expressed as power or
+                     current depending on the value of _u_n_i_t_s.
+
+             _l_f_c_a_p   Predicted battery capacity when fully charged.  Typically
+                     this will decrease every charging cycle.
+
+             btech   Battery technology:
+
+                     0x00000000 Primary cell (non-rechargable)
+
+                     0x00000001 Secondary cell (rechargable)
+
+             _d_v_o_l    Design voltage in mV, which is the nominal voltage of a
+                     new battery.
+
+             _w_c_a_p    Design capacity of warning.  When a discharging battery
+                     device reaches this capacity, notification is sent to the
+                     system.
+
+             _l_c_a_p    Design capacity of low.
+
+             _c_y_c_l_e_s  (rev 0 or newer) The number of cycles the battery has ex‐
+                     perienced.  A cycle means an amount of discharge occurred
+                     which was approximately equal to the value of Design Ca‐
+                     pacity.
+
+             _a_c_c_u_r_a_c_y
+                     (rev 0 or newer) The accuracy of the battery capacity
+                     measurement, in thousandth of a percent.
+
+             _s_t_m_a_x   (rev 0 or newer) The Maximum Sampling Time of the battery
+                     in milliseconds.  This is the maximum duration between
+                     two consecutive measurements of the battery's capacities
+                     specified in _BST.  If two succeeding readings of _BST
+                     beyond this duration occur, two different results can be
+                     returned.
+
+             _s_t_m_i_n   (rev 0 or newer) The Minimum Sampling Time of the battery
+                     in milliseconds.
+
+             _a_i_m_a_x   (rev 0 or newer) The Maximum Average Interval of the bat‐
+                     tery in milliseconds.  This is the length of time within
+                     which the battery averages the capacity measurements
+                     specified in _BST.  The Sampling Time specifies the fre‐
+                     quency of measurements, and the Average Interval speci‐
+                     fies the width of the time window of every measurement.
+
+             _a_i_m_i_n   (rev 0 or newer) The Minimum Average Interval of the bat‐
+                     tery in milliseconds.
+
+             _g_r_a_1    Battery capacity granularity between _l_o_w and _w_a_r_n_i_n_g.
+                     This is expressed as power or current depending on the
+                     value of _u_n_i_t_s.
+
+             _g_r_a_2    Battery capacity granularity between _w_a_r_n_i_n_g and _f_u_l_l.
+                     This is expressed as power or current depending on the
+                     value of _u_n_i_t_s.
+
+             _m_o_d_e_l   Model number of the battery as a string.
+
+             _s_e_r_i_a_l  Serial number of the battery as a string.
+
+             _t_y_p_e    Type identifier of the battery as a string.
+
+             _o_e_m_i_n_f_o
+                     OEM-specific information of the battery as a string.
+
+             _s_c_a_p    (rev 1 or newer) Battery swapping capability encoded in
+                     the following:
+
+                     ACPI_BIX_SCAP_NO (0x00000000)
+                             Non-swappable
+
+                     ACPI_BIX_SCAP_COLD (0x00000001)
+                             Cold-swappable
+
+                     ACPI_BIX_SCAP_HOT (0x00000010)
+                             Hot-swappable
+
+     ACPIIO_BATT_GET_BIF _s_t_r_u_c_t _a_c_p_i___b_i_f
+             (deprecated) Returns battery information given by the ACPI _BIF
+             (Battery Information) object, which was deprecated in ACPI 4.0
+             specification.  The data structure is a subset of _s_t_r_u_c_t
+             _a_c_p_i___b_i_x.
+
+             Note that this ioctl will built a _s_t_r_u_c_t _a_c_p_i___b_i_f structure based
+             on the obtained information even if this object is not available
+             and a _BIX object is found.
+
+     ACPIIO_BATT_GET_BST _s_t_r_u_c_t _a_c_p_i___b_s_t
+             Returns battery information given by the ACPI _BST (Battery
+             Status) object, which is the present battery status.  In the case
+             of a Smart Battery attached to SMBus, this ioctl will build a
+             _s_t_r_u_c_t _a_c_p_i___b_s_t structure based on the obtained information and
+             return it.
+
+             _s_t_a_t_e   Battery state.  The value is encoded in the same way as
+                     _s_t_a_t_e of _s_t_r_u_c_t _a_c_p_i___b_a_t_t_i_n_f_o.
+
+             _r_a_t_e    Battery present rate of charging or discharging.  The
+                     unit of the value depends on _u_n_i_t of _s_t_r_u_c_t _a_c_p_i___b_i_f.
+
+             _c_a_p     Battery remaining capacity.  The unit of this value de‐
+                     pends on _u_n_i_t of _s_t_r_u_c_t _a_c_p_i___b_i_f.
+
+             _v_o_l_t    Battery present voltage.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     The following sysctl(8) variables export battery status.  Note that they
+     are accumulated status of all of the connected batteries:
+
+     _h_w_._a_c_p_i_._b_a_t_t_e_r_y_._i_n_f_o___e_x_p_i_r_e
+             Information cache expiration time in seconds.  The battery infor‐
+             mation obtained by _BIX or _BIF object will be stored and reused
+             for successive read access to this MIB within the specified pe‐
+             riod.
+
+     _h_w_._a_c_p_i_._b_a_t_t_e_r_y_._u_n_i_t_s
+             Number of battery units in the system.
+
+     _h_w_._a_c_p_i_._b_a_t_t_e_r_y_._s_t_a_t_e
+             Current battery charging status.  This is same as _s_t_a_t_e of _s_t_r_u_c_t
+             _a_c_p_i___b_a_t_t_i_n_f_o.
+
+     _h_w_._a_c_p_i_._b_a_t_t_e_r_y_._r_a_t_e
+             Current battery discharging rate in mW.
+
+     _h_w_._a_c_p_i_._b_a_t_t_e_r_y_._t_i_m_e
+             Remaining battery life in minutes.  If the battery is not dis‐
+             charging, the value shows -1.
+
+     _h_w_._a_c_p_i_._b_a_t_t_e_r_y_._l_i_f_e
+             Battery capacity in percent.
+
+EEVVEENNTT NNOOTTIIFFIICCAATTIIOONNSS
+     Battery-related event notifications are sent to the userland via the
+     devd(8) interface.  See _/_e_t_c_/_d_e_v_d_._c_o_n_f and devd.conf(5) for more details.
+     Note that notifications are supported only by the Control Method Battery.
+
+     The aaccppii__bbaatttteerryy driver sends events with the following attributes:
+
+     system     ACPI
+     subsystem  CMBAT
+     type       The fully qualified battery object path as in the ASL.
+     notify     An integer designating the event:
+
+                0x80    Battery status was changed.
+                0x81    Battery information was changed.
+
+SSEEEE AALLSSOO
+     acpi(4), acpiconf(8)
+
+AAUUTTHHOORRSS
+     Nate Lawson <_n_j_l_@_F_r_e_e_B_S_D_._o_r_g>, Munehiro Matsuda, Takanori Watanabe
+     <_t_a_k_a_w_a_t_a_@_F_r_e_e_B_S_D_._o_r_g>, Mitsuru IWASAKI <_i_w_a_s_a_k_i_@_F_r_e_e_B_S_D_._o_r_g>, Hans
+     Petter Selasky <_h_s_e_l_a_s_k_y_@_F_r_e_e_B_S_D_._o_r_g>, and Hiroki Sato <_h_r_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+     This manual page was written by Takanori Watanabe <_t_a_k_a_w_a_t_a_@_F_r_e_e_B_S_D_._o_r_g>
+     and Hiroki Sato <_h_r_s_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            February 16, 2020                           BSD

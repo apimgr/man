@@ -1,0 +1,353 @@
+NG_L2CAP(4)              BSD Kernel Interfaces Manual              NG_L2CAP(4)
+
+NNAAMMEE
+     nngg__ll22ccaapp — Netgraph node type that implements Bluetooth Logical Link Con‐
+     trol and Adaptation Protocol (L2CAP)
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//bblluueettooootthh//iinncclluuddee//nngg__hhccii..hh>>
+     ##iinncclluuddee <<nneettggrraapphh//bblluueettooootthh//iinncclluuddee//nngg__ll22ccaapp..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The ll22ccaapp node type is a Netgraph node type that implements Bluetooth
+     Logical Link Control and Adaptation Protocol as per chapter D of the
+     Bluetooth Specification Book v1.1.
+
+     L2CAP provides connection-oriented and connectionless data services to
+     upper layer protocols with protocol multiplexing capability, segmentation
+     and reassembly operation, and group abstractions.  L2CAP permits higher
+     level protocols and applications to transmit and receive L2CAP data pack‐
+     ets up to 64 kilobytes in length.
+
+   LL22CCAAPP AAssssuummppttiioonnss
+           1.   The ACL link between two units is set up.  The Baseband pro‐
+                vides orderly delivery of data packets, although there might
+                be individual packet corruption and duplicates.  No more than
+                one ACL link exists between any two devices.
+
+           2.   The Baseband always provides the impression of full-duplex
+                communication channels.  This does not imply that all L2CAP
+                communications are bi-directional.  Multicasts and unidirec‐
+                tional traffic (e.g., video) do not require duplex channels.
+
+           3.   L2CAP provides a reliable channel using the mechanisms avail‐
+                able at the Baseband layer.  The Baseband always performs data
+                integrity checks when requested and resends data until it has
+                been successfully acknowledged or a timeout occurs.  As ac‐
+                knowledgements may be lost, timeouts may occur even after the
+                data has been successfully sent.
+
+LL22CCAAPP GGEENNEERRAALL OOPPEERRAATTIIOONN
+     The Logical Link Control and Adaptation Protocol (L2CAP) is based around
+     the concept of “channels”.  Each channel is bound to a single protocol in
+     a many-to-one fashion.  Multiple channels can be bound to the same proto‐
+     col, but a channel cannot be bound to multiple protocols.  Each L2CAP
+     packet received on a channel is directed to the appropriate higher level
+     protocol.
+
+     Each one of the end-points of an L2CAP channel is referred to by a chan‐
+     nel identifier.  Channel identifiers (CIDs) are local names representing
+     a logical channel end-point on the device.  Identifiers from 0x0001 to
+     0x003F are reserved for specific L2CAP functions.  The null identifier
+     (0x0000) is defined as an illegal identifier and must never be used as a
+     destination end-point.  All L2CAP signalling commands are sent to CID
+     0x0001.  CID 0x0002 is reserved for group-oriented channel.  The same CID
+     must not be reused as a local L2CAP channel endpoint for multiple simul‐
+     taneous L2CAP channels between a local device and some remote device.
+
+     CID assignment is relative to a particular device and a device can assign
+     CIDs independently from other devices.  Thus, even if the same CID value
+     has been assigned to (remote) channel endpoints by several remote devices
+     connected to a single local device, the local device can still uniquely
+     associate each remote CID with a different device.
+
+   CChhaannnneell OOppeerraattiioonnaall SSttaatteess
+     NG_L2CAP_CLOSED
+          In this state, there is no channel associated with this CID.  This
+          is the only state when a link level connection (Baseband) may not
+          exist.  Link disconnection forces all other states into the
+          NG_L2CAP_CLOSED state.
+
+     NG_L2CAP_W4_L2CAP_CON_RSP
+          In this state, the CID represents a local end-point and an L2CAP
+          Connect Request message has been sent referencing this endpoint and
+          it is now waiting for the corresponding L2CAP Connect Response mes‐
+          sage.
+
+     NG_L2CAP_W4_L2CA_CON_RSP
+          In this state, the remote end-point exists and an L2CAP Connect Re‐
+          quest has been received by the local L2CAP entity.  An L2CA Connect
+          Indication has been sent to the upper layer and the part of the lo‐
+          cal L2CAP entity processing the received L2CAP Connect Request waits
+          for the corresponding response.  The response may require a security
+          check to be performed.
+
+     NG_L2CAP_CONFIG
+          In this state, the connection has been established but both sides
+          are still negotiating the channel parameters.  The Configuration
+          state may also be entered when the channel parameters are being
+          renegotiated.  Prior to entering the NG_L2CAP_CONFIG state, all out‐
+          going data traffic is suspended since the traffic parameters of the
+          data traffic are to be renegotiated.  Incoming data traffic is ac‐
+          cepted until the remote channel endpoint has entered the
+          NG_L2CAP_CONFIG state.  In the NG_L2CAP_CONFIG state, both sides
+          will issue L2CAP Configuration Request messages if only defaults are
+          being used, a null message will be sent.  If a large amount of pa‐
+          rameters need to be negotiated, multiple messages will be sent to
+          avoid any MTU limitations and negotiate incrementally.  Moving from
+          the NG_L2CAP_CONFIG state to the NG_L2CAP_OPEN state requires both
+          sides to be ready.  An L2CAP entity is ready when it has received a
+          positive response to its final request and it has positively re‐
+          sponded to the final request from the remote device.
+
+     NG_L2CAP_OPEN
+          In this state, the connection has been established and configured,
+          and data flow may proceed.
+
+     NG_L2CAP_W4_L2CAP_DISCON_RSP
+          In this state, the connection is shutting down and an L2CAP Discon‐
+          nect Request message has been sent.  This state is now waiting for
+          the corresponding response.
+
+     NG_L2CAP_W4_L2CA_DISCON_RSP
+          In this state, the connection on the remote endpoint is shutting
+          down and an L2CAP Disconnect Request message has been received.  An
+          L2CA Disconnect Indication has been sent to the upper layer to no‐
+          tify the owner of the CID that the remote endpoint is being closed.
+          This state is now waiting for the corresponding response from the
+          upper layer before responding to the remote endpoint.
+
+   PPrroottooccooll MMuullttiipplleexxiinngg
+     L2CAP supports protocol multiplexing because the Baseband Protocol does
+     not support any “type” field identifying the higher layer protocol being
+     multiplexed above it.  L2CAP is able to distinguish between upper layer
+     protocols such as the Service Discovery Protocol, RFCOMM and Telephony
+     Control.
+
+   SSeeggmmeennttaattiioonn aanndd RReeaasssseemmbbllyy
+     The data packets defined by the Baseband Protocol are limited in size.
+     Large L2CAP packets must be segmented into multiple smaller Baseband
+     packets prior to their transmission over the air.  Similarly, multiple
+     received Baseband packets may be reassembled into a single larger L2CAP
+     packet.
+
+   QQuuaalliittyy ooff SSeerrvviiccee
+     The L2CAP connection establishment process allows the exchange of infor‐
+     mation regarding the quality of service (QoS) expected between two Blue‐
+     tooth units.
+
+   GGrroouuppss
+     The Baseband Protocol supports the concept of a piconet, a group of de‐
+     vices synchronously hopping together using the same clock.  The L2CAP
+     group abstraction permits implementations to efficiently map protocol
+     groups on to piconets.
+
+     The following features are outside the scope of L2CAP responsibilities:
+
+           --   L2CAP does not transport audio designated for SCO links.
+
+           --   L2CAP does not enforce a reliable channel or ensure data integ‐
+               rity, that is, L2CAP performs no retransmissions or checksum
+               calculations.
+
+           --   L2CAP does not support a reliable multicast channel.
+
+           --   L2CAP does not support the concept of a global group name.
+
+HHOOOOKKSS
+     This node type supports the following hooks:
+
+     _h_c_i  Bluetooth Host Controller Interface downstream hook.
+
+     _l_2_c  Upper layer protocol upstream hook.  Usually the Bluetooth L2CAP
+          socket layer is connected to the hook.
+
+     _c_t_l  Control hook.  Usually the Bluetooth raw L2CAP sockets layer is con‐
+          nected to the hook.
+
+IINNTTEERRFFAACCEE TTOO TTHHEE UUPPPPEERR LLAAYYEERR PPRROOTTOOCCOOLLSS ((LL22CCAA CCOONNTTRROOLL MMEESSSSAAGGEESS))
+     Bluetooth specification says that L2CA request must block until response
+     is ready.  L2CAP node uses _t_o_k_e_n field from Netgraph message header to
+     match L2CA request and response.  The upper layer protocol must populate
+     _t_o_k_e_n.  L2CAP node will queue request and start processing.  Later, when
+     response is ready or timeout has occurred, L2CAP node will create new
+     Netgraph message, set _t_o_k_e_n and NFG_RESP flag and send message to the up‐
+     per layer.  Note that L2CA indication messages will not populate _t_o_k_e_n
+     and will not set NGF_RESP flag.  There is no reason for this, because
+     they are just notifications and do not require acknowledgment.
+
+     NGM_L2CAP_L2CA_CON
+          Requests the creation of a channel representing a logical connection
+          to a physical address.  Input parameters are the target protocol
+          (PSM) and remote device's 48-bit address (BD_ADDR).  Output parame‐
+          ters are the local CID (LCID) allocated by the local L2CAP entity,
+          and Result of the request.  If Result indicates a pending notifica‐
+          tion, the Status value may contain more information of what process‐
+          ing is delaying the establishment of the connection.
+
+     NGM_L2CAP_L2CA_CON_IND
+          This message includes the parameters for the address of the remote
+          device that issued the connection request, the local CID represent‐
+          ing the channel being requested, the Identifier contained in the re‐
+          quest, and the PSM value the request is targeting.
+
+     NGM_L2CAP_L2CA_CON_RSP
+          Issues a response to a connection request event indication.  Input
+          parameters are the remote device's 48-bit address, Identifier sent
+          in the request, local CID, the Response code, and the Status at‐
+          tached to the Response code.  The output parameter is the Result of
+          the service request.  This primitive must be called no more than
+          once after receiving the indication.
+
+     NGM_L2CAP_L2CA_CFG
+          Requests the initial configuration (or reconfiguration) of a channel
+          to a new set of channel parameters.  Input parameters are the local
+          CID endpoint, new incoming receivable MTU (InMTU), new outgoing flow
+          spec-ification, and flush and link timeouts.  Output parameters are
+          the Result, accepted incoming MTU (InMTU), the remote side's flow
+          requests, and flush and link timeouts.
+
+     NGM_L2CAP_L2CA_CFG_IND
+          This message includes the parameters indicating the local CID of the
+          channel the request has been sent to, the outgoing MTU size (maximum
+          packet that can be sent across the channel) and the flowspec de‐
+          scribing the characteristics of the incoming data.  All other chan‐
+          nel parameters are set to their default values if not provided by
+          the remote device.
+
+     NGM_L2CAP_L2CA_CFG_RSP
+          Issues a response to a configuration request event indication.  In‐
+          put parameters include the local CID of the endpoint being config‐
+          ured, outgoing transmit MTU (which may be equal or less to the
+          OutMTU parameter in the configuration indication event) and the ac‐
+          cepted flowspec for incoming traffic.  The output parameter is the
+          Result value.
+
+     NGM_L2CAP_L2CA_QOS_IND
+          This message includes the parameter indicating the address of the
+          remote Bluetooth device where the QoS contract has been violated.
+
+     NGM_L2CAP_L2CA_DISCON
+          Requests the disconnection of the channel.  Input parameter is the
+          CID representing the local channel endpoint.  Output parameter is
+          Result.  Result is zero if an L2CAP Disconnect Response is received,
+          otherwise a non-zero value is returned.  Once disconnection has been
+          requested, no process will be able to successfully read or write
+          from the CID.
+
+     NGM_L2CAP_L2CA_DISCON_IND
+          This message includes the parameter indicating the local CID the re‐
+          quest has been sent to.
+
+     NGM_L2CAP_L2CA_WRITE
+          Response to transfer of data request.  Actual data must be received
+          from appropriate upstream hook and must be prepended with header de‐
+          fined as follows.
+
+                /* L2CA data packet header */
+                typedef struct {
+                        uint32_t token;  /* token to use in L2CAP_L2CA_WRITE */
+                        uint16_t length; /* length of the data */
+                        uint16_t lcid;   /* local channel ID */
+                } __attribute__ ((packed)) ng_l2cap_l2ca_hdr_t;
+
+          The output parameters are Result and Length of data written.
+
+     NGM_L2CAP_L2CA_GRP_CREATE
+          Requests the creation of a CID to represent a logical connection to
+          multiple devices.  Input parameter is the PSM value that the outgo‐
+          ing connectionless traffic is labelled with, and the filter used for
+          incoming traffic.  Output parameter is the CID representing the lo‐
+          cal endpoint.  On creation, the group is empty but incoming traffic
+          destined for the PSM value is readable.  _T_h_i_s _r_e_q_u_e_s_t _h_a_s _n_o_t _b_e_e_n
+          _i_m_p_l_e_m_e_n_t_e_d_.
+
+     NGM_L2CAP_L2CA_GRP_CLOSE
+          The use of this message closes down a Group.  _T_h_i_s _r_e_q_u_e_s_t _h_a_s _n_o_t
+          _b_e_e_n _i_m_p_l_e_m_e_n_t_e_d_.
+
+     NGM_L2CAP_L2CA_GRP_ADD_MEMBER
+          Requests the addition of a member to a group.  The input parameter
+          includes the CID representing the group and the BD_ADDR of the group
+          member to be added.  The output parameter Result confirms the suc‐
+          cess or failure of the request.  _T_h_i_s _r_e_q_u_e_s_t _h_a_s _n_o_t _b_e_e_n _i_m_p_l_e_‐
+          _m_e_n_t_e_d_.
+
+     NGM_L2CAP_L2CA_GRP_REM_MEMBER
+          Requests the removal of a member from a group.  The input parameters
+          include the CID representing the group and BD_ADDR of the group mem‐
+          ber to be removed.  The output parameter Result confirms the success
+          or failure of the request.  _T_h_i_s _r_e_q_u_e_s_t _h_a_s _n_o_t _b_e_e_n _i_m_p_l_e_m_e_n_t_e_d_.
+
+     NGM_L2CAP_L2CA_GRP_MEMBERSHIP
+          Requests a report of the members of a group.  The input parameter
+          CID represents the group being queried.  The output parameter Result
+          confirms the success or failure of the operation.  If the Result is
+          successful, BD_ADDR_Lst is a list of the Bluetooth addresses of the
+          N members of the group.  _T_h_i_s _r_e_q_u_e_s_t _h_a_s _n_o_t _b_e_e_n _i_m_p_l_e_m_e_n_t_e_d_.
+
+     NGM_L2CAP_L2CA_PING
+          Initiates an L2CA Echo Request message and the reception of the cor‐
+          responding L2CAP Echo Response message.  The input parameters are
+          remote Bluetooth device BD_ADDR, Echo Data and Length of the echo
+          data.  The output parameters are Result, Echo Data and Length of the
+          echo data.
+
+     NGM_L2CAP_L2CA_GET_INFO
+          Initiates an L2CA Information Request message and the reception of
+          the corresponding L2CAP Info Response message.  The input parameters
+          are remote Bluetooth device BD_ADDR and Information Type.  The out‐
+          put parameters are Result, Information Data and Size of the informa‐
+          tion data.
+
+     NGM_L2CAP_L2CA_ENABLE_CLT
+          Request to disable (enable) the reception of connectionless packets.
+          The input parameter is the PSM value indicating service that should
+          be blocked (unblocked) and Enable flag.
+
+NNEETTGGRRAAPPHH CCOONNTTRROOLL MMEESSSSAAGGEESS
+     This node type supports the generic control messages, plus the following:
+
+     NGM_L2CAP_NODE_GET_FLAGS
+          Returns current state for the node.
+
+     NGM_L2CAP_NODE_GET_DEBUG
+          Returns an integer containing the current debug level for the node.
+
+     NGM_L2CAP_NODE_SET_DEBUG
+          This command takes an integer argument and sets current debug level
+          for the node.
+
+     NGM_L2CAP_NODE_GET_CON_LIST
+          Returns list of active baseband connections (i.e., ACL links).
+
+     NGM_L2CAP_NODE_GET_CHAN_LIST
+          Returns list of active L2CAP channels.
+
+     NGM_L2CAP_NODE_GET_AUTO_DISCON_TIMO
+          Returns an integer containing the current value of the auto discon‐
+          nect timeout (in sec).
+
+     NGM_L2CAP_NODE_SET_AUTO_DISCON_TIMO
+          This command accepts an integer and sets the value of the auto dis‐
+          connect timeout (in sec).  The special value of 0 (zero) disables
+          auto disconnect timeout.
+
+SSHHUUTTDDOOWWNN
+     This node shuts down upon receipt of an NGM_SHUTDOWN control message, or
+     when all hooks have been disconnected.
+
+SSEEEE AALLSSOO
+     netgraph(4), l2control(8), l2ping(8), ngctl(8)
+
+HHIISSTTOORRYY
+     The ll22ccaapp node type was implemented in FreeBSD 5.0.
+
+AAUUTTHHOORRSS
+     Maksim Yevmenkin <_m___e_v_m_e_n_k_i_n_@_y_a_h_o_o_._c_o_m>
+
+BBUUGGSS
+     Most likely.  Please report if found.
+
+BSD                              July 4, 2002                              BSD

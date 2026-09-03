@@ -1,0 +1,238 @@
+BXE(4)                   BSD Kernel Interfaces Manual                   BXE(4)
+
+NNAAMMEE
+     bbxxee — QLogic NetXtreme II Ethernet 10Gb PCIe adapter driver
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following lines in your
+     kernel configuration file:
+
+           ddeevviiccee bbxxee
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           if_bxe_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The bbxxee driver provides support for PCIe 10Gb Ethernet adapters based on
+     the QLogic NetXtreme II family of 10Gb chips.  The driver supports Jumbo
+     Frames, VLAN tagging, checksum offload (IPv4, TCP, UDP, IPv6-TCP,
+     IPv6-UDP), MSI-X interrupts, TCP Segmentation Offload (TSO), Large Re‐
+     ceive Offload (LRO), and Receive Side Scaling (RSS).
+
+HHAARRDDWWAARREE
+     The bbxxee driver provides support for various NICs based on the QLogic
+     NetXtreme II family of 10Gb Ethernet controller chips, including the fol‐
+     lowing:
+
+     ••   QLogic NetXtreme II BCM57710 10Gb
+     ••   QLogic NetXtreme II BCM57711 10Gb
+     ••   QLogic NetXtreme II BCM57711E 10Gb
+     ••   QLogic NetXtreme II BCM57712 10Gb
+     ••   QLogic NetXtreme II BCM57712-MF 10Gb
+     ••   QLogic NetXtreme II BCM57800 10Gb
+     ••   QLogic NetXtreme II BCM57800-MF 10Gb
+     ••   QLogic NetXtreme II BCM57810 10Gb
+     ••   QLogic NetXtreme II BCM57810-MF 10Gb
+     ••   QLogic NetXtreme II BCM57840 10Gb / 20Gb
+     ••   QLogic NetXtreme II BCM57840-MF 10Gb
+
+CCOONNFFIIGGUURRAATTIIOONN
+     There a number of configuration parameters that can be set to tweak the
+     driver's behavior.  These parameters can be set via the loader.conf(5)
+     file to take effect during the next system boot.  The following parame‐
+     ters affect ALL instances of the driver.
+
+     _h_w_._b_x_e_._d_e_b_u_g
+             DEFAULT = 0
+             Sets the default logging level of the driver.  See the Diagnos‐
+             tics and Debugging section below for more details.
+
+     _h_w_._b_x_e_._i_n_t_e_r_r_u_p_t___m_o_d_e
+             DEFAULT = 2
+             Sets the default interrupt mode: 0=IRQ, 1=MSI, 2=MSIX.  If set to
+             MSIX and allocation fails, the driver will roll back and attempt
+             MSI allocation.  If MSI allocation fails, the driver will roll
+             back and attempt fixed level IRQ allocation.  If IRQ allocation
+             fails, then the driver load fails.  With MSI/MSIX, the driver at‐
+             tempts to allocate a vector for each queue in addition to one
+             more for default processing.
+
+     _h_w_._b_x_e_._q_u_e_u_e___c_o_u_n_t
+             DEFAULT = 4
+             Sets the default number of fast path packet processing queues.
+             Note that one MSI/MSIX interrupt vector is allocated per-queue.
+
+     _h_w_._b_x_e_._m_a_x___r_x___b_u_f_s
+             DEFAULT = 0
+             Sets the maximum number of receive buffers to allocate per-queue.
+             Zero(0) means to allocate a receive buffer for every buffer de‐
+             scriptor.  By default this equates to 4080 buffers per-queue
+             which is the maximum value for this config parameter.
+
+     _h_w_._b_x_e_._h_c___r_x___t_i_c_k_s
+             DEFAULT = 25
+             Sets the number of ticks for host interrupt coalescing in the re‐
+             ceive path.
+
+     _h_w_._b_x_e_._h_c___t_x___t_i_c_k_s
+             DEFAULT = 50
+             Sets the number of ticks for host interrupt coalescing in the
+             transmit path.
+
+     _h_w_._b_x_e_._r_x___b_u_d_g_e_t
+             DEFAULT = 0xffffffff
+             Sets the maximum number of receive packets to process in an in‐
+             terrupt.  If the budget is reached then the remaining/pending
+             packets will be processed in a scheduled taskqueue.
+
+     _h_w_._b_x_e_._m_a_x___a_g_g_r_e_g_a_t_i_o_n___s_i_z_e
+             DEFAULT = 32768
+             Sets the maximum LRO aggregration byte size.  The higher the
+             value the more packets the hardware will aggregate.  Maximum is
+             65K.
+
+     _h_w_._b_x_e_._m_r_r_s
+             DEFAULT = -1
+             Sets the PCI MRRS: -1=Auto, 0=128B, 1=256B, 2=512B, 3=1KB
+
+     _h_w_._b_x_e_._a_u_t_o_g_r_e_e_e_n
+             DEFAULT = 0
+             Set AutoGrEEEN: 0=HW_DEFAULT, 1=FORCE_ON, 2=FORCE_OFF
+
+     _h_w_._b_x_e_._u_d_p___r_s_s
+             DEFAULT = 0
+             Enable/Disable 4-tuple RSS for UDP: 0=DISABLED, 1=ENABLED
+
+     Special care must be taken when modifying the number of queues and re‐
+     ceive buffers.  FreeBSD imposes a limit on the maximum number of mbuf(9)
+     allocations.  If buffer allocations fail, the interface initialization
+     will fail and the interface will not be usable.  The driver does not make
+     a best effort for buffer allocations.  It is an all or nothing effort.
+
+     You can tweak the mbuf(9) allocation limit using sysctl(8) and view the
+     current usage with netstat(1) as follows:
+
+           # netstat -m
+           # sysctl kern.ipc.nmbclusters
+           # sysctl kern.ipc.nmbclusters=<#>
+
+     There are additional configuration parameters that can be set on a per-
+     instance basis to dynamically override the default configuration.  The
+     '#' below must be replaced with the driver instance / interface unit num‐
+     ber:
+
+     _d_e_v_._b_x_e_._#_._d_e_b_u_g
+             DEFAULT = 0
+             Sets the default logging level of the driver instance.  See
+             _h_w_._b_x_e_._d_e_b_u_g above and the Diagnostics and Debugging section be‐
+             low for more details.
+
+     _d_e_v_._b_x_e_._#_._r_x___b_u_d_g_e_t
+             DEFAULT = 0xffffffff
+             Sets the maximum number of receive packets to process in an in‐
+             terrupt for the driver instance.  See _h_w_._b_x_e_._r_x___b_u_d_g_e_t above for
+             more details.
+
+     Additional items can be configured using ifconfig(8):
+
+     _M_T_U _- _M_a_x_i_m_u_m _T_r_a_n_s_m_i_s_s_i_o_n _U_n_i_t
+             DEFAULT = 1500
+             RANGE = 46-9184
+             # ifconfig bxe# mtu <n>
+
+     _P_r_o_m_i_s_c_u_o_u_s _M_o_d_e
+             DEFAULT = OFF
+             # ifconfig bxe# [ promisc | -promisc ]
+
+     _R_x_/_T_x _C_h_e_c_k_s_u_m _O_f_f_l_o_a_d
+             DEFAULT = RX/TX CSUM ON
+             Note that the Rx and Tx settings are not independent.
+             # ifconfig bxe# [ rxcsum | -rxcsum | txcsum | -txcsum ]
+
+     _T_S_O _- _T_C_P _S_e_g_m_e_n_t_a_t_i_o_n _O_f_f_l_o_a_d
+             DEFAULT = ON
+             # ifconfig bxe# [ tso | -tso | tso6 | -tso6 ]
+
+     _L_R_O _- _T_C_P _L_a_r_g_e _R_e_c_e_i_v_e _O_f_f_l_o_a_d
+             DEFAULT = ON
+             # ifconfig bxe# [ lro | -lro ]
+
+DDIIAAGGNNOOSSTTIICCSS AANNDD DDEEBBUUGGGGIINNGG
+     There are many statistics exposed by bbxxee via sysctl(8).
+
+     To dump the default driver configuration:
+
+           # sysctl -a | grep hw.bxe
+
+     To dump every instance's configuration and detailed statistics:
+
+           # sysctl -a | grep dev.bxe
+
+     To dump information for a single instance (replace the '#' with the
+     driver instance / interface unit number):
+
+           # sysctl -a | grep dev.bxe.#
+
+     To dump information for all the queues of a single instance:
+
+           # sysctl -a | grep dev.bxe.#.queue
+
+     To dump information for a single queue of a single instance (replace the
+     additional '#' with the queue number):
+
+           # sysctl -a | grep dev.bxe.#.queue.#
+
+     The bbxxee driver has the ability to dump a ton of debug messages to the
+     system log.  The default level of logging can be set with the
+     _h_w_._b_x_e_._d_e_b_u_g sysctl(8).  Take care with this setting as it can result in
+     too many logs being dumped.  Since this parameter is the default one, it
+     affects every instance and will dramatically change the timing in the
+     driver.  A better alternative to aid in debugging is to dynamically
+     change the debug level of a specific instance with the _d_e_v_._b_x_e_._#_._d_e_b_u_g
+     sysctl(8).  This allows you to turn on/off logging of various debug
+     groups on-the-fly.
+
+     The different debug groups that can be toggled are:
+
+           DBG_LOAD   0x00000001 /* load and unload    */
+           DBG_INTR   0x00000002 /* interrupt handling */
+           DBG_SP     0x00000004 /* slowpath handling  */
+           DBG_STATS  0x00000008 /* stats updates      */
+           DBG_TX     0x00000010 /* packet transmit    */
+           DBG_RX     0x00000020 /* packet receive     */
+           DBG_PHY    0x00000040 /* phy/link handling  */
+           DBG_IOCTL  0x00000080 /* ioctl handling     */
+           DBG_MBUF   0x00000100 /* dumping mbuf info  */
+           DBG_REGS   0x00000200 /* register access    */
+           DBG_LRO    0x00000400 /* lro processing     */
+           DBG_ASSERT 0x80000000 /* debug assert       */
+           DBG_ALL    0xFFFFFFFF /* flying monkeys     */
+
+     For example, to debug an issue in the receive path on bxe0:
+
+           # sysctl dev.bxe.0.debug=0x22
+
+     When finished turn the logging back off:
+
+           # sysctl dev.bxe.0.debug=0
+
+SSUUPPPPOORRTT
+     For support questions please contact your QLogic approved reseller or
+     QLogic Technical Support at _h_t_t_p_:_/_/_s_u_p_p_o_r_t_._q_l_o_g_i_c_._c_o_m, or by E-mail at
+     ⟨_s_u_p_p_o_r_t_@_q_l_o_g_i_c_._c_o_m⟩.
+
+SSEEEE AALLSSOO
+     netstat(1), altq(4), arp(4), netintro(4), ng_ether(4), vlan(4),
+     ifconfig(8)
+
+HHIISSTTOORRYY
+     The bbxxee device driver first appeared in FreeBSD 9.0.
+
+AAUUTTHHOORRSS
+     The bbxxee driver was written by Eric Davis <_e_d_a_v_i_s_@_b_r_o_a_d_c_o_m_._c_o_m>,
+     David Christensen <_d_a_v_i_d_c_h_@_b_r_o_a_d_c_o_m_._c_o_m>, and
+     Gary Zambrano <_z_a_m_b_r_a_n_o_@_b_r_o_a_d_c_o_m_._c_o_m>.
+
+BSD                             April 29, 2012                             BSD

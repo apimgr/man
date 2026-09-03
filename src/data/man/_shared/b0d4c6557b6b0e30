@@ -1,0 +1,152 @@
+KCOV(4)                  BSD Kernel Interfaces Manual                  KCOV(4)
+
+NNAAMMEE
+     kkccoovv — kernel code coverage tracing
+
+SSYYNNOOPPSSIISS
+     ppsseeuuddoo--ddeevviiccee kkccoovv
+
+     ##iinncclluuddee <<ssyyss//kkccoovv..hh>>
+
+DDEESSCCRRIIPPTTIIOONN
+     The kkccoovv driver implements collection of code coverage inside the kernel.
+     It can be enabled on a per thread basis from user space, allowing the
+     kernel program counter to be collected during syscalls triggered by the
+     same thread.  The collected coverage can be accessed by mapping the de‐
+     vice using mmap(2).
+
+     By default, kkccoovv is not enabled but instead requires the following line
+     to be present in the kernel configuration:
+
+           pseudo-device kcov 1
+
+     The following ioctl(2) calls are provided:
+
+     KIOSETBUFSIZE _u_n_s_i_g_n_e_d _l_o_n_g _*_n_e_n_t_r_i_e_s
+           Allocate a coverage buffer with a capacity of _n_e_n_t_r_i_e_s.  The buffer
+           can be accessed using mmap(2), whereas the returned pointer must be
+           interpreted as an array of _u_n_s_i_g_n_e_d _l_o_n_g entries.  The first entry
+           contains the number of entries in the array, excluding the first
+           entry.
+
+     KIOENABLE _i_n_t _*_m_o_d_e
+           Enable code coverage tracing for the current thread or any remote
+           subsystem attached using KIOREMOTEATTACH.  The _m_o_d_e must be one of
+           the following:
+
+           KCOV_MODE_TRACE_PC
+           Trace the kernel program counter.
+
+           KCOV_MODE_TRACE_CMP
+           Trace comparison instructions and switch statements.  For switch
+           statements, the number of traced comparison instructions is equal
+           to the number of switch cases.  Each traced comparison instruction
+           is represented by 4 entries in the coverage buffer:
+
+           1.   A mask where the least significant bit is set if one of the
+                comparison operands is a compile-time constant, which is al‐
+                ways true for switch statements.  The remaining bits repre‐
+                sents the log2 size of the operands, ranging from 0 to 3.
+
+           2.   First comparison operand.  For switch statements, this operand
+                corresponds to the case value.
+
+           3.   Second comparison operand.  For switch statements, this oper‐
+                and corresponds to the value passed to switch.
+
+           4.   Kernel program counter where the comparison instruction took
+                place.
+
+           In this mode, the first entry in the coverage buffer reflects the
+           number of traced comparison instructions.  Thus, the effective num‐
+           ber of entries in the coverage buffer is given by multiplying the
+           first entry by 4.
+
+     KIODISABLE _v_o_i_d
+           Disable code coverage tracing for the current thread.
+
+     KIOREMOTEATTACH _s_t_r_u_c_t _k_i_o___r_e_m_o_t_e___a_t_t_a_c_h _*_r_e_m_o_t_e
+           Attach collection of remote coverage from other kernel threads,
+           identified by a subsystem.  Collection of remote coverage is mutu‐
+           ally exclusive with coverage collection of the current thread.  The
+           _r_e_m_o_t_e argument is a pointer to the following structure:
+
+           struct kio_remote_attach {
+                   int     subsystem;
+                   int     id;
+           };
+
+           The _s_u_b_s_y_s_t_e_m field must be one of the following:
+
+           KCOV_REMOTE_COMMON
+           Collect coverage from tasks and timeouts scheduled by the current
+           process, see task_add(9) and timeout(9).  The _i_d field is ignored.
+
+FFIILLEESS
+     /dev/kcov  Default device node.
+
+EEXXAAMMPPLLEESS
+     In the following example, the read(2) syscall is traced and the coverage
+     displayed, which in turn can be passed to addr2line(1) in order to trans‐
+     late the kernel program counter into the file name and line number it
+     corresponds to.
+
+     #include <sys/ioctl.h>
+     #include <sys/kcov.h>
+     #include <sys/mman.h>
+
+     #include <err.h>
+     #include <fcntl.h>
+     #include <stdio.h>
+     #include <stdlib.h>
+     #include <unistd.h>
+
+     int
+     main(void)
+     {
+             unsigned long *cover, i;
+             unsigned long size = 1024;
+             int fd, mode;
+
+             fd = open("/dev/kcov", O_RDWR);
+             if (fd == -1)
+                     err(1, "open");
+
+             if (ioctl(fd, KIOSETBUFSIZE, &size) == -1)
+                     err(1, "ioctl: KIOSETBUFSIZE");
+             cover = mmap(NULL, size * sizeof(unsigned long),
+                 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+             if (cover == MAP_FAILED)
+                     err(1, "mmap");
+
+             mode = KCOV_MODE_TRACE_PC;
+             if (ioctl(fd, KIOENABLE, &mode) == -1)
+                     err(1, "ioctl: KIOENABLE");
+             read(-1, NULL, 0);
+             if (ioctl(fd, KIODISABLE) == -1)
+                     err(1, "ioctl: KIODISABLE");
+
+             for (i = 0; i < cover[0]; i++)
+                     printf("%p\n", (void *)cover[i + 1]);
+
+             if (munmap(cover, size * sizeof(unsigned long)) == -1)
+                     err(1, "munmap");
+             close(fd);
+
+             return 0;
+     }
+
+SSEEEE AALLSSOO
+     files.conf(5), kcov_remote_register(9)
+
+HHIISSTTOORRYY
+     The kkccoovv driver first appeared in OpenBSD 6.4.
+
+AAUUTTHHOORRSS
+     The kkccoovv driver was written by Anton Lindqvist <_a_n_t_o_n_@_o_p_e_n_b_s_d_._o_r_g>.
+
+CCAAVVEEAATTSS
+     The kkccoovv driver is limited to architectures using clang(1) as their de‐
+     fault compiler.
+
+BSD                            December 30, 2021                           BSD

@@ -1,0 +1,140 @@
+UNR(9)                   BSD Kernel Developer's Manual                  UNR(9)
+
+NNAAMMEE
+     nneeww__uunnrrhhddrr, cclleeaann__uunnrrhhddrr, cclleeaarr__uunnrrhhddrr, ddeelleettee__uunnrrhhddrr, aalllloocc__uunnrr,
+     aalllloocc__uunnrr__ssppeecciiffiicc, ffrreeee__uunnrr, ccrreeaattee__iitteerr__uunnrr, nneexxtt__iitteerr__uunnrr,
+     ffrreeee__iitteerr__uunnrr — kernel unit number allocator
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ssyyssttmm..hh>>
+
+     _s_t_r_u_c_t _u_n_r_h_d_r _*
+     nneeww__uunnrrhhddrr(_i_n_t _l_o_w, _i_n_t _h_i_g_h, _s_t_r_u_c_t _m_t_x _*_m_u_t_e_x);
+
+     _v_o_i_d
+     cclleeaann__uunnrrhhddrr(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _v_o_i_d
+     cclleeaann__uunnrrhhddrrll(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _v_o_i_d
+     cclleeaarr__uunnrrhhddrr(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _v_o_i_d
+     ddeelleettee__uunnrrhhddrr(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _i_n_t
+     aalllloocc__uunnrr(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _i_n_t
+     aalllloocc__uunnrrll(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _i_n_t
+     aalllloocc__uunnrr__ssppeecciiffiicc(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h, _u___i_n_t _i_t_e_m);
+
+     _v_o_i_d
+     ffrreeee__uunnrr(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h, _u___i_n_t _i_t_e_m);
+
+     _v_o_i_d _*
+     ccrreeaattee__iitteerr__uunnrr(_s_t_r_u_c_t _u_n_r_h_d_r _*_u_h);
+
+     _i_n_t
+     nneexxtt__iitteerr__uunnrr(_v_o_i_d _*_h_a_n_d_l_e);
+
+     _v_o_i_d
+     ffrreeee__iitteerr__uunnrr(_v_o_i_d _*_h_a_n_d_l_e);
+
+DDEESSCCRRIIPPTTIIOONN
+     The kernel unit number allocator is a generic facility, which allows to
+     allocate unit numbers within a specified range.
+
+     nneeww__uunnrrhhddrr(_l_o_w, _h_i_g_h, _m_u_t_e_x)
+             Initialize a new unit number allocator entity.  The _l_o_w and _h_i_g_h
+             arguments specify minimum and maximum number of unit numbers.
+             There is no cost associated with the range of unit numbers, so
+             unless the resource really is finite, INT_MAX can be used.  If
+             _m_u_t_e_x is not NULL, it is used for locking when allocating and
+             freeing units.  If the passed value is the token _U_N_R___N_O___M_T_X, then
+             no locking is applied internally.  Otherwise, internal mutex is
+             used.
+
+     cclleeaarr__uunnrrhhddrr(_u_h)
+             Clear all units from the specified unit number allocator entity.
+             This function resets the entity as if it were just initialized
+             with nneeww__uunnrrhhddrr().
+
+     ddeelleettee__uunnrrhhddrr(_u_h)
+             Delete specified unit number allocator entity.  This function
+             frees the memory associated with the entity, it does not free any
+             units.  To free all units use cclleeaarr__uunnrrhhddrr().
+
+     cclleeaann__uunnrrhhddrr(_u_h)
+             Freeing unit numbers might result in some internal memory becom‐
+             ing unused.  There are uunniitt allocator consumers that cannot tol‐
+             erate taking malloc(9) locks to free the memory, while having
+             their unit mutex locked.  For this reason, free of the unused
+             memory after delete is postponed until the consumer can afford
+             calling into the malloc(9) subsystem.  Call cclleeaann__uunnrrhhddrr(_u_h) to
+             do the cleanup.  In particular, this needs to be done before
+             freeing a unr, if a deletion of units could have been performed.
+
+     cclleeaann__uunnrrhhddrrll()
+             Same as cclleeaann__uunnrrhhddrr(), but assumes that the unr mutex is already
+             owned, if any.
+
+     aalllloocc__uunnrr(_u_h)
+             Return a new unit number.  The lowest free number is always allo‐
+             cated.  This function does not allocate memory and never sleeps,
+             however it may block on a mutex.  If no free unit numbers are
+             left, -1 is returned.
+
+     aalllloocc__uunnrrll(_u_h)
+             Same as aalllloocc__uunnrr() except that mutex is assumed to be already
+             locked and thus is not used.
+
+     aalllloocc__uunnrr__ssppeecciiffiicc(_u_h, _i_t_e_m)
+             Allocate a specific unit number.  This function allocates memory
+             and thus may sleep.  The allocated unit number is returned on
+             success.  If the specified number is already allocated or out of
+             the range, -1 is returned.
+
+     ffrreeee__uunnrr(_u_h, _i_t_e_m)
+             Free a previously allocated unit number.  This function may re‐
+             quire allocating memory, and thus it can sleep.  There is no pre-
+             locked variant.
+
+IITTEERRAATTOORR IINNTTEERRFFAACCEE
+     The uunnrr facility provides an interface to iterate over all allocated
+     units for the given unrhdr.  Iterators are identified by an opaque han‐
+     dle.  More than one iterators can operate simultaneously; the iterator
+     position data is recorded only in the iterator handle.
+
+     Consumers must ensure that the unit allocator is not modified between
+     calls to the iterator functions.  In particular, the internal allocator
+     mutex cannot provide consistency, because it is acquired and dropped in‐
+     side the nneexxtt__iitteerr__uunnrr() function.  If the allocator was modified, it is
+     safe to free the iterator with ffrreeee__iitteerr__uunnrr() method nevertheless.
+
+     ccrreeaattee__iitteerr__uunnrr(_u_h)
+             Create an iterator.  Return the handle that should be passed to
+             other iterator functions.
+
+     nneexxtt__iitteerr__uunnrr(_h_a_n_d_l_e)
+             Return the value of the next unit.  Units are returned in ascend‐
+             ing order.  A return value of -1 indicates the end of iteration,
+             in which case -1 is returned for all future calls.
+
+     ffrreeee__iitteerr__uunnrr(_h_a_n_d_l_e)
+             Free the iterator, handle is no longer valid.
+
+CCOODDEE RREEFFEERREENNCCEESS
+     The above functions are implemented in _s_y_s_/_k_e_r_n_/_s_u_b_r___u_n_i_t_._c.
+
+HHIISSTTOORRYY
+     Kernel unit number allocator first appeared in FreeBSD 6.0.
+
+AAUUTTHHOORRSS
+     Kernel unit number allocator was written by Poul-Henning Kamp.  This man‐
+     page was written by Gleb Smirnoff.
+
+BSD                             April 21, 2022                             BSD

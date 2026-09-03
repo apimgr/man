@@ -1,0 +1,428 @@
+GDB(4)                   BSD Kernel Interfaces Manual                   GDB(4)
+
+NNAAMMEE
+     ggddbb — external kernel debugger
+
+SSYYNNOOPPSSIISS
+     mmaakkeeooppttiioonnss DDEEBBUUGG==--gg
+     ooppttiioonnss DDDDBB
+
+DDEESSCCRRIIPPTTIIOONN
+     The ggddbb kernel debugger is a variation of gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) which
+     understands some aspects of the FreeBSD kernel environment.  It can be
+     used in a number of ways:
+
+     ••   It can be used to examine the memory of the processor on which it
+         runs.
+
+     ••   It can be used to analyse a processor dump after a panic.
+
+     ••   It can be used to debug another system interactively via a serial or
+         firewire link.  In this mode, the processor can be stopped and single
+         stepped.
+
+     ••   With a firewire link, it can be used to examine the memory of a re‐
+         mote system without the participation of that system.  In this mode,
+         the processor cannot be stopped and single stepped, but it can be of
+         use when the remote system has crashed and is no longer responding.
+
+     When used for remote debugging, ggddbb requires the presence of the ddb(4)
+     kernel debugger.  Commands exist to switch between ggddbb and ddb(4).
+
+PPRREEPPAARRIINNGG FFOORR DDEEBBUUGGGGIINNGG
+     When debugging kernels, it is practically essential to have built a ker‐
+     nel with debugging symbols (mmaakkeeooppttiioonnss DDEEBBUUGG==--gg).  It is easiest to per‐
+     form operations from the kernel build directory, by default
+     _/_u_s_r_/_o_b_j_/_u_s_r_/_s_r_c_/_s_y_s_/_G_E_N_E_R_I_C.
+
+     First, ensure you have a copy of the debug macros in the directory:
+
+           make gdbinit
+
+     This command performs some transformations on the macros installed in
+     _/_u_s_r_/_s_r_c_/_t_o_o_l_s_/_d_e_b_u_g_s_c_r_i_p_t_s to adapt them to the local environment.
+
+   IInnssppeeccttiinngg tthhee eennvviirroonnmmeenntt ooff tthhee llooccaall mmaacchhiinnee
+     To look at and change the contents of the memory of the system you are
+     running on,
+
+           gdb -k -wcore kernel.debug /dev/mem
+
+     In this mode, you need the --kk flag to indicate to gdb(1)
+     (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) that the “dump file” _/_d_e_v_/_m_e_m is a kernel data file.
+     You can look at live data, and if you include the --wwccoorree option, you can
+     change it at your peril.  The system does not stop (obviously), so a num‐
+     ber of things will not work.  You can set breakpoints, but you cannot
+     “continue” execution, so they will not work.
+
+   DDeebbuuggggiinngg aa ccrraasshh dduummpp
+     By default, crash dumps are stored in the directory _/_v_a_r_/_c_r_a_s_h.  Investi‐
+     gate them from the kernel build directory with:
+
+           gdb -k kernel.debug /var/crash/vmcore.29
+
+     In this mode, the system is obviously stopped, so you can only look at
+     it.
+
+   DDeebbuuggggiinngg aa lliivvee ssyysstteemm wwiitthh aa rreemmoottee lliinnkk
+     In the following discussion, the term “local system” refers to the system
+     running the debugger, and “remote system” refers to the live system being
+     debugged.
+
+     To debug a live system with a remote link, the kernel must be compiled
+     with the option ooppttiioonnss DDDDBB.  The option ooppttiioonnss BBRREEAAKK__TTOO__DDEEBBUUGGGGEERR en‐
+     ables the debugging machine stop the debugged machine once a connection
+     has been established by pressing ‘^C’.
+
+   DDeebbuuggggiinngg aa lliivvee ssyysstteemm wwiitthh aa rreemmoottee sseerriiaall lliinnkk
+     When using a serial port for the remote link on the i386 platform, the
+     serial port must be identified by setting the flag bit 0x80 for the spec‐
+     ified interface.  Generally, this port will also be used as a serial con‐
+     sole (flag bit 0x10), so the entry in _/_b_o_o_t_/_d_e_v_i_c_e_._h_i_n_t_s should be:
+
+           hint.sio.0.flags="0x90"
+
+   DDeebbuuggggiinngg aa lliivvee ssyysstteemm wwiitthh aa rreemmoottee ffiirreewwiirree lliinnkk
+     As with serial debugging, to debug a live system with a firewire link,
+     the kernel must be compiled with the option ooppttiioonnss DDDDBB.
+
+     A number of steps must be performed to set up a firewire link:
+
+     ••   Ensure that both systems have firewire(4) support, and that the ker‐
+         nel of the remote system includes the dcons(4) and dcons_crom(4)
+         drivers.  If they are not compiled into the kernel, load the KLDs:
+
+               kldload firewire
+
+         On the remote system only:
+
+               kldload dcons
+               kldload dcons_crom
+
+         You should see something like this in the dmesg(8) output of the re‐
+         mote system:
+
+               fwohci0: BUS reset
+               fwohci0: node_id=0x8800ffc0, gen=2, non CYCLEMASTER mode
+               firewire0: 2 nodes, maxhop <= 1, cable IRM = 1
+               firewire0: bus manager 1
+               firewire0: New S400 device ID:00c04f3226e88061
+               dcons_crom0: <dcons configuration ROM> on firewire0
+               dcons_crom0: bus_addr 0x22a000
+
+         It is a good idea to load these modules at boot time with the follow‐
+         ing entry in _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f:
+
+               dcons_crom_enable="YES"
+
+         This ensures that all three modules are loaded.  There is no harm in
+         loading dcons(4) and dcons_crom(4) on the local system, but if you
+         only want to load the firewire(4) module, include the following in
+         _/_b_o_o_t_/_l_o_a_d_e_r_._c_o_n_f:
+
+               firewire_enable="YES"
+
+     ••   Next, use fwcontrol(8) to find the firewire node corresponding to the
+         remote machine.  On the local machine you might see:
+
+               # fwcontrol
+               2 devices (info_len=2)
+               node        EUI64        status
+                  1  0x00c04f3226e88061      0
+                  0  0x000199000003622b      1
+
+         The first node is always the local system, so in this case, node 0 is
+         the remote system.  If there are more than two systems, check from
+         the other end to find which node corresponds to the remote system.
+         On the remote machine, it looks like this:
+
+               # fwcontrol
+               2 devices (info_len=2)
+               node        EUI64        status
+                  0  0x000199000003622b      0
+                  1  0x00c04f3226e88061      1
+
+     ••   Next, establish a firewire connection with dconschat(8):
+
+               dconschat -br -G 5556 -t 0x000199000003622b
+
+         0x000199000003622b is the EUI64 address of the remote node, as deter‐
+         mined from the output of fwcontrol(8) above.  When started in this
+         manner, dconschat(8) establishes a local tunnel connection from port
+         localhost:5556 to the remote debugger.  You can also establish a con‐
+         sole port connection with the --CC option to the same invocation
+         dconschat(8).  See the dconschat(8) manpage for further details.
+
+         The dconschat(8) utility does not return control to the user.  It
+         displays error messages and console output for the remote system, so
+         it is a good idea to start it in its own window.
+
+     ••   Finally, establish connection:
+
+               # gdb kernel.debug
+               GNU gdb 5.2.1 (FreeBSD)
+               _(_p_o_l_i_t_i_c_a_l _s_t_a_t_e_m_e_n_t_s _o_m_i_t_t_e_d_)
+               Ready to go.  Enter 'tr' to connect to the remote target
+               with /dev/cuau0, 'tr /dev/cuau1' to connect to a different port
+               or 'trf portno' to connect to the remote target with the firewire
+               interface.  portno defaults to 5556.
+
+               Type 'getsyms' after connection to load kld symbols.
+
+               If you are debugging a local system, you can use 'kldsyms' instead
+               to load the kld symbols.  That is a less obnoxious interface.
+               (gdb) trf
+               0xc21bd378 in ?? ()
+
+         The ttrrff macro assumes a connection on port 5556.  If you want to use
+         a different port (by changing the invocation of dconschat(8) above),
+         use the ttrr macro instead.  For example, if you want to use port 4711,
+         run dconschat(8) like this:
+
+               dconschat -br -G 4711 -t 0x000199000003622b
+
+         Then establish connection with:
+
+               (gdb) tr localhost:4711
+               0xc21bd378 in ?? ()
+
+   NNoonn--ccooooppeerraattiivvee ddeebbuuggggiinngg aa lliivvee ssyysstteemm wwiitthh aa rreemmoottee ffiirreewwiirree lliinnkk
+     In addition to the conventional debugging via firewire described in the
+     previous section, it is possible to debug a remote system without its co‐
+     operation, once an initial connection has been established.  This corre‐
+     sponds to debugging a local machine using _/_d_e_v_/_m_e_m.  It can be very use‐
+     ful if a system crashes and the debugger no longer responds.  To use this
+     method, set the sysctl(8) variables _h_w_._f_i_r_e_w_i_r_e_._f_w_m_e_m_._e_u_i_6_4___h_i and
+     _h_w_._f_i_r_e_w_i_r_e_._f_w_m_e_m_._e_u_i_6_4___l_o to the upper and lower halves of the EUI64 ID
+     of the remote system, respectively.  From the previous example, the re‐
+     mote machine shows:
+
+           # fwcontrol
+           2 devices (info_len=2)
+           node        EUI64        status
+              0  0x000199000003622b      0
+              1  0x00c04f3226e88061      1
+
+     Enter:
+
+           # sysctl -w hw.firewire.fwmem.eui64_hi=0x00019900
+           hw.firewire.fwmem.eui64_hi: 0 -> 104704
+           # sysctl -w hw.firewire.fwmem.eui64_lo=0x0003622b
+           hw.firewire.fwmem.eui64_lo: 0 -> 221739
+
+     Note that the variables must be explicitly stated in hexadecimal.  After
+     this, you can examine the remote machine's state with the following in‐
+     put:
+
+           # gdb -k kernel.debug /dev/fwmem0.0
+           GNU gdb 5.2.1 (FreeBSD)
+           _(_m_e_s_s_a_g_e_s _o_m_i_t_t_e_d_)
+           Reading symbols from /boot/kernel/dcons.ko...done.
+           Loaded symbols for /boot/kernel/dcons.ko
+           Reading symbols from /boot/kernel/dcons_crom.ko...done.
+           Loaded symbols for /boot/kernel/dcons_crom.ko
+           #0  sched_switch (td=0xc0922fe0) at /usr/src/sys/kern/sched_4bsd.c:621
+           0xc21bd378 in ?? ()
+
+     In this case, it is not necessary to load the symbols explicitly.  The
+     remote system continues to run.
+
+CCOOMMMMAANNDDSS
+     The user interface to ggddbb is via gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b), so gdb(1)
+     (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) commands also work.  This section discusses only the
+     extensions for kernel debugging that get installed in the kernel build
+     directory.
+
+   DDeebbuuggggiinngg eennvviirroonnmmeenntt
+     The following macros manipulate the debugging environment:
+
+     ddddbb     Switch back to ddb(4).  This command is only meaningful when per‐
+             forming remote debugging.
+
+     ggeettssyymmss
+             Display kkllddssttaatt information for the target machine and invite
+             user to paste it back in.  This is required because ggddbb does not
+             allow data to be passed to shell scripts.  It is necessary for
+             remote debugging and crash dumps; for local memory debugging use
+             kkllddssyymmss instead.
+
+     kkllddssyymmss
+             Read in the symbol tables for the debugging machine.  This does
+             not work for remote debugging and crash dumps; use ggeettssyymmss in‐
+             stead.
+
+     ttrr _i_n_t_e_r_f_a_c_e
+             Debug a remote system via the specified serial or firewire inter‐
+             face.
+
+     ttrr00     Debug a remote system via serial interface _/_d_e_v_/_c_u_a_u_0.
+
+     ttrr11     Debug a remote system via serial interface _/_d_e_v_/_c_u_a_u_1.
+
+     ttrrff     Debug a remote system via firewire interface at default port
+             5556.
+
+     The commands ttrr00, ttrr11 and ttrrff are convenience commands which invoke ttrr.
+
+   TThhee ccuurrrreenntt pprroocceessss eennvviirroonnmmeenntt
+     The following macros are convenience functions intended to make things
+     easier than the standard gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) commands.
+
+     ff00      Select stack frame 0 and show assembler-level details.
+
+     ff11      Select stack frame 1 and show assembler-level details.
+
+     ff22      Select stack frame 2 and show assembler-level details.
+
+     ff33      Select stack frame 3 and show assembler-level details.
+
+     ff44      Select stack frame 4 and show assembler-level details.
+
+     ff55      Select stack frame 5 and show assembler-level details.
+
+     xxbb      Show 12 words in hex, starting at current _e_b_p value.
+
+     xxii      List the next 10 instructions from the current _e_i_p value.
+
+     xxpp      Show the register contents and the first four parameters of the
+             current stack frame.
+
+     xxpp00     Show the first parameter of current stack frame in various for‐
+             mats.
+
+     xxpp11     Show the second parameter of current stack frame in various for‐
+             mats.
+
+     xxpp22     Show the third parameter of current stack frame in various for‐
+             mats.
+
+     xxpp33     Show the fourth parameter of current stack frame in various for‐
+             mats.
+
+     xxpp44     Show the fifth parameter of current stack frame in various for‐
+             mats.
+
+     xxss      Show the last 12 words on stack in hexadecimal.
+
+     xxxxpp     Show the register contents and the first ten parameters.
+
+     zz       Single step 1 instruction (over calls) and show next instruction.
+
+     zzss      Single step 1 instruction (through calls) and show next instruc‐
+             tion.
+
+   EExxaammiinniinngg ootthheerr pprroocceesssseess
+     The following macros access other processes.  The ggddbb debugger does not
+     understand the concept of multiple processes, so they effectively bypass
+     the entire ggddbb environment.
+
+     bbttpp _p_i_d
+             Show a backtrace for the process _p_i_d.
+
+     bbttppaa    Show backtraces for all processes in the system.
+
+     bbttpppp    Show a backtrace for the process previously selected with
+             ddeeffpprroocc.
+
+     bbttrr _e_b_p
+             Show a backtrace from the _e_b_p address specified.
+
+     ddeeffpprroocc _p_i_d
+             Specify the PID of the process for some other commands in this
+             section.
+
+     ffrr _f_r_a_m_e
+             Show frame _f_r_a_m_e of the stack of the process previously selected
+             with ddeeffpprroocc.
+
+     ppccbb _p_r_o_c
+             Show some PCB contents of the process _p_r_o_c.
+
+   EExxaammiinniinngg ddaattaa ssttrruuccttuurreess
+     You can use standard gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) commands to look at most
+     data structures.  The macros in this section are convenience functions
+     which typically display the data in a more readable format, or which omit
+     less interesting parts of the structure.
+
+     bbpp      Show information about the buffer header pointed to by the vari‐
+             able _b_p in the current frame.
+
+     bbppdd     Show the contents (_c_h_a_r _*) of _b_p_-_>_d_a_t_a in the current frame.
+
+     bbppll     Show detailed information about the buffer header (_s_t_r_u_c_t _b_p)
+             pointed at by the local variable _b_p.
+
+     bbpppp _b_p  Show summary information about the buffer header (_s_t_r_u_c_t _b_p)
+             pointed at by the parameter _b_p.
+
+     bbxx      Print a number of fields from the buffer header pointed at in by
+             the pointer _b_p in the current environment.
+
+     vvddeevv    Show some information of the _v_n_o_d_e pointed to by the local vari‐
+             able _v_p.
+
+   MMiisscceellllaanneeoouuss mmaaccrrooss
+     cchheecckkmmeemm
+             Check unallocated memory for modifications.  This assumes that
+             the kernel has been compiled with ooppttiioonnss DDIIAAGGNNOOSSTTIICC.  This
+             causes the contents of free memory to be set to 0xdeadc0de.
+
+     ddmmeessgg   Print the system message buffer.  This corresponds to the
+             dmesg(8) utility.  This macro used to be called mmssggbbuuff.  It can
+             take a very long time over a serial line, and it is even slower
+             via firewire or local memory due to inefficiencies in ggddbb.  When
+             debugging a crash dump or over firewire, it is not necessary to
+             start ggddbb to access the message buffer: instead, use an appropri‐
+             ate variation of
+
+                   dmesg -M /var/crash/vmcore.0 -N kernel.debug
+                   dmesg -M /dev/fwmem0.0 -N kernel.debug
+
+     kkllddssttaatt
+             Equivalent of the kldstat(8) utility without options.
+
+     ppnnaammee   Print the command name of the current process.
+
+     ppss      Show process status.  This corresponds in concept, but not in ap‐
+             pearance, to the ps(1) utility.  When debugging a crash dump or
+             over firewire, it is not necessary to start ggddbb to display the
+             ps(1) output: instead, use an appropriate variation of
+
+                   ps -M /var/crash/vmcore.0 -N kernel.debug
+                   ps -M /dev/fwmem0.0 -N kernel.debug
+
+     yy       Kludge for writing macros.  When writing macros, it is convenient
+             to paste them back into the ggddbb window.  Unfortunately, if the
+             macro is already defined, ggddbb insists on asking
+
+                   Redefine foo?
+
+             It will not give up until you answer ‘y’.  This command is that
+             answer.  It does nothing else except to print a warning message
+             to remind you to remove it again.
+
+SSEEEE AALLSSOO
+     gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b), ps(1), ddb(4), firewire(4), dconschat(8),
+     dmesg(8), fwcontrol(8), kldload(8)
+
+AAUUTTHHOORRSS
+     This man page was written by Greg Lehey <_g_r_o_g_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BBUUGGSS
+     The gdb(1) (_p_o_r_t_s_/_d_e_v_e_l_/_g_d_b) debugger was never designed to debug ker‐
+     nels, and it is not a very good match.  Many problems exist.
+
+     The ggddbb implementation is very inefficient, and many operations are slow.
+
+     Serial debugging is even slower, and race conditions can make it diffi‐
+     cult to run the link at more than 9600 bps.  Firewire connections do not
+     have this problem.
+
+     The debugging macros “just grew.” In general, the person who wrote them
+     did so while looking for a specific problem, so they may not be general
+     enough, and they may behave badly when used in ways for which they were
+     not intended, even if those ways make sense.
+
+     Many of these commands only work on the ia32 architecture.
+
+BSD                              May 17, 2016                              BSD

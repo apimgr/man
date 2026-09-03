@@ -1,0 +1,159 @@
+DIVERT(4)                BSD Kernel Interfaces Manual                DIVERT(4)
+
+NNAAMMEE
+     ddiivveerrtt — kernel packet diversion mechanism
+
+SSYYNNOOPPSSIISS
+     ##iinncclluuddee <<ssyyss//ttyyppeess..hh>>
+     ##iinncclluuddee <<ssyyss//ssoocckkeett..hh>>
+     ##iinncclluuddee <<nneettiinneett//iinn..hh>>
+
+     _i_n_t
+     ssoocckkeett(_A_F___I_N_E_T, _S_O_C_K___R_A_W, _I_P_P_R_O_T_O___D_I_V_E_R_T);
+
+     _i_n_t
+     ssoocckkeett(_A_F___I_N_E_T_6, _S_O_C_K___R_A_W, _I_P_P_R_O_T_O___D_I_V_E_R_T);
+
+DDEESSCCRRIIPPTTIIOONN
+     Divert sockets are part of a mechanism completely integrated with pf(4)
+     that queues raw packets from the kernel stack to userspace applications,
+     and vice versa.
+
+     A divert socket must be bound to a divert port through bind(2), which
+     only the superuser can do.  Divert ports have their own number space,
+     completely separated from tcp(4) and udp(4).  When pf(4) processes a
+     packet that matches a rule with the _d_i_v_e_r_t_-_p_a_c_k_e_t parameter (see
+     pf.conf(5) for details), it is sent to the divert socket listening on the
+     divert port specified in the rule.  Note that _d_i_v_e_r_t_-_p_a_c_k_e_t should not be
+     confused with _d_i_v_e_r_t_-_t_o or _d_i_v_e_r_t_-_r_e_p_l_y, which do not use divert sockets.
+     If there are no divert sockets listening, the packets are dropped.
+
+     Packets can be read via read(2), recv(2), or recvfrom(2) from the divert
+     socket.  The application that is processing the packets can then reinject
+     them into the kernel.  With recvfrom(2), an interface IP address is
+     passed if it is an inbound packet.  Outbound packets provide the unspeci‐
+     fied address.  When reinjecting, use this address as argument to
+     sendto(2).  This allows the kernel to guess the original incoming inter‐
+     face and process it as an incoming packet.  If no interface IP address is
+     given, the reinjected packet is treated as an outgoing packet.  Since the
+     userspace application could have modified the packets, upon reinjection
+     basic sanity checks are done to ensure that the packets are still valid.
+     The packets' IPv4 and protocol checksums (TCP, UDP, ICMP, and ICMPv6) are
+     also recalculated.
+
+     Writing to a divert socket can be achieved using sendto(2) and it will
+     skip pf(4) filters to avoid loops.  Note that this means that a rein‐
+     jected inbound packet will also not run through the pf out rules after
+     being forwarded.  A diverted packet that is not reinjected into the ker‐
+     nel stack is lost.
+
+     Receive and send divert socket buffer space can be tuned through
+     sysctl(8).  netstat(1) shows information relevant to divert sockets.
+     Note that the default is 64k and too short to handle full sized UDP pack‐
+     ets.
+
+EEXXAAMMPPLLEESS
+     The following PF rule queues outbound IPv4 packets to TCP port 80, as
+     well as the return traffic, on the em0 interface to divert port 700:
+
+           pass out on em0 inet proto tcp to port 80 divert-packet port 700
+
+     The following program reads packets on divert port 700 and reinjects them
+     back into the kernel.  This program does not perform any processing of
+     the packets, apart from discarding invalid IP packets.
+
+     #include <sys/types.h>
+     #include <sys/socket.h>
+     #include <netinet/in.h>
+     #include <netinet/ip.h>
+     #include <netinet/tcp.h>
+     #include <arpa/inet.h>
+     #include <stdio.h>
+     #include <string.h>
+     #include <err.h>
+
+     #define DIVERT_PORT 700
+
+     int
+     main(int argc, char *argv[])
+     {
+             int fd, s;
+             struct sockaddr_in sin;
+             socklen_t sin_len;
+
+             fd = socket(AF_INET, SOCK_RAW, IPPROTO_DIVERT);
+             if (fd == -1)
+                     err(1, "socket");
+
+             memset(&sin, 0, sizeof(sin));
+             sin.sin_family = AF_INET;
+             sin.sin_port = htons(DIVERT_PORT);
+             sin.sin_addr.s_addr = 0;
+
+             sin_len = sizeof(struct sockaddr_in);
+
+             s = bind(fd, (struct sockaddr *) &sin, sin_len);
+             if (s == -1)
+                     err(1, "bind");
+
+             for (;;) {
+                     ssize_t n;
+                     char packet[IP_MAXPACKET];
+                     struct ip *ip;
+                     struct tcphdr *th;
+                     int hlen;
+                     char src[48], dst[48];
+
+                     memset(packet, 0, sizeof(packet));
+                     n = recvfrom(fd, packet, sizeof(packet), 0,
+                         (struct sockaddr *) &sin, &sin_len);
+                     if (n == -1) {
+                             warn("recvfrom");
+                             continue;
+                     }
+                     if (n < sizeof(struct ip)) {
+                             warnx("packet is too short");
+                             continue;
+                     }
+
+                     ip = (struct ip *) packet;
+                     hlen = ip->ip_hl << 2;
+                     if (hlen < sizeof(struct ip) || ntohs(ip->ip_len) < hlen ||
+                         n < ntohs(ip->ip_len)) {
+                             warnx("invalid IPv4 packet");
+                             continue;
+                     }
+
+                     th = (struct tcphdr *) (packet + hlen);
+
+                     if (inet_ntop(AF_INET, &ip->ip_src, src,
+                         sizeof(src)) == NULL)
+                             (void)strlcpy(src, "?", sizeof(src));
+
+                     if (inet_ntop(AF_INET, &ip->ip_dst, dst,
+                         sizeof(dst)) == NULL)
+                             (void)strlcpy(dst, "?", sizeof(dst));
+
+                     printf("%s:%u -> %s:%u\n",
+                         src,
+                         ntohs(th->th_sport),
+                         dst,
+                         ntohs(th->th_dport)
+                     );
+
+                     n = sendto(fd, packet, n, 0, (struct sockaddr *) &sin,
+                         sin_len);
+                     if (n == -1)
+                             warn("sendto");
+             }
+
+             return 0;
+     }
+
+SSEEEE AALLSSOO
+     socket(2), ip(4), pf.conf(5)
+
+HHIISSTTOORRYY
+     The ddiivveerrtt protocol first appeared in OpenBSD 4.7.
+
+BSD                           September 10, 2022                           BSD

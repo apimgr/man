@@ -1,0 +1,128 @@
+ACPI_FUJITSU(4)          BSD Kernel Interfaces Manual          ACPI_FUJITSU(4)
+
+NNAAMMEE
+     aaccppii__ffuujjiittssuu — Fujitsu Laptop Extras
+
+SSYYNNOOPPSSIISS
+     To compile this driver into the kernel, place the following line in your
+     kernel configuration file:
+
+           ddeevviiccee aaccppii__ffuujjiittssuu
+
+     Alternatively, to load the driver as a module at boot time, place the
+     following line in loader.conf(5):
+
+           acpi_fujitsu_load="YES"
+
+DDEESSCCRRIIPPTTIIOONN
+     The aaccppii__ffuujjiittssuu driver enables the ACPI-controlled buttons on Fujitsu
+     notebooks.  The button events are sent to userspace via devd(8), and a
+     sysctl(8) interface is provided to simulate the hardware events.
+
+     Using this driver, one can control the brightness of the display, the
+     volume of the speakers, and the internal (eraserhead) mouse pointer.
+
+SSYYSSCCTTLL VVAARRIIAABBLLEESS
+     These sysctls are currently implemented:
+
+     _h_w_._a_c_p_i_._f_u_j_i_t_s_u_._l_c_d___b_r_i_g_h_t_n_e_s_s
+             Makes the LCD backlight brighter or dimmer.
+
+     _h_w_._a_c_p_i_._f_u_j_i_t_s_u_._p_o_i_n_t_e_r___e_n_a_b_l_e
+             Enables or disables the internal mouse pointer.
+
+     _h_w_._a_c_p_i_._f_u_j_i_t_s_u_._v_o_l_u_m_e
+             Controls the speaker volume.
+
+     _h_w_._a_c_p_i_._f_u_j_i_t_s_u_._m_u_t_e
+             Mutes the speakers.
+
+     Defaults for these sysctls can be set in sysctl.conf(5).
+
+EEXXAAMMPPLLEESS
+     The following can be added to devd.conf(5) in order to pass button events
+     to a _/_u_s_r_/_l_o_c_a_l_/_s_b_i_n_/_a_c_p_i___o_e_m___e_x_e_c_._s_h script:
+
+           notify 10 {
+                   match "system"          "ACPI";
+                   match "subsystem"       "FUJITSU";
+                   action "/usr/local/sbin/acpi_oem_exec.sh $notify fujitsu";
+           };
+
+     A possible _/_u_s_r_/_l_o_c_a_l_/_s_b_i_n_/_a_c_p_i___o_e_m___e_x_e_c_._s_h script might look like:
+
+           #!/bin/sh
+           #
+           if [ "$1" = "" -o "$2" = "" ]
+           then
+                   echo "usage: $0 notify oem_name"
+                   exit 1
+           fi
+           NOTIFY=`echo $1`
+           LOGGER="logger"
+           CALC="bc"
+           BC_PRECOMMANDS="scale=2"
+           ECHO="echo"
+           CUT="cut"
+           MAX_LCD_BRIGHTNESS=7
+           MAX_VOLUME=16
+           OEM=$2
+           DISPLAY_PIPE=/tmp/acpi_${OEM}_display
+
+           case ${NOTIFY} in
+                   0x00)
+                           LEVEL=`sysctl -n hw.acpi.${OEM}.mute`
+                           if [ "$LEVEL" = "1" ]
+                           then
+                                   MESSAGE="volume muted"
+                           else
+                                   MESSAGE="volume unmuted"
+                           fi
+                           ;;
+                   0x01)
+                           LEVEL=`sysctl -n hw.acpi.${OEM}.pointer_enable`
+                           if [ "$LEVEL" = "1" ]
+                           then
+                                   MESSAGE="pointer enabled"
+                           else
+                                   MESSAGE="pointer disabled"
+                           fi
+                           ;;
+                   0x02)
+                           LEVEL=`sysctl -n hw.acpi.${OEM}.lcd_brightness`
+                           PERCENT=`${ECHO} "${BC_PRECOMMANDS} ; \
+                                    ${LEVEL} / ${MAX_LCD_BRIGHTNESS} * 100" |\
+                                    ${CALC} | ${CUT} -d . -f 1`
+                           MESSAGE="brightness level ${PERCENT}%"
+                           ;;
+                   0x03)
+                           LEVEL=`sysctl -n hw.acpi.${OEM}.volume`
+                           PERCENT=`${ECHO} "${BC_PRECOMMANDS} ; \
+                                   ${LEVEL} / ${MAX_VOLUME} * 100" | \
+                                    ${CALC} | ${CUT} -d . -f 1`
+                           MESSAGE="volume level ${PERCENT}%"
+                           ;;
+                   *)
+                           ;;
+                   esac
+                   ${LOGGER} ${MESSAGE}
+                   if [ -p ${DISPLAY_PIPE} ]
+                   then
+                           ${ECHO} ${MESSAGE} >> ${DISPLAY_PIPE} &
+                   fi
+           exit 0
+
+SSEEEE AALLSSOO
+     acpi(4), sysctl.conf(5), devd(8), sysctl(8)
+
+HHIISSTTOORRYY
+     The aaccppii__ffuujjiittssuu driver first appeared in FreeBSD 5.4.
+
+AAUUTTHHOORRSS
+     The aaccppii__ffuujjiittssuu driver was written by Sean Bullington
+     <_s_h_e_g_g_e_t_@_g_m_a_i_l_._c_o_m>, Anish Mistry <_m_i_s_t_r_y_._7_@_o_s_u_._e_d_u>, and Marc Santcroos
+     <_m_a_r_k_s_@_r_i_p_e_._n_e_t>.
+
+     This manual page was written by Philip Paeps <_p_h_i_l_i_p_@_F_r_e_e_B_S_D_._o_r_g>.
+
+BSD                            February 8, 2010                            BSD
