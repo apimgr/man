@@ -463,13 +463,52 @@ func skipGeoIPPath(p string) bool {
 }
 
 func clientIP(r *http.Request) string {
-	// chi's middleware.RealIP rewrote RemoteAddr to the trusted forwarded
-	// IP earlier in the chain when X-Forwarded-For was present.
+	// realIPMiddleware rewrote RemoteAddr to the trusted forwarded IP
+	// earlier in the chain when X-Forwarded-For was present.
 	host := r.RemoteAddr
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
 	return host
+}
+
+// realIPMiddleware rewrites r.RemoteAddr with the client IP resolved from
+// X-Forwarded-For/X-Real-IP, but only when the immediate TCP peer is a
+// trusted (private/loopback) address. Unlike chi's deprecated
+// middleware.RealIP, forwarded headers from an untrusted peer are ignored,
+// preventing IP spoofing (GHSA-3fxj-6jh8-hvhx, GHSA-rjr7-jggh-pgcp,
+// GHSA-9g5q-2w5x-hmxf).
+func realIPMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isPrivateAddr(hostOnly(r.RemoteAddr)) {
+			if ip := clientIPFromHeaders(r); ip != "" {
+				r.RemoteAddr = ip
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// clientIPFromHeaders extracts the client IP from trusted proxy headers.
+func clientIPFromHeaders(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		parts := strings.Split(xff, ",")
+		if ip := strings.TrimSpace(parts[0]); ip != "" {
+			return ip
+		}
+	}
+	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+		return strings.TrimSpace(xrip)
+	}
+	return ""
+}
+
+// hostOnly strips an optional ":port" suffix from addr.
+func hostOnly(addr string) string {
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		return h
+	}
+	return addr
 }
 
 func isPrivateAddr(host string) bool {

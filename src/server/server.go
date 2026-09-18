@@ -547,7 +547,8 @@ func (s *Server) setupRouter() *chi.Mux {
 	r.Use(CORSMiddleware)                // 5. CORS
 	r.Use(RecoveryMiddleware)            // 6. Panic recovery
 	r.Use(RequestIDMiddleware)           // 7. Request ID (X-Request-ID, X-Correlation-ID, X-Trace-ID)
-	r.Use(middleware.RealIP)             // 8. Real IP
+	// 8. Real IP (trusted-peer gated; not chi's deprecated middleware.RealIP)
+	r.Use(realIPMiddleware)
 	r.Use(middleware.Logger)             // 9. Logging
 	r.Use(middleware.Timeout(60 * time.Second))
 	if s.geoip != nil {
