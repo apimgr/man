@@ -28,7 +28,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -773,73 +772,4 @@ func cleanText(text string) string {
 	}
 
 	return text
-}
-
-// printStats prints statistics about the downloaded pages.
-func printStats() {
-	// Count files in each directory
-	platforms := []string{"linux", "freebsd", "openbsd", "netbsd", "macos"}
-
-	fmt.Println("\n=== Statistics ===")
-
-	var totalPages, totalShared int
-
-	// Count shared files
-	sharedDir := filepath.Join(*outputDir, "_shared")
-	if entries, err := os.ReadDir(sharedDir); err == nil {
-		totalShared = len(entries)
-	}
-
-	for _, platform := range platforms {
-		platformDir := filepath.Join(*outputDir, platform)
-		if _, err := os.Stat(platformDir); os.IsNotExist(err) {
-			continue
-		}
-
-		var count int
-		filepath.Walk(platformDir, func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				count++
-			}
-			return nil
-		})
-
-		fmt.Printf("%s: %d pages\n", platform, count)
-		totalPages += count
-	}
-
-	fmt.Printf("\nTotal pages: %d\n", totalPages)
-	fmt.Printf("Unique content files: %d\n", totalShared)
-
-	if totalShared > 0 {
-		dedupeRatio := float64(totalPages-totalShared) / float64(totalPages) * 100
-		fmt.Printf("Deduplication ratio: %.1f%%\n", dedupeRatio)
-	}
-}
-
-// listAllPages lists all downloaded pages.
-func listAllPages() {
-	platforms := []string{"linux", "freebsd", "openbsd", "netbsd", "macos"}
-
-	var allPages []string
-
-	for _, platform := range platforms {
-		platformDir := filepath.Join(*outputDir, platform)
-		if _, err := os.Stat(platformDir); os.IsNotExist(err) {
-			continue
-		}
-
-		filepath.Walk(platformDir, func(path string, info os.FileInfo, err error) error {
-			if err == nil && !info.IsDir() {
-				rel, _ := filepath.Rel(*outputDir, path)
-				allPages = append(allPages, rel)
-			}
-			return nil
-		})
-	}
-
-	sort.Strings(allPages)
-	for _, p := range allPages {
-		fmt.Println(p)
-	}
 }

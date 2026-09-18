@@ -264,7 +264,7 @@ func (g *GeoIP) Update(ctx context.Context) error {
 	// Download Country database
 	if g.config.Country {
 		if err := downloadFile(ctx, CountryURL, filepath.Join(dir, "country.mmdb")); err != nil {
-			downloadErrors = append(downloadErrors, fmt.Errorf("Country: %w", err))
+			downloadErrors = append(downloadErrors, fmt.Errorf("country: %w", err))
 		} else {
 			log.Println("GeoIP: downloaded Country database")
 		}
@@ -273,7 +273,7 @@ func (g *GeoIP) Update(ctx context.Context) error {
 	// Download City database
 	if g.config.City {
 		if err := downloadFile(ctx, CityURL, filepath.Join(dir, "city.mmdb")); err != nil {
-			downloadErrors = append(downloadErrors, fmt.Errorf("City: %w", err))
+			downloadErrors = append(downloadErrors, fmt.Errorf("city: %w", err))
 		} else {
 			log.Println("GeoIP: downloaded City database")
 		}

@@ -18,7 +18,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/casapps/casman/src/auth"
 	"github.com/casapps/casman/src/backup"
 	"github.com/casapps/casman/src/config"
 	"github.com/casapps/casman/src/geoip"
@@ -51,8 +50,6 @@ type Server struct {
 	smtp         *smtp.Client
 	geoip        *geoip.GeoIP
 	backup       *backup.Manager
-	authStore    *auth.Store
-	authMiddleware *auth.Middleware
 	usersDB      *sql.DB
 	rateLimiter  *RateLimiter
 	secret       *secret.Vault
@@ -178,66 +175,24 @@ func New(cfg *config.Config, version, commitID, buildDate string) (*Server, erro
 	s.backup = backup.New(backupCfg, version, cfg.Paths.ConfigDir, cfg.Paths.DataDir)
 	log.Printf("Backup: configured (dir=%s, retention=%d)", backupCfg.Dir, backupCfg.Retention.MaxBackups)
 
-	// Create auth store (PART 10, PART 17)
-	// Per AI.md: users.db is separate from server.db for easier backup/restore
+	// Open users.db. Per AI.md: users.db is separate from server.db for
+	// easier backup/restore.
 	usersDBPath := cfg.Paths.DataDir + "/db/users.db"
 	usersDB, err := sql.Open("sqlite", usersDBPath)
 	if err != nil {
-		log.Printf("Auth: failed to open users database: %v", err)
+		log.Printf("users db: failed to open: %v", err)
 	} else {
-		// Enable WAL mode
 		usersDB.Exec("PRAGMA journal_mode=WAL")
 		usersDB.Exec("PRAGMA foreign_keys=ON")
 		s.usersDB = usersDB
-
-		authStore, err := auth.NewStore(usersDB)
-		if err != nil {
-			log.Printf("Auth: failed to initialize auth store: %v", err)
-		} else {
-			s.authStore = authStore
-
-			// Check if debug mode
-			debugMode := cfg.Server.Mode == "development"
-
-			// Create auth middleware
-			s.authMiddleware = auth.NewMiddleware(authStore, debugMode, s.handlers.GetSetupToken())
-			log.Printf("Auth: initialized (debug=%v)", debugMode)
-
-			// Check admin count for setup status
-			adminCount, _ := authStore.AdminCount()
-			if adminCount == 0 {
-				log.Printf("Auth: No admins configured - setup wizard required")
-			} else {
-				log.Printf("Auth: %d admin account(s) configured", adminCount)
-			}
-		}
 	}
 
-	// Pass auth store to handlers
-	if s.authStore != nil {
-		s.handlers.SetAuthStore(s.authStore)
-	}
-
-	// Pass backup manager to handlers (PART 22 admin POST API).
-	handler.SetBackupBackend(s)
-
-	// Build the email notifier (PART 18). Recipients are resolved at send
-	// time from the auth store so admin profile changes take effect without
-	// restart. The notifier is a no-op when SMTP is not available.
+	// Build the email notifier (PART 18). The notifier is a no-op when SMTP
+	// is not available.
 	s.notifier = notify.New(
 		s.smtp,
 		cfg.Server.Branding.Title,
-		func() []string {
-			if s.authStore == nil {
-				return nil
-			}
-			emails, err := s.authStore.ListAdminEmails()
-			if err != nil {
-				log.Printf("notify: ListAdminEmails: %v", err)
-				return nil
-			}
-			return emails
-		},
+		func() []string { return nil },
 	)
 
 	// Initialize SSL subsystem (PART 15) — secret vault, credential vault,
@@ -296,7 +251,6 @@ func (s *Server) initSSL() error {
 			return fmt.Errorf("ssl vault: %w", err)
 		}
 		s.sslVault = v
-		handler.SetSSLBackend(s)
 	}
 
 	if !s.cfg.Server.SSL.Enabled {
@@ -342,14 +296,6 @@ func (s *Server) initSSL() error {
 	}
 	return nil
 }
-
-// Vault exposes the SSL credential vault to the handler package via the
-// SSLBackend interface.
-func (s *Server) Vault() *ssl.Vault { return s.sslVault }
-
-// BackupManager exposes the backup manager via the BackupBackend interface
-// the handler package uses for the PART 22 admin POST API.
-func (s *Server) BackupManager() *backup.Manager { return s.backup }
 
 // TorAvailable / TorRunning / TorOnionAddress satisfy the handler package's
 // TorBackend interface, mirroring the *tor.Service accessors so /healthz and
@@ -400,30 +346,6 @@ func (s *Server) sslDNSProvider() string {
 
 // registerScheduledTasks registers default scheduled tasks per PART 19.
 func (s *Server) registerScheduledTasks() {
-	// Session cleanup - every 15 minutes
-	s.scheduler.AddTask("session_cleanup", "@every 15m", true, func(ctx context.Context) error {
-		log.Println("Running session cleanup...")
-		if s.authStore != nil {
-			count, err := s.authStore.CleanupExpiredSessions()
-			if err != nil {
-				log.Printf("Session cleanup error: %v", err)
-				return err
-			}
-			if count > 0 {
-				log.Printf("Session cleanup: removed %d expired sessions", count)
-			}
-		}
-		return nil
-	})
-
-	// Token cleanup - every 15 minutes (resets locked accounts per AI.md)
-	s.scheduler.AddTask("token_cleanup", "@every 15m", true, func(ctx context.Context) error {
-		log.Println("Running token cleanup...")
-		// Token cleanup handles expired tokens and resets lockouts
-		// Lockout reset is handled automatically by auth when lockout expires
-		return nil
-	})
-
 	// Self health check - every 5 minutes
 	s.scheduler.AddTask("healthcheck_self", "@every 5m", true, func(ctx context.Context) error {
 		// Verify core components are responding
@@ -640,20 +562,6 @@ func (s *Server) setupRouter() *chi.Mux {
 	// Health endpoints
 	r.Get("/healthz", h.Healthz)
 
-	// Auth routes - required per AI.md PART 11, 12
-	r.Route("/auth", func(r chi.Router) {
-		r.Get("/login", h.AuthLogin)
-		r.Post("/login", h.AuthLoginPost)
-		r.Get("/logout", h.AuthLogout)
-		r.Post("/logout", h.AuthLogout)
-	})
-
-	// Auth API routes
-	r.Route("/api/v1/auth", func(r chi.Router) {
-		r.Post("/login", h.APIAuthLogin)
-		r.Post("/logout", h.APIAuthLogout)
-	})
-
 	// Homepage
 	r.Get("/", h.Home)
 
@@ -754,7 +662,6 @@ func (s *Server) setupRouter() *chi.Mux {
 	// Well-known files per AI.md PART 12
 	r.Route("/.well-known", func(r chi.Router) {
 		r.Get("/security.txt", h.SecurityTxt)
-		r.Get("/change-password", h.ChangePassword)
 	})
 	// Also serve security.txt at root for convenience
 	r.Get("/security.txt", h.SecurityTxt)
@@ -779,87 +686,6 @@ func (s *Server) setupRouter() *chi.Mux {
 
 	// Prometheus metrics (PART 21) - internal, optional token auth
 	r.Handle("/metrics", s.metrics.Handler())
-
-	// Admin panel - route hierarchy per PART 17
-	// /{admin_path}/ - Dashboard
-	// /{admin_path}/profile - Admin's own profile
-	// /{admin_path}/preferences - Admin's own preferences
-	// /{admin_path}/notifications - Admin's own notifications
-	// /{admin_path}/server/* - ALL server management
-	adminPath := s.cfg.Server.AdminPath
-	if adminPath == "" {
-		adminPath = "admin"
-	}
-	r.Route("/"+adminPath, func(r chi.Router) {
-		// Auth middleware - protects admin routes
-		if s.authMiddleware != nil {
-			r.Use(s.authMiddleware.RequireAuth)
-		}
-		r.Get("/", h.AdminDashboard)
-		r.Get("/profile", h.AdminProfile)
-		r.Get("/preferences", h.AdminPreferences)
-		r.Get("/notifications", h.AdminNotifications)
-
-		// Server management routes
-		r.Route("/server", func(r chi.Router) {
-			r.Get("/", h.AdminServerInfo)
-			r.Get("/settings", h.AdminSettings)
-			r.Get("/ssl", h.AdminSSL)
-			r.Post("/ssl", h.AdminSSLSave)
-			r.Get("/email", h.AdminEmail)
-			r.Get("/scheduler", h.AdminScheduler)
-			r.Get("/logs", h.AdminLogs)
-			r.Get("/logs/audit", h.AdminAuditLogs)
-			r.Get("/backup", h.AdminBackup)
-			r.Post("/backup", h.AdminBackupSave)
-			r.Get("/updates", h.AdminUpdates)
-			r.Get("/info", h.AdminServerInfo)
-			r.Get("/metrics", h.AdminMetrics)
-
-			// Setup wizard (PART 17)
-			r.Get("/setup", h.AdminSetup)
-			r.Post("/setup/verify", h.AdminSetupVerify)
-			r.Post("/setup/complete", h.AdminSetupComplete)
-
-			// Network settings
-			r.Route("/network", func(r chi.Router) {
-				r.Get("/", h.AdminNetwork)
-				r.Get("/tor", h.AdminTor)
-				r.Get("/geoip", h.AdminGeoIP)
-			})
-
-			// Security settings
-			r.Route("/security", func(r chi.Router) {
-				r.Get("/", h.AdminSecurity)
-				r.Get("/auth", h.AdminAuth)
-				r.Get("/tokens", h.AdminTokens)
-				r.Get("/firewall", h.AdminFirewall)
-			})
-		})
-	})
-
-	// Admin API routes
-	r.Route("/api/v1/"+adminPath, func(r chi.Router) {
-		// Auth middleware - protects admin API routes
-		if s.authMiddleware != nil {
-			r.Use(s.authMiddleware.RequireAuth)
-		}
-		r.Get("/", h.APIAdminDashboard)
-		r.Route("/server", func(r chi.Router) {
-			r.Get("/settings", h.APIAdminSettings)
-			r.Patch("/settings", h.APIAdminSettingsUpdate)
-
-			// Setup wizard API (PART 17)
-			r.Get("/setup", h.APIAdminSetupStatus)
-			r.Post("/setup/verify", h.APIAdminSetupVerify)
-			r.Post("/setup/complete", h.APIAdminSetupComplete)
-
-			// Backup admin API (PART 22)
-			r.Get("/backup", h.APIAdminBackupList)
-			r.Post("/backup", h.APIAdminBackupCreate)
-			r.Post("/backup/restore", h.APIAdminBackupRestore)
-		})
-	})
 
 	// Static files (embedded)
 	r.Handle("/static/*", h.StaticFiles())

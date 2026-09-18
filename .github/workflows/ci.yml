@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@27b0417c16317ca9a472a9a8092acce143b49c55  # v3.95.9
+        with:
+          base: ${{ github.event_name == 'schedule' && '' || github.event.before }}
+          head: ${{ github.event_name == 'schedule' && '' || github.event.after }}
+          extra_args: --results=verified,unknown
+
+  lint:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - run: go vet ./...
+      - run: staticcheck ./...
+
+  test:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Run tests with coverage
+        run: |
+          mkdir -p "/tmp/${{ github.repository_owner }}"
+          COVDIR=$(mktemp -d "/tmp/${{ github.repository_owner }}/$(basename "${{ github.repository }}")-XXXXXX")
+          echo "COVDIR=$COVDIR" >> "$GITHUB_ENV"
+          go test -cover -coverprofile="$COVDIR/coverage.out" ./...
+      - name: Enforce coverage threshold
+        run: |
+          THRESHOLD=60
+          PCT=$(go tool cover -func="$COVDIR/coverage.out" | awk '/^total:/ {gsub("%","",$3); print int($3)}')
+          if [ "$PCT" -lt "$THRESHOLD" ]; then
+            echo "::error::coverage $PCT% < threshold $THRESHOLD%"
+            exit 1
+          fi
+
+  build:
+    if: github.event_name != 'schedule'
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - run: go build -buildvcs=false ./...
+
+  vuln-scan:
+    runs-on: ubuntu-latest
+    container:
+      image: casjaysdev/go:latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - run: govulncheck ./...
+
+  workflow-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Verify action pinning and trigger policy
+        run: |
+          set -eo pipefail
+          FAIL=0
+          for f in .github/workflows/*.yml; do
+            if grep -qE '^\s*pull_request_target\s*:' "$f"; then
+              echo "::error file=$f::pull_request_target trigger is not allowed"
+              FAIL=1
+            fi
+            while IFS= read -r line; do
+              ref=$(echo "$line" | sed -E 's/.*uses:[[:space:]]*[^@]+@([^[:space:]]+).*/\1/')
+              if ! echo "$ref" | grep -qE '^[0-9a-f]{40}$'; then
+                echo "::error file=$f::unpinned action reference: $line"
+                FAIL=1
+              fi
+            done < <(grep -E '^\s*-?\s*uses:' "$f")
+          done
+          exit "$FAIL"
+
+  image-scan:
+    if: github.event_name != 'schedule'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - name: Build image
+        run: docker build -f docker/Dockerfile -t man:ci-scan .
+      - name: Scan image
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.70.0 image \
+            --exit-code 1 --severity CRITICAL,HIGH man:ci-scan

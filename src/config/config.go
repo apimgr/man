@@ -32,7 +32,6 @@ type ServerConfig struct {
 	FQDN             string `yaml:"fqdn"`
 	Address          string `yaml:"address"`
 	Mode             string `yaml:"mode"`
-	AdminPath        string `yaml:"admin_path"`
 
 	Branding BrandingConfig `yaml:"branding"`
 	SSL      SSLConfig      `yaml:"ssl"`
@@ -283,7 +282,6 @@ func defaultConfig(paths PathConfig) *Config {
 			FQDN:             hostname,
 			Address:          "[::]",
 			Mode:             "production",
-			AdminPath:        "admin",
 			Branding: BrandingConfig{
 				Title:       "casman",
 				Tagline:     "Universal Man Pages",
@@ -399,4 +397,3 @@ func userCacheDir() string {
 		return filepath.Join(os.Getenv("HOME"), ".cache")
 	}
 }
-

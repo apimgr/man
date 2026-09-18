@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,7 +40,6 @@ type Metrics struct {
 	config    Config
 	registry  *prometheus.Registry
 	startTime time.Time
-	mu        sync.RWMutex
 
 	// Version info
 	version   string

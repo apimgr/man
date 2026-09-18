@@ -176,7 +176,6 @@ func DefaultTLSConfig() *tls.Config {
 			tls.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,
 			tls.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,
 		},
-		PreferServerCipherSuites: true,
 		CurvePreferences: []tls.CurveID{
 			tls.X25519,
 			tls.CurveP256,

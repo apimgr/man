@@ -124,12 +124,7 @@ func (c *Client) testConnection(host string, port int) bool {
 	defer client.Close()
 
 	// Attempt EHLO
-	err = client.Hello("localhost")
-	if err != nil {
-		return false
-	}
-
-	return true
+	return client.Hello("localhost") == nil
 }
 
 // TestConnection tests the currently configured SMTP server.

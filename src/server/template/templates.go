@@ -7,8 +7,13 @@ import (
 	"io"
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/casapps/casman/src/server/model"
 )
+
+var titleCaser = cases.Title(language.Und)
 
 //go:embed *.html
 var templateFS embed.FS
@@ -23,7 +28,7 @@ func New() (*Templates, error) {
 	funcMap := htmltemplate.FuncMap{
 		"lower":    strings.ToLower,
 		"upper":    strings.ToUpper,
-		"title":    strings.Title,
+		"title":    titleCaser.String,
 		"contains": strings.Contains,
 		"join":     strings.Join,
 		"safe":     func(s string) htmltemplate.HTML { return htmltemplate.HTML(s) },
