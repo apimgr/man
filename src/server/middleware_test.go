@@ -297,7 +297,7 @@ func TestRateLimiter_AllowAndDeny(t *testing.T) {
 		t.Fatalf("second call: allowed=%v remaining=%d, want true 0", allowed, remaining)
 	}
 
-	allowed, remaining, resetTime := rl.Allow("login", "1.2.3.4")
+	allowed, _, resetTime := rl.Allow("login", "1.2.3.4")
 	if allowed {
 		t.Fatal("third call should be denied")
 	}
