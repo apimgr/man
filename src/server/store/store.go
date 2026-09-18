@@ -593,13 +593,23 @@ func (db *DB) GetStats() (model.Stats, error) {
 	}
 	rows.Close()
 
-	// Last updated
-	var lastUpdated sql.NullTime
+	// Last updated. MAX() loses the column's DATETIME type affinity, so the
+	// driver returns a raw string here instead of converting it the way a
+	// plain column scan would; parse it manually rather than scanning into
+	// sql.NullTime.
+	var lastUpdated sql.NullString
 	if err := db.conn.QueryRow("SELECT MAX(updated_at) FROM manpages").Scan(&lastUpdated); err != nil {
 		return stats, err
 	}
 	if lastUpdated.Valid {
-		stats.LastUpdated = lastUpdated.Time
+		parsed, err := time.Parse("2006-01-02 15:04:05", lastUpdated.String)
+		if err != nil {
+			parsed, err = time.Parse(time.RFC3339, lastUpdated.String)
+		}
+		if err != nil {
+			return stats, err
+		}
+		stats.LastUpdated = parsed
 	} else {
 		stats.LastUpdated = time.Now()
 	}

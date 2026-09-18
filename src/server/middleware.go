@@ -349,7 +349,7 @@ func (rl *RateLimiter) cleanup() {
 
 func (rl *RateLimiter) getKeyType(key string) string {
 	parts := strings.Split(key, ":")
-	if len(parts) > 0 {
+	if len(parts) > 1 {
 		return parts[0]
 	}
 	return "api_unauth"

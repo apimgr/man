@@ -103,3 +103,16 @@ func TestOutbound_RequiresRunningService(t *testing.T) {
 		t.Error("HTTPClient should error when service is not running")
 	}
 }
+
+func TestSetLocalPort(t *testing.T) {
+	s := New(DefaultConfig())
+	s.SetLocalPort(9999)
+	if s.cfg.LocalPort != 9999 {
+		t.Errorf("LocalPort = %d, want 9999", s.cfg.LocalPort)
+	}
+}
+
+func TestSetLocalPort_NilReceiver(t *testing.T) {
+	var s *Service
+	s.SetLocalPort(9999)
+}

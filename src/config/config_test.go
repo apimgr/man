@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -69,5 +70,37 @@ func TestDefaultConfig_HasHTTPSPorts(t *testing.T) {
 	}
 	if cfg.Server.HTTPRedirectPort != "80" {
 		t.Errorf("default HTTPRedirectPort = %q, want 80", cfg.Server.HTTPRedirectPort)
+	}
+}
+
+func TestIsRunningInContainer_EnvVar(t *testing.T) {
+	t.Setenv("container", "docker")
+	if !isRunningInContainer() {
+		t.Error("expected true when container env var is set")
+	}
+}
+
+func TestUserConfigDir_NoPanic(t *testing.T) {
+	if got := userConfigDir(); got == "" {
+		t.Error("userConfigDir returned empty string")
+	}
+}
+
+func TestUserDataDir_NoPanic(t *testing.T) {
+	if got := userDataDir(); got == "" {
+		t.Error("userDataDir returned empty string")
+	}
+}
+
+func TestUserCacheDir_NoPanic(t *testing.T) {
+	if got := userCacheDir(); got == "" {
+		t.Error("userCacheDir returned empty string")
+	}
+}
+
+func TestUserConfigDir_XDG(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
+	if got := userConfigDir(); runtime.GOOS != "darwin" && runtime.GOOS != "windows" && got != "/xdg/config" {
+		t.Errorf("userConfigDir() = %q, want /xdg/config", got)
 	}
 }
