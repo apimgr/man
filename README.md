@@ -1,20 +1,16 @@
 # casman
 
-[![Build](https://github.com/casapps/casman/actions/workflows/build.yml/badge.svg)](https://github.com/casapps/casman/actions/workflows/build.yml)
+[![Build](https://github.com/casapps/casman/actions/workflows/ci.yml/badge.svg)](https://github.com/casapps/casman/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/casapps/casman)](https://github.com/casapps/casman/releases)
 [![License](https://img.shields.io/github/license/casapps/casman)](LICENSE.md)
 
 ## About
 
-casman is a universal man page application with ALL man pages from BSD, macOS, Linux, Void, and other Unix-like systems embedded into a single binary. Like man.cgi but completely self-contained with no external dependencies.
-
-## Official Site
-
-https://casman.example.com
+casman is a self-contained man page application with a large embedded collection from BSD, macOS, Linux, Void, and other Unix-like systems. It provides a responsive browser interface, REST and GraphQL APIs, and a terminal client.
 
 ## Features
 
-- **Embedded Man Pages** - All man pages compiled into a single binary
+- **Embedded Man Pages** - A cross-platform collection compiled into a single binary
 - **Multi-Platform** - BSD (FreeBSD, OpenBSD, NetBSD), macOS, Linux, Void, Alpine, POSIX
 - **All Sections** - Sections 1-9, n (New/Tcl), x (X Window System)
 - **Multiple Formats** - HTML, plain text, Markdown, JSON, raw source
@@ -22,10 +18,9 @@ https://casman.example.com
 - **Compare** - Side-by-side comparison across platforms
 - **TLDR Summaries** - Auto-generated concise examples
 - **Whatis/Apropos** - Traditional man page utilities
-- **Translations** - Support for localized man pages (de, fr, ja, zh, etc.)
 - **Bookmarks** - Save favorites locally (no account required)
 - **History** - Track recently viewed pages
-- **Export** - Download as PDF, EPUB, MOBI
+- **Export** - Download as PDF, EPUB, or standalone HTML
 - **RSS Feeds** - Subscribe to updates
 - **PWA Support** - Installable, offline-capable
 - **Dark/Light Theme** - System preference detection
