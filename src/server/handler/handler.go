@@ -3,6 +3,7 @@ package handler
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	htmltemplate "html/template"
 	"io/fs"
@@ -885,9 +886,9 @@ func (h *Handlers) serveFeed(w http.ResponseWriter, r *http.Request, platform, s
 <feed xmlns="http://www.w3.org/2005/Atom">
   <title>casman - Man Page Updates</title>
   <subtitle>Universal man pages from BSD, macOS, Linux, and more</subtitle>
-  <link href="` + baseURL + `/feed.xml" rel="self"/>
-  <link href="` + baseURL + `/" rel="alternate"/>
-  <id>` + baseURL + `/</id>
+  <link href="` + escapeXML(baseURL) + `/feed.xml" rel="self"/>
+  <link href="` + escapeXML(baseURL) + `/" rel="alternate"/>
+  <id>` + escapeXML(baseURL) + `/</id>
 `)
 
 	if len(entries) > 0 {
@@ -898,13 +899,13 @@ func (h *Handlers) serveFeed(w http.ResponseWriter, r *http.Request, platform, s
 
 	for _, e := range entries {
 		sb.WriteString("  <entry>\n")
-		sb.WriteString("    <title>" + e.Name + "(" + e.Section + ") - " + e.Platform + "</title>\n")
-		sb.WriteString("    <link href=\"" + baseURL + e.URL + "\"/>\n")
-		sb.WriteString("    <id>" + baseURL + e.URL + "</id>\n")
+		sb.WriteString("    <title>" + escapeXML(e.Name) + "(" + escapeXML(e.Section) + ") - " + escapeXML(e.Platform) + "</title>\n")
+		sb.WriteString("    <link href=\"" + escapeXML(baseURL+e.URL) + "\"/>\n")
+		sb.WriteString("    <id>" + escapeXML(baseURL+e.URL) + "</id>\n")
 		sb.WriteString("    <updated>" + e.UpdatedAt.Format("2006-01-02T15:04:05Z") + "</updated>\n")
-		sb.WriteString("    <summary>" + e.Title + "</summary>\n")
-		sb.WriteString("    <category term=\"" + e.Platform + "\"/>\n")
-		sb.WriteString("    <category term=\"section-" + e.Section + "\"/>\n")
+		sb.WriteString("    <summary>" + escapeXML(e.Title) + "</summary>\n")
+		sb.WriteString("    <category term=\"" + escapeXML(e.Platform) + "\"/>\n")
+		sb.WriteString("    <category term=\"section-" + escapeXML(e.Section) + "\"/>\n")
 		sb.WriteString("  </entry>\n")
 	}
 
@@ -913,6 +914,14 @@ func (h *Handlers) serveFeed(w http.ResponseWriter, r *http.Request, platform, s
 	w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(sb.String()))
+}
+
+func escapeXML(value string) string {
+	var escaped strings.Builder
+	if err := xml.EscapeText(&escaped, []byte(value)); err != nil {
+		return ""
+	}
+	return strings.NewReplacer("\"", "&#34;", "'", "&#39;").Replace(escaped.String())
 }
 
 // FeedJSON handles /feed.json

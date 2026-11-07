@@ -30,9 +30,17 @@ import (
 var (
 	Version      = "dev"
 	CommitID     = "unknown"
+	BuildEpoch   = "0"
 	BuildDate    = "unknown"
-	OfficialSite = "https://casman.example.com"
+	OfficialSite = ""
 )
+
+func init() {
+	epoch, err := strconv.ParseInt(BuildEpoch, 10, 64)
+	if err == nil && epoch > 0 {
+		BuildDate = time.Unix(epoch, 0).UTC().Format(time.RFC3339)
+	}
+}
 
 // Project constants - NEVER change these (hardcoded identifiers)
 const (

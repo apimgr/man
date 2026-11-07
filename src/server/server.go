@@ -727,11 +727,12 @@ func (s *Server) Run() error {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	serveErr := make(chan error, 1)
 	go func() {
 		log.Printf("Starting server on %s", listenAddr)
 		log.Printf("Mode: %s", s.cfg.Server.Mode)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server error: %v", err)
+			serveErr <- err
 		}
 	}()
 
@@ -746,7 +747,17 @@ func (s *Server) Run() error {
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	defer signal.Stop(quit)
+	select {
+	case <-quit:
+	case err := <-serveErr:
+		s.scheduler.Stop()
+		if s.tor != nil {
+			_ = s.tor.Stop(context.Background())
+		}
+		_ = s.Close()
+		return fmt.Errorf("server listen: %w", err)
+	}
 
 	log.Println("Shutting down server...")
 	s.scheduler.Stop()

@@ -67,3 +67,4 @@ IDEA.md feature or every supported platform dataset is complete.
 - [ ] Confirm CI coverage remains at or above 60% after the current in-progress
       test additions; no build, test, lint, formatting, or workflow validation
       was run in this pass per task instructions.
+- man: server lacks --color/--debug flags and NO_COLOR handling

@@ -9,17 +9,19 @@ VERSION ?= $(shell cat release.txt 2>/dev/null || echo "0.1.0")
 
 # Build info - use TZ env var or system timezone
 # Format: "January 22, 2025 at 10:30:45"
-BUILD_DATE := $(shell date +"%B %-d, %Y at %H:%M:%S")
+BUILD_EPOCH := $(shell date -u +%s)
+BUILD_DATE := $(shell date -u -d @$(BUILD_EPOCH) +"%Y-%m-%dT%H:%M:%SZ")
 COMMIT_ID := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 # Official site
-OFFICIALSITE ?= https://casman.example.com
+OFFICIALSITE ?= $(shell [ -f site.txt ] && cat site.txt || echo "")
 
 # Linker flags to embed build info
 LDFLAGS := -s -w \
 	-X 'main.Version=$(VERSION)' \
 	-X 'main.CommitID=$(COMMIT_ID)' \
 	-X 'main.BuildDate=$(BUILD_DATE)' \
+	-X 'main.BuildEpoch=$(BUILD_EPOCH)' \
 	-X 'main.OfficialSite=$(OFFICIALSITE)'
 
 # Directories
@@ -27,8 +29,8 @@ BINDIR := binaries
 RELDIR := releases
 
 # Go directories (persistent across builds)
-GODIR := $(HOME)/.local/share/go
-GOCACHE := $(HOME)/.local/share/go/build
+GO_CACHE ?= $(HOME)/go/pkg/mod
+GO_BUILD ?= $(HOME)/.cache/go-build/$(PROJECTNAME)
 
 # Build targets
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 freebsd/arm64
@@ -37,11 +39,12 @@ PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 win
 REGISTRY ?= ghcr.io/$(PROJECTORG)/$(PROJECTNAME)
 GO_DOCKER := docker run --rm \
 	-v $(PWD):/build \
-	-v $(GOCACHE):/root/.cache/go-build \
-	-v $(GODIR):/go \
+	-v $(GO_BUILD):/usr/local/share/go/cache \
+	-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 	-w /build \
 	-e CGO_ENABLED=0 \
-	golang:alpine
+	-e GOFLAGS=-buildvcs=false \
+	casjaysdev/go:latest
 
 .PHONY: build local release docker test dev clean
 
@@ -49,9 +52,9 @@ GO_DOCKER := docker run --rm \
 # BUILD - Build all platforms + local binary (via Docker with cached modules)
 # =============================================================================
 build: clean
+	@mkdir -p $(GO_BUILD) $(GO_CACHE)
 	@mkdir -p $(BINDIR)
 	@echo "Building version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GODIR)
 
 	# Tidy and download modules
 	@echo "Tidying and downloading Go modules..."
@@ -61,7 +64,7 @@ build: clean
 	# Build for local OS/ARCH
 	@echo "Building local binary..."
 	@$(GO_DOCKER) sh -c "GOOS=$$(go env GOOS) GOARCH=$$(go env GOARCH) \
-		go build -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
+		go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" -o $(BINDIR)/$(PROJECTNAME) ./src"
 
 	# Build server for all platforms
 	@for platform in $(PLATFORMS); do \
@@ -71,7 +74,7 @@ build: clean
 		[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 		echo "Building server $$OS/$$ARCH..."; \
 		$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
-			go build -ldflags \"$(LDFLAGS)\" \
+			go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" \
 			-o $$OUTPUT ./src" || exit 1; \
 	done
 
@@ -84,7 +87,7 @@ build: clean
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building CLI $$OS/$$ARCH..."; \
 			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
-				go build -ldflags \"$(LDFLAGS)\" \
+				go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" \
 				-o $$OUTPUT ./src/client" || exit 1; \
 		done; \
 	fi
@@ -98,7 +101,7 @@ build: clean
 			[ "$$OS" = "windows" ] && OUTPUT=$$OUTPUT.exe; \
 			echo "Building agent $$OS/$$ARCH..."; \
 			$(GO_DOCKER) sh -c "GOOS=$$OS GOARCH=$$ARCH \
-				go build -ldflags \"$(LDFLAGS)\" \
+				go build -buildvcs=false -trimpath -ldflags \"$(LDFLAGS)\" \
 				-o $$OUTPUT ./src/agent" || exit 1; \
 		done; \
 	fi
@@ -111,7 +114,7 @@ build: clean
 local: clean
 	@mkdir -p $(BINDIR)
 	@echo "Building local binaries version $(VERSION)..."
-	@mkdir -p $(GOCACHE) $(GODIR)
+	@mkdir -p $(GO_BUILD) $(GO_CACHE)
 
 	# Tidy and download modules
 	@echo "Tidying and downloading Go modules..."
@@ -120,18 +123,18 @@ local: clean
 
 	# Build server binary (Linux - container native)
 	@echo "Building $(PROJECTNAME)..."
-	@$(GO_DOCKER) go build -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECTNAME) ./src
+	@$(GO_DOCKER) go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECTNAME) ./src
 
 	# Build CLI binary (if exists)
 	@if [ -d "src/client" ]; then \
 		echo "Building $(PROJECTNAME)-cli..."; \
-		$(GO_DOCKER) go build -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECTNAME)-cli ./src/client; \
+		$(GO_DOCKER) go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECTNAME)-cli ./src/client; \
 	fi
 
 	# Build agent binary (if exists)
 	@if [ -d "src/agent" ]; then \
 		echo "Building $(PROJECTNAME)-agent..."; \
-		$(GO_DOCKER) go build -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECTNAME)-agent ./src/agent; \
+		$(GO_DOCKER) go build -buildvcs=false -trimpath -ldflags "$(LDFLAGS)" -o $(BINDIR)/$(PROJECTNAME)-agent ./src/agent; \
 	fi
 
 	@echo "Local build complete: $(BINDIR)/"
@@ -190,6 +193,7 @@ docker:
 		--platform linux/amd64,linux/arm64 \
 		--build-arg VERSION="$(VERSION)" \
 		--build-arg BUILD_DATE="$(BUILD_DATE)" \
+		--build-arg BUILD_EPOCH="$(BUILD_EPOCH)" \
 		--build-arg COMMIT_ID="$(COMMIT_ID)" \
 		-t $(REGISTRY):$(VERSION) \
 		-t $(REGISTRY):latest \
@@ -203,16 +207,16 @@ docker:
 # =============================================================================
 test:
 	@echo "Running tests with coverage..."
-	@mkdir -p $(GOCACHE) $(GODIR)
+	@mkdir -p $(GO_BUILD) $(GO_CACHE)
 	@$(GO_DOCKER) go mod download
-	@$(GO_DOCKER) go test -v -cover -coverprofile=coverage.out ./...
+	@$(GO_DOCKER) sh -c 'set -eu; mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)"; COVERAGE_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX"); trap "rm -rf \"$$COVERAGE_DIR\"" EXIT; go vet ./...; go test -v -coverprofile="$$COVERAGE_DIR/coverage.out" ./...; COVERAGE=$$(go tool cover -func="$$COVERAGE_DIR/coverage.out" | awk "/^total:/ {print \$$3}" | sed "s/%//"); echo "Coverage: $$COVERAGE%"; awk -v coverage="$$COVERAGE" "BEGIN {exit !(coverage + 0 >= 60)}"'
 	@echo "Tests complete"
 
 # =============================================================================
 # DEV - Quick build for local development/testing (to random temp dir)
 # =============================================================================
 dev:
-	@mkdir -p $(GOCACHE) $(GODIR)
+	@mkdir -p $(GO_BUILD) $(GO_CACHE)
 	@$(GO_DOCKER) go mod tidy
 	@mkdir -p "$${TMPDIR:-/tmp}/$(PROJECTORG)" && \
 		BUILD_DIR=$$(mktemp -d "$${TMPDIR:-/tmp}/$(PROJECTORG)/$(PROJECTNAME)-XXXXXX") && \
@@ -220,32 +224,35 @@ dev:
 		docker run --rm \
 			-v $(PWD):/build \
 			-v $$BUILD_DIR:/out \
-			-v $(GOCACHE):/root/.cache/go-build \
-			-v $(GODIR):/go \
+			-v $(GO_BUILD):/usr/local/share/go/cache \
+			-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 			-w /build \
 			-e CGO_ENABLED=0 \
-			golang:alpine go build -o /out/$(PROJECTNAME) ./src && \
+	-e GOFLAGS=-buildvcs=false \
+			casjaysdev/go:latest go build -buildvcs=false -trimpath -o /out/$(PROJECTNAME) ./src && \
 		echo "Built: $$BUILD_DIR/$(PROJECTNAME)" && \
 		if [ -d "src/client" ]; then \
 			docker run --rm \
 				-v $(PWD):/build \
 				-v $$BUILD_DIR:/out \
-				-v $(GOCACHE):/root/.cache/go-build \
-				-v $(GODIR):/go \
+				-v $(GO_BUILD):/usr/local/share/go/cache \
+				-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 				-w /build \
 				-e CGO_ENABLED=0 \
-				golang:alpine go build -o /out/$(PROJECTNAME)-cli ./src/client && \
+	-e GOFLAGS=-buildvcs=false \
+				casjaysdev/go:latest go build -buildvcs=false -trimpath -o /out/$(PROJECTNAME)-cli ./src/client && \
 			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-cli"; \
 		fi && \
 		if [ -d "src/agent" ]; then \
 			docker run --rm \
 				-v $(PWD):/build \
 				-v $$BUILD_DIR:/out \
-				-v $(GOCACHE):/root/.cache/go-build \
-				-v $(GODIR):/go \
+				-v $(GO_BUILD):/usr/local/share/go/cache \
+				-v $(GO_CACHE):/usr/local/share/go/pkg/mod \
 				-w /build \
 				-e CGO_ENABLED=0 \
-				golang:alpine go build -o /out/$(PROJECTNAME)-agent ./src/agent && \
+	-e GOFLAGS=-buildvcs=false \
+				casjaysdev/go:latest go build -buildvcs=false -trimpath -o /out/$(PROJECTNAME)-agent ./src/agent && \
 			echo "Built: $$BUILD_DIR/$(PROJECTNAME)-agent"; \
 		fi && \
 		echo "Test:  docker run --rm -v $$BUILD_DIR:/app alpine:latest /app/$(PROJECTNAME) --help"

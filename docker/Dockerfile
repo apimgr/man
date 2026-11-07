@@ -1,16 +1,14 @@
 # =============================================================================
 # Build Stage - Compile Go binary
 # =============================================================================
-FROM golang:alpine AS builder
-
-# Install git and bash (git: required for go mod download; bash: for build scripts)
-RUN apk add --no-cache git bash
+FROM casjaysdev/go:latest AS builder
 
 ARG TARGETARCH
 ARG VERSION=dev
 ARG BUILD_DATE
+ARG BUILD_EPOCH
 ARG COMMIT_ID
-ARG OFFICIALSITE=https://casman.example.com
+ARG OFFICIALSITE=
 
 WORKDIR /build
 
@@ -20,8 +18,9 @@ RUN go mod download
 
 # Copy source and build
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build \
-    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildDate=${BUILD_DATE}' -X 'main.OfficialSite=${OFFICIALSITE}'" \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} GOFLAGS=-buildvcs=false go build \
+    -buildvcs=false -trimpath \
+    -ldflags "-s -w -X 'main.Version=${VERSION}' -X 'main.CommitID=${COMMIT_ID}' -X 'main.BuildEpoch=${BUILD_EPOCH}' -X 'main.OfficialSite=${OFFICIALSITE}'" \
     -o /build/binary/casman ./src
 
 # =============================================================================
@@ -34,26 +33,6 @@ ARG VERSION=dev
 ARG BUILD_DATE
 ARG COMMIT_ID
 ARG LICENSE=MIT
-
-# Static Labels
-LABEL maintainer="casapps <casapps@example.com>" \
-      org.opencontainers.image.vendor="casapps" \
-      org.opencontainers.image.authors="casapps" \
-      org.opencontainers.image.title="casman" \
-      org.opencontainers.image.base.name="casman" \
-      org.opencontainers.image.description="casman - universal man pages (alpine)" \
-      org.opencontainers.image.url="https://github.com/casapps/casman" \
-      org.opencontainers.image.source="https://github.com/casapps/casman" \
-      org.opencontainers.image.documentation="https://github.com/casapps/casman" \
-      org.opencontainers.image.vcs-type="Git" \
-      com.github.containers.toolbox="false"
-
-# Dynamic Labels (from ARGs)
-LABEL org.opencontainers.image.licenses="${LICENSE}" \
-      org.opencontainers.image.created="${BUILD_DATE}" \
-      org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.schema-version="${VERSION}" \
-      org.opencontainers.image.revision="${COMMIT_ID}"
 
 # Install required packages
 # NOTE: Tor binary installed but NOT configured here - binary handles all Tor setup
@@ -71,9 +50,9 @@ RUN apk add --no-cache \
 # Copy binary from builder stage (multi-stage build)
 COPY --from=builder /build/binary/casman /usr/local/bin/casman
 
-# Copy BUILD-TIME overlay (entrypoint.sh) from docker/file_system/ into image
-# Note: This is docker/file_system/ (build context), NOT runtime ./rootfs/ volumes
-COPY docker/file_system/ /
+# Copy BUILD-TIME overlay (entrypoint.sh) from docker/rootfs/ into image
+# Note: This is docker/rootfs/ (build context), NOT runtime ./rootfs/ volumes
+COPY docker/rootfs/ /
 
 # Copy Dockerfile to image (for reference and backup)
 COPY docker/Dockerfile /root/Dockerfile
