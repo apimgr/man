@@ -23,7 +23,7 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - **REST API** - Programmatic access to all man pages
 - **GraphQL** - Complex queries and relationships
 - **CLI Client** - Terminal interface with TUI mode
-- **PWA Support** - Installable, offline-capable
+- **PWA Support** - Installable with cached homepage and static assets
 
 ## Documentation
 
@@ -31,7 +31,10 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - [Configuration](configuration.md) - All configuration options
 - [API Reference](api.md) - REST API, Swagger, GraphQL
 - [CLI Reference](cli.md) - Command-line client
-- [Admin Panel](admin.md) - WebUI administration
+- [Server Operations](admin.md) - Configuration and command-line operations
+- [Security](security.md) - Security boundaries and reporting
+- [Integrations](integrations.md) - Public protocols and integrations
+- [Translating](translating.md) - Translation status and contribution guidance
 - [Development](development.md) - Contributing guide
 
 ## Links

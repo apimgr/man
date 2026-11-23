@@ -2,28 +2,38 @@
 
 ## Config File
 
-Default location: `/etc/casapps/casman/server.yml`
+The file is named `server.yml` in the selected configuration directory. The
+default directory is `/etc/casapps/casman` for root, `/config` in a container,
+and the platform's user configuration directory for an unprivileged process.
+The `--config` and `--data` flags override the corresponding directories.
 
 ```yaml
 server:
-  address: 0.0.0.0
-  port: 80
+  address: "[::]"
+  port: ""
+  https_port: "443"
+  http_redirect_port: "80"
+  fqdn: localhost
   mode: production
+  branding:
+    title: casman
+    tagline: Universal Man Pages
+    description: Man pages from BSD, macOS, Linux, and more
+  ssl:
+    enabled: false
+    min_version: TLS1.2
+    cert: ""
+    key: ""
+    data_dir: ""
+    letsencrypt:
+      enabled: false
+      email: ""
+      challenge: http-01
+      staging: false
 
 database:
   driver: sqlite
-  path: /data/db/server.db
-
-ssl:
-  enabled: false
-  cert: ""
-  key: ""
-  data_dir: ""
-  letsencrypt:
-    enabled: false
-    email: admin@example.com
-    challenge: http-01
-    staging: false
+  path: "{data_dir}/db/server.db"
 ```
 
 ## SSL/TLS
@@ -31,20 +41,20 @@ ssl:
 Per AI.md PART 15, casman ships built-in Let's Encrypt support and an
 encrypted DNS provider credential vault. The wiring is:
 
-- Set `ssl.enabled: true` to switch the listener stack from HTTP-only to
+- Set `server.ssl.enabled: true` to switch the listener stack from HTTP-only to
   HTTP redirect + HTTPS. The HTTPS listener uses a tightened TLS profile
   (TLS 1.2+, ECDHE+AES/ChaCha20, X25519/P256).
-- For an operator-supplied cert, set `ssl.cert` and `ssl.key`. The cert is
+- For an operator-supplied cert, set `server.ssl.cert` and `server.ssl.key`. The cert is
   loaded into the in-memory cache at startup and served via SNI.
-- For automated issuance, set `ssl.letsencrypt.enabled: true`,
-  `letsencrypt.email`, and `letsencrypt.challenge` to one of `http-01`,
+- For automated issuance, set `server.ssl.letsencrypt.enabled: true`,
+  `server.ssl.letsencrypt.email` and `server.ssl.letsencrypt.challenge` to one of `http-01`,
   `tls-alpn-01`, or `dns-01`. Use `staging: true` while testing to avoid
   Let's Encrypt rate limits.
-- For DNS-01, configure provider credentials at
-  `Admin → Server → SSL/TLS`. Credentials are encrypted with the server
-  master key (`{config_dir}/security/master.key`, 0600) before they hit
-  the database. The supported providers track lego's: cloudflare, route53,
-  digitalocean, godaddy, namecheap, rfc2136, plus a `manual` fallback.
+- A DNS credential vault is present, but this release does not expose a
+  supported web or CLI workflow for adding DNS provider credentials. Use
+  HTTP-01 or an operator-supplied certificate until that management path is
+  implemented. The code includes provider adapters for Cloudflare, Route 53,
+  DigitalOcean, GoDaddy, Namecheap, RFC 2136, and a manual fallback.
 - A daily scheduler task (03:00) parses each cached cert's `NotAfter` and
   re-provisions any cert with less than 30 days of life remaining. Static
   (non-ACME) certs are inspected too so operators get an early-warning
@@ -58,12 +68,13 @@ encrypted DNS provider credential vault. The wiring is:
 
 ## Environment Variables
 
-All settings can be overridden via environment:
+Environment variables may override settings supported by the server entry
+point. Common examples include:
 
 ```bash
-CASMAN_SERVER_PORT=8080
-CASMAN_SERVER_MODE=development
-CASMAN_DATABASE_DRIVER=postgres
+MODE=development
+PORT=8080
+DEBUG=true
 ```
 
 ## CLI Flags
@@ -74,15 +85,19 @@ casman --port 8080 --mode development --debug
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--port` | Listen port (HTTP) | 80 (container), random 64xxx (host) |
-| `--address` | Listen address | 0.0.0.0 |
-| `--https-port` | Listen port (HTTPS, when ssl.enabled) | 443 |
-| `--http-redirect-port` | Listen port (HTTP→HTTPS redirect + ACME) | 80 |
+| `--port` | Listen port (HTTP) | Environment/config dependent |
+| `--address` | Listen address | `[::]` |
+| `--https-port` | Listen port (HTTPS, when SSL is enabled) | 443 |
+| `--http-redirect-port` | Listen port (HTTP redirect + ACME) | 80 |
 | `--mode` | production/development | production |
 | `--config` | Config directory | OS-specific |
 | `--data` | Data directory | OS-specific |
 | `--debug` | Enable debug mode | false |
 
-## Admin Panel
+## Optional features
 
-All settings are configurable via the WebUI at `/admin`.
+The server configuration also supports metrics, GeoIP, backup, and Tor
+settings. These sections are optional; see the comments and defaults in
+`src/config/config.go`. There is no admin web UI. TLS and DNS provider
+credentials must be configured through the server's supported configuration
+and CLI workflows.

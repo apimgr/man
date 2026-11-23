@@ -6,11 +6,11 @@
 
 ## About
 
-casman is a self-contained man page application with a large embedded collection from BSD, macOS, Linux, Void, and other Unix-like systems. It provides a responsive browser interface, REST and GraphQL APIs, and a terminal client.
+casman is a self-contained man page application with an embedded collection from BSD, macOS, Linux, Void, and other Unix-like systems. It provides a responsive browser interface, REST and GraphQL APIs, and a terminal client.
 
 ## Features
 
-- **Embedded Man Pages** - A cross-platform collection compiled into a single binary
+- **Embedded Man Pages** - A cross-platform collection compiled into the server binary
 - **Multi-Platform** - BSD (FreeBSD, OpenBSD, NetBSD), macOS, Linux, Void, Alpine, POSIX
 - **All Sections** - Sections 1-9, n (New/Tcl), x (X Window System)
 - **Multiple Formats** - HTML, plain text, Markdown, JSON, raw source
@@ -21,9 +21,9 @@ casman is a self-contained man page application with a large embedded collection
 - **Bookmarks** - Save favorites locally (no account required)
 - **History** - Track recently viewed pages
 - **Export** - Download as PDF, EPUB, or standalone HTML
-- **RSS Feeds** - Subscribe to updates
-- **PWA Support** - Installable, offline-capable
-- **Dark/Light Theme** - System preference detection
+- **Update Feeds** - Atom and JSON feeds
+- **PWA Support** - Installable with cached homepage and static assets
+- **Theme** - Dark by default, with light and system-following modes
 
 ## Production
 
@@ -77,13 +77,15 @@ casman-cli
 
 ## Configuration
 
-Configuration file: `/etc/casapps/casman/server.yml` (or `~/.config/casapps/casman/server.yml`)
+Configuration file: `/etc/casapps/casman/server.yml` when running as root,
+`/config/server.yml` in a container, or the user's OS configuration directory
+when running unprivileged. Use `--config` to select another configuration
+directory.
 
 ```yaml
 server:
   port: 64580
   fqdn: casman.example.com
-
   ssl:
     enabled: false
     letsencrypt:
@@ -108,7 +110,9 @@ database:
 | `GET /compare/{name}` | Compare across platforms |
 | `GET /api/v1/*` | JSON API endpoints |
 
-Full API documentation: `/openapi`
+Full API documentation: [`/openapi`](http://localhost:64580/openapi). The
+service has no admin web UI or user accounts; configure and maintain it through
+`server.yml` and the command line.
 
 ---
 

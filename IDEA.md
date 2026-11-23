@@ -482,10 +482,10 @@ page:
 - Touch-friendly dropdowns
 
 ### Theme Support
-- Light mode (default)
-- Dark mode
+- Dark mode (default)
+- Light mode
 - Auto (follow system preference)
-- Persist choice in localStorage
+- Persist choice using the server-readable theme preference cookie
 
 ## Compare Feature
 
@@ -697,51 +697,18 @@ tree(1) - list contents of directories in a tree-like format
 
 Support localized man pages where available.
 
-### Supported Locales
-| Code | Language | Coverage |
-|------|----------|----------|
-| en | English | 100% (default) |
-| de | German | ~40% |
-| fr | French | ~35% |
-| ja | Japanese | ~30% |
-| zh | Chinese | ~25% |
-| es | Spanish | ~20% |
-| ru | Russian | ~15% |
-| pt | Portuguese | ~10% |
+### Locale Availability
 
-### Translation URL Structure
-| Route | Description |
-|-------|-------------|
-| `/man/{name}` | Default language (English) |
-| `/man/{lang}/{name}` | Specific language |
-| `/man/{lang}/{section}/{name}` | Language + section |
-| `/man/{lang}/{platform}/{section}/{name}` | Full path |
+The database's `language` field identifies the language of each stored page.
+`/api/v1/languages` reports only language codes and page counts present in the
+active database. Availability varies by deployment; no coverage percentage
+is guaranteed.
 
-### Translation Examples
-```
-/man/ls              → English (default)
-/man/de/ls           → German translation
-/man/ja/1/ls         → Japanese, section 1
-/man/fr/linux/1/ls   → French, Linux, section 1
-```
+### Translation Routes
 
-### Language Selector
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  ls(1) - list directory contents                                │
-│                                                                  │
-│  Language: [English ▼]                                          │
-│            ├─ English (original)                                │
-│            ├─ Deutsch (German)                                  │
-│            ├─ Français (French)                                 │
-│            ├─ 日本語 (Japanese)                                  │
-│            └─ 中文 (Chinese)                                     │
-│                                                                  │
-│  ⚠️ Translation may be outdated. Last updated: 2024-06-15       │
-│     English version updated: 2025-01-10                          │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+The API route `/api/v1/man/{lang}/{platform}/{section}/{name}` returns a
+page only when a matching translated row is stored. It returns 404 when that
+translation is unavailable; it does not label English content as translated.
 
 ### Translation Sources
 - Linux: man-pages-l10n project
@@ -1133,13 +1100,6 @@ All formats are pre-rendered during build:
 - SQLite database embedded as binary blob
 - Build-time generation of search index
 
-## Admin Features
-
-- View database statistics
-- See popular searches/pages
-- Manual page refresh (future updates)
-- Cache management
-
 ## Future Considerations
 
 - **Updates**: Mechanism to update embedded pages
@@ -1150,6 +1110,7 @@ All formats are pre-rendered during build:
 ## Non-Features (Out of Scope)
 
 - User accounts (read-only public service)
+- Admin web UI, dashboard, and browser-based server settings
 - Page editing through web UI
 - Custom page uploads
 - Real-time page fetching from external sources

@@ -1,65 +1,25 @@
-# Admin Panel
+# Server Operations
 
-## Access
+casman is a read-only public man page service. It has no admin web UI, user
+accounts, setup wizard, or `/api/v1/admin/` endpoints. Configure and operate
+the server through `server.yml`, environment variables, and the `casman`
+command line.
 
-- URL: `/admin`
-- First-run setup wizard creates admin account
-- Session-based authentication
+Public information pages are available at `/server/about`, `/server/help`,
+`/server/privacy`, `/server/terms`, `/server/security`, and `/server/contact`.
+Visitor display preferences are saved at `/server/preferences`.
 
-## First-Run Setup
+## Public status and statistics
 
-On first run, a setup token is displayed in the server logs:
+- `/healthz` serves HTML to browsers and supports JSON or plain text through
+  content negotiation.
+- `/api/v1/healthz` returns health data as JSON.
+- `/api/v1/stats` returns embedded database statistics.
+- `/metrics` is the Prometheus endpoint. It is disabled unless enabled in
+  configuration and can be protected with its configured token.
 
-```
-Setup token: abc123-def456-ghi789
-Visit: http://localhost:64580/admin/setup
-```
+## Configuration and maintenance
 
-Use this token to create the primary admin account.
-
-## Features
-
-### Dashboard
-
-- Server status and health
-- Man page statistics
-- Recent activity
-
-### Server Settings
-
-- Port and address configuration
-- SSL/TLS management
-- Mode (production/development)
-
-### Database
-
-- View statistics
-- Rebuild search index
-- Backup/restore
-
-### Backup & Restore
-
-- Create encrypted backups
-- Restore from backup
-- Scheduled automatic backups
-
-### SSL/TLS
-
-- Let's Encrypt integration
-- Custom certificate upload
-- Auto-renewal management
-
-### Monitoring
-
-- Server metrics
-- Request logs
-- Error tracking
-
-## Admin API
-
-Programmatic access via `/api/v1/admin/` with bearer token authentication.
-
-```bash
-curl -H "Authorization: Bearer adm_xxxxx" \
-  http://localhost:64580/api/v1/admin/stats
-```
+See [Configuration](configuration.md) for server, database, TLS, metrics,
+backup, GeoIP, and Tor settings. Use the documented CLI flags and maintenance
+commands for operations; there is no browser-based settings or restore page.
