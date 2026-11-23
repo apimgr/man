@@ -13,7 +13,15 @@ collection is read-only.
 | `/api/v1/man/{section}/{name}` | GET | Get man page by section and name |
 | `/api/v1/man/{os}/{section}/{name}` | GET | Get man page for specific OS |
 | `/api/v1/man/{lang}/{os}/{section}/{name}` | GET | Get an exact stored translation; 404 if unavailable |
+| `/api/v1/compare/{name}` | GET | Compare across platforms |
+| `/api/v1/compare/{section}/{name}` | GET | Compare within a section |
+| `/api/v1/tldr/{name}` | GET | Get a quick summary and examples |
+| `/api/v1/whatis/{name}` | GET | One-line description |
+| `/api/v1/apropos?q={term}` | GET | Search descriptions |
 | `/api/v1/search?q={term}` | GET | Search man pages |
+| `/api/v1/autocomplete?q={term}` | GET | Autocomplete suggestions |
+| `/api/v1/suggest?q={term}` | GET | Related page suggestions |
+| `/api/v1/export/formats` | GET | List supported export formats |
 | `/api/v1/whatis/{name}` | GET | One-line description |
 | `/api/v1/apropos?q={term}` | GET | Search descriptions |
 | `/api/v1/tldr/{name}` | GET | Get quick summary and examples |
@@ -31,6 +39,10 @@ collection is read-only.
 | `/api/v1/platforms` | GET | List platforms |
 | `/api/v1/languages` | GET | List language metadata |
 | `/api/v1/popular` | GET | List popular pages |
+| `/api/v1/openapi` | GET | OpenAPI document |
+
+There is no `/api/v1/man/{lang}/{name}` route. Translated retrieval requires
+language, platform, section, and page name so it can match one stored row.
 
 ### Search Parameters
 

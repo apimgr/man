@@ -13,12 +13,16 @@
 ## Browser and discovery
 
 - `/manifest.json` and `/service-worker.js` provide the installable web app
-  metadata and offline cache support.
+  metadata, static asset caching, and offline access to man pages already
+  viewed in the browser.
 - `/robots.txt` identifies the sitemap at `/sitemap.xml`.
 - `/sitemap-pages.xml`, `/sitemap-sections.xml`, and
   `/sitemap-platforms.xml` provide sitemap subdivisions.
 - `/.well-known/security.txt` publishes vulnerability reporting information.
-- `/.well-known/llms.txt` lists public API entry points for machine clients.
+- `/.well-known/llms.txt` and `/llms.txt` list routes from the running router
+  for machine clients.
+- Feed and sitemap responses support `ETag`, `Last-Modified`, and conditional
+  `304 Not Modified` responses.
 
 ## Optional network features
 

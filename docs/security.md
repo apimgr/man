@@ -21,8 +21,8 @@ private configuration, backup, or data directories through the web server.
 
 ## Reporting vulnerabilities
 
-`/.well-known/security.txt` and `/security.txt` publish the current reporting
-contact derived from the configured server hostname. Verify the contact is
+`/.well-known/security.txt` publishes the reporting contact derived from the
+configured server hostname. Verify the contact is
 reachable before deploying a public instance. Reports should not be sent in
 public issues before a fix is available.
 
