@@ -3,7 +3,9 @@
 The page model stores a language code for each man page. `/api/v1/languages`
 reports only the codes and row counts found in the active database; it does
 not publish estimated coverage. The translated API route returns only an
-exact stored match and returns 404 when that translation is unavailable.
+exact stored match and returns 404 when that translation is unavailable. The
+browser route `/man/{lang}/{os}/{section}/{name}` renders the same exact stored
+row and returns 404 when it is missing.
 
 The web interface currently uses English UI text. Translation source projects
 named in the repository's IDEA.md include man-pages-l10n for Linux and the

@@ -21,9 +21,11 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - **Full-Text Search** - Search across all pages with highlighting
 - **Compare** - Side-by-side comparison across platforms
 - **REST API** - Programmatic access to all man pages
-- **GraphQL** - Complex queries and relationships
+- **GraphQL** - Read-only query endpoint with JSON and browser form access
 - **CLI Client** - Terminal interface with TUI mode
-- **PWA Support** - Installable with cached homepage and static assets
+- **PWA Support** - Offline access to previously viewed man pages and static assets
+- **Translations** - Exact stored translations by language, platform, section, and page
+- **Guest Preferences** - Cookie-backed theme, language, and consent settings, with cross-device sync and reset
 
 ## Documentation
 
@@ -40,8 +42,8 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 ## Links
 
 - [Repository](https://github.com/casapps/casman)
-- [API Documentation](/openapi) (Swagger UI)
-- [GraphQL Playground](/graphql)
+- [API Documentation](/openapi)
+- [GraphQL query form](/graphql)
 
 ## License
 

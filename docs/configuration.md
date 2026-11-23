@@ -6,6 +6,9 @@ The file is named `server.yml` in the selected configuration directory. The
 default directory is `/etc/casapps/casman` for root, `/config` in a container,
 and the platform's user configuration directory for an unprivileged process.
 The `--config` and `--data` flags override the corresponding directories.
+Unknown keys and malformed YAML invalidate the file; the server logs a warning
+and starts with defaults. Invalid documented values use their documented
+fallbacks.
 
 ```yaml
 server:
@@ -101,3 +104,19 @@ settings. These sections are optional; see the comments and defaults in
 `src/config/config.go`. There is no admin web UI. This release does not provide
 a supported configuration or CLI workflow for DNS provider credentials; use
 HTTP-01 or an operator-supplied certificate until that path exists.
+
+### CORS
+
+`server.cors.allowed_origins` defaults to `[*]`. A wildcard never allows
+credentials. For browser requests that need credentials, list the exact
+origins and set `allow_credentials: true`. Use `allowed_origins: [""]` to
+disable cross-origin headers. `max_age` defaults to 86400 seconds.
+
+```yaml
+server:
+  cors:
+    allowed_origins:
+      - https://app.example.com
+    allow_credentials: true
+    max_age: 86400
+```

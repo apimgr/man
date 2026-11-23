@@ -6,7 +6,7 @@
 
 ## About
 
-casman is a self-contained man page application with an embedded collection from BSD, macOS, Linux, Void, and other Unix-like systems. It provides a responsive browser interface, REST and GraphQL APIs, and a terminal client.
+casman is a self-contained man page application with an embedded collection from BSD, macOS, Linux, Void, and other Unix-like systems. It provides a responsive browser interface, read-only REST and GraphQL endpoints, and a terminal client.
 
 ## Features
 
@@ -22,8 +22,11 @@ casman is a self-contained man page application with an embedded collection from
 - **History** - Track recently viewed pages
 - **Export** - Download as PDF, EPUB, or standalone HTML
 - **Update Feeds** - Atom and JSON feeds
-- **PWA Support** - Installable with cached homepage and static assets
+- **PWA Support** - Installable with offline access to previously viewed man pages and static assets
 - **Theme** - Dark by default, with light and system-following modes
+- **Guest Preferences** - Cookie-backed theme, language, and consent settings, with reset and cross-device sync
+- **Translations** - View exact translated man page rows when the database contains them
+- **API Documentation** - Server-rendered OpenAPI route list and GraphQL query form
 
 ## Production
 
@@ -104,11 +107,16 @@ database:
 | `GET /man/{name}` | Get man page (HTML) |
 | `GET /man/{section}/{name}` | Get man page by section |
 | `GET /man/{os}/{section}/{name}` | Get man page for specific OS |
+| `GET /man/{lang}/{os}/{section}/{name}` | Get an exact stored translation |
 | `GET /search?q={term}` | Search man pages |
 | `GET /whatis/{name}` | One-line description |
 | `GET /apropos?q={term}` | Search descriptions |
 | `GET /compare/{name}` | Compare across platforms |
 | `GET /api/v1/*` | JSON API endpoints |
+| `GET /openapi` | Server-rendered OpenAPI route documentation |
+| `GET /graphql` | GraphQL query form; POST queries to the same path |
+| `GET /server/preferences` | Edit browser theme, language, and consent settings |
+| `GET /server/preferences/sync` | Export or import browser preferences |
 
 Full API documentation: [`/openapi`](http://localhost:64580/openapi). The
 service has no admin web UI or user accounts; configure and maintain it through
@@ -149,6 +157,23 @@ make dev
 
 # The binary is built inside Docker and output to a temp directory
 ```
+
+## Disclaimer
+
+This software is provided "as is" without warranty of any kind. Use it at your
+own risk.
+
+- **No warranty:** The authors are not responsible for damages, data loss, or
+  issues arising from use of this software.
+- **Not professional advice:** This software does not provide legal, financial,
+  medical, or other professional advice.
+- **Third-party services:** External services have their own terms of service.
+- **Security:** No software can be guaranteed free of vulnerabilities.
+- **Production use:** Evaluate the software for your environment before
+  deploying it.
+
+By using this software, you acknowledge that you have read and understood this
+disclaimer.
 
 ## License
 

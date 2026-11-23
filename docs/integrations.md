@@ -4,8 +4,8 @@
 
 - REST API: `/api/v1/`; see [API Reference](api.md).
 - OpenAPI JSON: `/api/v1/openapi`.
-- Swagger UI: `/openapi` (also `/swagger`).
-- GraphQL UI: `/graphql`; POST GraphQL requests to `/graphql`.
+- Server-rendered API route documentation: `/openapi` (also `/swagger`).
+- GraphQL query form: `/graphql`; JSON and form POST queries use `/graphql`.
 - Atom updates: `/feed.xml`, with platform and section filters.
 - RSS 2.0 updates: `/rss.xml`.
 - JSON Feed: `/feed.json`.

@@ -22,12 +22,6 @@ collection is read-only.
 | `/api/v1/autocomplete?q={term}` | GET | Autocomplete suggestions |
 | `/api/v1/suggest?q={term}` | GET | Related page suggestions |
 | `/api/v1/export/formats` | GET | List supported export formats |
-| `/api/v1/whatis/{name}` | GET | One-line description |
-| `/api/v1/apropos?q={term}` | GET | Search descriptions |
-| `/api/v1/tldr/{name}` | GET | Get quick summary and examples |
-| `/api/v1/compare/{name}` | GET | Compare across platforms |
-| `/api/v1/compare/{section}/{name}` | GET | Compare within a section |
-| `/api/v1/export/formats` | GET | List available export formats |
 
 ### System Endpoints
 
@@ -40,6 +34,11 @@ collection is read-only.
 | `/api/v1/languages` | GET | List language metadata |
 | `/api/v1/popular` | GET | List popular pages |
 | `/api/v1/openapi` | GET | OpenAPI document |
+| `/api/v1/server/security/policy` | GET | Public security disclosure policy |
+| `/api/v1/server/preferences` | GET, POST | Read or update guest theme and language preferences |
+| `/api/v1/server/preferences/sync` | GET | Export guest preferences as a URL and short code |
+| `/api/v1/server/preferences/sync/import` | GET | Import guest preferences from query parameters or a short code |
+| `/api/v1/` | GET | API service information and endpoint links |
 
 There is no `/api/v1/man/{lang}/{name}` route. Translated retrieval requires
 language, platform, section, and page name so it can match one stored row.
@@ -54,14 +53,16 @@ language, platform, section, and page name so it can match one stored row.
 | `page` | int | Page number (default: 1) |
 | `limit` | int | Results per page (default: 25) |
 
-## Swagger UI
+## OpenAPI
 
-Interactive API documentation: [/openapi](/openapi). The machine-readable
-OpenAPI document is available from `/api/v1/openapi`.
+Server-rendered API route documentation: [/openapi](/openapi). The
+machine-readable OpenAPI document is available from `/api/v1/openapi` and
+`/openapi.json`.
 
 ## GraphQL
 
-GraphQL UI: [/graphql](/graphql). Send GraphQL POST requests to the same path.
+The server-rendered query form is at [/graphql](/graphql). GraphQL requests can
+also be sent as JSON POSTs to the same path.
 
 ### Example Query
 
@@ -81,15 +82,21 @@ query {
 
 The server renders the homepage, man pages, search results, browse pages,
 cross-platform comparisons, and `whatis`/`apropos` lookups. Man pages also
-support `.txt`, `.md`, `.json`, `.raw`, `.pdf`, and `.epub` suffixes. Bulk
-exports are available at `/export/section/{section}.{format}` and
-`/export/platform/{platform}.{format}`.
+support `.txt`, `.md`, `.json`, `.raw`, `.pdf`, `.epub`, and `.shtml`
+(print-friendly HTML) suffixes. Bulk exports are available at
+`/export/section/{section}.{format}` and
+`/export/platform/{platform}.{format}`. Stored translations are rendered at
+`/man/{lang}/{os}/{section}/{name}`.
 
 `/healthz` negotiates HTML, JSON, or plain text. `/feed.xml` is Atom,
 `/rss.xml` is RSS 2.0, and `/feed.json` is JSON Feed; per-platform and
 per-section Atom feeds are also available.
 
 Public information pages are available under `/server/about`, `/server/help`,
-`/server/privacy`, `/server/terms`, `/server/security`, and `/server/contact`.
+`/server/privacy`, `/server/terms`, `/server/security`,
+`/server/security/policy`, and `/server/contact`.
 Visitor display preferences are saved at `/server/preferences`. The server has
-no admin UI or account settings pages.
+no admin UI or account settings pages. The preferences page stores theme and
+language choices, consent categories, and offers a reset action. The separate
+`/server/preferences/sync` page exports a URL and code and accepts an import;
+its POST form is usable without JavaScript. The API mirrors are listed above.

@@ -13,11 +13,13 @@ private configuration, backup, or data directories through the web server.
   reverse proxy. TLS settings and ACME options are documented in
   [Configuration](configuration.md).
 - The server applies request rate limits and security middleware. Keep the
-  service and its embedded dependencies updated.
+  service and its embedded dependencies updated. Responses include a restrictive
+  Content Security Policy, cross-origin protections, and two-year HSTS when the
+  request is served over TLS.
 - `/metrics` is disabled unless enabled in configuration. Set its token before
   exposing the endpoint outside a trusted monitoring network.
-- CORS is intended for public API reads; do not send credentials with wildcard
-  origins.
+- CORS uses one policy across routes. Wildcard origins never allow credentials;
+  configure exact origins when browser credentials are required.
 
 ## Reporting vulnerabilities
 
@@ -25,6 +27,8 @@ private configuration, backup, or data directories through the web server.
 configured server hostname. Verify the contact is
 reachable before deploying a public instance. Reports should not be sent in
 public issues before a fix is available.
+The disclosure policy is published at
+[`/server/security/policy`](/server/security/policy).
 
 ## Data and privacy
 
