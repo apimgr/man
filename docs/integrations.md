@@ -13,8 +13,8 @@
 ## Browser and discovery
 
 - `/manifest.json` and `/service-worker.js` provide the installable web app
-  metadata, static asset caching, and offline access to man pages already
-  viewed in the browser.
+  metadata, static asset caching, and an offline fallback page. HTML pages
+  containing forms are not stored for offline use.
 - `/robots.txt` identifies the sitemap at `/sitemap.xml`.
 - `/sitemap-pages.xml`, `/sitemap-sections.xml`, and
   `/sitemap-platforms.xml` provide sitemap subdivisions.

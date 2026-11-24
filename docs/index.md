@@ -23,7 +23,7 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - **REST API** - Programmatic access to all man pages
 - **GraphQL** - Read-only query endpoint with JSON and browser form access
 - **CLI Client** - Terminal interface with TUI mode
-- **PWA Support** - Offline access to previously viewed man pages and static assets
+- **PWA Support** - Cached static assets and an offline fallback page
 - **Translations** - Exact stored translations by language, platform, section, and page
 - **Guest Preferences** - Cookie-backed theme, language, and consent settings, with cross-device sync and reset
 
