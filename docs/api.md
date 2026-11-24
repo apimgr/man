@@ -34,6 +34,10 @@ collection is read-only.
 | `/api/v1/languages` | GET | List language metadata |
 | `/api/v1/popular` | GET | List popular pages |
 | `/api/v1/openapi` | GET | OpenAPI document |
+| `/api/v1/server/swagger` | GET | OpenAPI document alias |
+| `/api/v1/server/graphql` | GET, POST | GraphQL query endpoint |
+| `/api/swagger` | GET | OpenAPI compatibility alias |
+| `/api/graphql` | GET, POST | GraphQL compatibility alias |
 | `/api/v1/server/security/policy` | GET | Public security disclosure policy |
 | `/api/v1/server/preferences` | GET, POST | Read or update guest theme and language preferences |
 | `/api/v1/server/preferences/sync` | GET | Export guest preferences as a URL and short code |

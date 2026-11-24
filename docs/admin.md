@@ -6,8 +6,11 @@ the server through `server.yml`, environment variables, and the `casman`
 command line.
 
 Public information pages are available at `/server/about`, `/server/help`,
-`/server/privacy`, `/server/terms`, `/server/security`, and `/server/contact`.
-Visitor display preferences are saved at `/server/preferences`.
+`/server/help/mcp`, `/server/privacy`, `/server/terms`, `/server/security`,
+`/server/security/policy`, and `/server/contact`. Visitors can save
+browser-only display and consent preferences at `/server/preferences` and
+export or import them at `/server/preferences/sync`. These pages do not
+change server configuration or create user accounts.
 
 ## Public status and statistics
 
@@ -22,4 +25,5 @@ Visitor display preferences are saved at `/server/preferences`.
 
 See [Configuration](configuration.md) for server, database, TLS, metrics,
 backup, GeoIP, and Tor settings. Use the documented CLI flags and maintenance
-commands for operations; there is no browser-based settings or restore page.
+commands for operations; there is no browser-based administration or
+configuration restore page.

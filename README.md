@@ -146,6 +146,12 @@ make build
 # Run tests
 make test
 
+# Run the basic Docker binary-validation tier
+./tests/run_tests.sh
+
+# Run the full OS and service-lifecycle tier with Incus
+./tests/incus.sh
+
 # Run browser end-to-end tests (on demand; requires Docker, Python 3, and Git)
 ./tests/e2e.sh
 ```
@@ -153,6 +159,9 @@ make test
 The browser end-to-end harness runs the application and headless Chromium in
 an isolated Docker network. It pulls its configured Go and browser images
 before each run and is separate from `make test`.
+
+`tests/run_tests.sh` runs the basic Docker tier. Full OS and service-lifecycle
+checks are explicit through `tests/incus.sh` and require Incus.
 
 ### Container-Only Development
 

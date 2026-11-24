@@ -1,6 +1,4 @@
-# casman - Universal Man Page Application
-
-## Project Overview
+## Project description
 
 **casman** is a complete, self-contained man page application. Unlike traditional `man` commands that rely on locally installed pages, casman embeds ALL known man pages from multiple operating systems and distributions into a single binary.
 
@@ -11,16 +9,89 @@ Think `man.cgi` but:
 - API for programmatic access
 - Single static binary deployment
 
-## Core Features
+## Project variables
 
-### Man Page Database
+project_name: casman
+project_org: casapps
+internal_name: casman
+internal_org: casapps
+app_name: casman
+
+## Business logic
+
+### Product scope & non-goals
+
+casman is a read-only public catalog of Unix and operating-system manual pages. It provides browser browsing and search, man-page format views, cross-platform comparisons, local bookmarks and history, exact stored translations, export, and public read APIs. The catalog is embedded and available without a runtime connection to a page source. The product does not provide user accounts, page editing, arbitrary uploads, or an administration dashboard.
+
+### Roles & permissions
+
+- Visitors can read public catalog pages, search and browse, compare pages, export content, and manage their own browser-only preferences, bookmarks, and history.
+- Server operators install and configure the service and control its optional integrations outside the browser administration surface.
+- Translators and source maintainers can contribute through the upstream man-page projects; casman does not offer an in-product editing role.
+- No user account or role grants permission to edit catalog content.
+
+### Data model & sensitivity
+
+A catalog page is identified by its name, section, platform, and language. It may include distro and source-version metadata, title, synopsis, description, raw source, rendered HTML/text/Markdown, cross-references, and update time. Catalog pages and their metadata are public. Page-view data is operational input for aggregate popularity and statistics. Bookmarks, history, theme, language, and consent choices belong to the visitor's browser and are not account records. Operator configuration, credentials, logs, and backups are private deployment data.
+
+### Trust boundaries & external services
+
+Man-page repositories and archives listed in the source inventory are external sources; imported content is untrusted data and must not execute as browser code. Normal page reads use the embedded catalog and do not fetch a source at request time. Optional operator-configured integrations such as SMTP, GeoIP data, certificate issuance, Tor, and I2P are external dependencies; their availability must not be treated as a prerequisite for reading the embedded catalog. Browser requests and all query, path, and header values are untrusted.
+
+### Threat model & abuse cases
+
+The protected assets are the embedded catalog, private operator data, service availability, and visitor privacy. Relevant abuse includes high-volume scraping or search that exhausts CPU or memory, malformed paths and query strings, Host or forwarded-header injection, malicious markup embedded in imported pages, and attempts to expose configuration or backup files. Public source content and network requests are untrusted. The service must bound requests, validate inputs, escape or safely render source text, generate public URLs only from trusted request context, and keep private deployment files outside the served tree. Browser-only preferences and history must not become server-side visitor profiles.
+
+### Security decisions & exceptions
+
+The catalog is intentionally read-only and public. The product has no user accounts, public uploads, or browser-based server administration. Preferences, bookmarks, and history remain in the visitor's browser. Optional network integrations are controlled by server configuration and must not make the built-in catalog unavailable when disabled or unreachable.
+
+### API routes
+
+All catalog reads are public and return JSON on `/api/` routes. The browser preference API is limited to visitor preference data; it does not manage server configuration. GraphQL is read-only. The route inventory below records project-defined API routes and compatibility aliases.
+
+| Method | Path | Auth | Purpose and request/response summary |
+|--------|------|------|-------------------------------------|
+| GET | `/api/v1/` | Public | Service name, version, and API endpoint links. |
+| GET | `/api/v1/healthz` | Public | Health status in JSON. |
+| GET | `/api/v1/stats` | Public | Catalog and usage statistics. |
+| GET | `/api/v1/sections` | Public | Section list and counts. |
+| GET | `/api/v1/platforms` | Public | Platform list and counts. |
+| GET | `/api/v1/languages` | Public | Stored language codes and page counts. |
+| GET | `/api/v1/popular` | Public | Popular catalog pages. |
+| GET | `/api/v1/man/{name}` | Public | Best matching page by name. |
+| GET | `/api/v1/man/{section}/{name}` | Public | Page by section and name. |
+| GET | `/api/v1/man/{os}/{section}/{name}` | Public | Page by platform, section, and name. |
+| GET | `/api/v1/man/{lang}/{os}/{section}/{name}` | Public | Exact stored translation; unavailable rows return not found. |
+| GET | `/api/v1/search?q={term}` | Public | Search with query and optional section, platform, page, and limit filters. |
+| GET | `/api/v1/autocomplete?q={term}` | Public | Name suggestions. |
+| GET | `/api/v1/suggest?q={term}` | Public | Related page suggestions. |
+| GET | `/api/v1/compare/{name}` | Public | Compare a page across platforms. |
+| GET | `/api/v1/compare/{section}/{name}` | Public | Compare a page within a section. |
+| GET | `/api/v1/whatis/{name}` | Public | One-line page descriptions. |
+| GET | `/api/v1/apropos?q={term}` | Public | Search page descriptions. |
+| GET | `/api/v1/tldr/{name}` | Public | Short page summary and examples. |
+| GET | `/api/v1/export/formats` | Public | Supported page export formats. |
+| GET | `/api/v1/openapi` | Public | Machine-readable OpenAPI specification. |
+| GET | `/api/v1/server/swagger` | Public | OpenAPI compatibility route. |
+| GET, POST | `/api/v1/server/graphql` | Public | Read-only GraphQL query endpoint; POST accepts JSON or form data, GET accepts query parameters. |
+| GET | `/api/v1/server/security/policy` | Public | Public security disclosure policy. |
+| GET, POST | `/api/v1/server/preferences` | Public | Read or update browser preference values. |
+| GET | `/api/v1/server/preferences/sync` | Public | Export browser preferences as a URL and short code. |
+| GET | `/api/v1/server/preferences/sync/import` | Public | Import preferences from query values or a short code. |
+| GET | `/api/swagger` | Public | OpenAPI compatibility alias. |
+| GET, POST | `/api/graphql` | Public | Read-only GraphQL compatibility alias. |
+
+#### Core Features
+
+#### Man Page Database
 - **Embedded pages**: All man pages compiled into the binary
 - **Multi-platform**: BSD (FreeBSD, OpenBSD, NetBSD), macOS, Linux (various distros), Void Linux
 - **All sections**: 1-9 (User commands, System calls, Library functions, etc.)
 - **Versioned**: Track which OS version each page comes from
 - **Searchable**: Full-text search across all pages
 
-### Web Interface
+#### Web Interface
 - Browse by section, OS, or alphabetically
 - Full-text search with highlighting
 - Responsive design (mobile-friendly)
@@ -28,24 +99,24 @@ Think `man.cgi` but:
 - Cross-references (see also) as clickable links
 - Dark/light theme support
 
-### API
+#### API
 - REST API for programmatic access
 - Search endpoint with filters (OS, section, keyword)
 - Get specific man page by name/section/OS
 - List available pages with pagination
 - GraphQL endpoint for complex queries
 
-### CLI Client
+#### CLI Client
 - `casman-cli man <page>` - view man page
 - `casman-cli search <term>` - search pages
 - `casman-cli list` - list available pages
 - TUI mode for interactive browsing
 
-## Man Page Sources
+### Man Page Sources
 
 **Strategy: Combined approach** - aggregate from both online archives AND official source repositories for maximum coverage.
 
-### Online Archives
+#### Online Archives
 | Source | URL | Coverage |
 |--------|-----|----------|
 | **man7.org** | man7.org/linux/man-pages/ | Linux man-pages project |
@@ -57,7 +128,7 @@ Think `man.cgi` but:
 | **die.net** | linux.die.net/man/ | Linux aggregated |
 | **mankier.com** | mankier.com | Multi-distro |
 
-### Official Repositories
+#### Official Repositories
 | Source | Repository | Description |
 |--------|------------|-------------|
 | **man-pages** | kernel.org/doc/man-pages | Linux kernel/libc docs |
@@ -71,7 +142,7 @@ Think `man.cgi` but:
 | **Void Linux** | github.com/void-linux | Void-specific pages |
 | **Alpine** | gitlab.alpinelinux.org | Alpine/musl pages |
 
-### Coverage by Platform
+#### Coverage by Platform
 | Platform | Sources |
 |----------|---------|
 | **Linux** | man-pages, GNU, util-linux, systemd, distro packages |
@@ -84,9 +155,9 @@ Think `man.cgi` but:
 | **Alpine** | Alpine packages |
 | **POSIX** | IEEE Std 1003.1 (where available) |
 
-## Data Model
+### Data Model
 
-### Man Page
+#### Man Page
 ```yaml
 page:
   name: "ls"
@@ -117,7 +188,7 @@ page:
   search_text: "normalized searchable text"
 ```
 
-### Section Definitions
+#### Section Definitions
 | Section | Name | Description |
 |---------|------|-------------|
 | 1 | User Commands | Executable programs, shell commands |
@@ -132,9 +203,9 @@ page:
 | n | New/Tcl | New documentation, Tcl/Tk commands |
 | x | X Window System | X11/Xorg related documentation |
 
-## URL Structure
+### URL Structure
 
-### Web Routes
+#### Web Routes
 | Route | Description |
 |-------|-------------|
 | `/` | Homepage with search |
@@ -157,7 +228,7 @@ page:
 | `/feed/{platform}.xml` | Platform-specific feed |
 | `/feed/section/{num}.xml` | Section-specific feed |
 
-### API Routes
+#### API Routes
 | Route | Description |
 |-------|-------------|
 | `/api/v1/man/{name}` | Get page (JSON) |
@@ -179,7 +250,7 @@ page:
 | `/api/v1/tldr/{name}` | Get TLDR summary only |
 | `/api/v1/export/formats` | List available export formats |
 
-### Search API Parameters
+#### Search API Parameters
 | Parameter | Type | Description |
 |-----------|------|-------------|
 | `q` | string | Search query (required) |
@@ -191,7 +262,7 @@ page:
 | `limit` | int | Results per page (default: 25, max: 100) |
 | `sort` | string | Sort: `relevance`, `name`, `section` |
 
-### Search Response Format
+#### Search Response Format
 ```json
 {
   "query": "ls",
@@ -215,9 +286,10 @@ page:
     "sections": [{"id": 1, "count": 45}, {"id": 8, "count": 32}],
     "platforms": [{"id": "linux", "count": 67}, {"id": "freebsd", "count": 28}]
   }
-}
+  }
+```
 
-## Search Features
+### Search Features
 
 ### Search Box
 - **Prominent placement**: Center of homepage, sticky header on other pages

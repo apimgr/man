@@ -41,8 +41,11 @@ docker run --rm -v /path/to/build:/app alpine:latest /app/casman --help
 # Run tests
 make test
 
-# Run integration tests
+# Run the basic Docker binary-validation tier
 ./tests/run_tests.sh
+
+# Run full OS and service-lifecycle tests with Incus
+./tests/incus.sh
 
 # Run browser end-to-end tests (on demand)
 ./tests/e2e.sh
@@ -52,6 +55,8 @@ The browser end-to-end harness builds the application in Docker and runs it
 against a headless Chromium browser in an isolated Docker network. It requires
 Docker, Python 3, and Git, and pulls the configured Go and browser images
 before each run. This check is on demand and is not part of `make test`.
+`tests/run_tests.sh` runs the basic Docker binary-validation tier;
+`tests/incus.sh` is the explicit full OS and service-lifecycle tier.
 
 ## Project Structure
 

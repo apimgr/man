@@ -6,6 +6,10 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
+- [ ] Add the standard versioned and compatibility API aliases for Swagger and
+  GraphQL, and keep OpenAPI, route tests, and the API guide synchronized.
+  Relevant files: `src/server/server.go`, `src/swagger/`, `src/server/server_extra_test.go`,
+  `docs/api.md`.
 - [ ] Complete guest preferences with cookie-backed language and project
   settings, reset and sync flows, and the credential-gated owner-token page.
   The theme preference POST exists; add the AI.md consent controls and make

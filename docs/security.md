@@ -3,9 +3,12 @@
 ## Service model
 
 casman serves a read-only public man page collection. It does not provide user
-accounts, an admin web UI, page editing, or browser-based server settings.
-Configure the server through `server.yml` and the command line. Do not expose
-private configuration, backup, or data directories through the web server.
+accounts, an admin web UI, page editing, or browser-based server configuration.
+Visitors can manage browser-only display and consent preferences at
+`/server/preferences`; those preferences do not create an account or change
+server settings. Configure the server through `server.yml` and the command
+line. Do not expose private configuration, backup, or data directories through
+the web server.
 
 ## Network protection
 
@@ -32,7 +35,8 @@ The disclosure policy is published at
 
 ## Data and privacy
 
-Bookmarks, browsing history, and theme selection are browser-side features;
-they do not require an account. Server request logs and operational data are
-managed by the deployment. Review the deployment's log retention and backup
-settings before making the service available to users.
+Bookmarks, browsing history, display preferences, and consent choices are
+browser-side features; they do not require an account. The preferences page can
+reset its site cookies and browser storage. Server request logs and operational
+data are managed by the deployment. Review the deployment's log retention and
+backup settings before making the service available to users.
