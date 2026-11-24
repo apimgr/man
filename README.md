@@ -145,7 +145,14 @@ make build
 
 # Run tests
 make test
+
+# Run browser end-to-end tests (on demand; requires Docker, Python 3, and Git)
+./tests/e2e.sh
 ```
+
+The browser end-to-end harness runs the application and headless Chromium in
+an isolated Docker network. It pulls its configured Go and browser images
+before each run and is separate from `make test`.
 
 ### Container-Only Development
 
