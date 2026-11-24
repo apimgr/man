@@ -330,7 +330,7 @@ page:
 └─────────────────────────────────────────────┘
 ```
 
-## User Interface
+### User Interface
 
 ### Global Header
 ```
@@ -559,7 +559,7 @@ page:
 - Auto (follow system preference)
 - Persist choice using the server-readable theme preference cookie
 
-## Compare Feature
+### Compare Feature
 
 Compare the same man page across different platforms side-by-side.
 
@@ -601,7 +601,7 @@ Compare the same man page across different platforms side-by-side.
 - Collapsible sections
 - Export comparison as PDF/HTML
 
-## TLDR Summaries
+### TLDR Summaries
 
 Auto-generated concise summaries shown above full man pages.
 
@@ -659,7 +659,7 @@ tldr:
   source: "auto"  # auto-generated vs manual
 ```
 
-## Bookmarks (localStorage)
+### Bookmarks (localStorage)
 
 Save favorite man pages locally without requiring an account.
 
@@ -708,7 +708,7 @@ Save favorite man pages locally without requiring an account.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Whatis / Apropos
+### Whatis / Apropos
 
 Traditional man page utilities for quick lookups.
 
@@ -765,7 +765,7 @@ tree(1) - list contents of directories in a tree-like format
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Translations (i18n)
+### Translations (i18n)
 
 Support localized man pages where available.
 
@@ -787,7 +787,7 @@ translation is unavailable; it does not label English content as translated.
 - FreeBSD: FreeBSD doc translations
 - Community contributions
 
-## Export (PDF/EPUB)
+### Export (PDF/EPUB)
 
 Download man pages in various formats for offline use.
 
@@ -834,7 +834,7 @@ Download man pages in various formats for offline use.
 - Export bookmarked pages as bundle
 - Generate "man page book" with TOC
 
-## History (localStorage)
+### History (localStorage)
 
 Track recently viewed man pages for quick access.
 
@@ -886,7 +886,7 @@ Track recently viewed man pages for quick access.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Print Stylesheet
+### Print Stylesheet
 
 Optimized CSS for printing man pages.
 
@@ -946,7 +946,7 @@ Optimized CSS for printing man pages.
 - Print preview modal
 - Options: include TLDR, include SEE ALSO descriptions
 
-## Sitemap & SEO
+### Sitemap & SEO
 
 Search engine optimization for discoverability.
 
@@ -1031,7 +1031,7 @@ Allow: /api/v1/openapi
 - Proper redirects (301) for alternate paths
 - Language alternates with hreflang
 
-## RSS/Atom Feeds
+### RSS/Atom Feeds
 
 Subscribe to updates for new and modified man pages.
 
@@ -1095,7 +1095,7 @@ Subscribe to updates for new and modified man pages.
 - "New pages only" vs "All updates"
 - JSON Feed format alternative (`/feed.json`)
 
-## Page Rendering
+### Page Rendering
 
 **Strategy: Combined toolchain** - use both mandoc and groff for parsing, pre-render all formats at build time, store in standardized internal format.
 
@@ -1157,7 +1157,7 @@ All formats are pre-rendered during build:
 4. Compress and embed all formats
 5. No runtime rendering needed (fast serving)
 
-## Build Process
+### Build Process
 
 ### Man Page Collection
 1. Download/clone man page sources
@@ -1172,14 +1172,14 @@ All formats are pre-rendered during build:
 - SQLite database embedded as binary blob
 - Build-time generation of search index
 
-## Future Considerations
+### Future Considerations
 
 - **Updates**: Mechanism to update embedded pages
 - **User contributions**: Allow corrections/additions
 - **API rate limiting**: For public deployments
 - **Caching**: CDN-friendly responses
 
-## Non-Features (Out of Scope)
+### Non-Features (Out of Scope)
 
 - User accounts (read-only public service)
 - Admin web UI, dashboard, and browser-based server settings
