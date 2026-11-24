@@ -100,8 +100,9 @@ casman --port 8080 --mode development --debug
 ## Optional features
 
 The server configuration also supports metrics, GeoIP, backup, and Tor
-settings. These sections are optional; see the comments and defaults in
-`src/config/config.go`. There is no admin web UI. This release does not provide
+settings. These sections are optional; Tor startup is attempted automatically
+when the `tor` executable is available on `PATH`. See the comments and defaults
+in `src/config/config.go`. There is no admin web UI. This release does not provide
 a supported configuration or CLI workflow for DNS provider credentials; use
 HTTP-01 or an operator-supplied certificate until that path exists.
 

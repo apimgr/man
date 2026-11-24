@@ -28,6 +28,13 @@ casman is a self-contained man page application with an embedded collection from
 - **Translations** - View exact translated man page rows when the database contains them
 - **API Documentation** - Server-rendered OpenAPI route list and GraphQL query form
 
+The catalog asset is currently unavailable: `src/server/data/manpages.db` is a
+134-byte pointer to a Git LFS object that is missing from the public LFS store.
+The current daily release does not include a database asset, and this checkout
+does not yet have a complete reproducible catalog builder. Until the asset is
+restored or regenerated, the advertised page catalog cannot be served. See the
+[development guide](docs/development.md) and [alignment backlog](TODO.AI.md).
+
 ## Production
 
 ### Docker (Recommended)
@@ -149,8 +156,15 @@ make test
 # Run the basic Docker binary-validation tier
 ./tests/run_tests.sh
 
-# Run the full OS and service-lifecycle tier with Incus
+# Run full service-lifecycle tests on both Incus init systems (default)
 ./tests/incus.sh
+
+# Or select one init system
+./tests/incus.sh systemd
+./tests/incus.sh openrc
+
+# Require Tor and I2P to bootstrap; otherwise an unavailable overlay is skipped
+REQUIRE_OVERLAY=1 ./tests/incus.sh all
 
 # Run browser end-to-end tests (on demand; requires Docker, Python 3, and Git)
 ./tests/e2e.sh
@@ -160,8 +174,21 @@ The browser end-to-end harness runs the application and headless Chromium in
 an isolated Docker network. It pulls its configured Go and browser images
 before each run and is separate from `make test`.
 
-`tests/run_tests.sh` runs the basic Docker tier. Full OS and service-lifecycle
-checks are explicit through `tests/incus.sh` and require Incus.
+`tests/run_tests.sh` runs the basic Docker tier. `tests/incus.sh` requires
+Docker and Incus. Its default `all` mode runs the full service lifecycle in a
+Debian Trixie systemd container and an Alpine 3.24 OpenRC container, one after
+the other. Pass `systemd` or `openrc` to run only one. The service checks cover
+installation, enable/start, restart, stop/start, container restart persistence,
+disable, re-install, and uninstall. The containers also check the Tor and
+opt-in I2P overlay contracts. They need outbound network access for overlay
+bootstrap; without it, the test reports a skip while still checking the
+contract. Set `REQUIRE_OVERLAY=1` to make unsuccessful Tor or I2P bootstrap a
+test failure.
+`make test` runs Go vet and unit tests in the Go container and enforces the
+60% coverage threshold. The Docker tier builds the server and CLI with Make,
+then checks their binaries and HTTP behavior in Alpine. The Incus tier also
+needs Docker for the build and runs service checks in Debian/systemd and
+Alpine/OpenRC containers by default.
 
 ### Container-Only Development
 

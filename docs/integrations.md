@@ -26,9 +26,11 @@
 
 ## Optional network features
 
-Tor and GeoIP support are configurable server features. Tor is disabled unless
-enabled in `server.yml`; GeoIP is an optional risk signal and is not used as
-the sole basis for access decisions. See [Configuration](configuration.md).
+Tor hidden-service startup is attempted automatically when a `tor` executable
+is available on `PATH`; its data directory, virtual port, and bootstrap timeout
+can be configured in `server.yml`. GeoIP is an optional risk signal and is not
+used as the sole basis for access decisions. See
+[Configuration](configuration.md).
 
 casman does not currently expose webhooks, OAuth/OIDC, federation, or native
 application association endpoints.
