@@ -55,14 +55,15 @@ language, platform, section, and page name so it can match one stored row.
 
 ## OpenAPI
 
-Server-rendered API route documentation: [/openapi](/openapi). The
-machine-readable OpenAPI document is available from `/api/v1/openapi` and
-`/openapi.json`.
+Server-rendered Swagger UI: [/server/docs/swagger](/server/docs/swagger),
+with `/openapi` and `/swagger` aliases. The machine-readable OpenAPI document
+is available from `/api/v1/openapi`, `/openapi.json`, and `/swagger.json`.
 
 ## GraphQL
 
-The server-rendered query form is at [/graphql](/graphql). GraphQL requests can
-also be sent as JSON POSTs to the same path.
+The server-rendered GraphiQL page is at
+[/server/docs/graphql](/server/docs/graphql), with `/graphql` and `/graphiql`
+aliases. GraphQL requests can also be sent as JSON POSTs to `/graphql`.
 
 ### Example Query
 
