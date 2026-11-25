@@ -28,12 +28,31 @@ casman is a self-contained man page application with an embedded collection from
 - **Translations** - View exact translated man page rows when the database contains them
 - **API Documentation** - Server-rendered OpenAPI route list and GraphQL query form
 
-The catalog asset is currently unavailable: `src/server/data/manpages.db` is a
-134-byte pointer to a Git LFS object that is missing from the public LFS store.
-The current daily release does not include a database asset, and this checkout
-does not yet have a complete reproducible catalog builder. Until the asset is
-restored or regenerated, the advertised page catalog cannot be served. See the
-[development guide](docs/development.md) and [alignment backlog](TODO.AI.md).
+Rebuild the embedded SQLite catalog with `make catalog`. The target runs
+`scripts/build_catalog.sh`, which imports the tracked, pre-rendered platform
+directories, normalizes catalog timestamps from `SOURCE_DATE_EPOCH` (default
+`0`), compacts the SQLite database with `VACUUM`, and verifies its integrity
+before replacing `src/server/data/manpages.db`. This reconstructs the database
+from the repository snapshot; it does not fetch or update upstream pages. Two
+consecutive builds of the current tracked snapshot produced byte-identical
+databases. The snapshot is not verified as a complete or latest-stable catalog
+because upstream source-version and license provenance is missing. A successful
+integrity check confirms the database is readable, not that its coverage or
+freshness is complete. See the [development guide](docs/development.md).
+Because trustworthy per-page source dates are unavailable, catalog timestamps
+use `SOURCE_DATE_EPOCH` for repeatable builds and default to `0` when unset.
+
+The source versions, immutable references, archive checksums, license
+references, and unresolved coverage are recorded in
+[`scripts/catalog-sources.tsv`](scripts/catalog-sources.tsv). The downloader
+scripts consume this inventory; it pins Linux man-pages 6.20, FreeBSD 15.1,
+OpenBSD 8.0, and NetBSD 11.1, and uses immutable Apple OSS commits. Linux's
+SHA-256 is checked against the [signed upstream sums
+file](https://kernel.org/pub/linux/docs/man-pages/sha256sums.asc); BSD archives
+are checked against their published checksum files. Apple commits do not map
+to one macOS point release. The inventory also records IDEA.md sources that
+remain unlocked or unimported and license questions that still need review.
+These downloaders do not currently rebuild or refresh the tracked catalog.
 
 ## Production
 
@@ -150,6 +169,9 @@ make local
 # Full release build (all 8 platforms)
 make build
 
+# Rebuild the embedded man-page database from tracked pre-rendered sources
+make catalog
+
 # Run tests
 make test
 
@@ -186,9 +208,11 @@ contract. Set `REQUIRE_OVERLAY=1` to make unsuccessful Tor or I2P bootstrap a
 test failure.
 `make test` runs Go vet and unit tests in the Go container and enforces the
 60% coverage threshold. The Docker tier builds the server and CLI with Make,
-then checks their binaries and HTTP behavior in Alpine. The Incus tier also
-needs Docker for the build and runs service checks in Debian/systemd and
-Alpine/OpenRC containers by default.
+then checks their binaries and HTTP behavior in Alpine. Its binaries, staged
+releases, and runtime test data live under a project-scoped OS temporary
+directory that the script removes when it exits. The Incus tier also needs
+Docker for the build and runs service checks in Debian/systemd and Alpine/OpenRC
+containers by default.
 
 ### Container-Only Development
 

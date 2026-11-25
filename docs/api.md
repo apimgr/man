@@ -5,6 +5,17 @@
 Base path: `/api/v1/`. Read endpoints return JSON. The public man page
 collection is read-only.
 
+### Response Formats
+
+API responses are JSON by default. Append `.txt` to an API route or send
+`Accept: text/plain` to request the shared plain-text representation. The
+`.txt` suffix takes precedence over `Accept`; otherwise, an explicit
+`Accept: application/json` selects JSON. Non-interactive clients whose `Accept`
+is absent or `*/*` receive text. Text objects use an `OK:` line followed by
+`key: value` fields, lists identify the item count, and errors use
+`ERROR: CODE: message`. Binary responses retain their original media type and
+bytes.
+
 ### Man Page Endpoints
 
 | Endpoint | Method | Description |
@@ -38,6 +49,13 @@ collection is read-only.
 | `/api/v1/server/graphql` | GET, POST | GraphQL query endpoint |
 | `/api/swagger` | GET | OpenAPI compatibility alias |
 | `/api/graphql` | GET, POST | GraphQL compatibility alias |
+| `/api/v1/server/about` | GET | Public service information |
+| `/api/v1/server/privacy` | GET | Privacy information |
+| `/api/v1/server/contact` | GET | Contact and reporting information |
+| `/api/v1/server/help` | GET | Help information |
+| `/api/v1/server/help/mcp` | GET | MCP integration help |
+| `/api/v1/server/terms` | GET | Terms of service |
+| `/api/v1/server/security` | GET | Security information |
 | `/api/v1/server/security/policy` | GET | Public security disclosure policy |
 | `/api/v1/server/preferences` | GET, POST | Read or update guest theme and language preferences |
 | `/api/v1/server/preferences/sync` | GET | Export guest preferences as a URL and short code |

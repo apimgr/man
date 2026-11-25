@@ -16,8 +16,11 @@
   metadata, static asset caching, and an offline fallback page. HTML pages
   containing forms are not stored for offline use.
 - `/robots.txt` identifies the sitemap at `/sitemap.xml`.
+- `/sitemap.xml` lists public pages and catalog entries, honoring the configured
+  `web.robots.allow` and `web.robots.deny` paths. Catalogs above 50,000 URLs
+  use `/sitemap-1.xml`, `/sitemap-2.xml`, and subsequent numbered files.
 - `/sitemap-pages.xml`, `/sitemap-sections.xml`, and
-  `/sitemap-platforms.xml` provide sitemap subdivisions.
+  `/sitemap-platforms.xml` remain available as focused sitemap views.
 - `/.well-known/security.txt` publishes vulnerability reporting information.
 - `/.well-known/llms.txt` and `/llms.txt` list routes from the running router
   for machine clients.
