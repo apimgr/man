@@ -31,6 +31,15 @@ coverage before synchronizing the sitemap and user documentation.
   serializer behavior for all endpoint models. Relevant files:
   `src/server/middleware.go`, `src/server/api_text.go`, `src/server/server.go`,
   `src/server/handler/`, `src/swagger/`, `src/graphql/`.
+- [ ] Implement the required always-on MCP Streamable HTTP endpoint at
+  `/api/v1/server/mcp` with `/api/mcp` and `/mcp` aliases. It must enforce the
+  AI.md protocol/header/Origin validation order, reuse API Bearer-token auth,
+  expose only in-process tools backed by the route/OpenAPI registry, and keep
+  token management and browser preferences out of MCP. Add the documented
+  help route and transport, authorization, and discovery tests. The current
+  project has no MCP handler or token-validation/ownership layer.
+  Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
+  `src/server/template/`, `src/client/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
   inventory. `make catalog` now reproducibly rebuilds the embedded SQLite
   file from the tracked
