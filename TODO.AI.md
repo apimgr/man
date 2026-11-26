@@ -6,6 +6,11 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
+- [ ] Complete the thin, testable server entrypoint required by PART 25.
+  Move build metadata to `src/version.go` (already done), then leave only the
+  bootstrap in `src/main.go` and move startup/shutdown into a tested package
+  under `src/` with a cancelable context and injectable listener. Keep CLI
+  parsing testable and preserve phase-two binary tests.
 - [ ] Complete the PART 20 metrics contract. `/server/metrics` and its service
   subroutes, API/root aliases, independent `mtr_` credentials in `secrets.yml`,
   constant-time Bearer checks, and initial Grafana JSON and Loki-compatible
