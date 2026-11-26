@@ -14,14 +14,15 @@ coverage before synchronizing the sitemap and user documentation.
   GraphQL, and keep OpenAPI, route tests, and the API guide synchronized.
   Implemented at `/api/v1/server/{swagger,graphql}` and `/api/{swagger,graphql}`;
   OpenAPI, route tests, and `docs/api.md` list the same routes.
-- [ ] Implement the AI.md contact and security-report flows. `/server/contact`
-  currently renders static informational copy instead of the configured report
-  form; its GET API returns that copy rather than field descriptors, CAPTCHA
-  challenges, and the security URL. `/server/security` is also static instead
-  of rendering live RFC 9116 contacts, expiry, PGP state, and report links.
-  Implement the documented report/security modes, validation, antispam,
-  two-step confirmation, encrypted storage/delivery, and dynamic API mirrors.
-  Relevant files: `src/server/`, `src/config/`, `src/smtp/`, `src/secret/`.
+- [ ] Finish verification of the AI.md contact and security-report flows.
+  `/server/contact` now renders configured abuse, DMCA, privacy, and security
+  forms with field descriptors, CAPTCHA/form tokens, validation, antispam,
+  two-step confirmation, encrypted security-report storage, and API mirrors.
+  `/server/security` and `security.txt` now render configured reporting
+  contacts and expiry. Verify encrypted delivery/storage, PGP configuration,
+  report status links, and the full documented failure matrix. Relevant files:
+  `src/server/handler/contact*.go`, `src/server/securityreport/`,
+  `src/config/`, `src/smtp/`.
 - [ ] Implement the API text negotiation contract across every API route. The
   middleware now strips API `.txt` suffixes and serializes buffered JSON
   responses into text for `.txt`, `Accept: text/plain`, and detected HTTP
@@ -105,9 +106,18 @@ coverage before synchronizing the sitemap and user documentation.
   `src/graphql/`, `docs/`.
 - [ ] Finish overlay-network compliance. Tor now uses the PART 32 torrc and
   control-port process with a dedicated PROXY-protocol backend listener, and
-  Docker runtime health checks cover its hidden service. I2P is still absent
-  from the application implementation despite its required opt-in behavior;
-  add the isolated i2pd service, tunnel and status lifecycle, configuration,
-  health contract, and runtime checks. Complete the operator-token route and
+  Docker runtime health checks cover its hidden service. I2P now has a SAM
+  client, eepsite key persistence, tunnel/status lifecycle, and configuration;
+  finish checking the documented container/VM/host defaults, runtime health,
+  and Docker/Incus behavior. Complete the operator-token route and
   authenticated CLI checks required by PART 28. Relevant files: `src/tor/`,
-  `src/server/`, `src/config/`, `tests/docker.sh`, `tests/incus.sh`.
+  `src/i2p/`, `src/server/`, `src/config/`, `tests/docker.sh`, `tests/incus.sh`.
+- [ ] Complete PART 30 i18n and accessibility across the server, CLI, API,
+  GraphQL, email, and documentation. The shared embedded package, six required
+  locale files, request fallback selection, locale JSON endpoint, preference
+  selector, and shared-layout translations now exist. Translate every
+  remaining human-facing string, wire language selection through both
+  binaries and all page/API responses, add plural/key/interpolation parity and
+  accessibility checks, and synchronize the supported-language documentation.
+  Relevant files: `src/common/i18n/`, `src/server/`, `src/client/`,
+  `src/graphql/`, `src/config/`, `docs/`, `README.md`.

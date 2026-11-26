@@ -149,3 +149,7 @@ no admin UI or account settings pages. The preferences page stores theme and
 language choices, consent categories, and offers a reset action. The separate
 `/server/preferences/sync` page exports a URL and code and accepts an import;
 its POST form is usable without JavaScript. The API mirrors are listed above.
+The server also serves its embedded interface catalogue at
+`/locales/{lang}.json`; supported UI locales are English, Spanish, French,
+German, Italian, and Arabic. These locale files are separate from stored
+man-page translations returned by `/api/v1/languages`.

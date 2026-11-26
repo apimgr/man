@@ -25,6 +25,7 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - **CLI Client** - Terminal interface with TUI mode
 - **PWA Support** - Cached static assets and an offline fallback page
 - **Translations** - Exact stored translations by language, platform, section, and page
+- **Interface languages** - Embedded English, Spanish, French, German, Italian, and Arabic catalogues
 - **Guest Preferences** - Cookie-backed theme, language, and consent settings, with cross-device sync and reset
 
 ## Documentation

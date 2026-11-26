@@ -7,10 +7,16 @@ exact stored match and returns 404 when that translation is unavailable. The
 browser route `/man/{lang}/{os}/{section}/{name}` renders the same exact stored
 row and returns 404 when it is missing.
 
-The web interface currently uses English UI text. Translation source projects
-named in the repository's IDEA.md include man-pages-l10n for Linux and the
-FreeBSD documentation translations. Follow each source project's license and
-contribution rules when preparing content.
+The shared interface catalogue is embedded in both server and CLI builds and
+currently registers English, Spanish, French, German, Italian, and Arabic.
+The shared page shell and language selector use these translations; most page,
+API, CLI, email, and accessibility strings still need translation-key coverage.
+The catalogue is served at `/locales/{lang}.json`. The required locale files
+must keep matching message keys, with locale-specific plural categories.
+
+Translation source projects named in the repository's IDEA.md include
+man-pages-l10n for Linux and the FreeBSD documentation translations. Follow
+each source project's license and contribution rules when preparing content.
 
 ## Contributing translated pages
 
