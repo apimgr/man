@@ -144,7 +144,7 @@ server:
 The Loki endpoint streams recent structured HTTP request events and retains at
 most `max_entries` events younger than `max_age`. Events include the normalized
 route, method, status, duration, and byte counts. Request headers, query
-strings, and bodies are not recorded.
+strings, and bodies are not recorded; credential-like path values are redacted.
 
 ### CORS
 

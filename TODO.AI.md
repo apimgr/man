@@ -6,18 +6,20 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
-- [ ] Complete the PART 20 metrics contract. This pass adds `/server/metrics`
-  and service subroutes, API/root aliases, independent `mtr_` credentials in
-  `secrets.yml`, constant-time Bearer checks, and initial Grafana JSON and
-  Loki-compatible output. HTTP request counts, status, latency, body sizes,
-  and active-request gauges now record through the outer middleware while
-  health probes and metrics scrapes are excluded. Still missing: bounded
-  structured HTTP event streaming was added with bounded `loki.max_entries`
-  and `loki.max_age`; it records normalized route, method, status, duration,
-  and byte counts without headers, query strings, or bodies. Still missing: a
-  complete dashboard covering every exported required metric, full system
-  metric collection, verified exclusion from OpenAPI and public discovery, and
-  exact endpoint/auth integration coverage. Relevant files: `src/metrics/`,
+- [ ] Complete the PART 20 metrics contract. `/server/metrics` and its service
+  subroutes, API/root aliases, independent `mtr_` credentials in `secrets.yml`,
+  constant-time Bearer checks, and initial Grafana JSON and Loki-compatible
+  output exist. HTTP request counts, status, latency, body sizes, and
+  active-request gauges record through the outer middleware while health
+  probes and metrics scrapes are excluded. Loki now retains bounded structured
+  HTTP events using `loki.max_entries` and `loki.max_age`; it records normalized
+  route, method, status, duration, and byte counts without headers, query
+  strings, or bodies, and redacts credential-like path values. Still missing:
+  dashboard panels for the currently exported HTTP, database, cache, auth,
+  system, and runtime metrics now exist. Still missing: scheduler/business
+  metrics and matching panels required by PART 20, full system metric
+  collection, verified exclusion from OpenAPI and public discovery, and exact
+  endpoint/auth integration coverage. Relevant files: `src/metrics/`,
   `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
 
@@ -26,10 +28,6 @@ coverage before synchronizing the sitemap and user documentation.
   verify each provider's build/test, security, release, and coverage behavior
   against AI.md, then confirm workflows on their respective hosted/self-hosted
   runners. Keep provider-specific limitations documented and resolve any drift.
-- [x] Add the standard versioned and compatibility API aliases for Swagger and
-  GraphQL, and keep OpenAPI, route tests, and the API guide synchronized.
-  Implemented at `/api/v1/server/{swagger,graphql}` and `/api/{swagger,graphql}`;
-  OpenAPI, route tests, and `docs/api.md` list the same routes.
 - [ ] Finish verification of the AI.md contact and security-report flows.
   `/server/contact` now renders configured abuse, DMCA, privacy, and security
   forms with field descriptors, CAPTCHA/form tokens, validation, antispam,
@@ -101,11 +99,6 @@ coverage before synchronizing the sitemap and user documentation.
   product model. Relevant files: `src/server/server.go`, `src/server/handler/`,
   `src/server/store/`, `src/server/ownertoken/`, `src/server/template/`,
   `src/server/static/`.
-- [x] Implement language-aware man page routes using stored translated rows;
-  web and API routes return only the exact stored locale row and return 404
-  when it is missing. The language inventory and preference selector derive
-  available languages from stored row counts, with English as the empty-catalog
-  fallback. Covered by `TestGetManPageLanguage` and handler route tests.
 - [ ] Complete required static discovery behavior. Sitemap and robots output
   now apply the configured allow-minus-deny policy, and sitemap URLs include
   section, platform, and catalog pages; the sitemap index and numbered chunk

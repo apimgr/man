@@ -24,7 +24,7 @@ change server configuration or create user accounts.
   use separate Bearer tokens stored in `secrets.yml`.
   Restrict access to monitoring clients. The Loki endpoint returns bounded,
   structured HTTP request events with request headers, query strings, and
-  bodies excluded.
+  bodies excluded and credential-like path values redacted.
 
 ## Configuration and maintenance
 
