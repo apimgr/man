@@ -36,9 +36,14 @@ coverage before synchronizing the sitemap and user documentation.
   `/api/v1/server/mcp` with `/api/mcp` and `/mcp` aliases. It must enforce the
   AI.md protocol/header/Origin validation order, reuse API Bearer-token auth,
   expose only in-process tools backed by the route/OpenAPI registry, and keep
-  token management and browser preferences out of MCP. Add the documented
-  help route and transport, authorization, and discovery tests. The current
-  project has no MCP handler or token-validation/ownership layer.
+  token management and browser preferences out of MCP. A basic always-on
+  handler, direct aliases, Bearer validation, protocol/header/Origin checks,
+  router dispatch, and help text now exist. Remaining work: use the canonical
+  route registry for complete operation IDs, schemas, and every API operation;
+  share the exact API authorization, rate-limit and audit path with `source=mcp`;
+  implement operator-token visibility and scope filtering; and add transport,
+  authorization, and discovery tests. Do not mark this complete until those
+  requirements and the full MCP acceptance matrix pass.
   Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
   `src/server/template/`, `src/client/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
@@ -69,12 +74,15 @@ coverage before synchronizing the sitemap and user documentation.
   `scripts/catalog-sources.tsv`, `scripts/build_catalog.sh`.
 - [ ] Complete guest preferences and the owner-token surface. Theme and
   language cookies, consent controls, reset, and stateless sync flows now
-  exist with no-JavaScript forms. The `/server/preferences/tokens` owner
-  token lifecycle and its API mirrors are still absent; verify every preference
-  mutation and import against the AI.md CSRF, consent, and data-validation
-  rules. Keep preferences browser-local and preserve the no-login product
-  model. Relevant files: `src/server/server.go`, `src/server/handler/`,
-  `src/server/template/`, `src/server/static/`.
+  exist with no-JavaScript forms. Owner-token storage, primary issue/restore,
+  masked listing, one-page reveal, linked-token CRUD, rotation, expiry,
+  revocation, cookie handling, and API mirrors are now implemented. Continue
+  checking the full AI.md UI/API contract, strict rate limiting, audit details,
+  MCP auth integration, CSRF, and preference consent/data validation before
+  closing this item. Keep preferences browser-local and preserve the no-login
+  product model. Relevant files: `src/server/server.go`, `src/server/handler/`,
+  `src/server/store/`, `src/server/ownertoken/`, `src/server/template/`,
+  `src/server/static/`.
 - [x] Implement language-aware man page routes using stored translated rows;
   web and API routes return only the exact stored locale row and return 404
   when it is missing. The language inventory and preference selector derive

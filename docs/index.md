@@ -27,6 +27,8 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - **Translations** - Exact stored translations by language, platform, section, and page
 - **Interface languages** - Embedded English, Spanish, French, German, Italian, and Arabic catalogues
 - **Guest Preferences** - Cookie-backed theme, language, and consent settings, with cross-device sync and reset
+- **Owner Tokens** - Anonymous primary and linked credentials for protected integrations
+- **MCP Streamable HTTP** - Bearer-authenticated API tools at `/api/v1/server/mcp` with `/api/mcp` and `/mcp` aliases
 
 ## Documentation
 

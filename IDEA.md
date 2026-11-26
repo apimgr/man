@@ -16,6 +16,8 @@ project_org: casapps
 internal_name: casman
 internal_org: casapps
 app_name: casman
+owner_token: casman_owner_token_htozfnmg
+resource_label_plural: man pages
 
 ## Business logic
 
@@ -79,6 +81,16 @@ All catalog reads are public and return JSON on `/api/` routes. The browser pref
 | GET, POST | `/api/v1/server/preferences` | Public | Read or update browser preference values. |
 | GET | `/api/v1/server/preferences/sync` | Public | Export browser preferences as a URL and short code. |
 | GET | `/api/v1/server/preferences/sync/import` | Public | Import preferences from query values or a short code. |
+| GET | `/api/v1/server/preferences/tokens` | Primary bearer | List masked owner and linked token metadata. |
+| POST | `/api/v1/server/preferences/tokens/primary` | Public | Issue a new anonymous owner token; valid existing credentials receive conflict. |
+| POST | `/api/v1/server/preferences/tokens/primary/reveal` | Primary bearer | Reveal the primary owner token. |
+| POST | `/api/v1/server/preferences/tokens/primary/rotate` | Primary bearer | Rotate the primary token in place. |
+| DELETE | `/api/v1/server/preferences/tokens/primary` | Primary bearer | Revoke the owner and its linked tokens. |
+| POST | `/api/v1/server/preferences/tokens` | Primary bearer | Create one linked token. |
+| POST | `/api/v1/server/preferences/tokens/{id}/reveal` | Primary bearer | Reveal one linked token. |
+| POST | `/api/v1/server/preferences/tokens/{id}/rotate` | Primary bearer | Rotate one linked token in place. |
+| PATCH | `/api/v1/server/preferences/tokens/{id}` | Primary bearer | Rename a linked token or change its expiry. |
+| DELETE | `/api/v1/server/preferences/tokens/{id}` | Primary bearer | Revoke one linked token. |
 | GET | `/api/swagger` | Public | OpenAPI compatibility alias. |
 | GET, POST | `/api/graphql` | Public | Read-only GraphQL compatibility alias. |
 

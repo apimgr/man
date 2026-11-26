@@ -55,6 +55,7 @@ bytes.
 | `/api/v1/server/contact` | GET, POST | Report form descriptors and two-step abuse, DMCA, privacy, or security submission |
 | `/api/v1/server/help` | GET | Help information |
 | `/api/v1/server/help/mcp` | GET | MCP integration help |
+| `/api/v1/server/mcp` | POST | MCP Streamable HTTP endpoint; `/api/mcp` and `/mcp` are direct aliases |
 | `/api/v1/server/terms` | GET | Terms of service |
 | `/api/v1/server/security` | GET | Dynamic RFC 9116 contacts, expiry, PGP availability, policy, thanks, and report URLs |
 | `/api/v1/server/security/policy` | GET | Public security disclosure policy |
@@ -62,10 +63,32 @@ bytes.
 | `/api/v1/server/preferences` | GET, POST | Read or update guest theme and language preferences |
 | `/api/v1/server/preferences/sync` | GET | Export guest preferences as a URL and short code |
 | `/api/v1/server/preferences/sync/import` | GET | Import guest preferences from query parameters or a short code |
+| `/api/v1/server/preferences/tokens` | GET | List masked owner and linked token metadata; requires the primary bearer token |
+| `/api/v1/server/preferences/tokens/primary` | POST, DELETE | Issue an owner token publicly, or revoke the current owner with its primary bearer token |
+| `/api/v1/server/preferences/tokens/primary/reveal` | POST | Reveal the encrypted primary token; requires the primary bearer token |
+| `/api/v1/server/preferences/tokens/primary/rotate` | POST | Rotate the primary token without changing its owner; requires the primary bearer token |
+| `/api/v1/server/preferences/tokens` | POST | Create a linked token; requires the primary bearer token |
+| `/api/v1/server/preferences/tokens/{id}` | PATCH, DELETE | Update or revoke a linked token; requires the primary bearer token |
+| `/api/v1/server/preferences/tokens/{id}/reveal` | POST | Reveal a linked token; requires the primary bearer token |
+| `/api/v1/server/preferences/tokens/{id}/rotate` | POST | Rotate a linked token; requires the primary bearer token |
 | `/api/v1` | GET | API service information and endpoint links; `/api/v1/` redirects here |
 
 There is no `/api/v1/man/{lang}/{name}` route. Translated retrieval requires
 language, platform, section, and page name so it can match one stored row.
+
+### MCP Streamable HTTP
+
+Connect an MCP client to `/api/v1/server/mcp` (or either direct alias
+`/api/mcp` and `/mcp`). The endpoint accepts JSON-RPC 2.0 POST requests using
+protocol revision `2026-07-28`. Every request requires an existing API owner or
+linked token in `Authorization: Bearer <token>`; cookies are ignored. Include
+`MCP-Protocol-Version` matching `_meta.io.modelcontextprotocol/protocolVersion`
+and `Mcp-Method` matching the JSON-RPC `method`. `tools/call` additionally
+requires `Mcp-Name` matching `params.name`. Token issue, reveal, rotation, and
+revocation are not available as MCP tools. Create a separate linked credential
+for each client on [/server/preferences/tokens](/server/preferences/tokens).
+The server currently returns a single JSON response per request and has no
+session state.
 
 ### Search Parameters
 
@@ -114,7 +137,8 @@ query {
 ## Browser routes
 
 The server renders the homepage, man pages, search results, browse pages,
-cross-platform comparisons, and `whatis`/`apropos` lookups. Man pages also
+cross-platform comparisons, `whatis`/`apropos` lookups, and owner-token
+management at `/server/preferences/tokens`. Man pages also
 support `.txt`, `.md`, `.json`, `.raw`, `.pdf`, `.epub`, and `.shtml`
 (print-friendly HTML) suffixes. Bulk exports are available at
 `/export/section/{section}.{format}` and
@@ -145,11 +169,33 @@ public API mirror. Source-code vulnerabilities should use the repository's
 [GitHub private vulnerability reporting](https://github.com/apimgr/man/security/advisories/new),
 not a deployed-instance form.
 Visitor display preferences are saved at `/server/preferences`. The server has
-no admin UI or account settings pages. The preferences page stores theme and
-language choices, consent categories, and offers a reset action. The separate
+no administration dashboard or user account system. The preferences page stores
+theme and language choices, consent categories, and offers a reset action. The
+separate `/server/preferences/tokens` page manages anonymous owner credentials;
+the browser uses an HttpOnly primary-token cookie, while API routes require a
+Bearer header and ignore cookies. Token list responses stay masked, and explicit
+reveal responses are marked `no-store`. The separate
 `/server/preferences/sync` page exports a URL and code and accepts an import;
 its POST form is usable without JavaScript. The API mirrors are listed above.
 The server also serves its embedded interface catalogue at
 `/locales/{lang}.json`; supported UI locales are English, Spanish, French,
 German, Italian, and Arabic. These locale files are separate from stored
 man-page translations returned by `/api/v1/languages`.
+
+### Owner Tokens
+
+Owner tokens are anonymous credentials, not user accounts. `POST
+/api/v1/server/preferences/tokens/primary` creates an owner and returns its
+primary credential in `data.owner_token`. A valid owner or linked bearer on
+that request returns `409`. All other token-management API routes require the
+primary token as `Authorization: Bearer own_...`; linked tokens receive `403`,
+and API routes ignore browser cookies. Token list results contain masked values
+only. Explicit reveal, rotate, and creation responses carry the raw credential
+in the JSON body and use `Cache-Control: no-store`.
+
+Create a linked token with `POST /api/v1/server/preferences/tokens` and
+`{"name":"mcp-client","expires":"30d"}`. Supported expiries are
+`never`, `7d`, `30d`, `90d`, and `1y`; a chosen UTC calendar date uses
+`expires_on: "YYYY-MM-DD"`. The web token page is
+`/server/preferences/tokens`; it uses the HttpOnly primary-token cookie and
+CSRF-protected POST forms. API token routes have no unversioned aliases.
