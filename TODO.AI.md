@@ -20,10 +20,11 @@ coverage before synchronizing the sitemap and user documentation.
   coverage. Relevant files: `src/metrics/`, `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
 
-- [ ] Complete the required five-provider CI/CD set. The repository currently
-  has GitHub workflows only; add GitLab, Gitea, Forgejo, and Jenkins build/test,
-  security, and release workflows after implementation and validation are
-  complete. Keep required scans and coverage gates equivalent across providers.
+- [ ] Complete validation and parity review of the required five-provider CI/CD
+  set. GitHub, GitLab, Gitea, Forgejo, and Jenkins configurations now exist;
+  verify each provider's build/test, security, release, and coverage behavior
+  against AI.md, then confirm workflows on their respective hosted/self-hosted
+  runners. Keep provider-specific limitations documented and resolve any drift.
 - [x] Add the standard versioned and compatibility API aliases for Swagger and
   GraphQL, and keep OpenAPI, route tests, and the API guide synchronized.
   Implemented at `/api/v1/server/{swagger,graphql}` and `/api/{swagger,graphql}`;
