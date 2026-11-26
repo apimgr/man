@@ -28,9 +28,9 @@ coverage before synchronizing the sitemap and user documentation.
   HTTP events using `loki.max_entries` and `loki.max_age`; it records normalized
   route, method, status, duration, and byte counts without headers, query
   strings, or bodies, and redacts credential-like path values. Still missing:
-  dashboard panels for the currently exported HTTP, database, cache, auth,
-  system, and runtime metrics now exist. Still missing: scheduler/business
-  metrics and matching panels required by PART 20, full system metric
+  Grafana panels cover the currently exported HTTP, database, cache, auth,
+  system, and runtime metrics. Still missing: scheduler/business metrics and
+  matching panels required by PART 20, full system metric
   collection, verified exclusion from OpenAPI and public discovery, and exact
   endpoint/auth integration coverage. Relevant files: `src/metrics/`,
   `src/config/`, `src/secret/`,
