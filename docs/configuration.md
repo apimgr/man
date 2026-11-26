@@ -39,6 +39,19 @@ database:
   path: "{data_dir}/db/server.db"
 ```
 
+## Secrets
+
+On first startup, the server creates `{config_dir}/secrets.yml` with an
+operator token (`server.token`, `adm_` prefix) and an AES-256 encryption key
+(`server.security.encryption_key`). The file is written atomically with mode
+`0600`; keep it in the deployment's private configuration storage. The
+operator token is printed once to the first-start console output. Later starts
+show only its masked suffix. `GET /api/v1/server/auth/check` validates a
+presented Bearer token and reports its kind without returning the credential.
+
+The former `{config_dir}/security/master.key` file is migrated into
+`secrets.yml` on startup so existing encrypted data remains readable.
+
 ## SSL/TLS
 
 Per AI.md PART 15, casman ships built-in Let's Encrypt support and an
@@ -62,9 +75,6 @@ encrypted DNS provider credential vault. The wiring is:
   re-provisions any cert with less than 30 days of life remaining. Static
   (non-ACME) certs are inspected too so operators get an early-warning
   log entry before expiry.
-- Override the master key by setting `CASMAN_MASTER_SECRET` to a
-  hex-encoded 32-byte value; this skips the disk file entirely and is
-  recommended in container deployments.
 - HTTP-01 shares port 80 with the redirect listener (no second bind).
   TLS-ALPN-01 uses lego's own listener and therefore conflicts with our
   HTTPS server — prefer HTTP-01 or DNS-01 in normal operation.
