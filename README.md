@@ -101,6 +101,7 @@ casman-cli man ls
 casman-cli search "file permission"
 
 # Interactive TUI
+casman-cli --server https://your-server.example.com
 casman-cli
 ```
 

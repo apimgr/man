@@ -11,6 +11,14 @@ coverage before synchronizing the sitemap and user documentation.
   bootstrap in `src/main.go` and move startup/shutdown into a tested package
   under `src/` with a cancelable context and injectable listener. Keep CLI
   parsing testable and preserve phase-two binary tests.
+- [ ] Complete the PART 33/34 CLI configuration contract. Server and token
+  resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
+  config files private, honors explicit flags and environment settings, and
+  avoids an implicit localhost server. Remaining work includes all documented
+  config sections and their flag/environment precedence, config path/profile
+  edge cases, API version/timeout/retry integration, token-file handling,
+  output/pager/TUI/log/cache settings, interactive first-run setup, error exit
+  codes, and CLI documentation. Relevant files: `src/client/`, `docs/`.
 - [ ] Complete the PART 20 metrics contract. `/server/metrics` and its service
   subroutes, API/root aliases, independent `mtr_` credentials in `secrets.yml`,
   constant-time Bearer checks, and initial Grafana JSON and Loki-compatible

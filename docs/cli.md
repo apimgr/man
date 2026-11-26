@@ -2,7 +2,7 @@
 
 ## Installation
 
-The CLI client is included with the server binary or available separately:
+The CLI client is released as a separate binary:
 
 ```bash
 # Download CLI
@@ -14,6 +14,9 @@ mv casman-cli-linux-amd64 /usr/local/bin/casman-cli
 ## Usage
 
 ```bash
+# Configure the server on first use. The valid address is saved to cli.yml
+casman-cli --server https://your-server.example.com health
+
 # Interactive TUI mode
 casman-cli
 
@@ -47,8 +50,9 @@ casman-cli stats
 
 | Option | Description |
 |--------|-------------|
-| `--server URL` | Server URL (default: http://localhost:64580) |
+| `--server URL` | Server URL for this invocation; saves it only when the config has no valid server |
 | `--token TOKEN` | API token |
+| `--config PATH` | Select a config file or profile |
 | `--no-pager` | Disable pager |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
@@ -57,12 +61,30 @@ casman-cli stats
 
 | Variable | Description |
 |----------|-------------|
-| `CASMAN_SERVER` | Default server URL |
+| `CASMAN_SERVER_PRIMARY` | Default server URL |
 | `CASMAN_TOKEN` | Default API token |
+
+## Configuration
+
+On Unix-like systems, the CLI uses `~/.config/casapps/casman/cli.yml`. On
+Windows, it uses `%APPDATA%\\casapps\\casman\\cli.yml`. The file and its
+directory are created with user-only permissions where supported. The CLI
+preserves other YAML sections when it updates a server or token value.
+
+Server selection is `--server`, `CASMAN_SERVER_PRIMARY`, `server.primary` in
+the config file, then the compiled official site when one is configured. If no
+server is available, the CLI prints setup instructions. Token selection is
+`--token`, `CASMAN_TOKEN`, then `auth.token`.
+
+`--config` accepts an absolute path or a profile name relative to the default
+config directory. A profile with no extension resolves to `.yml` unless an
+existing `.yml` or `.yaml` file is found. Use `--config prod.yaml` to select a
+specific YAML file.
 
 ## TUI Mode
 
-Launch interactive mode by running `casman-cli` without arguments:
+After configuring a server, launch interactive mode by running `casman-cli`
+without command arguments:
 
 - Browse man pages by section
 - Full-text search
