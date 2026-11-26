@@ -25,8 +25,10 @@ the credential.
 Anonymous owners receive `own_` primary tokens, and may create linked tokens
 for integrations. Owner tokens grant access only to that owner's resources;
 the primary token also manages its linked tokens. The browser stores its owner
-credential in an HttpOnly, Secure, SameSite=Strict cookie for token-management
-forms. API and MCP authentication uses the Bearer header and ignores cookies.
+credential in an HttpOnly, SameSite=Strict cookie for token-management forms.
+The `Secure` attribute is set for normal and Tor requests and omitted for I2P
+requests, whose browser-facing HTTP origin cannot store Secure cookies. API
+and MCP authentication uses the Bearer header and ignores cookies.
 See [API Reference](api.md) for token routes and the MCP transport.
 
 - Use the built-in TLS configuration or place casman behind a trusted TLS
@@ -36,8 +38,11 @@ See [API Reference](api.md) for token routes and the MCP transport.
   service and its embedded dependencies updated. Responses include a restrictive
   Content Security Policy, cross-origin protections, and two-year HSTS when the
   request is served over TLS.
-- `/metrics` is disabled unless enabled in configuration. Set its token before
-  exposing the endpoint outside a trusted monitoring network.
+- The current metrics implementation exposes `/metrics`; configure
+  `server.metrics.token` to require a Bearer credential and restrict network
+  access to trusted scrapers. The
+  service-specific metrics endpoints and mandatory generated service tokens
+  described in AI.md remain to be implemented.
 - CORS uses one policy across routes. Wildcard origins never allow credentials;
   configure exact origins when browser credentials are required.
 
