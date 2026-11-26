@@ -19,6 +19,31 @@ server:
   fqdn: localhost
   mode: production
   api_version: v1
+  cache:
+    type: memory
+    url: ""
+    host: localhost
+    port: 6379
+    username: ""
+    password: ""
+    db: 0
+    tls: false
+    tls_skip_verify: true
+    tls_ca: ""
+    tls_cert: ""
+    tls_key: ""
+    pool_size: 10
+    min_idle: 2
+    timeout: 5s
+    prefix: casman:
+    ttl: 1h
+  rate_limit:
+    read: {requests: 120, window: 60}
+    write: {requests: 10, window: 60}
+    health: {requests: 120, window: 60}
+    strict: {requests: 10, window: 900}
+    auth_failures: {requests: 5, window: 900}
+    global_burst: 240
   branding:
     title: casman
     tagline: Universal Man Pages
@@ -50,6 +75,20 @@ web:
 `v2` to move the canonical API routes, OpenAPI document, MCP endpoint, and
 generated links to `/api/v2`. Keep the CLI's `server.api_version` setting in
 `cli.yml` in sync with the server.
+
+`server.cache.type` defaults to `memory`; choose `none`, `valkey`, or `redis`
+to change it. For an external cache, configure either `url` or the host,
+port, credentials, and database fields. `rediss://` and `valkeys://` URLs
+enable TLS; `tls_ca`, `tls_cert`, and `tls_key` name files in
+`{config_dir}/ssl/`. A cache URL takes precedence over individual connection
+fields. Rate-limit counters remain in SQLite unless an external cache is
+selected.
+
+`server.rate_limit` configures per-IP or per-Bearer-token read and write
+windows, a health endpoint window, a stricter owner-token action window, and
+an absolute per-IP burst ceiling. Repeated invalid Bearer credentials are
+counted per IP and lock that IP out for the `auth_failures.window` duration
+after `auth_failures.requests` failures. Windows are seconds.
 
 `web.llms.include_endpoints` controls whether `llms.txt` lists API operations
 (default `true`). `include_schemas` adds the available parameter and response

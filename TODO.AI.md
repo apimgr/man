@@ -47,6 +47,23 @@ coverage before synchronizing the sitemap and user documentation.
   `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
 
+- [ ] Implement the complete `server.rate_limit` configuration and enforcement
+  from PART 12. Read/write limits use per-IP or hashed Bearer-token buckets;
+  health and strict token-action windows, the per-IP global burst ceiling,
+  and invalid-Bearer failure lockout are configured and enforced. API 429
+  responses include the documented error envelope and `Retry-After`; lockout
+  uses the same 429 response until the sliding failure count drops below its
+  limit. SQLite stores atomic current/previous fixed-window counters and
+  applies the documented weighted sliding-window calculation; counters survive
+  process restarts. Defaults, validation, route classification, owner
+  bucketing, global ceilings, and lockout have focused tests. Remaining work:
+  implement `server.cache` and its `none`/`memory`/Valkey/Redis backends,
+  including URL validation, TLS/CA/client certs, pools/timeouts, shared cache
+  use, health/metrics, and Redis-backed sliding counters with the required
+  fallback and restart guarantees. Relevant files: `src/config/`,
+  `src/server/middleware.go`, `src/server/server.go`, `src/server/store/`,
+  `src/cache/`, and `docs/`.
+
 - [ ] Complete validation and parity review of the required five-provider CI/CD
   set. GitHub, GitLab, Gitea, Forgejo, and Jenkins configurations now exist;
   verify each provider's build/test, security, release, and coverage behavior
@@ -117,9 +134,15 @@ coverage before synchronizing the sitemap and user documentation.
   exist with no-JavaScript forms. Owner-token storage, primary issue/restore,
   masked listing, one-page reveal, linked-token CRUD, rotation, expiry,
   revocation, cookie handling, and API mirrors are now implemented. Continue
-  checking the full AI.md UI/API contract, strict rate limiting, audit details,
+  checking the full AI.md UI/API contract, audit details,
   MCP auth integration, CSRF, and preference consent/data validation before
-  closing this item. Keep preferences browser-local and preserve the no-login
+  closing this item. Strict token actions now use configurable
+  `server.rate_limit.strict` limits (10 requests per 900 seconds by default),
+  bucket valid credentials by owner and otherwise use the resolved client
+  address, and count invalid attempts. API throttles return the documented
+  `RATE_LIMITED` JSON envelope with `Retry-After`. Focused tests cover the
+  strict route matrix, owner bucketing, API error output, and config defaults
+  and validation. Keep preferences browser-local and preserve the no-login
   product model. Relevant files: `src/server/server.go`, `src/server/handler/`,
   `src/server/store/`, `src/server/ownertoken/`, `src/server/template/`,
   `src/server/static/`.
