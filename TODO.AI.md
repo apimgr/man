@@ -23,9 +23,16 @@ coverage before synchronizing the sitemap and user documentation.
   delay, and token-file loading now reach both the command runner and TUI; the
   CLI reference documents these settings. Remaining work includes the rest of
   the documented config sections and flag/environment precedence, config
-  path/profile edge cases, output/color/pager/quiet/verbose settings, TUI,
-  logging and cache preferences, interactive first-run setup, error exit
-  codes, and complete CLI documentation. Relevant files: `src/client/`,
+  path/profile edge cases, color/quiet/verbose settings, TUI, logging and cache
+  preferences, and complete CLI documentation. Output format and pager
+  preferences now honor CLI flags, environment variables, and `cli.yml`;
+  JSON, YAML, plain, table, and CSV serializers are implemented. Interactive
+  first-run setup now prompts for a server and
+  optional owner token in Bubble Tea, checks reachability/authentication,
+  preserves existing valid values, and saves the initial config only after
+  successful checks. CLI errors now map to the specified usage, validation,
+  not-found, connection, auth/permission, and config exit codes; `health`
+  returns failure for a degraded server. Relevant files: `src/client/`,
   `docs/`.
 - [ ] Complete the PART 20 metrics contract. `/server/metrics` and its service
   subroutes, API/root aliases, independent `mtr_` credentials in `secrets.yml`,
@@ -56,11 +63,16 @@ coverage before synchronizing the sitemap and user documentation.
   limit. SQLite stores atomic current/previous fixed-window counters and
   applies the documented weighted sliding-window calculation; counters survive
   process restarts. Defaults, validation, route classification, owner
-  bucketing, global ceilings, and lockout have focused tests. Remaining work:
-  implement `server.cache` and its `none`/`memory`/Valkey/Redis backends,
-  including URL validation, TLS/CA/client certs, pools/timeouts, shared cache
-  use, health/metrics, and Redis-backed sliding counters with the required
-  fallback and restart guarantees. Relevant files: `src/config/`,
+  bucketing, global ceilings, and lockout have focused tests. `server.cache`
+  now supports none, memory, Valkey, and Redis backends; URL and TLS/CA/client
+  certificate configuration, pools/timeouts, generic cache operations,
+  health/metrics, and atomic Redis sliding counters are wired. Successful
+  Redis counter operations also persist a SQLite shadow, so cache loss and
+  restart do not discard rate-limit history; cache errors use the persistent
+  store before the in-process fallback. A live Valkey integration test verifies
+  shared Lua counters, strict lockout checks, and continued denial after the
+  cache is flushed. Remaining work is the full endpoint/failover acceptance
+  matrix. Relevant files: `src/config/`,
   `src/server/middleware.go`, `src/server/server.go`, `src/server/store/`,
   `src/cache/`, and `docs/`.
 

@@ -53,7 +53,9 @@ casman-cli stats
 | `--server URL` | Server URL for this invocation; saves it only when the config has no valid server |
 | `--token TOKEN` | API token |
 | `--config PATH` | Select a config file or profile |
-| `--no-pager` | Disable pager |
+| `--format FORMAT` | `table`, `json`, `yaml`, `plain`, or `csv` output |
+| `--pager` | Always use a pager |
+| `--no-pager` | Never use a pager |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
@@ -68,6 +70,21 @@ casman-cli stats
 | `CASMAN_SERVER_RETRY_DELAY` | Delay between retries |
 | `CASMAN_TOKEN` | Default API token |
 | `CASMAN_TOKEN_FILE` | Read the API token from a file |
+| `CASMAN_OUTPUT_FORMAT` | Output format (`table`, `json`, `yaml`, `plain`, `csv`) |
+| `CASMAN_OUTPUT_PAGER` | Pager policy (`auto`, `always`, `never`) |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Command succeeded |
+| `1` | General error or unhealthy server |
+| `2` | Invalid command usage or flags |
+| `65` | Server rejected input with `VALIDATION_FAILED` |
+| `66` | Requested resource was not found |
+| `69` | Server connection failed |
+| `77` | Authentication or permission failure |
+| `78` | CLI configuration error |
 
 ## Configuration
 
@@ -97,10 +114,21 @@ file paths are resolved beside the selected config file. A token passed with
 the token file and then `auth.token`. Environment variables override the
 matching config values.
 
+The `output` section supports `format` (default `table`) and `pager` (default
+`auto`; paging is enabled only for an interactive terminal and when `TERM` is
+not `dumb`). Flags override environment variables, which override `cli.yml`.
+
 ## TUI Mode
 
-After configuring a server, launch interactive mode by running `casman-cli`
-without command arguments:
+Run `casman-cli` without command arguments to launch interactive mode. If no
+server is configured, the TUI first opens the setup wizard. Enter a server URL
+and optionally an owner token; the CLI checks server reachability and validates
+the token before saving initial values. A failed check leaves the config
+unchanged. After setup, the normal TUI opens.
+
+In a non-interactive shell, configure a server explicitly with `--server` or
+`CASMAN_SERVER_PRIMARY`; the CLI prints setup instructions when neither is
+available.
 
 - Browse man pages by section
 - Full-text search
