@@ -30,6 +30,9 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 - **Owner Tokens** - Anonymous primary and linked credentials for protected integrations
 - **MCP Streamable HTTP** - Bearer-authenticated API tools at `/api/v1/server/mcp` with `/api/mcp` and `/mcp` aliases
 
+Versioned API examples use `/api/v1` by default; `server.api_version` in
+`server.yml` selects the canonical versioned prefix.
+
 ## Documentation
 
 - [Installation](installation.md) - How to install and run

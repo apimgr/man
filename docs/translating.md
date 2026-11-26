@@ -7,6 +7,9 @@ exact stored match and returns 404 when that translation is unavailable. The
 browser route `/man/{lang}/{os}/{section}/{name}` renders the same exact stored
 row and returns 404 when it is missing.
 
+Versioned API examples use the default `/api/v1` prefix. The server's
+`server.api_version` setting controls the canonical prefix.
+
 The shared interface catalogue is embedded in both server and CLI builds and
 currently registers English, Spanish, French, German, Italian, and Arabic.
 The shared page shell and language selector use these translations; most page,

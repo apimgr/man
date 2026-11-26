@@ -1,9 +1,11 @@
 # Server Operations
 
 casman is a read-only public man page service. It has no admin web UI, user
-accounts, setup wizard, or `/api/v1/admin/` endpoints. Configure and operate
+accounts, setup wizard, or admin API endpoints. Configure and operate
 the server through `server.yml`, environment variables, and the `casman`
 command line.
+Versioned API examples use the default `/api/v1` prefix; `server.api_version`
+in `server.yml` controls the canonical versioned routes.
 
 Public information pages are available at `/server/about`, `/server/help`,
 `/server/help/mcp`, `/server/privacy`, `/server/terms`, `/server/security`,

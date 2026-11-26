@@ -2,9 +2,11 @@
 
 ## REST API
 
-Base path: `/api/v1` by default (without a trailing slash). The CLI can select
-another version prefix with `server.api_version` in `cli.yml`. The public man
-page collection is read-only. JSON is the default API representation; clients
+Base path: `/api/v1` by default (without a trailing slash). Set
+`server.api_version` in the server's `server.yml` to select another version
+prefix; routes, OpenAPI, MCP, and discovery use that configured value. The CLI
+selects the matching client prefix in its own `cli.yml`. The public man-page
+collection is read-only. JSON is the default API representation; clients
 may request the shared plain-text representation as described below.
 
 ### Response Formats

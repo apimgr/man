@@ -2,6 +2,9 @@
 
 ## HTTP APIs
 
+The versioned API examples below use the default `/api/v1` prefix. Set
+`server.api_version` in `server.yml` to use another version.
+
 - REST API: `/api/v1/`; see [API Reference](api.md).
 - OpenAPI JSON: `/api/v1/openapi`.
 - Server-rendered API documentation: `/server/docs/swagger`.
@@ -33,8 +36,8 @@ request contract and token-management exclusions.
 - `/sitemap-pages.xml`, `/sitemap-sections.xml`, and
   `/sitemap-platforms.xml` remain available as focused sitemap views.
 - `/.well-known/security.txt` publishes vulnerability reporting information.
-- `/.well-known/llms.txt` and `/llms.txt` list routes from the running router
-  for machine clients.
+- `/.well-known/llms.txt` and `/llms.txt` list live API operations with their
+  OpenAPI summaries and request-specific API/MCP URLs for machine clients.
 - Feed and sitemap responses support `ETag`, `Last-Modified`, and conditional
   `304 Not Modified` responses.
 

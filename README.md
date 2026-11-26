@@ -129,6 +129,9 @@ database:
 
 ## API
 
+The versioned API examples below use the default `/api/v1` prefix. Configure
+`server.api_version` in `server.yml` to select a different prefix.
+
 | Endpoint | Description |
 |----------|-------------|
 | `GET /man/{name}` | Get man page (HTML) |

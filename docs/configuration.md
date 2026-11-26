@@ -18,6 +18,7 @@ server:
   http_redirect_port: "80"
   fqdn: localhost
   mode: production
+  api_version: v1
   branding:
     title: casman
     tagline: Universal Man Pages
@@ -37,7 +38,24 @@ server:
 database:
   driver: sqlite
   path: "{data_dir}/db/server.db"
+
+web:
+  llms:
+    include_endpoints: true
+    include_schemas: false
+    custom_sections: []
 ```
+
+`server.api_version` defaults to `v1`; set it to a positive version such as
+`v2` to move the canonical API routes, OpenAPI document, MCP endpoint, and
+generated links to `/api/v2`. Keep the CLI's `server.api_version` setting in
+`cli.yml` in sync with the server.
+
+`web.llms.include_endpoints` controls whether `llms.txt` lists API operations
+(default `true`). `include_schemas` adds the available parameter and response
+details. Up to ten `custom_sections` may be appended; each section has a title
+of 1–80 characters and Markdown content of at most 4096 characters. HTML is
+escaped, and links may use HTTPS or relative paths.
 
 ## Secrets
 

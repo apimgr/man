@@ -128,13 +128,16 @@ coverage before synchronizing the sitemap and user documentation.
   section, platform, and catalog pages; the sitemap index and numbered chunk
   handler are implemented. Feeds use catalog creation dates and exclude rows
   without trustworthy creation times; sitemap catalog URLs include
-  `lastmod` only when the stored timestamp is trustworthy. Remaining work:
-  trustworthy modification dates for static page content and shared URL
-  construction per the server URL contract. `.well-known/llms.txt` now filters the live route inventory
-  to GET routes and excludes metrics, MCP, preferences, token, operator, and
-  admin paths. Remaining work: use the shared route registry's `Listed`
-  visibility metadata instead of path-name filtering and preserve summaries
-  for listed operations.
+  `lastmod` only when the stored timestamp is trustworthy. Shared URL
+  construction now applies the trusted proxy and overlay-network rules to
+  feeds, sitemaps, and robots output. Remaining work: trustworthy modification
+  dates for static page content. `.well-known/llms.txt` now uses the live
+  OpenAPI operation inventory for summaries, auth labels, parameter/response
+  details, and request-resolved API/MCP/documentation URLs; `web.llms` controls
+  endpoint details and validated custom sections. Remaining work: use the
+  shared route registry's `Listed` visibility metadata instead of deriving
+  visibility from OpenAPI/path rules, and emit complete request/response
+  schemas from the route models.
   Relevant files: `src/server/server.go`, `src/server/handler/`.
 
 ## Medium (P2)

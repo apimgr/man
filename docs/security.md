@@ -9,6 +9,8 @@ Visitors can manage browser-only display and consent preferences at
 server settings. Configure the server through `server.yml` and the command
 line. Do not expose private configuration, backup, or data directories through
 the web server.
+Versioned API paths in this guide use `/api/v1` by default; `server.api_version`
+in `server.yml` controls the configured prefix.
 
 ## Network protection
 

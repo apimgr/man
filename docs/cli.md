@@ -88,7 +88,8 @@ config directory. A profile with no extension resolves to `.yml` unless an
 existing `.yml` or `.yaml` file is found. Use `--config prod.yaml` to select a
 specific YAML file.
 
-The `server` section supports `primary`, `api_version` (default `v1`),
+The CLI's `server` section supports `primary`, `api_version` (default `v1`;
+match the server's configured API version),
 `timeout` (default `30s`), `retry` (default `3`), and `retry_delay` (default
 `1s`). The `auth` section supports `token` and `token_file`; relative token
 file paths are resolved beside the selected config file. A token passed with
