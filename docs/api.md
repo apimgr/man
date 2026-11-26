@@ -2,8 +2,9 @@
 
 ## REST API
 
-Base path: `/api/v1/`. Read endpoints return JSON. The public man page
-collection is read-only.
+Base path: `/api/v1` (without a trailing slash). The public man page
+collection is read-only. JSON is the default API representation; clients may
+request the shared plain-text representation as described below.
 
 ### Response Formats
 
@@ -61,7 +62,7 @@ bytes.
 | `/api/v1/server/preferences` | GET, POST | Read or update guest theme and language preferences |
 | `/api/v1/server/preferences/sync` | GET | Export guest preferences as a URL and short code |
 | `/api/v1/server/preferences/sync/import` | GET | Import guest preferences from query parameters or a short code |
-| `/api/v1/` | GET | API service information and endpoint links |
+| `/api/v1` | GET | API service information and endpoint links; `/api/v1/` redirects here |
 
 There is no `/api/v1/man/{lang}/{name}` route. Translated retrieval requires
 language, platform, section, and page name so it can match one stored row.
@@ -100,6 +101,12 @@ query {
     title
     synopsis
     description
+  }
+  serverPage(path: "about") {
+    title
+    heading
+    content
+    format
   }
 }
 ```
