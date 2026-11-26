@@ -139,12 +139,12 @@ database:
 | `GET /apropos?q={term}` | Search descriptions |
 | `GET /compare/{name}` | Compare across platforms |
 | `GET /api/v1/*` | JSON API endpoints |
-| `GET /openapi` | Server-rendered OpenAPI route documentation |
-| `GET /graphql` | GraphQL query form; POST queries to the same path |
+| `GET /server/docs/swagger` | Server-rendered OpenAPI documentation |
+| `GET /server/docs/graphql` | GraphiQL; send GraphQL queries to `/api/v1/server/graphql` |
 | `GET /server/preferences` | Edit browser theme, language, and consent settings |
 | `GET /server/preferences/sync` | Export or import browser preferences |
 
-Full API documentation: [`/openapi`](http://localhost:64580/openapi). The
+Full API documentation: [`/server/docs/swagger`](http://localhost:64580/server/docs/swagger). The
 service has no admin web UI or user accounts; configure and maintain it through
 `server.yml` and the command line.
 

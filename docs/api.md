@@ -45,7 +45,7 @@ bytes.
 | `/api/v1/languages` | GET | List language metadata |
 | `/api/v1/popular` | GET | List popular pages |
 | `/api/v1/openapi` | GET | OpenAPI document |
-| `/api/v1/server/swagger` | GET | OpenAPI document alias |
+| `/api/v1/server/swagger` | GET | OpenAPI document |
 | `/api/v1/server/graphql` | GET, POST | GraphQL query endpoint |
 | `/api/swagger` | GET | OpenAPI compatibility alias |
 | `/api/graphql` | GET, POST | GraphQL compatibility alias |
@@ -78,15 +78,17 @@ language, platform, section, and page name so it can match one stored row.
 
 ## OpenAPI
 
-Server-rendered Swagger UI: [/server/docs/swagger](/server/docs/swagger),
-with `/openapi` and `/swagger` aliases. The machine-readable OpenAPI document
-is available from `/api/v1/openapi`, `/openapi.json`, and `/swagger.json`.
+Server-rendered Swagger UI: [/server/docs/swagger](/server/docs/swagger).
+The machine-readable OpenAPI document is available from `/api/v1/openapi` and
+`/api/v1/server/swagger`, with `/api/swagger` as the unversioned compatibility
+alias.
 
 ## GraphQL
 
 The server-rendered GraphiQL page is at
-[/server/docs/graphql](/server/docs/graphql), with `/graphql` and `/graphiql`
-aliases. GraphQL requests can also be sent as JSON POSTs to `/graphql`.
+[/server/docs/graphql](/server/docs/graphql). GraphQL requests use
+`/api/v1/server/graphql`; `/api/graphql` is the unversioned compatibility
+alias.
 
 ### Example Query
 

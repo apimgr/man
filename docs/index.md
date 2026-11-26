@@ -42,8 +42,8 @@ docker run -p 64580:80 ghcr.io/casapps/casman:latest
 ## Links
 
 - [Repository](https://github.com/casapps/casman)
-- [API Documentation](/openapi)
-- [GraphQL query form](/graphql)
+- [API Documentation](/server/docs/swagger)
+- [GraphQL query form](/server/docs/graphql)
 
 ## License
 
