@@ -37,13 +37,13 @@ coverage before synchronizing the sitemap and user documentation.
   AI.md protocol/header/Origin validation order, reuse API Bearer-token auth,
   expose only in-process tools backed by the route/OpenAPI registry, and keep
   token management and browser preferences out of MCP. A basic always-on
-  handler, direct aliases, Bearer validation, protocol/header/Origin checks,
-  router dispatch, and help text now exist. Remaining work: use the canonical
-  route registry for complete operation IDs, schemas, and every API operation;
-  share the exact API authorization, rate-limit and audit path with `source=mcp`;
-  implement operator-token visibility and scope filtering; and add transport,
-  authorization, and discovery tests. Do not mark this complete until those
-  requirements and the full MCP acceptance matrix pass.
+  handler, direct aliases, shared Bearer lookup, protocol/header/Origin checks,
+  router dispatch, live-router/OpenAPI operation inventory, help text, and
+  unit plus built-server smoke coverage now exist. Remaining work: complete
+  OpenAPI request schemas and meaningful operation descriptions; enforce the
+  same API authorization, rate-limit and audit path with `source=mcp`; implement
+  operator-token visibility and scope filtering; and pass the complete MCP
+  acceptance matrix. Do not mark this complete until then.
   Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
   `src/server/template/`, `src/client/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
