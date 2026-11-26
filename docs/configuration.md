@@ -146,6 +146,13 @@ most `max_entries` events younger than `max_age`. Events include the normalized
 route, method, status, duration, and byte counts. Request headers, query
 strings, and bodies are not recorded; credential-like path values are redacted.
 
+When enabled, a host-resource collector samples CPU, memory, and the filesystem
+containing the configured data directory every 30 seconds. Runtime metrics use
+the Go Prometheus collector. Scheduler metrics report run status, duration,
+currently running tasks, and last-run timestamps. Business metrics expose the
+catalog page count and successful man-page API requests. These values are also
+included in the generated Grafana dashboard.
+
 ### CORS
 
 `server.cors.allowed_origins` defaults to `[*]`. A wildcard never allows

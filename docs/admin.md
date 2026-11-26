@@ -24,7 +24,9 @@ change server configuration or create user accounts.
   use separate Bearer tokens stored in `secrets.yml`.
   Restrict access to monitoring clients. The Loki endpoint returns bounded,
   structured HTTP request events with request headers, query strings, and
-  bodies excluded and credential-like path values redacted.
+  bodies excluded and credential-like path values redacted. Prometheus also
+  exports host-resource, scheduler, catalog-size, and man-page API request
+  metrics; the generated Grafana dashboard includes panels for those families.
 
 ## Configuration and maintenance
 

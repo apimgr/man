@@ -7,10 +7,13 @@ coverage before synchronizing the sitemap and user documentation.
 ## High (P1)
 
 - [ ] Complete the thin, testable server entrypoint required by PART 25.
-  Move build metadata to `src/version.go` (already done), then leave only the
-  bootstrap in `src/main.go` and move startup/shutdown into a tested package
-  under `src/` with a cancelable context and injectable listener. Keep CLI
-  parsing testable and preserve phase-two binary tests.
+  Build metadata is in `src/version.go`, and server startup/shutdown now run
+  through `src/app.Run(ctx, cfg)` and `Server.RunContext` with an injectable
+  listener. A runner test makes a real health request, cancels the context,
+  and checks clean shutdown. `src/main.go` now contains only the executable
+  bootstrap; flag parsing and actions are in the testable `src/cli` package,
+  and build metadata is copied into runtime config. Remaining: complete the
+  phase-two compiled-binary validation required by PART 28.
 - [ ] Complete the PART 33/34 CLI configuration contract. Server and token
   resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
   config files private, honors explicit flags and environment settings, and
@@ -27,12 +30,15 @@ coverage before synchronizing the sitemap and user documentation.
   probes and metrics scrapes are excluded. Loki now retains bounded structured
   HTTP events using `loki.max_entries` and `loki.max_age`; it records normalized
   route, method, status, duration, and byte counts without headers, query
-  strings, or bodies, and redacts credential-like path values. Still missing:
-  Grafana panels cover the currently exported HTTP, database, cache, auth,
-  system, and runtime metrics. Still missing: scheduler/business metrics and
-  matching panels required by PART 20, full system metric
-  collection, verified exclusion from OpenAPI and public discovery, and exact
-  endpoint/auth integration coverage. Relevant files: `src/metrics/`,
+  strings, or bodies, and redacts credential-like path values. Scheduler task
+  lifecycle metrics, catalog-size and man-page API business metrics, matching
+  Grafana panels, and a periodic CPU/memory/data-volume collector are now
+  implemented. Metrics routes are excluded from OpenAPI, public discovery,
+  and MCP; tests cover service-specific credentials across all metrics aliases
+  and preserve Grafana/Loki JSON media types. Remaining work: replace route-name
+  filtering with route-registry visibility metadata and complete the full
+  endpoint/auth acceptance matrix. Relevant files:
+  `src/metrics/`,
   `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
 
@@ -117,10 +123,11 @@ coverage before synchronizing the sitemap and user documentation.
   section, platform, and catalog pages; the sitemap index and numbered chunk
   handler are implemented. Remaining work: accurate `lastmod`, publication
   filtering, trusted request URL construction, and feed/sitemap validators and
-  cache headers. Generate the `.well-known/llms.txt` endpoint inventory from
-  one route registry while excluding methods and routes not meant for public
-  discovery; the current route walk emits every method and route without
-  visibility metadata.
+  cache headers. `.well-known/llms.txt` now filters the live route inventory
+  to GET routes and excludes metrics, MCP, preferences, token, operator, and
+  admin paths. Remaining work: use the shared route registry's `Listed`
+  visibility metadata instead of path-name filtering and preserve summaries
+  for listed operations.
   Relevant files: `src/server/server.go`, `src/server/handler/`.
 
 ## Medium (P2)
