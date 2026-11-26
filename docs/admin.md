@@ -18,8 +18,12 @@ change server configuration or create user accounts.
   content negotiation.
 - `/api/v1/healthz` returns health data as JSON.
 - `/api/v1/stats` returns embedded database statistics.
-- `/metrics` is the Prometheus endpoint. It is disabled unless enabled in
-  configuration and can be protected with its configured token.
+- `/server/metrics` and `/metrics` serve Prometheus exposition. The
+  `/server/metrics/{prometheus,grafana,loki}` paths, root aliases under
+  `/metrics`, and API aliases at `/api/v1/server/metrics` and `/api/metrics`
+  use separate Bearer tokens stored in `secrets.yml`.
+  Restrict access to monitoring clients. Dashboard completeness and bounded
+  Loki log streaming remain under implementation against AI.md.
 
 ## Configuration and maintenance
 

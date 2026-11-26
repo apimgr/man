@@ -116,6 +116,28 @@ in `src/config/config.go`. There is no admin web UI. This release does not provi
 a supported configuration or CLI workflow for DNS provider credentials; use
 HTTP-01 or an operator-supplied certificate until that path exists.
 
+### Metrics
+
+Metrics are served internally at `/server/metrics` and `/server/metrics/{service}`.
+The root `/metrics` aliases are enabled by default and can be disabled with
+`server.metrics.root.enabled: false`. Prometheus, Grafana, and Loki each use a
+separate Bearer token, generated into `{config_dir}/secrets.yml` on startup.
+Keep those credentials private and restrict metrics paths to trusted monitoring
+clients at the firewall or reverse proxy. `auth.allow_unauthenticated` is only
+for firewalled deployments.
+
+```yaml
+server:
+  metrics:
+    enabled: true
+    root:
+      enabled: true
+    auth:
+      allow_unauthenticated: false
+    include_system: true
+    include_runtime: true
+```
+
 ### CORS
 
 `server.cors.allowed_origins` defaults to `[*]`. A wildcard never allows

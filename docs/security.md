@@ -38,11 +38,12 @@ See [API Reference](api.md) for token routes and the MCP transport.
   service and its embedded dependencies updated. Responses include a restrictive
   Content Security Policy, cross-origin protections, and two-year HSTS when the
   request is served over TLS.
-- The current metrics implementation exposes `/metrics`; configure
-  `server.metrics.token` to require a Bearer credential and restrict network
-  access to trusted scrapers. The
-  service-specific metrics endpoints and mandatory generated service tokens
-  described in AI.md remain to be implemented.
+- Metrics endpoints are internal and use separate Bearer credentials for
+  Prometheus, Grafana, and Loki. Tokens are generated into the private
+  `secrets.yml` file. Restrict these paths to trusted monitoring clients at the
+  firewall or reverse proxy as a second layer of protection. Metrics output,
+  including the Loki-compatible endpoint, is still being completed against the
+  full AI.md contract.
 - CORS uses one policy across routes. Wildcard origins never allow credentials;
   configure exact origins when browser credentials are required.
 

@@ -6,15 +6,19 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
-- [ ] Implement the PART 20 metrics contract. The current service mounts only
-  `/metrics`, uses one optional configured token, and does not implement the
-  required `/server/metrics` service endpoints, per-service generated tokens,
-  Grafana dashboard, Loki stream, metrics API aliases, or service-specific
-  auth behavior. Add the `prometheus`, `grafana`, and `loki` handlers and
-  configuration, secrets generation/redaction, constant-time bearer checks,
-  root aliases, auth tests, OpenAPI/discovery rules, and operator docs before
-  calling metrics complete. Relevant files: `src/metrics/`, `src/config/`,
-  `src/secret/`, `src/server/`, `src/swagger/`, `docs/`.
+- [ ] Complete the PART 20 metrics contract. This pass adds `/server/metrics`
+  and service subroutes, API/root aliases, independent `mtr_` credentials in
+  `secrets.yml`, constant-time Bearer checks, and initial Grafana JSON and
+  Loki-compatible output. HTTP request counts, status, latency, body sizes,
+  and active-request gauges now record through the outer middleware while
+  health probes and metrics scrapes are excluded. Still missing: bounded
+  structured log streaming with credential redaction, a complete dashboard
+  covering every exported required metric, full system metric collection,
+  configurable `loki.max_entries` and
+  `loki.max_age`, verified exclusion from OpenAPI and public discovery, and
+  exact endpoint/auth integration
+  coverage. Relevant files: `src/metrics/`, `src/config/`, `src/secret/`,
+  `src/server/`, `src/swagger/`, `docs/`.
 
 - [ ] Complete the required five-provider CI/CD set. The repository currently
   has GitHub workflows only; add GitLab, Gitea, Forgejo, and Jenkins build/test,
