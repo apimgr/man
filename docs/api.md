@@ -51,12 +51,13 @@ bytes.
 | `/api/graphql` | GET, POST | GraphQL compatibility alias |
 | `/api/v1/server/about` | GET | Public service information |
 | `/api/v1/server/privacy` | GET | Privacy information |
-| `/api/v1/server/contact` | GET | Contact and reporting information |
+| `/api/v1/server/contact` | GET, POST | Report form descriptors and two-step abuse, DMCA, privacy, or security submission |
 | `/api/v1/server/help` | GET | Help information |
 | `/api/v1/server/help/mcp` | GET | MCP integration help |
 | `/api/v1/server/terms` | GET | Terms of service |
-| `/api/v1/server/security` | GET | Security information |
+| `/api/v1/server/security` | GET | Dynamic RFC 9116 contacts, expiry, PGP availability, policy, thanks, and report URLs |
 | `/api/v1/server/security/policy` | GET | Public security disclosure policy |
+| `/api/v1/server/security/thanks` | GET | Public researcher acknowledgments |
 | `/api/v1/server/preferences` | GET, POST | Read or update guest theme and language preferences |
 | `/api/v1/server/preferences/sync` | GET | Export guest preferences as a URL and short code |
 | `/api/v1/server/preferences/sync/import` | GET | Import guest preferences from query parameters or a short code |
@@ -117,7 +118,23 @@ per-section Atom feeds are also available.
 
 Public information pages are available under `/server/about`, `/server/help`,
 `/server/privacy`, `/server/terms`, `/server/security`,
-`/server/security/policy`, and `/server/contact`.
+`/server/security/policy`, `/server/security/thanks`, and `/server/contact`.
+The report form is intentionally unlinked outside the security overview and
+`security.txt`. Its HTML responses are `no-store` and `noindex,nofollow`.
+`GET /api/v1/server/contact` returns the form field descriptors, a one-use
+simple CAPTCHA challenge, a signed form token, available report types, and
+public security and abuse contact links. Supply a `type` query value to get
+the fields for an abuse, DMCA, or privacy form. Submit the fields with
+`step=submit` to receive a review token; repeat the fields with
+`step=confirm`, that token, and `confirmed=true` to deliver the report.
+Security submissions require a valid `security_id` from the instance's
+security contact URL. The security overview is available from
+`GET /api/v1/server/security` and `/.well-known/security.txt`. A successful
+security submission returns its `tracking_id`; its emailed status link is a
+one-use-per-UTC-day page at `/server/security/report/{tracking_id}` and has no
+public API mirror. Source-code vulnerabilities should use the repository's
+[GitHub private vulnerability reporting](https://github.com/apimgr/man/security/advisories/new),
+not a deployed-instance form.
 Visitor display preferences are saved at `/server/preferences`. The server has
 no admin UI or account settings pages. The preferences page stores theme and
 language choices, consent categories, and offers a reset action. The separate

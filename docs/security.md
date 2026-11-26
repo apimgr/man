@@ -26,12 +26,33 @@ the web server.
 
 ## Reporting vulnerabilities
 
-`/.well-known/security.txt` publishes the reporting contact derived from the
-configured server hostname. Verify the contact is
-reachable before deploying a public instance. Reports should not be sent in
-public issues before a fix is available.
-The disclosure policy is published at
-[`/server/security/policy`](/server/security/policy).
+Source-code vulnerabilities belong in [GitHub private vulnerability
+reporting](https://github.com/apimgr/man/security/advisories/new). This is the
+repository channel; it is distinct from reporting a problem with a particular
+deployed service instance.
+
+For a deployed instance, `/.well-known/security.txt` lists the configured
+source-report URL, the instance's coordinated-disclosure form, and the
+configured security mailbox in preference order. The dynamic overview at
+`/server/security` shows those channels and the policy link. The instance form
+is available from its security contact URL
+(`/server/contact?security_id=…`); an expired or invalid ID returns the
+ordinary abuse, DMCA, and privacy form. `/server/contact` is not linked
+elsewhere, is not indexed, and returns `404` when disabled by configuration.
+
+The form uses a simple CAPTCHA and a two-step submit/review/confirm flow. The
+first submit never delivers a message. Confirmed non-security reports are
+mailed to the configured role recipient, with the submitter's address kept in
+the message body rather than a mail header. Security reports are encrypted
+before database storage; maintainer email contains only encrypted report
+bytes, and the acknowledgment contains only a tracking ID and status link.
+The status link reveals triage state only, and its token can be used once per
+UTC day. Invalid security IDs are recorded in `security.log` with a short hash
+of the supplied value; the ID itself is not logged.
+
+The public security pages are `/server/security/policy` and
+`/server/security/thanks`. Reports about source-code vulnerabilities should
+use GitHub private vulnerability reporting instead of public issues.
 
 ## Data and privacy
 
