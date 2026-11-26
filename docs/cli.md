@@ -67,9 +67,11 @@ casman-cli stats
 ## Configuration
 
 On Unix-like systems, the CLI uses `~/.config/casapps/casman/cli.yml`. On
-Windows, it uses `%APPDATA%\\casapps\\casman\\cli.yml`. The file and its
-directory are created with user-only permissions where supported. The CLI
-preserves other YAML sections when it updates a server or token value.
+Windows, it uses `%APPDATA%\\casapps\\casman\\cli.yml`. The default config
+directory and file are created with user-only permissions where supported.
+Custom config files are secured as files, while their parent directories are
+left under the caller's control. The CLI preserves other YAML sections when it
+updates a server or token value.
 
 Server selection is `--server`, `CASMAN_SERVER_PRIMARY`, `server.primary` in
 the config file, then the compiled official site when one is configured. If no
