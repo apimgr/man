@@ -27,8 +27,13 @@ request contract and token-management exclusions.
 ## Browser and discovery
 
 - `/manifest.json` and `/service-worker.js` provide the installable web app
-  metadata, static asset caching, and an offline fallback page. HTML pages
-  containing forms are not stored for offline use.
+  metadata and static asset caching. Previously viewed public man pages and
+  public information pages can be used offline when requested without a
+  visitor cookie or Authorization header. The worker synthesizes a translated
+  offline page when no eligible cached page is available; there is no static
+  offline HTML page, and API responses are never cached. The worker caps its
+  versioned cache at 50 MiB, expires cached static assets after seven days, and
+  checks available browser storage quota before writing cache entries.
 - `/robots.txt` identifies the sitemap at `/sitemap.xml`.
 - `/sitemap.xml` lists public pages and catalog entries, honoring the configured
   `web.robots.allow` and `web.robots.deny` paths. Catalogs above 50,000 URLs

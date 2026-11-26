@@ -44,10 +44,6 @@ server:
     strict: {requests: 10, window: 900}
     auth_failures: {requests: 5, window: 900}
     global_burst: 240
-  branding:
-    title: casman
-    tagline: Universal Man Pages
-    description: Man pages from BSD, macOS, Linux, and more
   ssl:
     enabled: false
     min_version: TLS1.2
@@ -95,6 +91,39 @@ after `auth_failures.requests` failures. Windows are seconds.
 details. Up to ten `custom_sections` may be appended; each section has a title
 of 1–80 characters and Markdown content of at most 4096 characters. HTML is
 escaped, and links may use HTTPS or relative paths.
+
+Branding and SEO settings belong in `yaml.d/branding.yml`, not `server.yml`.
+The file is a normal config drop-in:
+
+```yaml
+server:
+  branding:
+    title: casman
+    tagline: Universal Man Pages
+    description: Man pages from BSD, macOS, Linux, and more
+  seo:
+    keywords: [manuals, man pages]
+    author: casapps
+    og_image: ""
+    twitter_handle: ""
+    title_separator: " - "
+    meta_tags: {}
+    canonical: ""
+    noindex: false
+    opengraph: {enabled: true, type: website, site_name: ""}
+    twitter: {enabled: true, card: summary_large_image, creator: ""}
+    verification: {google: "", bing: "", yandex: "", baidu: "", pinterest: "", facebook: "", custom: []}
+```
+
+`server.branding` controls the visible title, tagline, and page description.
+`server.seo` controls keywords, author, the canonical URL prefix, OpenGraph
+and Twitter cards, custom meta tags, noindex mode, and search-provider
+verification tags. Unknown or unsafe meta names and invalid verification
+values are ignored; verification content is HTML-escaped. Unlisted and
+private pages default to `noindex,nofollow`, while the public home, browse,
+search, page, and informational routes are explicitly indexable. Setting
+`server.seo.noindex: true` marks every HTML page noindex and emits the matching
+`X-Robots-Tag` header.
 
 ## Secrets
 

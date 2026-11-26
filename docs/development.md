@@ -59,6 +59,9 @@ make local
 # Full release build (all 8 platforms)
 make build
 
+# Optional native GUI CLI artifacts (Linux, macOS, and Windows)
+make build-gui
+
 # Rebuild the embedded catalog from tracked pre-rendered platform data
 make catalog
 ```

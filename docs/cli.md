@@ -121,6 +121,8 @@ code and uses the TUI when a terminal is available. A forced mode reports an
 error when its required display or terminal is unavailable. Build the optional
 desktop client separately with `-tags gui`; its runtime graphics loader makes
 it platform specific and it is not the static CLI artifact.
+The Make target `make build-gui` produces separate GUI artifacts for Linux,
+macOS, and Windows.
 Custom config files are secured as files, while their parent directories are
 left under the caller's control. The CLI preserves other YAML sections when it
 updates a server or token value.
@@ -182,13 +184,15 @@ logging. `--lang`, `CASMAN_LANG`, and `defaults.lang` select a supported
 language; `auto` uses `LANG` and falls back to English. The resolved language
 is sent to the API with `Accept-Language`.
 
-## TUI Mode
+## Interactive UI Mode
 
-Run `casman-cli` without command arguments to launch interactive mode. If no
-server is configured, the TUI first opens the setup wizard. Enter a server URL
-and optionally an owner token; the CLI checks server reachability and validates
-the token before saving initial values. A failed check leaves the config
-unchanged. After setup, the normal TUI opens.
+Run `casman-cli` without command arguments to launch the detected interface.
+The optional GUI build opens its native window on a supported local display;
+the static build opens the TUI in an interactive terminal. If no server is
+configured, the selected interface first opens its setup form. Enter a server
+URL and optionally an owner token; the CLI checks server reachability and
+validates the token before saving initial values. A failed check leaves the
+config unchanged.
 
 In a non-interactive shell, configure a server explicitly with `--server` or
 `CASMAN_SERVER_PRIMARY`; the CLI prints setup instructions when neither is

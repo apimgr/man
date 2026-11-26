@@ -6,6 +6,17 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
+- [ ] Implement PART 5 area-file ownership, precedence, generated-file split,
+  legacy `server.yaml` migration, automatic splitting of area settings from
+  `server.yml`, path-safe drop-in loading, duplicate/null-key recovery, source
+  attribution, permission enforcement, and hot reload. Current `Load` only
+  merges parseable `yaml.d` files into the config struct and validates the
+  final merged values; it does not split legacy sections or keep their source
+  file attribution. `Config.Save` serializes every loaded section back into
+  `server.yml`. Relevant files: `src/config/`, server startup/reload, and
+  configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
+  “Automatic Migration,” and “Area Files and Automatic Migration.”
+
 - [ ] Complete the thin, testable server entrypoint required by PART 25.
   Build metadata is in `src/version.go`, and server startup/shutdown now run
   through `src/app.Run(ctx, cfg)` and `Server.RunContext` with an injectable
@@ -192,12 +203,23 @@ coverage before synchronizing the sitemap and user documentation.
 ## Medium (P2)
 
 - [ ] Complete the required SEO metadata and validated verification-tag
-  configuration, including canonical URLs, OpenGraph, Twitter cards, robots
-  directives, and JSON-LD. Relevant files: `src/config/`,
-  `src/server/template/`, `src/server/handler/`.
+  configuration. Server-rendered canonical, OpenGraph, Twitter, JSON-LD,
+  custom meta, provider verification, and fail-closed robots metadata now use
+  `server.seo`; tests cover output, invalid settings, public/private routes,
+  and noindex mode. Remaining: validate branding image inputs, honor configured
+  favicon/logo assets, and review every server page against the SEO route
+  inventory. Relevant files: `src/config/`, `src/server/template/`,
+  `src/server/handler/`.
 - [ ] Complete the frontend's no-JavaScript-first export and print flows and
-  offline behavior for previously viewed man pages. Relevant files:
-  `src/server/template/`, `src/server/static/`, `src/server/handler/`.
+  offline behavior for previously viewed man pages. The worker now caches
+  only eligible public man/information pages, synthesizes its fallback from
+  translated strings stored by the page, and never serves `/offline.html` or
+  caches API responses. Its versioned cache is capped at 50 MiB, static assets
+  expire after seven days, and writes check browser storage quota. Focused tests
+  cover cache eligibility and assert the limit/expiry/quota policy is emitted.
+  Remaining: audit every export and print flow in a no-JS browser and exercise
+  the worker behavior in browser E2E tests. Relevant
+  files: `src/server/template/`, `src/server/static/`, `src/server/handler/`.
 - [ ] Synchronize API and GraphQL reference output with every implemented
   endpoint and document the final browser and integration surfaces in `docs/`.
   Relevant files: `src/server/handler/handler.go`, `src/swagger/`,

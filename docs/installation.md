@@ -40,6 +40,14 @@ Available platforms:
 - `casman-windows-amd64.exe`
 - `casman-windows-arm64.exe`
 
+The CLI is also released as `casman-cli-{os}-{arch}` for the same supported
+platforms. Optional desktop builds are published as
+`casman-cli-gui-{os}-{arch}` for Linux, macOS, and Windows. These GUI binaries
+are built separately with native windowing support and may require the
+platform's runtime graphics loader; use the standard `casman-cli` artifact for
+static, headless, or terminal use. See [CLI Reference](cli.md) for display-mode
+selection and setup.
+
 ## Systemd Service
 
 ```bash
