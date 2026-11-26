@@ -10,6 +10,17 @@
 - RSS 2.0 updates: `/rss.xml`.
 - JSON Feed: `/feed.json`.
 
+## MCP Streamable HTTP
+
+The server exposes JSON-RPC tools at `/api/v1/server/mcp`, with direct aliases
+at `/api/mcp` and `/mcp`. Send `POST` requests with a Bearer token and protocol
+revision `2026-07-28` in both `MCP-Protocol-Version` and
+`_meta.io.modelcontextprotocol/protocolVersion`; `Mcp-Method` must match the
+JSON-RPC method. Tool calls also send `Mcp-Name` matching `params.name`.
+Requests are stateless and return one JSON response. Cookies are not used for
+MCP authentication. See [API Reference](api.md#mcp-streamable-http) for the
+request contract and token-management exclusions.
+
 ## Browser and discovery
 
 - `/manifest.json` and `/service-worker.js` provide the installable web app

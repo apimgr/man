@@ -6,6 +6,16 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
+- [ ] Implement the PART 20 metrics contract. The current service mounts only
+  `/metrics`, uses one optional configured token, and does not implement the
+  required `/server/metrics` service endpoints, per-service generated tokens,
+  Grafana dashboard, Loki stream, metrics API aliases, or service-specific
+  auth behavior. Add the `prometheus`, `grafana`, and `loki` handlers and
+  configuration, secrets generation/redaction, constant-time bearer checks,
+  root aliases, auth tests, OpenAPI/discovery rules, and operator docs before
+  calling metrics complete. Relevant files: `src/metrics/`, `src/config/`,
+  `src/secret/`, `src/server/`, `src/swagger/`, `docs/`.
+
 - [ ] Complete the required five-provider CI/CD set. The repository currently
   has GitHub workflows only; add GitLab, Gitea, Forgejo, and Jenkins build/test,
   security, and release workflows after implementation and validation are
@@ -38,8 +48,10 @@ coverage before synchronizing the sitemap and user documentation.
   expose only in-process tools backed by the route/OpenAPI registry, and keep
   token management and browser preferences out of MCP. A basic always-on
   handler, direct aliases, shared Bearer lookup, protocol/header/Origin checks,
-  router dispatch, live-router/OpenAPI operation inventory, help text, and
-  unit plus built-server smoke coverage now exist. Remaining work: complete
+  router dispatch, live-router/OpenAPI operation inventory, help text, unit
+  coverage, and a built-server smoke for health plus operator/unauthenticated
+  auth-check behavior now exist. API and security docs describe the transport
+  and credentials. Remaining work: complete
   OpenAPI request schemas and meaningful operation descriptions; enforce the
   same API authorization, rate-limit and audit path with `source=mcp`; implement
   operator-token visibility and scope filtering; and pass the complete MCP

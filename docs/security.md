@@ -12,6 +12,23 @@ the web server.
 
 ## Network protection
 
+### Bearer credentials
+
+The server generates its global `adm_` operator token and encryption key into
+`{config_dir}/secrets.yml` on first startup. The file is written with mode
+`0600`; the operator token is printed once to the first-start console and is
+masked on later starts. Keep the configuration directory private. The token
+is not stored in the database. `GET /api/v1/server/auth/check` reports whether
+a supplied Bearer credential is an operator or owner token without returning
+the credential.
+
+Anonymous owners receive `own_` primary tokens, and may create linked tokens
+for integrations. Owner tokens grant access only to that owner's resources;
+the primary token also manages its linked tokens. The browser stores its owner
+credential in an HttpOnly, Secure, SameSite=Strict cookie for token-management
+forms. API and MCP authentication uses the Bearer header and ignores cookies.
+See [API Reference](api.md) for token routes and the MCP transport.
+
 - Use the built-in TLS configuration or place casman behind a trusted TLS
   reverse proxy. TLS settings and ACME options are documented in
   [Configuration](configuration.md).
