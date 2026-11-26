@@ -62,7 +62,12 @@ casman-cli stats
 | Variable | Description |
 |----------|-------------|
 | `CASMAN_SERVER_PRIMARY` | Default server URL |
+| `CASMAN_SERVER_API_VERSION` | API version prefix, such as `v1` |
+| `CASMAN_SERVER_TIMEOUT` | Per-request timeout; accepts Go durations or integer seconds |
+| `CASMAN_SERVER_RETRY` | Number of retries after a failed request |
+| `CASMAN_SERVER_RETRY_DELAY` | Delay between retries |
 | `CASMAN_TOKEN` | Default API token |
+| `CASMAN_TOKEN_FILE` | Read the API token from a file |
 
 ## Configuration
 
@@ -82,6 +87,14 @@ server is available, the CLI prints setup instructions. Token selection is
 config directory. A profile with no extension resolves to `.yml` unless an
 existing `.yml` or `.yaml` file is found. Use `--config prod.yaml` to select a
 specific YAML file.
+
+The `server` section supports `primary`, `api_version` (default `v1`),
+`timeout` (default `30s`), `retry` (default `3`), and `retry_delay` (default
+`1s`). The `auth` section supports `token` and `token_file`; relative token
+file paths are resolved beside the selected config file. A token passed with
+`--token` takes precedence over `CASMAN_TOKEN`, which takes precedence over
+the token file and then `auth.token`. Environment variables override the
+matching config values.
 
 ## TUI Mode
 

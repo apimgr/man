@@ -140,6 +140,7 @@ database:
 | `GET /apropos?q={term}` | Search descriptions |
 | `GET /compare/{name}` | Compare across platforms |
 | `GET /api/v1/*` | JSON API endpoints |
+| `GET /api/v1/server/metrics` | Prometheus metrics (service Bearer token required by default) |
 | `GET /server/docs/swagger` | Server-rendered OpenAPI documentation |
 | `GET /server/docs/graphql` | GraphiQL; send GraphQL queries to `/api/v1/server/graphql` |
 | `GET /server/preferences` | Edit browser theme, language, and consent settings |

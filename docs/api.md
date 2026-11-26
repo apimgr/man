@@ -2,9 +2,10 @@
 
 ## REST API
 
-Base path: `/api/v1` (without a trailing slash). The public man page
-collection is read-only. JSON is the default API representation; clients may
-request the shared plain-text representation as described below.
+Base path: `/api/v1` by default (without a trailing slash). The CLI can select
+another version prefix with `server.api_version` in `cli.yml`. The public man
+page collection is read-only. JSON is the default API representation; clients
+may request the shared plain-text representation as described below.
 
 ### Response Formats
 
@@ -40,12 +41,19 @@ bytes.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/healthz` | GET | Health check |
+| `/api/v1/server/healthz` | GET | Canonical versioned health API |
+| `/api/healthz` | GET | Unversioned health API alias |
 | `/api/v1/server/auth/check` | GET | Validate a Bearer token and return its kind; requires `Authorization: Bearer` |
 | `/api/v1/stats` | GET | Database statistics |
 | `/api/v1/sections` | GET | List sections |
 | `/api/v1/platforms` | GET | List platforms |
 | `/api/v1/languages` | GET | List language metadata |
 | `/api/v1/popular` | GET | List popular pages |
+| `/api/v1/server/metrics` | GET | Prometheus metrics; requires its service Bearer token unless unauthenticated access is explicitly configured |
+| `/api/v1/server/metrics/grafana` | GET | Grafana dashboard JSON; requires the Grafana service Bearer token |
+| `/api/v1/server/metrics/loki` | GET | Loki-compatible recent request events; requires the Loki service Bearer token |
+| `/api/metrics` | GET | Unversioned Prometheus metrics alias |
+| `/api/metrics/{prometheus,grafana,loki}` | GET | Unversioned metrics service aliases |
 | `/api/v1/openapi` | GET | OpenAPI document |
 | `/api/v1/server/swagger` | GET | OpenAPI document |
 | `/api/v1/server/graphql` | GET, POST | GraphQL query endpoint |
@@ -76,6 +84,9 @@ bytes.
 
 There is no `/api/v1/man/{lang}/{name}` route. Translated retrieval requires
 language, platform, section, and page name so it can match one stored row.
+Metrics credentials are separate service tokens generated into
+`secrets.yml`; they are not owner or operator tokens. Metrics routes are
+internal and do not appear in OpenAPI or MCP tool listings.
 
 ### MCP Streamable HTTP
 

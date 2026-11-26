@@ -14,9 +14,10 @@ change server configuration or create user accounts.
 
 ## Public status and statistics
 
-- `/healthz` serves HTML to browsers and supports JSON or plain text through
-  content negotiation.
-- `/api/v1/healthz` returns health data as JSON.
+- `/server/healthz` serves HTML to browsers and supports JSON or plain text
+  through content negotiation; `/healthz` is the root alias.
+- `/api/v1/server/healthz` and `/api/healthz` return health data as JSON. The
+  versioned `/api/v1/healthz` route remains available for compatibility.
 - `/api/v1/stats` returns embedded database statistics.
 - `/server/metrics` and `/metrics` serve Prometheus exposition. The
   `/server/metrics/{prometheus,grafana,loki}` paths, root aliases under

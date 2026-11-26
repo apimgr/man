@@ -12,16 +12,21 @@ coverage before synchronizing the sitemap and user documentation.
   listener. A runner test makes a real health request, cancels the context,
   and checks clean shutdown. `src/main.go` now contains only the executable
   bootstrap; flag parsing and actions are in the testable `src/cli` package,
-  and build metadata is copied into runtime config. Remaining: complete the
-  phase-two compiled-binary validation required by PART 28.
+  and build metadata is copied into runtime config. The full test gate,
+  cross-platform build, browser E2E suite, and phase-two compiled-binary
+  validation all pass. This implementation item is complete and will be
+  removed with the final aligned change.
 - [ ] Complete the PART 33/34 CLI configuration contract. Server and token
   resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
   config files private, honors explicit flags and environment settings, and
-  avoids an implicit localhost server. Remaining work includes all documented
-  config sections and their flag/environment precedence, config path/profile
-  edge cases, API version/timeout/retry integration, token-file handling,
-  output/pager/TUI/log/cache settings, interactive first-run setup, error exit
-  codes, and CLI documentation. Relevant files: `src/client/`, `docs/`.
+  avoids an implicit localhost server. API version, timeout, retry count and
+  delay, and token-file loading now reach both the command runner and TUI; the
+  CLI reference documents these settings. Remaining work includes the rest of
+  the documented config sections and flag/environment precedence, config
+  path/profile edge cases, output/color/pager/quiet/verbose settings, TUI,
+  logging and cache preferences, interactive first-run setup, error exit
+  codes, and complete CLI documentation. Relevant files: `src/client/`,
+  `docs/`.
 - [ ] Complete the PART 20 metrics contract. `/server/metrics` and its service
   subroutes, API/root aliases, independent `mtr_` credentials in `secrets.yml`,
   constant-time Bearer checks, and initial Grafana JSON and Loki-compatible
@@ -121,9 +126,11 @@ coverage before synchronizing the sitemap and user documentation.
 - [ ] Complete required static discovery behavior. Sitemap and robots output
   now apply the configured allow-minus-deny policy, and sitemap URLs include
   section, platform, and catalog pages; the sitemap index and numbered chunk
-  handler are implemented. Remaining work: accurate `lastmod`, publication
-  filtering, trusted request URL construction, and feed/sitemap validators and
-  cache headers. `.well-known/llms.txt` now filters the live route inventory
+  handler are implemented. Feeds use catalog creation dates and exclude rows
+  without trustworthy creation times; sitemap catalog URLs include
+  `lastmod` only when the stored timestamp is trustworthy. Remaining work:
+  trustworthy modification dates for static page content and shared URL
+  construction per the server URL contract. `.well-known/llms.txt` now filters the live route inventory
   to GET routes and excludes metrics, MCP, preferences, token, operator, and
   admin paths. Remaining work: use the shared route registry's `Listed`
   visibility metadata instead of path-name filtering and preserve summaries
