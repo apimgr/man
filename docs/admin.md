@@ -22,8 +22,9 @@ change server configuration or create user accounts.
   `/server/metrics/{prometheus,grafana,loki}` paths, root aliases under
   `/metrics`, and API aliases at `/api/v1/server/metrics` and `/api/metrics`
   use separate Bearer tokens stored in `secrets.yml`.
-  Restrict access to monitoring clients. Dashboard completeness and bounded
-  Loki log streaming remain under implementation against AI.md.
+  Restrict access to monitoring clients. The Loki endpoint returns bounded,
+  structured HTTP request events with request headers, query strings, and
+  bodies excluded.
 
 ## Configuration and maintenance
 

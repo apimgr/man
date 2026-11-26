@@ -12,12 +12,13 @@ coverage before synchronizing the sitemap and user documentation.
   Loki-compatible output. HTTP request counts, status, latency, body sizes,
   and active-request gauges now record through the outer middleware while
   health probes and metrics scrapes are excluded. Still missing: bounded
-  structured log streaming with credential redaction, a complete dashboard
-  covering every exported required metric, full system metric collection,
-  configurable `loki.max_entries` and
-  `loki.max_age`, verified exclusion from OpenAPI and public discovery, and
-  exact endpoint/auth integration
-  coverage. Relevant files: `src/metrics/`, `src/config/`, `src/secret/`,
+  structured HTTP event streaming was added with bounded `loki.max_entries`
+  and `loki.max_age`; it records normalized route, method, status, duration,
+  and byte counts without headers, query strings, or bodies. Still missing: a
+  complete dashboard covering every exported required metric, full system
+  metric collection, verified exclusion from OpenAPI and public discovery, and
+  exact endpoint/auth integration coverage. Relevant files: `src/metrics/`,
+  `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
 
 - [ ] Complete validation and parity review of the required five-provider CI/CD

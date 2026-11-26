@@ -41,9 +41,9 @@ See [API Reference](api.md) for token routes and the MCP transport.
 - Metrics endpoints are internal and use separate Bearer credentials for
   Prometheus, Grafana, and Loki. Tokens are generated into the private
   `secrets.yml` file. Restrict these paths to trusted monitoring clients at the
-  firewall or reverse proxy as a second layer of protection. Metrics output,
-  including the Loki-compatible endpoint, is still being completed against the
-  full AI.md contract.
+  firewall or reverse proxy as a second layer of protection. Loki output is
+  bounded by the configured entry count and age, and excludes request headers,
+  query strings, and bodies.
 - CORS uses one policy across routes. Wildcard origins never allow credentials;
   configure exact origins when browser credentials are required.
 
