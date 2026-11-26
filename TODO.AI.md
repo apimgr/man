@@ -20,14 +20,28 @@ coverage before synchronizing the sitemap and user documentation.
   resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
   config files private, honors explicit flags and environment settings, and
   avoids an implicit localhost server. API version, timeout, retry count and
-  delay, and token-file loading now reach both the command runner and TUI; the
+  delay, `--token-file`, and config token-file loading now reach both the
+  command runner and TUI; the
   CLI reference documents these settings. Remaining work includes the rest of
   the documented config sections and flag/environment precedence, config
-  path/profile edge cases, color/quiet/verbose settings, TUI, logging and cache
-  preferences, and complete CLI documentation. Output format and pager
+  path/profile edge cases, accessibility and
+  GUI coverage, and complete CLI documentation. Output format and pager
   preferences now honor CLI flags, environment variables, and `cli.yml`;
-  JSON, YAML, plain, table, and CSV serializers are implemented. Interactive
-  first-run setup now prompts for a server and
+  JSON, YAML, plain, table, and CSV serializers are implemented. Color
+  preferences honor `--color`, `output.color`, `NO_COLOR`, and
+  `TERM=dumb`; quiet and verbose preferences honor flags, environment values,
+  and `cli.yml`. Table headings receive color, quiet mode omits nonessential
+  search/man-page framing, and verbose mode reports the request server on
+  stderr. TUI theme, mouse, and Unicode settings now configure the Bubble Tea
+  interface; its command menu covers all eight commands exposed by `--help`
+  with man-page, search, whatis, apropos, statistics, section, platform, and
+  health views. Response caching now honors `cache.enabled`, `cache.ttl`, and
+  `cache.max_size`, scopes entries by server and token, and keeps private files
+  under the user cache directory. The logger now honors its configured level,
+  path, size cap, and retention count, writes plain text to private user-scoped
+  files, and records command failures without credentials. New config files
+  contain documented defaults.
+  Interactive first-run setup now prompts for a server and
   optional owner token in Bubble Tea, checks reachability/authentication,
   preserves existing valid values, and saves the initial config only after
   successful checks. CLI errors now map to the specified usage, validation,
