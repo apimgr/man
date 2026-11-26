@@ -40,6 +40,7 @@ bytes.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/healthz` | GET | Health check |
+| `/api/v1/server/auth/check` | GET | Validate a Bearer token and return its kind; requires `Authorization: Bearer` |
 | `/api/v1/stats` | GET | Database statistics |
 | `/api/v1/sections` | GET | List sections |
 | `/api/v1/platforms` | GET | List platforms |
