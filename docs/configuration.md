@@ -6,19 +6,23 @@ The file is named `server.yml` in the selected configuration directory. The
 default directory is `/etc/casapps/casman` for root, `/config` in a container,
 and the platform's user configuration directory for an unprivileged process.
 The `--config` and `--data` flags override the corresponding directories.
-Unknown keys and malformed YAML invalidate the file; the server logs a warning
-and starts with defaults. Invalid documented values use their documented
-fallbacks.
+Configuration merges built-in defaults, `server.yml`, byte-wise sorted
+`yaml.d/*.yml` and `yaml.d/*.yaml` drop-ins, then `secrets.yml`. Maps merge
+recursively; a later scalar or list replaces the earlier value. Null,
+duplicate, or wrongly typed keys reset to defaults with a file and line
+warning. An unparseable file is ignored. Config files use mode `0600` and
+`yaml.d/` uses mode `0700`.
 
 ```yaml
 server:
   address: "[::]"
-  port: ""
-  https_port: "443"
-  http_redirect_port: "80"
+  port: "64580"
   fqdn: localhost
   mode: production
   api_version: v1
+  database:
+    driver: sqlite
+    url: "{data_dir}/db/server.db"
   cache:
     type: memory
     url: ""
@@ -37,13 +41,6 @@ server:
     timeout: 5s
     prefix: casman:
     ttl: 1h
-  rate_limit:
-    read: {requests: 120, window: 60}
-    write: {requests: 10, window: 60}
-    health: {requests: 120, window: 60}
-    strict: {requests: 10, window: 900}
-    auth_failures: {requests: 5, window: 900}
-    global_burst: 240
   ssl:
     enabled: false
     min_version: TLS1.2
@@ -56,16 +53,19 @@ server:
       challenge: http-01
       staging: false
 
-database:
-  driver: sqlite
-  path: "{data_dir}/db/server.db"
-
-web:
-  llms:
-    include_endpoints: true
-    include_schemas: false
-    custom_sections: []
 ```
+
+`server.yml` holds this node's listen address, identity, database, cache, and
+SSL settings. Branding and SEO belong in `yaml.d/branding.yml`; web settings
+and CORS belong in `yaml.d/web.yml`; rate limits, tokens, and security settings
+belong in `yaml.d/security.yml`; report and help pages belong in
+`yaml.d/pages.yml`; and `web.*` LLM discovery options belong in
+`yaml.d/web.yml`. Credentials belong in `secrets.yml`. Every file uses the
+same dotted YAML paths as the merged configuration.
+
+The server migrates a legacy `server.yaml` to `server.yml` and splits known
+area settings from a large `server.yml` on startup. It keeps a private
+`server.yml.bak`; settings already present in an area file take precedence.
 
 `server.api_version` defaults to `v1`; set it to a positive version such as
 `v2` to move the canonical API routes, OpenAPI document, MCP endpoint, and
@@ -152,23 +152,41 @@ encrypted DNS provider credential vault. The wiring is:
   `server.ssl.letsencrypt.email` and `server.ssl.letsencrypt.challenge` to one of `http-01`,
   `tls-alpn-01`, or `dns-01`. Use `staging: true` while testing to avoid
   Let's Encrypt rate limits.
-- A DNS credential vault is present, but this release does not expose a
-  supported web or CLI workflow for adding DNS provider credentials. Use
-  HTTP-01 or an operator-supplied certificate until that management path is
-  implemented. The code includes provider adapters for Cloudflare, Route 53,
-  DigitalOcean, GoDaddy, Namecheap, RFC 2136, and a manual fallback.
+- DNS-01 accepts the provider name in `server.ssl.letsencrypt.dns_provider`
+  and the provider's flat credential map in
+  `server.ssl.letsencrypt.dns_credentials` in `secrets.yml`. Credential values
+  are encrypted at rest and are never logged.
 - A daily scheduler task (03:00) parses each cached cert's `NotAfter` and
   re-provisions any cert with less than 30 days of life remaining. Static
   (non-ACME) certs are inspected too so operators get an early-warning
   log entry before expiry.
-- HTTP-01 shares port 80 with the redirect listener (no second bind).
-  TLS-ALPN-01 uses lego's own listener and therefore conflicts with our
-  HTTPS server — prefer HTTP-01 or DNS-01 in normal operation.
+- HTTP-01 is answered on the HTTP listener and TLS-ALPN-01 on the HTTPS
+  listener. Set `server.port` to a comma-separated pair such as `"80,443"`
+  when both listeners are needed.
 
 ## Environment Variables
 
-Environment variables may override settings supported by the server entry
-point. Common examples include:
+Directory variables are applied on every startup and use flag, environment,
+then platform-default precedence:
+
+| Variable | Flag | Purpose |
+|----------|------|---------|
+| `CONFIG_DIR` | `--config` | Configuration files |
+| `DATA_DIR` | `--data` | Application and database data |
+| `LOG_DIR` | `--log` | Log files |
+| `BACKUP_DIR` | `--backup` | Backup files |
+| `CACHE_DIR` | `--cache` | Cache files |
+| `DATABASE_DIR` | — | SQLite database directory |
+
+`DATABASE_URL`, `DATABASE_DRIVER`, and `CACHE_URL` are first-run setup inputs.
+The saved file value wins on later starts; edit the files to change a saved
+connection. `DATABASE_DRIVER` is used when the first-run database URL does not
+select a driver. `APPLICATION_NAME` and `APPLICATION_TAGLINE` seed the branding
+area file only on first run. `PORT` and `LISTEN` are read at every startup and
+take precedence over saved port and address values unless their CLI flags are
+set.
+
+Other supported process settings include:
 
 ```bash
 MODE=development
@@ -186,8 +204,6 @@ casman --port 8080 --mode development --debug
 |------|-------------|---------|
 | `--port` | Listen port (HTTP) | Environment/config dependent |
 | `--address` | Listen address | `[::]` |
-| `--https-port` | Listen port (HTTPS, when SSL is enabled) | 443 |
-| `--http-redirect-port` | Listen port (HTTP redirect + ACME) | 80 |
 | `--mode` | production/development | production |
 | `--config` | Config directory | OS-specific |
 | `--data` | Data directory | OS-specific |
@@ -198,9 +214,7 @@ casman --port 8080 --mode development --debug
 The server configuration also supports metrics, GeoIP, backup, and Tor
 settings. These sections are optional; Tor startup is attempted automatically
 when the `tor` executable is available on `PATH`. See the comments and defaults
-in `src/config/config.go`. There is no admin web UI. This release does not provide
-a supported configuration or CLI workflow for DNS provider credentials; use
-HTTP-01 or an operator-supplied certificate until that path exists.
+in `src/config/config.go`. There is no admin web UI.
 
 ### Metrics
 

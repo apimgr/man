@@ -9,11 +9,25 @@ coverage before synchronizing the sitemap and user documentation.
 - [ ] Implement PART 5 area-file ownership, precedence, generated-file split,
   legacy `server.yaml` migration, automatic splitting of area settings from
   `server.yml`, path-safe drop-in loading, duplicate/null-key recovery, source
-  attribution, permission enforcement, and hot reload. Current `Load` only
-  merges parseable `yaml.d` files into the config struct and validates the
-  final merged values; it does not split legacy sections or keep their source
-  file attribution. `Config.Save` serializes every loaded section back into
-  `server.yml`. Relevant files: `src/config/`, server startup/reload, and
+  attribution, permission enforcement, and hot reload. `Load` now migrates
+  `server.yaml`, backs up and splits known sections from a legacy `server.yml`,
+  writes the required header, and normalizes the legacy top-level database
+  shape and canonical database URL, and moves configured secret paths from
+  server/area files into `secrets.yml` with existing secrets taking
+  precedence. DNS credentials are encrypted as `enc:v1:` values and decrypted
+  only for the lego provider constructor. Typed invalid values reset one key
+  with file and line attribution; source tracking and server-only Save
+  semantics are implemented. Override source diagnostics are gated by
+  `DEBUG`. Directory flags/environment fallbacks, runtime PORT/LISTEN/MODE,
+  and first-run database/cache/branding environment seeding are implemented
+  and tested, along with `${NAME}` and `${NAME:-default}` expansion after
+  merging. Legacy security secrets now import atomically into `app_secrets`
+  before the installation secret is initialized, with imported YAML values
+  removed after persistence succeeds; preexisting integer timestamps are
+  migrated to the specified UTC text schema. Remaining work includes scheduler task
+  cleanup, preservation of invalid-file last-good values across reload, asset
+  watching, and safe live application of reloadable settings.
+  Relevant files: `src/config/`, server startup/reload, and
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”
 

@@ -114,17 +114,16 @@ directory.
 
 ```yaml
 server:
-  port: 64580
+  port: "64580"
   fqdn: casman.example.com
   ssl:
     enabled: false
     letsencrypt:
       enabled: false
       email: admin@example.com
-
-database:
-  driver: sqlite
-  path: "{data_dir}/db/server.db"
+  database:
+    driver: sqlite
+    url: "{data_dir}/db/server.db"
 ```
 
 ## API
