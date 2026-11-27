@@ -134,9 +134,13 @@ coverage before synchronizing the sitemap and user documentation.
 
 - [ ] Complete validation and parity review of the required five-provider CI/CD
   set. GitHub, GitLab, Gitea, Forgejo, and Jenkins configurations now exist;
-  verify each provider's build/test, security, release, and coverage behavior
-  against AI.md, then confirm workflows on their respective hosted/self-hosted
-  runners. Keep provider-specific limitations documented and resolve any drift.
+  a local parity review found and fixed two gaps: GitLab coverage tests now run
+  on merge-request pipelines, and Jenkins secret scans now use the AI.md
+  range/full-history result policy for ordinary, scheduled, and manual runs.
+  Continue checking each provider's build/test, security, release, and coverage
+  behavior against AI.md, then confirm workflows on their respective
+  hosted/self-hosted runners. Keep provider-specific limitations documented
+  and resolve any drift.
 - [ ] Finish verification of the AI.md contact and security-report flows.
   `/server/contact` now renders configured abuse, DMCA, privacy, and security
   forms with field descriptors, CAPTCHA/form tokens, validation, antispam,
