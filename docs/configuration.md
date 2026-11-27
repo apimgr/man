@@ -20,6 +20,15 @@ server:
   fqdn: localhost
   mode: production
   api_version: v1
+  debug:
+    pprof: true
+    log_queries: true
+    log_cache: true
+    log_bodies: false
+    max_body_log_size: 10KB
+    block_profile_rate: 1
+    mutex_profile_fraction: 1
+    runtime_endpoints: true
   database:
     driver: sqlite
     url: "{data_dir}/db/server.db"
@@ -55,13 +64,26 @@ server:
 
 ```
 
-`server.yml` holds this node's listen address, identity, database, cache, and
-SSL settings. Branding and SEO belong in `yaml.d/branding.yml`; web settings
+`server.yml` holds this node's listen address, identity, database, cache, SSL,
+and debug settings. Debug endpoints remain off unless the run explicitly
+enables them with `--debug`, `DEBUG=true`, or `MODE=debug` (unless `DEBUG` is
+explicitly set to false). Every enabled `/debug/*` route requires the operator
+token as a Bearer credential. `server.debug.pprof` gates pprof routes and
+`runtime_endpoints` gates runtime diagnostics; query, cache, body logging, and
+profiling settings apply only while debug is enabled. Branding and SEO belong
+in `yaml.d/branding.yml`; web settings
 and CORS belong in `yaml.d/web.yml`; rate limits, tokens, and security settings
 belong in `yaml.d/security.yml`; report and help pages belong in
 `yaml.d/pages.yml`; and `web.*` LLM discovery options belong in
 `yaml.d/web.yml`. Credentials belong in `secrets.yml`. Every file uses the
 same dotted YAML paths as the merged configuration.
+
+With debug enabled, request logs include sanitized request metadata. Request
+and response bodies are omitted unless `server.debug.log_bodies` is true; then
+only bounded JSON or form bodies are logged, with sensitive fields and token
+values redacted. Unsupported and invalid body formats are omitted. SQL logs
+never include bound parameter values and redact quoted literals. Cache keys are
+hashed before they reach the log.
 
 The server migrates a legacy `server.yaml` to `server.yml` and splits known
 area settings from a large `server.yml` on startup. It keeps a private
@@ -232,10 +254,10 @@ casman --port 8080 --mode development --debug
 |------|-------------|---------|
 | `--port` | One port or an HTTP,HTTPS pair | Random 64xxx; 80 in an application container |
 | `--address` | Listen address | `[::]` |
-| `--mode` | production/development | production |
+| `--mode` | production/development/debug | production |
 | `--config` | Config directory | OS-specific |
 | `--data` | Data directory | OS-specific |
-| `--debug` | Enable debug mode | false |
+| `--debug` | Enable diagnostics without changing application mode | false |
 
 ## Optional features
 

@@ -112,8 +112,9 @@ skip while its health contract is still checked. Set `REQUIRE_OVERLAY=1` to
 make unsuccessful bootstrap fail the test.
 `make test` runs vet, static analysis, vulnerability checks, shell checks, and
 the Go unit suite in the Go container, enforces at least 60% total coverage,
-then runs the basic binary checks. The Docker tier builds the server and CLI
-through Make and exercises them in Alpine. Runtime test data lives under a
+then runs the basic binary checks. The Docker tier builds the host-platform
+server and CLI debug binaries directly in the Go toolchain container and
+exercises them in Alpine. Runtime test data lives under a
 project-scoped OS temporary directory that the script removes when it exits.
 The Incus tier uses Docker for the build and
 the Debian/systemd plus Alpine/OpenRC containers for service checks.

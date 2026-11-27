@@ -211,7 +211,8 @@ contract. Set `REQUIRE_OVERLAY=1` to make unsuccessful Tor or I2P bootstrap a
 test failure.
 `make test` runs the static-analysis and vulnerability gates, Go tests, the
 60% coverage threshold, and the basic binary checks. The Docker tier builds the
-server and CLI with Make, then checks their binaries and HTTP behavior in
+host-platform server and CLI debug binaries directly in the Go toolchain
+container, then checks their binaries and HTTP behavior in
 Alpine. Runtime test data lives under a project-scoped OS temporary directory
 that the script removes when it exits. The Incus tier also needs Docker for
 the build and runs service checks in Debian/systemd and Alpine/OpenRC containers

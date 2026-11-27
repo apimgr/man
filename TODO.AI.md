@@ -6,6 +6,32 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## High (P1)
 
+- [ ] Finish PART 6 debug and application-mode compliance. Authenticated pprof,
+  expvar with command-line redaction, config/routes/cache/database/scheduler/
+  memory/goroutine diagnostics, and the deterministic themed 500 route are
+  wired behind the independent debug flag. `server.debug` now has typed
+  settings, defaults, validation, and `server.yml` persistence; debug config
+  output redacts credential fields and URLs. Mode aliases, debug mode, shell
+  completions, and authorized maintenance mode persistence are implemented.
+  Request logging now records bounded, type-aware sanitized bodies only when
+  `log_bodies` is enabled; query logging omits parameter values and redacts SQL
+  literals; cache keys are hashed and expirations emit eviction events. Focused
+  Docker tests cover body restoration, credential redaction, query metadata,
+  and cache hit/miss/expiration events. Remaining: complete the
+  `/debug/components` catalog and every state in both themes and directions,
+  and verify the full browser diagnostics flow. Required by AI.md PART 6.
+- [ ] Finish PART 8 startup sequencing across every entry path. The CLI now
+  freezes paths, prepares root-owned directories and private modes before the
+  early config peek, daemonizes before binding, binds privileged HTTP sockets,
+  drops and verifies privileges, initializes the startup log, acquires the PID
+  file, then loads full config and initializes server dependencies. Prepared
+  listeners and resolved paths are carried into server construction. Focused
+  Docker tests pass. Remaining: validate the sequence with the compiled binary
+  in the required container/system-service scenarios, move the `server.New` /
+  `app.RunWithReady` fallback paths away from post-load privilege setup, and
+  finish logging reconfiguration/rotation after full config load. Required by
+  AI.md PART 8, PART 14, PART 23, and PART 25.
+
 - [ ] Implement PART 5 area-file ownership, precedence, generated-file split,
   legacy `server.yaml` migration, automatic splitting of area settings from
   `server.yml`, path-safe drop-in loading, duplicate/null-key recovery, source
@@ -55,9 +81,10 @@ coverage before synchronizing the sitemap and user documentation.
   and checks clean shutdown. `src/main.go` now contains only the executable
   bootstrap; flag parsing and actions are in the testable `src/cli` package,
   and build metadata is copied into runtime config. The full test gate,
-  cross-platform build, browser E2E suite, and phase-two compiled-binary
-  validation all pass. The full test suite, coverage gate, lint, binary builds,
-  and browser E2E suite also pass for the current implementation.
+  browser E2E suite, and host-platform compiled-binary validation pass. A
+  recent all-platform debug build stopped during `darwin/amd64` linking because
+  the shared host filesystem ran out of space; rerun the standalone build when
+  sufficient space is available.
 - [ ] Complete the PART 33/34 CLI configuration contract. Server and token
   resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
   config files private, honors explicit flags and environment settings, and
@@ -234,7 +261,7 @@ coverage before synchronizing the sitemap and user documentation.
   migrated. Scope cannot be changed after creation, and read-only credentials
   cannot list or call write tools over MCP. The migration, handler, and MCP
   regressions pass; scope labels are translated in all six locales. The full
-  `make test` gate passes at 61.8% coverage, and staticcheck, golangci-lint,
+  `make test` gate passes at 61.0% coverage, and staticcheck, golangci-lint,
   and `go vet` pass. Keep preferences browser-local
   and preserve the no-login
   product model. Relevant files: `src/server/server.go`, `src/server/handler/`,
@@ -260,12 +287,25 @@ coverage before synchronizing the sitemap and user documentation.
 
 ## Medium (P2)
 
-- [x] Align embedded public assets with the AI.md directory contracts. CSS is
-  split into `static/css/common.css`, `public.css`, and `components.css`, and
-  application behavior lives in the single `static/js/app.js`. The shared page
-  shell and service worker reference all four versioned assets, and tests cover
-  their embedded responses. The conflicting stylesheet-path instructions are
-  recorded in the authorized API-template issue list.
+- [ ] Complete the AI.md PART 16 asset and component contract. The assets are
+  split into the required three CSS files and one application script.
+  `common.css` now declares the required cascade order and complete semantic
+  token palette, and a test checks those shared color roles against the Go
+  theme palette. The other stylesheets are now inside component/page layers,
+  but still contain legacy declarations, hardcoded values, physical
+  properties, and component internals in the page layer. JavaScript behavior
+  hooks now use `data-js-*`, and compare result states use semantic data
+  attributes and palette tokens. Focused package tests and browser E2E pass
+  these hooks. Many required shared
+  and feature components have incomplete or missing styles and states. The
+  debug gallery now lists the catalog and feature fixtures, but the full
+  size/state matrix, native modal behavior, contrast checks, axe run, and
+  required viewport/theme/direction layout matrix remain. Reconcile templates,
+  styles, Go palette, JavaScript hooks, and browser tests with PART 16 before
+  marking complete. The conflicting stylesheet-path instructions are already
+  recorded in the authorized API-template issue list. The current full
+  `make test` gate passes at 61.0% coverage, the browser E2E suite passes, and
+  strict MkDocs builds after the latest documentation sync.
 - [ ] Complete the required SEO metadata and validated verification-tag
   configuration. Server-rendered canonical, OpenGraph, Twitter, JSON-LD,
   custom meta, provider verification, and fail-closed robots metadata now use
