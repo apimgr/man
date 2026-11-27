@@ -125,8 +125,8 @@ code and uses the TUI when a terminal is available. A forced mode reports an
 error when its required display or terminal is unavailable. Build the optional
 desktop client separately with `-tags gui`; its runtime graphics loader makes
 it platform specific and it is not the static CLI artifact.
-The Make target `make build-gui` produces separate GUI artifacts for Linux,
-macOS, and Windows.
+The standard Makefile targets build the server and static client; optional GUI
+artifacts use the `gui` build tag in a platform-appropriate Docker build.
 Custom config files are secured as files, while their parent directories are
 left under the caller's control. The CLI preserves other YAML sections when it
 updates a server or token value.

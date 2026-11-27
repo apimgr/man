@@ -15,13 +15,15 @@ cd casman
 
 `src/server/data/manpages.db` must be a real SQLite database before building
 or running the application. Rebuild it from the tracked, pre-rendered platform
-directories with:
+directories by running the catalog script inside the Go toolchain container:
 
 ```bash
-make catalog
+docker run --rm --name "casman-$(head -c6 /dev/urandom | od -An -tx1 | tr -d ' \n' | cut -c1-8)" \\
+  -v "$PWD:/workspace" -w /workspace casjaysdev/go:latest \\
+  bash scripts/build_catalog.sh
 ```
 
-This runs `scripts/build_catalog.sh`, imports the repository's source snapshot,
+This imports the repository's source snapshot,
 normalizes catalog timestamps from `SOURCE_DATE_EPOCH` (default `0`), compacts
 the SQLite database with `VACUUM`, and then verifies its integrity. This
 normalizes timestamps and removes unused database pages. Two consecutive
@@ -42,7 +44,7 @@ file](https://kernel.org/pub/linux/docs/man-pages/sha256sums.asc); BSD archive
 checksums are checked against the upstream checksum files. The Apple commits
 are not mapped to one macOS point release. The manifest also marks the IDEA.md
 sources that remain unpinned, unimported, or unresolved for licensing. These
-downloaders are separate from `make catalog`: they do not refresh the tracked
+downloaders are separate from the catalog rebuild: they do not refresh the tracked
 database or establish the provenance of its existing pages.
 
 ## Build
@@ -50,27 +52,25 @@ database or establish the provenance of its existing pages.
 All builds use containers - no local Go installation required.
 
 ```bash
-# Quick development build
-make dev
-
-# Local build with version info
-make local
-
-# Full release build (all 8 platforms)
+# Debug binaries for all supported platforms
 make build
 
-# Optional native GUI CLI artifacts (Linux, macOS, and Windows)
-make build-gui
+# Production binaries, source archive, and checksums (does not publish)
+make release
 
-# Rebuild the embedded catalog from tracked pre-rendered platform data
-make catalog
+# Build the local container image, run the complete gate, or inspect targets
+make docker
+make test
+make help
+make clean
 ```
 
 ## Run
 
 ```bash
-# Test the dev build in Docker
-docker run --rm -v /path/to/build:/app alpine:latest /app/casman --help
+# Run the Docker binary-validation tier or Incus service-lifecycle tier
+./tests/run_tests.sh
+./tests/incus.sh
 ```
 
 ## Testing
@@ -110,11 +110,12 @@ checks cover Tor and opt-in I2P. The containers need outbound network access
 for Tor/I2P bootstrap; by default, an unavailable overlay is reported as a
 skip while its health contract is still checked. Set `REQUIRE_OVERLAY=1` to
 make unsuccessful bootstrap fail the test.
-`make test` runs `go vet` and the Go unit suite in the Go container, then
-enforces at least 60% total coverage. The Docker tier builds the server and
-CLI through Make and exercises them in Alpine. Its binaries, staged releases,
-and runtime test data live under a project-scoped OS temporary directory that
-the script removes when it exits. The Incus tier uses Docker for the build and
+`make test` runs vet, static analysis, vulnerability checks, shell checks, and
+the Go unit suite in the Go container, enforces at least 60% total coverage,
+then runs the basic binary checks. The Docker tier builds the server and CLI
+through Make and exercises them in Alpine. Runtime test data lives under a
+project-scoped OS temporary directory that the script removes when it exits.
+The Incus tier uses Docker for the build and
 the Debian/systemd plus Alpine/OpenRC containers for service checks.
 
 ## Project Structure

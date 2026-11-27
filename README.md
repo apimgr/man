@@ -28,8 +28,8 @@ casman is a self-contained man page application with an embedded collection from
 - **Translations** - View exact translated man page rows when the database contains them
 - **API Documentation** - Server-rendered OpenAPI route list and GraphQL query form
 
-Rebuild the embedded SQLite catalog with `make catalog`. The target runs
-`scripts/build_catalog.sh`, which imports the tracked, pre-rendered platform
+Rebuild the embedded SQLite catalog by running `scripts/build_catalog.sh` in
+the Go toolchain container. The script imports the tracked, pre-rendered platform
 directories, normalizes catalog timestamps from `SOURCE_DATE_EPOCH` (default
 `0`), compacts the SQLite database with `VACUUM`, and verifies its integrity
 before replacing `src/server/data/manpages.db`. This reconstructs the database
@@ -164,20 +164,19 @@ service has no admin web UI or user accounts; configure and maintain it through
 ### Build
 
 ```bash
-# Development build (quick, no version info)
-make dev
-
-# Local build (with version info)
-make local
-
-# Full release build (all 8 platforms)
+# Debug build for all supported platforms
 make build
 
-# Rebuild the embedded man-page database from tracked pre-rendered sources
-make catalog
+# Production binaries and source archive (build only; does not publish)
+make release
 
 # Run tests
 make test
+
+# Build the local container image, list targets, or remove build artifacts
+make docker
+make help
+make clean
 
 # Run the basic Docker binary-validation tier
 ./tests/run_tests.sh
@@ -210,23 +209,21 @@ opt-in I2P overlay contracts. They need outbound network access for overlay
 bootstrap; without it, the test reports a skip while still checking the
 contract. Set `REQUIRE_OVERLAY=1` to make unsuccessful Tor or I2P bootstrap a
 test failure.
-`make test` runs Go vet and unit tests in the Go container and enforces the
-60% coverage threshold. The Docker tier builds the server and CLI with Make,
-then checks their binaries and HTTP behavior in Alpine. Its binaries, staged
-releases, and runtime test data live under a project-scoped OS temporary
-directory that the script removes when it exits. The Incus tier also needs
-Docker for the build and runs service checks in Debian/systemd and Alpine/OpenRC
-containers by default.
+`make test` runs the static-analysis and vulnerability gates, Go tests, the
+60% coverage threshold, and the basic binary checks. The Docker tier builds the
+server and CLI with Make, then checks their binaries and HTTP behavior in
+Alpine. Runtime test data lives under a project-scoped OS temporary directory
+that the script removes when it exits. The Incus tier also needs Docker for
+the build and runs service checks in Debian/systemd and Alpine/OpenRC containers
+by default.
 
 ### Container-Only Development
 
 All development uses containers. Never run Go directly on your machine.
 
 ```bash
-# Start development environment
-make dev
-
-# The binary is built inside Docker and output to a temp directory
+# Build debug binaries in Docker
+make build
 ```
 
 ## Disclaimer
