@@ -116,7 +116,7 @@ session state.
 | `section` | string | Filter by section (1-9, `n`, or `x`) |
 | `platform` | string | Filter by platform |
 | `page` | int | Page number (default: 1) |
-| `limit` | int | Results per page (default: 25) |
+| `limit` | positive int | Results per page (default: 20) |
 
 ## OpenAPI
 
@@ -131,6 +131,20 @@ The server-rendered GraphQL query form is at
 [/server/docs/graphql](/server/docs/graphql). It shares the application chrome and
 provides a no-JavaScript link to the GraphQL endpoint. Requests use
 `/api/v1/server/graphql`; `/api/graphql` is the unversioned compatibility alias.
+The schema is read-only and exposes these query fields:
+
+| Field | Arguments | Result |
+|-------|-----------|--------|
+| `version` | — | Server version string |
+| `serverPage` | `path: String!` | Public server page content and sections |
+| `manPage` | `name: String!`, `section: String`, `platform: String` | Man-page fields, including HTML, text, Markdown, and source |
+| `search` | `query: String!`, optional `section`, `platform`, `page` (default `1`), `limit` (default `20`) | Search metadata and matching pages |
+| `sections` | — | Catalog sections and counts |
+| `platforms` | — | Catalog platforms and counts |
+| `compare` | `name: String!`, optional `section` | Cross-platform page comparison |
+| `stats` | — | Catalog totals and per-section/platform counts |
+| `whatis` | `name: String!` | One-line descriptions |
+| `apropos` | `query: String!` | Description search results |
 
 ### Example Query
 

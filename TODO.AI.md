@@ -88,7 +88,10 @@ coverage before synchronizing the sitemap and user documentation.
   preserves existing valid values, and saves the initial config only after
   successful checks. CLI errors now map to the specified usage, validation,
   not-found, connection, auth/permission, and config exit codes; `health`
-  returns failure for a degraded server. Relevant files: `src/client/`,
+  returns failure for a degraded server. Search now honors `defaults.limit`,
+  `CASMAN_LIMIT`, and `--limit` (default 20) in the command runner, TUI, and
+  GUI, passes the value to the API, and documents the precedence. Relevant
+  files: `src/client/`,
   `docs/`.
 - [ ] Complete the PART 20 metrics contract. `/server/metrics` and its service
   subroutes, API/root aliases, independent `mtr_` credentials in `secrets.yml`,
@@ -219,14 +222,21 @@ coverage before synchronizing the sitemap and user documentation.
   masked listing, one-page reveal, linked-token CRUD, rotation, expiry,
   revocation, cookie handling, and API mirrors are now implemented. Continue
   checking the full AI.md UI/API contract, audit details,
-  MCP auth integration, CSRF, and preference consent/data validation before
+  CSRF, and preference consent/data validation before
   closing this item. Strict token actions now use configurable
   `server.rate_limit.strict` limits (10 requests per 900 seconds by default),
   bucket valid credentials by owner and otherwise use the resolved client
   address, and count invalid attempts. API throttles return the documented
   `RATE_LIMITED` JSON envelope with `Retry-After`. Focused tests cover the
   strict route matrix, owner bucketing, API error output, and config defaults
-  and validation. Keep preferences browser-local and preserve the no-login
+  and validation. Linked-token `read`/`read-write` scopes are persisted and
+  returned by the API, primary scopes are `global`, and legacy rows are
+  migrated. Scope cannot be changed after creation, and read-only credentials
+  cannot list or call write tools over MCP. The migration, handler, and MCP
+  regressions pass; scope labels are translated in all six locales. The full
+  `make test` gate passes at 61.8% coverage, and staticcheck, golangci-lint,
+  and `go vet` pass. Keep preferences browser-local
+  and preserve the no-login
   product model. Relevant files: `src/server/server.go`, `src/server/handler/`,
   `src/server/store/`, `src/server/ownertoken/`, `src/server/template/`,
   `src/server/static/`.
@@ -280,6 +290,11 @@ coverage before synchronizing the sitemap and user documentation.
   files: `src/server/template/`, `src/server/static/`, `src/server/handler/`.
 - [ ] Synchronize API and GraphQL reference output with every implemented
   endpoint and document the final browser and integration surfaces in `docs/`.
+  The REST search limit advertised in the API reference and IDEA.md now works
+  as a positive integer (default 20), appears in the response, and rejects
+  invalid values with the API validation envelope. The reference now matches
+  AI.md's configured default. Remaining work is a complete route/schema and
+  browser/integration documentation reconciliation.
   Relevant files: `src/server/handler/handler.go`, `src/swagger/`,
   `src/graphql/`, `docs/`.
 - [ ] Finish overlay-network compliance. Tor now uses the PART 32 torrc and

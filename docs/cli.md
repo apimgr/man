@@ -26,6 +26,7 @@ casman-cli man 5 passwd
 
 # Search
 casman-cli search "file permission"
+casman-cli --limit 10 search "file permission"
 
 # Other commands
 casman-cli whatis chmod
@@ -57,6 +58,7 @@ casman-cli stats
 | `--debug` | Enable debug logging |
 | `--lang CODE` | Select a supported output language or `auto` |
 | `--format FORMAT` | `table`, `json`, `yaml`, `plain`, or `csv` output |
+| `--limit NUMBER` | Maximum search results (default: `20`) |
 | `--color auto\|yes\|no` | Color table headings; automatic mode respects `NO_COLOR`, `TERM=dumb`, and terminal detection |
 | `--quiet[=BOOL]` | Suppress nonessential man headers and search summaries/snippets |
 | `--verbose[=BOOL]` | Print the request server URL to stderr |
@@ -79,6 +81,7 @@ casman-cli stats
 | `CASMAN_TOKEN` | Default API token |
 | `CASMAN_TOKEN_FILE` | Read the API token from a file |
 | `CASMAN_OUTPUT_FORMAT` | Output format (`table`, `json`, `yaml`, `plain`, `csv`) |
+| `CASMAN_LIMIT` | Default maximum search results (positive integer; default `20`) |
 | `CASMAN_OUTPUT_COLOR` | Color preference (`auto`, `yes`, `no`) |
 | `CASMAN_OUTPUT_QUIET` | Suppress nonessential output (truthy/falsey values) |
 | `CASMAN_OUTPUT_VERBOSE` | Print request diagnostics (truthy/falsey values) |
@@ -159,6 +162,10 @@ disables automatic color, while an explicit `yes` forces it. Color is applied to
 JSON, YAML, CSV, and plain output remain free of ANSI escapes.
 `defaults.output` is also accepted as a fallback for the documented flag-default
 setting when `output.format` is unset.
+
+Search results use `defaults.limit` (default `20`). `--limit NUMBER` overrides
+it for the command, and `CASMAN_LIMIT` overrides the config value. The CLI
+passes the selected limit to the server search API.
 
 The `tui` section supports `enabled` (default `true`), `theme` (`dark`,
 `light`, or `system`), `mouse` (default `true`), and `unicode` (default
