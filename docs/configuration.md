@@ -155,14 +155,25 @@ presented Bearer token and reports its kind without returning the credential.
 The former `{config_dir}/security/master.key` file is migrated into
 `secrets.yml` on startup so existing encrypted data remains readable.
 
+## Startup mode
+
+The server runs in the foreground by default. For a manual Unix start, pass
+`--daemon` or set `server.daemonize: true` to detach it from the terminal. The
+flag takes precedence over the config setting. Service manager starts and
+application containers stay in the foreground, and Windows keeps the process
+in the foreground with a warning when daemonization is requested. The setting
+is read at startup and requires a restart to change.
+
 ## SSL/TLS
 
 Per AI.md PART 15, casman ships built-in Let's Encrypt support and an
 encrypted DNS provider credential vault. The wiring is:
 
-- Set `server.ssl.enabled: true` to switch the listener stack from HTTP-only to
-  HTTP redirect + HTTPS. The HTTPS listener uses a tightened TLS profile
-  (TLS 1.2+, ECDHE+AES/ChaCha20, X25519/P256).
+- Set `server.ssl.enabled: true` with a single `server.port` value to serve
+  HTTPS on that port. A comma-separated pair uses the first port for HTTP and
+  the second for HTTPS; HTTP redirects to HTTPS. Port `443` selects
+  HTTPS-only mode and enables TLS-ALPN-01 by default. The HTTPS listener uses
+  a tightened TLS profile (TLS 1.2+, ECDHE+AES/ChaCha20, X25519/P256).
 - For an operator-supplied cert, set `server.ssl.cert` and `server.ssl.key`. The cert is
   loaded into the in-memory cache at startup and served via SNI.
 - For automated issuance, set `server.ssl.letsencrypt.enabled: true`,
@@ -219,7 +230,7 @@ casman --port 8080 --mode development --debug
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--port` | Listen port (HTTP) | Environment/config dependent |
+| `--port` | One port or an HTTP,HTTPS pair | Random 64xxx; 80 in an application container |
 | `--address` | Listen address | `[::]` |
 | `--mode` | production/development | production |
 | `--config` | Config directory | OS-specific |
