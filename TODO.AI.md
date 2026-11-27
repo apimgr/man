@@ -30,10 +30,11 @@ coverage before synchronizing the sitemap and user documentation.
   seconds, retains each malformed source's last good YAML, compares config
   snapshots, classifies hot/graceful/restart changes, and keeps restart values
   out of its active snapshot. Handlers and CORS/noindex middleware can consume
-  immutable snapshots safely. Remaining work is starting the manager from the
-  server lifecycle, supplying exact CLI/environment overrides, applying every
-  supported category to its owning service, graceful HTTP/router replacement,
-  Tor restart behavior, and runtime asset cache invalidation.
+  immutable snapshots safely, and exact PORT/LISTEN/MODE CLI and environment
+  overrides are carried through reloads. Remaining work is starting the
+  manager from the server lifecycle, applying every supported category to its
+  owning service, graceful HTTP/router replacement, Tor restart behavior, and
+  runtime asset cache invalidation.
   Relevant files: `src/config/`, server startup/reload, and
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”
