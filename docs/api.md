@@ -127,10 +127,10 @@ alias.
 
 ## GraphQL
 
-The server-rendered GraphiQL page is at
-[/server/docs/graphql](/server/docs/graphql). GraphQL requests use
-`/api/v1/server/graphql`; `/api/graphql` is the unversioned compatibility
-alias.
+The server-rendered GraphQL query form is at
+[/server/docs/graphql](/server/docs/graphql). It shares the application chrome and
+provides a no-JavaScript link to the GraphQL endpoint. Requests use
+`/api/v1/server/graphql`; `/api/graphql` is the unversioned compatibility alias.
 
 ### Example Query
 

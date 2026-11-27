@@ -8,7 +8,7 @@ The versioned API examples below use the default `/api/v1` prefix. Set
 - REST API: `/api/v1/`; see [API Reference](api.md).
 - OpenAPI JSON: `/api/v1/openapi`.
 - Server-rendered API documentation: `/server/docs/swagger`.
-- GraphQL explorer: `/server/docs/graphql`; queries use `/api/v1/server/graphql`.
+- GraphQL query form: `/server/docs/graphql`; queries use `/api/v1/server/graphql`.
 - Atom updates: `/feed.xml`, with platform and section filters.
 - RSS 2.0 updates: `/rss.xml`.
 - JSON Feed: `/feed.json`.
