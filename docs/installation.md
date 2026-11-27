@@ -52,9 +52,11 @@ selection and setup.
 
 ```bash
 sudo ./casman --service --install
-sudo systemctl start casman
-sudo systemctl enable casman
 ```
+
+Installation creates and enables the service and starts it immediately. On a
+systemd host use `--service start`, `restart`, `stop`, or `status` to manage it.
+Alpine/OpenRC hosts use the same CLI commands with the generated OpenRC service.
 
 ## Configuration
 
