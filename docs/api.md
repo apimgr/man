@@ -84,6 +84,10 @@ bytes.
 | `/api/v1/server/preferences/tokens/{id}/rotate` | POST | Rotate a linked token; requires the primary bearer token |
 | `/api/v1` | GET | API service information and endpoint links; `/api/v1/` redirects here |
 
+Security-report status pages have no API mirror. The reporter receives a
+private status link at `/server/security/report/{tracking_id}`; its token can
+be used once per UTC day and expires 30 days after the report is closed.
+
 There is no `/api/v1/man/{lang}/{name}` route. Translated retrieval requires
 language, platform, section, and page name so it can match one stored row.
 Metrics credentials are separate service tokens generated into

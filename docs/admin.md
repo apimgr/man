@@ -9,10 +9,14 @@ in `server.yml` controls the canonical versioned routes.
 
 Public information pages are available at `/server/about`, `/server/help`,
 `/server/help/mcp`, `/server/privacy`, `/server/terms`, `/server/security`,
-`/server/security/policy`, and `/server/contact`. Visitors can save
-browser-only display and consent preferences at `/server/preferences` and
-export or import them at `/server/preferences/sync`. These pages do not
-change server configuration or create user accounts.
+`/server/security/policy`, `/server/security/thanks`, and `/server/contact`.
+Security-report status pages use the private link sent to the reporter at
+`/server/security/report/{tracking_id}`; the link token is rate-limited to one
+view per UTC day and expires 30 days after the report is closed. Visitors can
+save browser-only display and consent preferences at `/server/preferences`,
+export or import them at `/server/preferences/sync`, and manage owner and
+linked API tokens at `/server/preferences/tokens`. These pages do not change
+server configuration or create user accounts.
 
 ## Public status and statistics
 

@@ -249,7 +249,9 @@ coverage before synchronizing the sitemap and user documentation.
   cover cache eligibility and assert the limit/expiry/quota policy is emitted.
   The browser E2E suite verifies a cached public man page works offline, API
   requests remain network-only, and an uncached private form receives the
-  synthesized fallback. Remaining: audit every export and print flow in a
+  synthesized fallback. Its fixture now seeds the server's configured
+  `data/db/server.db` path, and the complete suite passes in Docker. Remaining:
+  audit every export and print flow in a
   no-JS browser. Relevant
   files: `src/server/template/`, `src/server/static/`, `src/server/handler/`.
 - [ ] Synchronize API and GraphQL reference output with every implemented
