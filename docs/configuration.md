@@ -86,6 +86,23 @@ an absolute per-IP burst ceiling. Repeated invalid Bearer credentials are
 counted per IP and lock that IP out for the `auth_failures.window` duration
 after `auth_failures.requests` failures. Windows are seconds.
 
+`server.limits` belongs in `yaml.d/security.yml`:
+
+```yaml
+server:
+  limits:
+    max_body_size: 10MB
+    read_timeout: 30s
+    write_timeout: 30s
+    idle_timeout: 120s
+```
+
+Body-size values use byte units (`B`, `KB`, `MB`, `GB`, or `TB`) with 1024-based
+scaling. Missing, malformed, zero, and negative values use the defaults above
+and emit a warning. A valid body-size change applies to new requests on reload.
+Timeout changes replace the active HTTP server over the existing listener and
+gracefully drain existing requests without a restart.
+
 `web.llms.include_endpoints` controls whether `llms.txt` lists API operations
 (default `true`). `include_schemas` adds the available parameter and response
 details. Up to ten `custom_sections` may be appended; each section has a title

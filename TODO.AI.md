@@ -47,7 +47,7 @@ coverage before synchronizing the sitemap and user documentation.
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”
 
-- [ ] Complete the thin, testable server entrypoint required by PART 25.
+- [x] Complete the thin, testable server entrypoint required by PART 25.
   Build metadata is in `src/version.go`, and server startup/shutdown now run
   through `src/app.Run(ctx, cfg)` and `Server.RunContext` with an injectable
   listener. A runner test makes a real health request, cancels the context,
@@ -55,8 +55,8 @@ coverage before synchronizing the sitemap and user documentation.
   bootstrap; flag parsing and actions are in the testable `src/cli` package,
   and build metadata is copied into runtime config. The full test gate,
   cross-platform build, browser E2E suite, and phase-two compiled-binary
-  validation all pass. This implementation item is complete and will be
-  removed with the final aligned change.
+  validation all pass. The full test suite, coverage gate, lint, binary builds,
+  and browser E2E suite also pass for the current implementation.
 - [ ] Complete the PART 33/34 CLI configuration contract. Server and token
   resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
   config files private, honors explicit flags and environment settings, and
@@ -102,9 +102,10 @@ coverage before synchronizing the sitemap and user documentation.
   Grafana panels, and a periodic CPU/memory/data-volume collector are now
   implemented. Metrics routes are excluded from OpenAPI, public discovery,
   and MCP; tests cover service-specific credentials across all metrics aliases
-  and preserve Grafana/Loki JSON media types. Remaining work: replace route-name
-  filtering with route-registry visibility metadata and complete the full
-  endpoint/auth acceptance matrix. Relevant files:
+  and preserve Grafana/Loki JSON media types. OpenAPI visibility flags now drive
+  discovery and MCP filtering, but are assigned from route-path heuristics
+  rather than the shared route registry. Complete that registry integration
+  and the full endpoint/auth acceptance matrix. Relevant files:
   `src/metrics/`,
   `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
@@ -163,11 +164,14 @@ coverage before synchronizing the sitemap and user documentation.
   router dispatch, live-router/OpenAPI operation inventory, help text, unit
   coverage, and a built-server smoke for health plus operator/unauthenticated
   auth-check behavior now exist. API and security docs describe the transport
-  and credentials. Remaining work: complete
-  OpenAPI request schemas and meaningful operation descriptions; enforce the
-  same API authorization, rate-limit and audit path with `source=mcp`; implement
-  operator-token visibility and scope filtering; and pass the complete MCP
-  acceptance matrix. Do not mark this complete until then.
+  and credentials. OpenAPI operation metadata now carries visibility, listed,
+  MCP-allowed, operator-only, response-model, and primary-field attributes;
+  operator-token visibility is enforced for tool listing and calls. Remaining:
+  complete request schemas and meaningful operation descriptions; enforce
+  token scopes and the same API authorization, rate-limit, and audit path with
+  `source=mcp`; replace path-derived metadata with the shared route registry;
+  and pass the complete MCP acceptance matrix. Do not mark this complete until
+  then.
   Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
   `src/server/template/`, `src/client/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
@@ -224,14 +228,20 @@ coverage before synchronizing the sitemap and user documentation.
   dates for static page content. `.well-known/llms.txt` now uses the live
   OpenAPI operation inventory for summaries, auth labels, parameter/response
   details, and request-resolved API/MCP/documentation URLs; `web.llms` controls
-  endpoint details and validated custom sections. Remaining work: use the
-  shared route registry's `Listed` visibility metadata instead of deriving
-  visibility from OpenAPI/path rules, and emit complete request/response
+  endpoint details and validated custom sections. Discovery now consumes the
+  OpenAPI `Listed` metadata. Remaining work: populate it from the shared route
+  registry instead of path heuristics, and emit complete request/response
   schemas from the route models.
   Relevant files: `src/server/server.go`, `src/server/handler/`.
 
 ## Medium (P2)
 
+- [x] Align embedded public assets with the AI.md directory contracts. CSS is
+  split into `static/css/common.css`, `public.css`, and `components.css`, and
+  application behavior lives in the single `static/js/app.js`. The shared page
+  shell and service worker reference all four versioned assets, and tests cover
+  their embedded responses. The conflicting stylesheet-path instructions are
+  recorded in the authorized API-template issue list.
 - [ ] Complete the required SEO metadata and validated verification-tag
   configuration. Server-rendered canonical, OpenGraph, Twitter, JSON-LD,
   custom meta, provider verification, and fail-closed robots metadata now use

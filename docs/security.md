@@ -76,12 +76,15 @@ elsewhere, is not indexed, and returns `404` when disabled by configuration.
 The form uses a simple CAPTCHA and a two-step submit/review/confirm flow. The
 first submit never delivers a message. Confirmed non-security reports are
 mailed to the configured role recipient, with the submitter's address kept in
-the message body rather than a mail header. Security reports are encrypted
-before database storage; maintainer email contains only encrypted report
-bytes, and the acknowledgment contains only a tracking ID and status link.
-The status link reveals triage state only, and its token can be used once per
-UTC day. Invalid security IDs are recorded in `security.log` with a short hash
-of the supplied value; the ID itself is not logged.
+the message body rather than a mail header. Security report bodies and
+researcher contact details are encrypted with the server's configured AES-256
+key before database storage. Maintainer email, when SMTP and a recipient are
+configured, contains only encrypted report bytes; the report remains stored
+if notification delivery is unavailable. The acknowledgment contains only a
+tracking ID and status link. The status link reveals triage state only, is
+marked `no-store` and `no-referrer`, and its token can be used once per UTC
+day. Invalid security IDs are recorded in `security.log` with a short hash of
+the supplied value; the ID itself is not logged.
 
 The public security pages are `/server/security/policy` and
 `/server/security/thanks`. Reports about source-code vulnerabilities should

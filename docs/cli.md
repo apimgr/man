@@ -79,6 +79,7 @@ casman-cli stats
 | `CASMAN_TOKEN` | Default API token |
 | `CASMAN_TOKEN_FILE` | Read the API token from a file |
 | `CASMAN_OUTPUT_FORMAT` | Output format (`table`, `json`, `yaml`, `plain`, `csv`) |
+| `CASMAN_OUTPUT_COLOR` | Color preference (`auto`, `yes`, `no`) |
 | `CASMAN_OUTPUT_QUIET` | Suppress nonessential output (truthy/falsey values) |
 | `CASMAN_OUTPUT_VERBOSE` | Print request diagnostics (truthy/falsey values) |
 | `CASMAN_OUTPUT_PAGER` | Pager policy (`auto`, `always`, `never`) |
@@ -152,9 +153,9 @@ The `output` section supports `format` (default `table`), `color` (default
 `auto`), `pager` (default `auto`), `quiet` (default `false`), and `verbose`
 (default `false`). Paging is enabled in automatic mode only for an interactive
 terminal and when `TERM` is not `dumb`. Format, pager, quiet, and verbose use
-flag > environment > config precedence. Color uses flag > config > terminal
-auto-detection; any nonempty `NO_COLOR` or `TERM=dumb` disables automatic
-color, while `--color=yes` forces it. Color is applied to table headings;
+flag > environment > config precedence. Color uses flag > `CASMAN_OUTPUT_COLOR`
+> config > terminal auto-detection; any nonempty `NO_COLOR` or `TERM=dumb`
+disables automatic color, while an explicit `yes` forces it. Color is applied to table headings;
 JSON, YAML, CSV, and plain output remain free of ANSI escapes.
 `defaults.output` is also accepted as a fallback for the documented flag-default
 setting when `output.format` is unset.
@@ -195,8 +196,10 @@ validates the token before saving initial values. A failed check leaves the
 config unchanged.
 
 In a non-interactive shell, configure a server explicitly with `--server` or
-`CASMAN_SERVER_PRIMARY`; the CLI prints setup instructions when neither is
-available.
+`CASMAN_SERVER_PRIMARY`. If the CLI starts without a command and no server is
+configured, it exits with usage status `2` and names `server.primary` in the
+selected `cli.yml` as the persistent configuration option. A command that
+requires a server also prints setup instructions when neither is available.
 
 The interactive menu provides man-page lookup, search, whatis, apropos,
 statistics, sections, platforms, and health views. Select a result to open its
