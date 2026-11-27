@@ -22,7 +22,7 @@ casman is a self-contained man page application with an embedded collection from
 - **History** - Track recently viewed pages
 - **Export** - Download as PDF, EPUB, or standalone HTML
 - **Update Feeds** - Atom and JSON feeds
-- **PWA Support** - Installable with cached static assets and an offline fallback page
+- **PWA Support** - Installable with versioned static assets and a synthesized offline fallback for eligible public pages
 - **Theme** - Dark by default, with light and system-following modes
 - **Guest Preferences** - Cookie-backed theme, language, and consent settings, with reset and cross-device sync
 - **Translations** - View exact translated man page rows when the database contains them

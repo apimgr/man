@@ -39,10 +39,11 @@ coverage before synchronizing the sitemap and user documentation.
   server reload test covers rate-limit updates and asset-stamp changes. The
   full Go test suite, `go vet ./...`, `staticcheck ./...`, server/CLI builds,
   and strict MkDocs build passed after the current lifecycle changes.
-  Remaining work includes the other hot categories (notifications, logging,
-  security headers, and ACME), graceful HTTP timeout/listener replacement,
-  Tor restart behavior, and completing the documented custom image asset
-  pipeline.
+  Graceful HTTP timeout/listener replacement is implemented. Changes under
+  `server.tor.*` now stop and recreate only the Tor child and its backend
+  listener while the clearnet server remains available. Remaining work
+  includes the other hot categories (notifications, logging, security headers,
+  and ACME), and completing the documented custom image asset pipeline.
   Relevant files: `src/config/`, server startup/reload, and
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”
@@ -137,6 +138,12 @@ coverage before synchronizing the sitemap and user documentation.
   a local parity review found and fixed two gaps: GitLab coverage tests now run
   on merge-request pipelines, and Jenkins secret scans now use the AI.md
   range/full-history result policy for ordinary, scheduled, and manual runs.
+  CI coverage output now uses the `{project_org}/{internal_name}` temp path on
+  every provider, Jenkins runs the coverage test once, and the GitHub GUI
+  compile uses a cleaned project-scoped temp directory. The pinned actionlint
+  version validates workflow syntax when its outdated runner-label warning for
+  the AI.md-required `ubuntu-26.04` is ignored; the official runner image is
+  available. The workflow pin policy passes locally.
   Continue checking each provider's build/test, security, release, and coverage
   behavior against AI.md, then confirm workflows on their respective
   hosted/self-hosted runners. Keep provider-specific limitations documented
@@ -173,9 +180,11 @@ coverage before synchronizing the sitemap and user documentation.
   operator-token visibility is enforced for tool listing and calls. Remaining:
   complete request schemas and meaningful operation descriptions; enforce
   token scopes and the same API authorization, rate-limit, and audit path with
-  `source=mcp`; replace path-derived metadata with the shared route registry;
-  and pass the complete MCP acceptance matrix. Do not mark this complete until
-  then.
+  `source=mcp`; replace path-derived metadata with explicit route contracts;
+  and pass the complete MCP acceptance matrix. The OpenAPI registry is now
+  reconciled against methods and path patterns from the mounted chi router
+  before it is shared with content negotiation, discovery, and MCP. Do not
+  mark this complete until then.
   Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
   `src/server/template/`, `src/client/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
@@ -233,9 +242,10 @@ coverage before synchronizing the sitemap and user documentation.
   OpenAPI operation inventory for summaries, auth labels, parameter/response
   details, and request-resolved API/MCP/documentation URLs; `web.llms` controls
   endpoint details and validated custom sections. Discovery now consumes the
-  OpenAPI `Listed` metadata. Remaining work: populate it from the shared route
-  registry instead of path heuristics, and emit complete request/response
-  schemas from the route models.
+  OpenAPI `Listed` metadata. Its rate-limit summary now reflects the active
+  read, write, health, and global-burst configuration. Remaining work: populate
+  metadata from explicit route contracts instead of path/operation heuristics,
+  and emit complete request/response schemas from the route models.
   Relevant files: `src/server/server.go`, `src/server/handler/`.
 
 ## Medium (P2)

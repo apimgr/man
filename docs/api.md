@@ -212,7 +212,10 @@ only. Explicit reveal, rotate, and creation responses carry the raw credential
 in the JSON body and use `Cache-Control: no-store`.
 
 Create a linked token with `POST /api/v1/server/preferences/tokens` and
-`{"name":"mcp-client","expires":"30d"}`. Supported expiries are
+`{"name":"mcp-client","scope":"read-write","expires":"30d"}`. Scope is
+`read` or `read-write` (default); `global` is reserved for the primary token.
+Read-only linked credentials see only GET tools over MCP. A token's scope cannot
+be changed after creation. Supported expiries are
 `never`, `7d`, `30d`, `90d`, and `1y`; a chosen UTC calendar date uses
 `expires_on: "YYYY-MM-DD"`. The web token page is
 `/server/preferences/tokens`; it uses the HttpOnly primary-token cookie and

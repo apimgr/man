@@ -80,9 +80,9 @@ enable TLS; `tls_ca`, `tls_cert`, and `tls_key` name files in
 fields. Rate-limit counters remain in SQLite unless an external cache is
 selected.
 
-`server.rate_limit` configures per-IP or per-Bearer-token read and write
-windows, a health endpoint window, a stricter owner-token action window, and
-an absolute per-IP burst ceiling. Repeated invalid Bearer credentials are
+`server.rate_limit` in `yaml.d/security.yml` configures per-IP or per-Bearer-token
+read and write windows, a health endpoint window, a stricter owner-token action
+window, and an absolute burst ceiling per IP or valid Bearer token. Repeated invalid Bearer credentials are
 counted per IP and lock that IP out for the `auth_failures.window` duration
 after `auth_failures.requests` failures. Windows are seconds.
 
