@@ -24,9 +24,16 @@ coverage before synchronizing the sitemap and user documentation.
   merging. Legacy security secrets now import atomically into `app_secrets`
   before the installation secret is initialized, with imported YAML values
   removed after persistence succeeds; preexisting integer timestamps are
-  migrated to the specified UTC text schema. Remaining work includes scheduler task
-  cleanup, preservation of invalid-file last-good values across reload, asset
-  watching, and safe live application of reloadable settings.
+  migrated to the specified UTC text schema. Scheduler migration removes
+  unsupported per-task keys and omits built-in tasks left at their documented
+  defaults. `ConfigManager` now polls file and asset sources every five
+  seconds, retains each malformed source's last good YAML, compares config
+  snapshots, classifies hot/graceful/restart changes, and keeps restart values
+  out of its active snapshot. Handlers and CORS/noindex middleware can consume
+  immutable snapshots safely. Remaining work is starting the manager from the
+  server lifecycle, supplying exact CLI/environment overrides, applying every
+  supported category to its owning service, graceful HTTP/router replacement,
+  Tor restart behavior, and runtime asset cache invalidation.
   Relevant files: `src/config/`, server startup/reload, and
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”

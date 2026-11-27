@@ -24,6 +24,14 @@ is not stored in the database. `GET /api/v1/server/auth/check` reports whether
 a supplied Bearer credential is an operator or owner token without returning
 the credential.
 
+Installation-secret rotation state is stored in the `app_secrets` table in
+`server.db`, alongside its previous value and expiry. Legacy
+`server.security.installation_secret*` and previous-encryption-key rotation
+values are imported only when the corresponding database row is absent; after
+the database write succeeds, the imported YAML keys are removed from their
+source file. Keep the database private and include it in protected backups
+with the rest of the application state.
+
 Anonymous owners receive `own_` primary tokens, and may create linked tokens
 for integrations. Owner tokens grant access only to that owner's resources;
 the primary token also manages its linked tokens. The browser stores its owner
