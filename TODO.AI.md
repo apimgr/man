@@ -217,8 +217,10 @@ coverage before synchronizing the sitemap and user documentation.
   caches API responses. Its versioned cache is capped at 50 MiB, static assets
   expire after seven days, and writes check browser storage quota. Focused tests
   cover cache eligibility and assert the limit/expiry/quota policy is emitted.
-  Remaining: audit every export and print flow in a no-JS browser and exercise
-  the worker behavior in browser E2E tests. Relevant
+  The browser E2E suite verifies a cached public man page works offline, API
+  requests remain network-only, and an uncached private form receives the
+  synthesized fallback. Remaining: audit every export and print flow in a
+  no-JS browser. Relevant
   files: `src/server/template/`, `src/server/static/`, `src/server/handler/`.
 - [ ] Synchronize API and GraphQL reference output with every implemented
   endpoint and document the final browser and integration surfaces in `docs/`.
