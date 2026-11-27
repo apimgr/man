@@ -31,10 +31,12 @@ coverage before synchronizing the sitemap and user documentation.
   snapshots, classifies hot/graceful/restart changes, and keeps restart values
   out of its active snapshot. Handlers and CORS/noindex middleware can consume
   immutable snapshots safely, and exact PORT/LISTEN/MODE CLI and environment
-  overrides are carried through reloads. Remaining work is starting the
-  manager from the server lifecycle, applying every supported category to its
-  owning service, graceful HTTP/router replacement, Tor restart behavior, and
-  runtime asset cache invalidation.
+  overrides are carried through reloads. `Server.RunContextReady` now starts
+  the manager with the server context; rate limits, CORS, branding, and SEO
+  reach request handlers through immutable snapshots. Remaining work includes
+  the other hot categories (notifications, logging, security headers, and
+  ACME), graceful HTTP/router replacement, Tor restart behavior, and runtime
+  asset cache invalidation.
   Relevant files: `src/config/`, server startup/reload, and
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”
