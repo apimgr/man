@@ -33,10 +33,16 @@ coverage before synchronizing the sitemap and user documentation.
   immutable snapshots safely, and exact PORT/LISTEN/MODE CLI and environment
   overrides are carried through reloads. `Server.RunContextReady` now starts
   the manager with the server context; rate limits, CORS, branding, and SEO
-  reach request handlers through immutable snapshots. Remaining work includes
-  the other hot categories (notifications, logging, security headers, and
-  ACME), graceful HTTP/router replacement, Tor restart behavior, and runtime
-  asset cache invalidation.
+  reach request handlers through immutable snapshots. Graceful snapshots now
+  reach request handlers, and watched asset changes advance the browser asset
+  stamp so versioned resources and service-worker caches are invalidated. A
+  server reload test covers rate-limit updates and asset-stamp changes. The
+  full Go test suite, `go vet ./...`, `staticcheck ./...`, server/CLI builds,
+  and strict MkDocs build passed after the current lifecycle changes.
+  Remaining work includes the other hot categories (notifications, logging,
+  security headers, and ACME), graceful HTTP timeout/listener replacement,
+  Tor restart behavior, and completing the documented custom image asset
+  pipeline.
   Relevant files: `src/config/`, server startup/reload, and
   configuration docs. Required by AI.md PART 5 → “Drop-in Config Directory,”
   “Automatic Migration,” and “Area Files and Automatic Migration.”
