@@ -140,6 +140,8 @@ server:
     title: casman
     tagline: Universal Man Pages
     description: Man pages from BSD, macOS, Linux, and more
+    logo: ""
+    favicon: ""
   seo:
     keywords: [manuals, man pages]
     author: casapps
@@ -163,6 +165,18 @@ private pages default to `noindex,nofollow`, while the public home, browse,
 search, page, and informational routes are explicitly indexable. Setting
 `server.seo.noindex: true` marks every HTML page noindex and emits the matching
 `X-Robots-Tag` header.
+
+`server.branding.logo`, `server.branding.favicon`, and
+`server.seo.og_image` accept a filename in `{config_dir}/assets/`, an HTTPS
+URL, or a bounded image data URI. Local files are limited to 2 MiB and must
+use an allowed image extension. Remote images are fetched server-side with
+public-address and redirect validation, a 10 MiB limit, and a 30-second
+timeout; only validated raster formats are accepted. They are served from a
+private local cache and refreshed after 24 hours. A failed refresh keeps the
+last cached image; without a cached copy, the embedded favicon is used.
+Raster logos generate 50 px and 200 px variants, favicons generate 16, 32, 48,
+180, 192, and 512 px square variants, and OpenGraph images generate a centered
+1200 by 630 variant. SVG assets remain vector images.
 
 ## Secrets
 

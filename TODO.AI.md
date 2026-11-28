@@ -25,12 +25,13 @@ coverage before synchronizing the sitemap and user documentation.
   early config peek, daemonizes before binding, binds privileged HTTP sockets,
   drops and verifies privileges, initializes the startup log, acquires the PID
   file, then loads full config and initializes server dependencies. Prepared
-  listeners and resolved paths are carried into server construction. Focused
-  Docker tests pass. Remaining: validate the sequence with the compiled binary
-  in the required container/system-service scenarios, move the `server.New` /
-  `app.RunWithReady` fallback paths away from post-load privilege setup, and
-  finish logging reconfiguration/rotation after full config load. Required by
-  AI.md PART 8, PART 14, PART 23, and PART 25.
+  listeners and resolved paths are carried into server construction. Root
+  startup through `app.RunWithReady` and `Server.RunContextReady` now fails
+  early without a prepared plan; post-load privilege setup fallbacks have been
+  removed. The full Docker test gate and compiled server/client binary checks
+  pass. Remaining: finish logging reconfiguration/rotation after full config
+  load and verify the service-manager startup cases. Required by AI.md PART 8,
+  PART 14, PART 23, and PART 25.
 
 - [ ] Implement PART 5 area-file ownership, precedence, generated-file split,
   legacy `server.yaml` migration, automatic splitting of area settings from
@@ -38,7 +39,12 @@ coverage before synchronizing the sitemap and user documentation.
   attribution, permission enforcement, and hot reload. `Load` now migrates
   `server.yaml`, backs up and splits known sections from a legacy `server.yml`,
   writes the required header, and normalizes the legacy top-level database
-  shape and canonical database URL, and moves configured secret paths from
+  shape and canonical database URL. Migration now runs after the full merged
+  config load and keeps overrides from drop-ins that sort before a generated
+  area file effective; a focused regression covers that precedence. The
+  fixed-name migration versus later-sorting drop-in precedence conflict in
+  AI.md is recorded in the authorized template backlog. Config migration moves
+  configured secret paths from
   server/area files into `secrets.yml` with existing secrets taking
   precedence. DNS credentials are encrypted as `enc:v1:` values and decrypted
   only for the lego provider constructor. Typed invalid values reset one key
@@ -85,7 +91,7 @@ coverage before synchronizing the sitemap and user documentation.
   recent all-platform debug build stopped during `darwin/amd64` linking because
   the shared host filesystem ran out of space; rerun the standalone build when
   sufficient space is available.
-- [ ] Complete the PART 33/34 CLI configuration contract. Server and token
+- [ ] Complete the PART 32 CLI configuration contract. Server and token
   resolution now reads `cli.yml`, supports `--config`, validates URLs, keeps
   config files private, honors explicit flags and environment settings, and
   avoids an implicit localhost server. API version, timeout, retry count and
@@ -183,7 +189,9 @@ coverage before synchronizing the sitemap and user documentation.
   forms with field descriptors, CAPTCHA/form tokens, validation, antispam,
   two-step confirmation, encrypted security-report storage, and API mirrors.
   `/server/security` and `security.txt` now render configured reporting
-  contacts and expiry. Verify encrypted delivery/storage, PGP configuration,
+  contacts, expiry, and the project-key fingerprint. PGP encryption is wired
+  for stored reports and maintainer notification; the AES fallback now sends
+  an encrypted MIME attachment with a warning. Verify PGP configuration,
   report status links, and the full documented failure matrix. Relevant files:
   `src/server/handler/contact*.go`, `src/server/securityreport/`,
   `src/config/`, `src/smtp/`.
@@ -210,11 +218,12 @@ coverage before synchronizing the sitemap and user documentation.
   operator-token visibility is enforced for tool listing and calls. Remaining:
   complete request schemas and meaningful operation descriptions; enforce
   token scopes and the same API authorization, rate-limit, and audit path with
-  `source=mcp`; replace path-derived metadata with explicit route contracts;
-  and pass the complete MCP acceptance matrix. The OpenAPI registry is now
+  `source=mcp`; and pass the complete MCP acceptance matrix. The OpenAPI registry is now
   reconciled against methods and path patterns from the mounted chi router
-  before it is shared with content negotiation, discovery, and MCP. Do not
-  mark this complete until then.
+  before it is shared with content negotiation, discovery, and MCP. Each
+  OpenAPI operation carries explicit auth, visibility, listed, operator-only,
+  and MCP eligibility metadata; operation IDs no longer infer route access,
+  and unclassified routes are closed. Do not mark this complete until then.
   Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
   `src/server/template/`, `src/client/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
@@ -297,22 +306,38 @@ coverage before synchronizing the sitemap and user documentation.
   hooks now use `data-js-*`, and compare result states use semantic data
   attributes and palette tokens. Focused package tests and browser E2E pass
   these hooks. Many required shared
-  and feature components have incomplete or missing styles and states. The
-  debug gallery now lists the catalog and feature fixtures, but the full
+  and feature components have incomplete or missing styles and states.
+  Branding image URLs now use an HTTPS-only fetcher with DNS pinning,
+  redirect/private-address validation, MIME and signature checks, bounded
+  downloads, a private cache, 24-hour refresh, stale-cache retention, and
+  embedded fallback. Logo, favicon, and OpenGraph images are served through
+  same-origin routes. Raster logo variants, six favicon sizes, and centered
+  1200x630 OpenGraph output are generated and cached; SVG assets remain vector
+  files. The Preferences and Help hubs, footer
+  links, sitemap membership, and help JSON
+  page list now share the server page registry; all six locale files have
+  translated hub labels. The debug gallery now lists the catalog and feature fixtures, but the full
   size/state matrix, native modal behavior, contrast checks, axe run, and
   required viewport/theme/direction layout matrix remain. Reconcile templates,
   styles, Go palette, JavaScript hooks, and browser tests with PART 16 before
   marking complete. The conflicting stylesheet-path instructions are already
-  recorded in the authorized API-template issue list. The current full
-  `make test` gate passes at 61.0% coverage, the browser E2E suite passes, and
-  strict MkDocs builds after the latest documentation sync.
+  recorded in the authorized API-template issue list. The latest full
+  `make test` gate passes at 61.6% coverage, including vet, staticcheck,
+  govulncheck, shell lint, server/client debug builds, and the Docker binary,
+  API, Tor, and I2P checks. `tests/docker.sh` now uses the shared Go caches and
+  keeps its binaries under the project-scoped OS temp directory. Earlier gate
+  attempts exhausted shared disk before this cache and artifact-path fix.
+  Focused tests for the image pipeline and page registry pass. The browser E2E
+  suite passes, and strict MkDocs builds after the latest documentation sync.
 - [ ] Complete the required SEO metadata and validated verification-tag
   configuration. Server-rendered canonical, OpenGraph, Twitter, JSON-LD,
   custom meta, provider verification, and fail-closed robots metadata now use
   `server.seo`; tests cover output, invalid settings, public/private routes,
-  and noindex mode. Remaining: validate branding image inputs, honor configured
-  favicon/logo assets, and review every server page against the SEO route
-  inventory. Relevant files: `src/config/`, `src/server/template/`,
+  and noindex mode. Branding image inputs and same-origin configured assets are
+  implemented. Raster variants generate the specified logo, favicon, and
+  OpenGraph sizes; SVG assets stay vector-based. Remaining: review every server
+  page against the SEO route inventory. Relevant files: `src/config/`,
+  `src/server/template/`,
   `src/server/handler/`.
 - [ ] Complete the frontend's no-JavaScript-first export and print flows and
   offline behavior for previously viewed man pages. The worker now caches
