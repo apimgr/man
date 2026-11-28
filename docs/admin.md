@@ -7,9 +7,10 @@ command line.
 Versioned API examples use the default `/api/v1` prefix; `server.api_version`
 in `server.yml` controls the canonical versioned routes.
 
-Public information pages are available at `/server/about`, `/server/help`,
-`/server/help/mcp`, `/server/privacy`, `/server/terms`, `/server/security`,
-`/server/security/policy`, `/server/security/thanks`, and `/server/contact`.
+Public information pages are available at `/server/about`, `/server/dpo`,
+`/server/help`, `/server/help/mcp`, `/server/privacy`, `/server/terms`,
+`/server/security`, `/server/security/policy`, `/server/security/thanks`, and
+`/server/contact`.
 Security-report status pages use the private link sent to the reporter at
 `/server/security/report/{tracking_id}`; the link token is rate-limited to one
 view per UTC day and expires 30 days after the report is closed. Visitors can

@@ -64,6 +64,7 @@ bytes.
 | `/api/v1/server/about` | GET | Public service information |
 | `/api/v1/server/privacy` | GET | Privacy information |
 | `/api/v1/server/contact` | GET, POST | Report form descriptors and two-step abuse, DMCA, privacy, or security submission |
+| `/api/v1/server/dpo` | GET | Public DPO contact; DPO email falls back to the general contact email, never the admin email |
 | `/api/v1/server/help` | GET | Help information |
 | `/api/v1/server/help/mcp` | GET | MCP integration help |
 | `/api/v1/server/mcp` | POST | MCP Streamable HTTP endpoint; `/api/mcp` and `/mcp` are direct aliases |
@@ -131,6 +132,10 @@ The server-rendered GraphQL query form is at
 [/server/docs/graphql](/server/docs/graphql). It shares the application chrome and
 provides a no-JavaScript link to the GraphQL endpoint. Requests use
 `/api/v1/server/graphql`; `/api/graphql` is the unversioned compatibility alias.
+POST accepts a JSON object with required `query` and optional `variables` and
+`operationName`. GET uses the same names as query parameters; `variables` is a
+JSON-encoded object. These fields are also published as the GraphQL operation's
+OpenAPI and MCP input schemas.
 The schema is read-only and exposes these query fields:
 
 | Field | Arguments | Result |
@@ -181,8 +186,8 @@ support `.txt`, `.md`, `.json`, `.raw`, `.pdf`, `.epub`, and `.shtml`
 `/rss.xml` is RSS 2.0, and `/feed.json` is JSON Feed; per-platform and
 per-section Atom feeds are also available.
 
-Public information pages are available under `/server/about`, `/server/help`,
-`/server/privacy`, `/server/terms`, `/server/security`,
+Public information pages are available under `/server/about`, `/server/dpo`,
+`/server/help`, `/server/privacy`, `/server/terms`, `/server/security`,
 `/server/security/policy`, `/server/security/thanks`, and `/server/contact`.
 The report form is intentionally unlinked outside the security overview and
 `security.txt`. Its HTML responses are `no-store` and `noindex,nofollow`.

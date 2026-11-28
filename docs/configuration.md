@@ -173,10 +173,14 @@ use an allowed image extension. Remote images are fetched server-side with
 public-address and redirect validation, a 10 MiB limit, and a 30-second
 timeout; only validated raster formats are accepted. They are served from a
 private local cache and refreshed after 24 hours. A failed refresh keeps the
-last cached image; without a cached copy, the embedded favicon is used.
-Raster logos generate 50 px and 200 px variants, favicons generate 16, 32, 48,
-180, 192, and 512 px square variants, and OpenGraph images generate a centered
-1200 by 630 variant. SVG assets remain vector images.
+last cached image; without a cached copy, the embedded favicon is used. Local
+SVG files and SVG data URIs are accepted only by the bounded, static SVG
+rasterizer; scripts, event attributes, external references, XML directives,
+and unsupported elements are rejected. Remote SVG remains disabled. Original
+SVG assets are served as images, and resized variants are PNGs. Raster logos
+generate 50 px and 200 px variants, favicons generate 16, 32, 48, 180, 192,
+and 512 px square variants, and OpenGraph images generate a centered 1200 by
+630 variant. Generated variants are cached locally.
 
 ## Secrets
 

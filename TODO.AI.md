@@ -19,7 +19,9 @@ coverage before synchronizing the sitemap and user documentation.
   Docker tests cover body restoration, credential redaction, query metadata,
   and cache hit/miss/expiration events. Remaining: complete the
   `/debug/components` catalog and every state in both themes and directions,
-  and verify the full browser diagnostics flow. Required by AI.md PART 6.
+  with state-by-state gallery assertions. The browser E2E path passes through
+  the authenticated themed error page and component gallery in light/dark and
+  LTR/RTL. Required by AI.md PART 6.
 - [ ] Finish PART 8 startup sequencing across every entry path. The CLI now
   freezes paths, prepares root-owned directories and private modes before the
   early config peek, daemonizes before binding, binds privileged HTTP sockets,
@@ -32,6 +34,17 @@ coverage before synchronizing the sitemap and user documentation.
   pass. Remaining: finish logging reconfiguration/rotation after full config
   load and verify the service-manager startup cases. Required by AI.md PART 8,
   PART 14, PART 23, and PART 25.
+
+- [ ] Implement the PART 10 SQLite concurrency contract for every SQLite file.
+  `src/server/store.DB` currently exposes one pooled `*sql.DB`; it does not
+  separate query-only reads from immediate single-writer transactions. There
+  is no `Read(ctx)`/`Write(ctx, fn)` boundary, busy retry with jitter, bounded
+  write wait telemetry, hot-counter flush, WAL checkpoint shutdown, or required
+  20-reader/20-writer concurrency test. The rate-limit and owner-token flows
+  also write per request. Apply the contract to the application catalog and
+  every other SQLite store, then verify maintenance and backup paths use the
+  same safe writer. Required by AI.md PART 10 and its PART 20 observability
+  metrics.
 
 - [ ] Implement PART 5 area-file ownership, precedence, generated-file split,
   legacy `server.yaml` migration, automatic splitting of area settings from
@@ -137,12 +150,17 @@ coverage before synchronizing the sitemap and user documentation.
   strings, or bodies, and redacts credential-like path values. Scheduler task
   lifecycle metrics, catalog-size and man-page API business metrics, matching
   Grafana panels, and a periodic CPU/memory/data-volume collector are now
-  implemented. Metrics routes are excluded from OpenAPI, public discovery,
+  implemented. Database query duration/count and classified database errors
+  now record at the existing sanitized SQLite timing hook, with fixed SQL
+  operation/table labels; focused Docker tests cover classification and scrape
+  output. Metrics routes are excluded from OpenAPI, public discovery,
   and MCP; tests cover service-specific credentials across all metrics aliases
-  and preserve Grafana/Loki JSON media types. OpenAPI visibility flags now drive
-  discovery and MCP filtering, but are assigned from route-path heuristics
-  rather than the shared route registry. Complete that registry integration
-  and the full endpoint/auth acceptance matrix. Relevant files:
+  and preserve Grafana/Loki JSON media types. Mounted metrics routes now enter
+  the shared route registry as explicitly internal, unlisted, non-MCP contracts
+  with service-specific bearer requirements; path-segment heuristics no longer
+  suppress routes. Complete authentication-attempt and SQLite busy/write-wait
+  instrumentation, the full endpoint/auth acceptance matrix, and remaining
+  metrics acceptance requirements. Relevant files:
   `src/metrics/`,
   `src/config/`, `src/secret/`,
   `src/server/`, `src/swagger/`, `docs/`.
@@ -188,6 +206,10 @@ coverage before synchronizing the sitemap and user documentation.
   `/server/contact` now renders configured abuse, DMCA, privacy, and security
   forms with field descriptors, CAPTCHA/form tokens, validation, antispam,
   two-step confirmation, encrypted security-report storage, and API mirrors.
+  The public `/server/dpo` page and `/api/{api_version}/server/dpo` JSON mirror
+  now follow the DPO-to-general email fallback and never expose the admin
+  address; the privacy URL resolves from each request. Both routes are in SEO,
+  sitemap, OpenAPI, API reference, and regression coverage.
   `/server/security` and `security.txt` now render configured reporting
   contacts, expiry, and the project-key fingerprint. PGP encryption is wired
   for stored reports and maintainer notification; the AES fallback now sends
@@ -198,10 +220,12 @@ coverage before synchronizing the sitemap and user documentation.
 - [ ] Implement the API text negotiation contract across every API route. The
   middleware now strips API `.txt` suffixes and serializes buffered JSON
   responses into text for `.txt`, `Accept: text/plain`, and detected HTTP
-  tools; explicit JSON still wins over client detection. Remaining work is the
-  canonical shared route registry with response-model metadata and primary
-  fields, full consistency for every API error and binary route, and exact
-  serializer behavior for all endpoint models. Relevant files:
+  tools; explicit JSON still wins over client detection. The serializer now
+  orders bound response models, flattens nested object lists, honors dotted
+  primary paths, and has scalar/model regression cases. Remaining work is
+  complete response-model, request-schema, message, and primary metadata for
+  every API operation, plus consistent error and binary-route behavior.
+  Relevant files:
   `src/server/middleware.go`, `src/server/api_text.go`, `src/server/server.go`,
   `src/server/handler/`, `src/swagger/`, `src/graphql/`.
 - [ ] Implement the required always-on MCP Streamable HTTP endpoint at
@@ -218,7 +242,14 @@ coverage before synchronizing the sitemap and user documentation.
   operator-token visibility is enforced for tool listing and calls. Remaining:
   complete request schemas and meaningful operation descriptions; enforce
   token scopes and the same API authorization, rate-limit, and audit path with
-  `source=mcp`; and pass the complete MCP acceptance matrix. The OpenAPI registry is now
+  `source=mcp`; and pass the complete MCP acceptance matrix. Unparseable
+  JSON-RPC requests and unsupported HTTP methods now use the canonical API
+  error shape, with focused regression coverage. GraphQL GET and POST request
+  schemas now feed the OpenAPI document and MCP tools, top-level tool inputs
+  reject undocumented fields, and GET variables are JSON-encoded for dispatch.
+  Origin validation now precedes the HTTP method check as required, with a
+  regression covering a disallowed-origin GET. Focused tests cover these
+  contracts. The OpenAPI registry is now
   reconciled against methods and path patterns from the mounted chi router
   before it is shared with content negotiation, discovery, and MCP. Each
   OpenAPI operation carries explicit auth, visibility, listed, operator-only,
@@ -226,6 +257,14 @@ coverage before synchronizing the sitemap and user documentation.
   and unclassified routes are closed. Do not mark this complete until then.
   Relevant files: `src/server/`, `src/config/`, `src/swagger/`, `src/graphql/`,
   `src/server/template/`, `src/client/`.
+- [ ] Implement the PART 11 audit-log contract. The current SQLite `audit_log`
+  table uses integer IDs and stores structured columns, while AI.md requires
+  append-only JSON Lines entries with ULID IDs, a SHA-256 hash chain, and a
+  top-level source field. `requestinfo.Source` is set on MCP tool subrequests
+  but no audit writer consumes it. Implement storage, integrity verification,
+  retention, source propagation, and the required API/CLI export and tests.
+  Relevant files: `src/server/store/`, `src/server/requestinfo/`,
+  `src/server/handler/`, and `src/cli/`.
 - [ ] Complete catalog provenance and coverage from the IDEA.md source
   inventory. `make catalog` now reproducibly rebuilds the embedded SQLite
   file from the tracked
@@ -270,8 +309,9 @@ coverage before synchronizing the sitemap and user documentation.
   migrated. Scope cannot be changed after creation, and read-only credentials
   cannot list or call write tools over MCP. The migration, handler, and MCP
   regressions pass; scope labels are translated in all six locales. The full
-  `make test` gate passes at 61.0% coverage, and staticcheck, golangci-lint,
-  and `go vet` pass. Keep preferences browser-local
+  `make test` gate passes at 61.9% coverage; the latest complete gate also
+  includes staticcheck and `go vet`; golangci-lint was not part of that gate.
+  Keep preferences browser-local
   and preserve the no-login
   product model. Relevant files: `src/server/server.go`, `src/server/handler/`,
   `src/server/store/`, `src/server/ownertoken/`, `src/server/template/`,
@@ -288,10 +328,13 @@ coverage before synchronizing the sitemap and user documentation.
   OpenAPI operation inventory for summaries, auth labels, parameter/response
   details, and request-resolved API/MCP/documentation URLs; `web.llms` controls
   endpoint details and validated custom sections. Discovery now consumes the
-  OpenAPI `Listed` metadata. Its rate-limit summary now reflects the active
-  read, write, health, and global-burst configuration. Remaining work: populate
+  OpenAPI `Listed` metadata. It emits the required global requests-per-minute
+  limit plus the active read, write, health, and global-burst breakdown.
+  Remaining work: populate
   metadata from explicit route contracts instead of path/operation heuristics,
-  and emit complete request/response schemas from the route models.
+  and emit complete request/response schemas from the route models. The
+  authentication guidance now links the owner-token issuance route and linked
+  MCP token setup; unconfigured contact addresses are omitted as required.
   Relevant files: `src/server/server.go`, `src/server/handler/`.
 
 ## Medium (P2)
@@ -312,8 +355,11 @@ coverage before synchronizing the sitemap and user documentation.
   downloads, a private cache, 24-hour refresh, stale-cache retention, and
   embedded fallback. Logo, favicon, and OpenGraph images are served through
   same-origin routes. Raster logo variants, six favicon sizes, and centered
-  1200x630 OpenGraph output are generated and cached; SVG assets remain vector
-  files. The Preferences and Help hubs, footer
+  1200x630 OpenGraph output are generated and cached for raster and SVG
+  sources. Local and data URI SVG passes a bounded static-element and
+  attribute allowlist before rasterization; remote SVG stays disabled. Original
+  SVG assets remain vector files when served through image URLs. The
+  Preferences and Help hubs, footer
   links, sitemap membership, and help JSON
   page list now share the server page registry; all six locale files have
   translated hub labels. The debug gallery now lists the catalog and feature fixtures, but the full
@@ -322,7 +368,7 @@ coverage before synchronizing the sitemap and user documentation.
   styles, Go palette, JavaScript hooks, and browser tests with PART 16 before
   marking complete. The conflicting stylesheet-path instructions are already
   recorded in the authorized API-template issue list. The latest full
-  `make test` gate passes at 61.6% coverage, including vet, staticcheck,
+  `make test` gate passes at 61.9% coverage, including vet, staticcheck,
   govulncheck, shell lint, server/client debug builds, and the Docker binary,
   API, Tor, and I2P checks. `tests/docker.sh` now uses the shared Go caches and
   keeps its binaries under the project-scoped OS temp directory. Earlier gate
@@ -335,13 +381,23 @@ coverage before synchronizing the sitemap and user documentation.
   `server.seo`; tests cover output, invalid settings, public/private routes,
   and noindex mode. Branding image inputs and same-origin configured assets are
   implemented. Raster variants generate the specified logo, favicon, and
-  OpenGraph sizes; SVG assets stay vector-based. Remaining: review every server
-  page against the SEO route inventory. Relevant files: `src/config/`,
+  OpenGraph sizes from raster sources and safely supported local/data SVG.
+  Swagger and GraphQL docs now
+  use the server's request-specific branding, canonical URL, and indexing
+  policy. Robots metadata and headers share the enabled Help-page registry,
+  and error pages plus unregistered Help paths fail closed to noindex.
+  Public browse-section/platform, compare, and whatis routes now share the
+  public indexability policy with their route roots; only successful responses
+  are indexable. Remaining: review every server page against the SEO route
+  inventory. Relevant files: `src/config/`,
   `src/server/template/`,
   `src/server/handler/`.
 - [ ] Complete the frontend's no-JavaScript-first export and print flows and
-  offline behavior for previously viewed man pages. The worker now caches
-  only eligible public man/information pages, synthesizes its fallback from
+  offline behavior for previously viewed public pages. Cache eligibility now
+  follows the shared public route registry for browse, compare, whatis, help,
+  security, and docs pages, while excluding pages with their own search form;
+  man exports remain excluded. The worker caches only eligible public
+  documents, synthesizes its fallback from
   translated strings stored by the page, and never serves `/offline.html` or
   caches API responses. Its versioned cache is capped at 50 MiB, static assets
   expire after seven days, and writes check browser storage quota. Focused tests
@@ -358,8 +414,9 @@ coverage before synchronizing the sitemap and user documentation.
   The REST search limit advertised in the API reference and IDEA.md now works
   as a positive integer (default 20), appears in the response, and rejects
   invalid values with the API validation envelope. The reference now matches
-  AI.md's configured default. Remaining work is a complete route/schema and
-  browser/integration documentation reconciliation.
+  AI.md's configured default. GraphQL GET and POST request fields are now
+  represented in OpenAPI/MCP and documented in `docs/api.md`. Remaining work is
+  a complete route/schema and browser/integration documentation reconciliation.
   Relevant files: `src/server/handler/handler.go`, `src/swagger/`,
   `src/graphql/`, `docs/`.
 - [ ] Finish overlay-network compliance. Tor now uses the PART 32 torrc and
